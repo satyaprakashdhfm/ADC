@@ -46,24 +46,71 @@ export async function seedIfEmpty() {
   );
   console.log('Addresses created');
 
-  const ins = async (name, category, description, price, stock, images, options) => {
+  const ins = async (o) => {
     const { rows: [r] } = await q(
-      `INSERT INTO products (name, category, description, price, stock_quantity, images, options, is_available, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,$8,$9) RETURNING id`,
-      [name, category, description, price, stock, images, options, ts, ts]
+      `INSERT INTO products (name, category, description, price, stock_quantity, images, options,
+                             is_available, menu_group, tag, featured, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,$8,$9,$10,$11,$12) RETURNING id`,
+      [o.name, o.category, o.description, o.price, o.stock, o.images, o.options,
+       o.menuGroup, o.tag, !!o.featured, ts, ts]
     );
     return r.id;
   };
 
-  const p1 = await ins('Classic Chocolate Chip Cookie', 'COOKIES', 'Our signature cookie loaded with premium Belgian chocolate chips. Crispy on the outside, gooey on the inside.', 120, 150, '["https://images.unsplash.com/photo-1499636136210-6f4ee915583e"]', '["Extra Chocolate","Less Sweet","Gift Wrap","Message Card"]');
-  const p2 = await ins('Biscoff Lava Cookie', 'COOKIES', 'Warm cookie filled with molten Biscoff spread. A European delight in every bite.', 149, 80, '["https://images.unsplash.com/photo-1558961363-fa8fdf82db35"]', '["Extra Biscoff","Gift Wrap","Message Card"]');
-  await ins('Nutella Stuffed Cookie', 'COOKIES', 'Double chocolate cookie with a generous Nutella filling. Absolutely irresistible.', 139, 100, '["https://images.unsplash.com/photo-1548365328-8c6db3220e4c"]', '["Extra Nutella","Gift Wrap","Message Card"]');
-  await ins('Peanut Butter Crunch Cookie', 'COOKIES', 'Rich peanut butter cookie with crunchy peanut pieces. A perfect snack for PB lovers.', 110, 120, '["https://images.unsplash.com/photo-1590080876351-41f8c04b6af5"]', '["Extra Crunchy","Gift Wrap","Message Card"]');
-  await ins('Red Velvet Cookie', 'COOKIES', 'Stunning red velvet cookie with cream cheese drizzle. Perfect for gifting.', 159, 60, '["https://images.unsplash.com/photo-1612203985729-70726954388c"]', '["Extra Cream Cheese","Gift Wrap","Message Card"]');
-  await ins('Matcha White Chocolate Cookie', 'COOKIES', 'Premium Japanese matcha cookie studded with white chocolate chips.', 169, 45, '["https://images.unsplash.com/photo-1558303836-50ad5f87e08e"]', '["Extra White Chocolate","Less Sugar","Gift Wrap","Message Card"]');
-  await ins('Classic Cookie Tin (12 pcs)', 'TINS', 'A beautiful gift tin with 12 assorted cookies. Perfect for festivals and celebrations.', 899, 30, '["https://images.unsplash.com/photo-1481931098730-318b6f776db0"]', '["Custom Message","Ribbon Wrap","Premium Box"]');
-  const t2 = await ins('Premium Cookie Tin (24 pcs)', 'TINS', 'Our largest gift tin with 24 cookies in assorted flavours. The ultimate cookie gift.', 1599, 15, '["https://images.unsplash.com/photo-1607920591413-4ec007e70023"]', '["Custom Message","Ribbon Wrap","Premium Box","Free Name Tag"]');
-  console.log('Products created: 6 cookies + 2 tins');
+  const img = (file) => JSON.stringify([`/assets/products/${file}`]);
+
+  // --- Cookies (the real ADC menu) ---
+  const p1 = await ins({ name: 'Chocolate Chip', category: 'COOKIES', price: 60, stock: 150,
+    description: 'The original. Buttery dough, browned-butter base and premium dark chocolate chips — crisp at the edges, gooey at the core.',
+    images: img('blueberry.jpg'), options: '["Extra Chocolate","Less Sweet","Gift Wrap","Message Card"]',
+    menuGroup: 'Classic Cookies', tag: 'Classic', featured: false });
+
+  const p2 = await ins({ name: 'Double Choc Chip', category: 'COOKIES', price: 65, stock: 130,
+    description: 'Rich cocoa dough loaded with extra-dark chocolate chunks and a dusting of Dutch cocoa. Fudgy and impossible to resist.',
+    images: img('triple-choc.jpg'), options: '["Extra Chocolate","Gift Wrap","Message Card"]',
+    menuGroup: 'Classic Cookies', tag: 'Bestseller', featured: true });
+
+  await ins({ name: 'Raagi (Gluten Free)', category: 'COOKIES', price: 60, stock: 90,
+    description: 'Wholesome finger-millet cookie, naturally gluten free, with a warm nutty depth and just the right chew.',
+    images: img('oatmeal-raisin.jpg'), options: '["Less Sweet","Gift Wrap","Message Card"]',
+    menuGroup: 'Classic Cookies', tag: 'Gluten Free', featured: false });
+
+  await ins({ name: 'Matcha', category: 'COOKIES', price: 90, stock: 70,
+    description: 'Stone-ground ceremonial matcha from Uji, Japan folded into buttery dough with cacao-butter white-chocolate chips.',
+    images: img('matcha.jpg'), options: '["Extra White Chocolate","Less Sugar","Gift Wrap","Message Card"]',
+    menuGroup: 'Premium Cookies', tag: 'Premium', featured: true });
+
+  await ins({ name: 'ADC Special', category: 'COOKIES', price: 90, stock: 120,
+    description: 'Our crown jewel — slow-browned butter, three kinds of premium chocolate and hand-harvested Maldon sea-salt flakes.',
+    images: img('adc-special.jpg'), options: '["Extra Chocolate","Sea Salt","Gift Wrap","Message Card"]',
+    menuGroup: 'Premium Cookies', tag: 'Signature', featured: true });
+
+  await ins({ name: 'Red Velvet With Cheese', category: 'COOKIES', price: 90, stock: 80,
+    description: 'Deep cocoa-red velvet dough wrapped around a tangy cream-cheese centre that softens as it bakes. Our most dramatic cookie.',
+    images: img('red-velvet.jpg'), options: '["Extra Cream Cheese","Gift Wrap","Message Card"]',
+    menuGroup: 'Premium Cookies', tag: 'Premium', featured: true });
+
+  const biscoff = await ins({ name: 'Biscoff Filled', category: 'COOKIES', price: 110, stock: 100,
+    description: 'Caramelised cookie shell around a warm, molten river of Belgian Lotus Biscoff spread. Frozen before baking for a lava-like centre.',
+    images: img('peanut-butter.jpg'), options: '["Extra Biscoff","Gift Wrap","Message Card"]',
+    menuGroup: 'Filled Cookies', tag: 'Bestseller', featured: true });
+
+  const nutella = await ins({ name: 'Nutella Filled', category: 'COOKIES', price: 90, stock: 110,
+    description: 'A gooey Nutella centre tucked inside a soft chocolate cookie. Absolutely irresistible warm.',
+    images: img('caramel-cashew.jpg'), options: '["Extra Nutella","Gift Wrap","Message Card"]',
+    menuGroup: 'Filled Cookies', tag: 'Recommended', featured: false });
+
+  // --- Gift Tins ---
+  await ins({ name: 'Nutella Tin', category: 'TINS', price: 600, stock: 30,
+    description: 'Six premium Nutella-filled cookies in a keepsake gift tin. Perfect for gifting and celebrations.',
+    images: img('coffee-almond.jpg'), options: '["Custom Message","Ribbon Wrap","Premium Box"]',
+    menuGroup: 'Gift Tins', tag: 'Gift', featured: false });
+
+  const t2 = await ins({ name: 'Biscoff Tin', category: 'TINS', price: 850, stock: 20,
+    description: 'Nine Biscoff-filled cookies, gift-ready in a premium tin with a ribbon wrap and name tag.',
+    images: img('m-and-m.jpg'), options: '["Custom Message","Ribbon Wrap","Premium Box","Free Name Tag"]',
+    menuGroup: 'Gift Tins', tag: 'Gift', featured: false });
+  console.log('Products created: 8 cookies + 2 tins (real ADC menu)');
 
   await q(`INSERT INTO coupons (code, discount_type, discount_value, minimum_order_amount, maximum_discount, expiry_date, usage_limit, is_active) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
     ['WELCOME10', 'PERCENTAGE', 10, 300, 100, dateOffset(90), 500, true]);
@@ -80,15 +127,15 @@ export async function seedIfEmpty() {
     `INSERT INTO orders (order_number, user_id, address_id, subtotal, discount_amount, delivery_fee, tax_amount, total_amount,
        coupon_code, payment_status, order_status, delhivery_waybill, tracking_url, shipment_status, label_generated, created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
-    ['ADC20260610001', priya.id, addr1.id, 388, 38.80, 0, 0, 349.20,
+    ['ADC20260610001', priya.id, addr1.id, 185, 18.50, 49, 0, 215.50,
      'WELCOME10', 'PAID', 'DELIVERED', 'DLV123456789', 'https://www.delhivery.com/track/package/DLV123456789', 'DELIVERED', true, ts, ts]
   );
   await q(`INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, total_price, selected_options, special_notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [o1.id, p1, 'Classic Chocolate Chip Cookie', 2, 120, 240, '["Extra Chocolate"]', null]);
+    [o1.id, p1, 'Chocolate Chip', 2, 60, 120, '["Extra Chocolate"]', null]);
   await q(`INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, total_price, selected_options, special_notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [o1.id, p2, 'Biscoff Lava Cookie', 1, 149, 149, '[]', null]);
+    [o1.id, p2, 'Double Choc Chip', 1, 65, 65, '[]', null]);
   await q(`INSERT INTO payments (order_id, provider, transaction_id, amount, status, paid_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [o1.id, 'RAZORPAY', 'pay_ADC001ABCDEF', 349.20, 'PAID', ts, ts]);
+    [o1.id, 'RAZORPAY', 'pay_ADC001ABCDEF', 215.50, 'PAID', ts, ts]);
   for (const [status, remarks] of [
     ['PLACED','Order placed'],['CONFIRMED','Payment received'],['PREPARING','Baking in progress'],
     ['PACKED','Packed and ready for pickup'],['OUT_FOR_DELIVERY','Out for delivery with Delhivery'],['DELIVERED','Delivered successfully'],
@@ -99,12 +146,12 @@ export async function seedIfEmpty() {
     `INSERT INTO orders (order_number, user_id, address_id, subtotal, discount_amount, delivery_fee, tax_amount, total_amount,
        coupon_code, payment_status, order_status, shipment_status, label_generated, created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
-    ['ADC20260610002', rahul.id, addr2.id, 1599, 0, 0, 0, 1599, null, 'PAID', 'PREPARING', 'NOT_CREATED', false, ts, ts]
+    ['ADC20260610002', rahul.id, addr2.id, 850, 0, 0, 0, 850, null, 'PAID', 'PREPARING', 'NOT_CREATED', false, ts, ts]
   );
   await q(`INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, total_price, selected_options, special_notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [o2.id, t2, 'Premium Cookie Tin (24 pcs)', 1, 1599, 1599, '["Custom Message","Ribbon Wrap"]', "Please write 'Happy Birthday Meera' on the card"]);
+    [o2.id, t2, 'Biscoff Tin', 1, 850, 850, '["Custom Message","Ribbon Wrap"]', "Please write 'Happy Birthday Meera' on the card"]);
   await q(`INSERT INTO payments (order_id, provider, transaction_id, amount, status, paid_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [o2.id, 'RAZORPAY', 'pay_ADC002XYZABC', 1599, 'PAID', ts, ts]);
+    [o2.id, 'RAZORPAY', 'pay_ADC002XYZABC', 850, 'PAID', ts, ts]);
   for (const [status, remarks] of [
     ['PLACED','Order placed'],['CONFIRMED','Payment confirmed'],['PREPARING','Baking your cookies'],
   ]) await q('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)', [o2.id, status, remarks, ts]);

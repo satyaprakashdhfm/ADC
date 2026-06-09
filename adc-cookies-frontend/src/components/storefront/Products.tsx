@@ -1,25 +1,34 @@
 'use client';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { getProducts, firstImage } from '@/lib/api';
 
-export const PRODUCTS = [
-  { n: 'Blueberry Cookie', tag: 'Classic', img: '/assets/products/blueberry.jpg', desc: 'The original. Buttery dough, browned butter base, two types of premium dark chocolate chips, and a pinch of fleur de sel. Crisp at the edges, gooey at the core — every single time.', bg: '#F5E8C8', flip: false },
-  { n: 'Triple Chocolate', tag: 'Bestseller', img: '/assets/products/triple-choc.jpg', desc: 'Built for the serious chocolate lover. Our deep cocoa dough is folded with extra-dark Callebaut chocolate chunks and finished with a dusting of Dutch-process cocoa. Fudgy, rich and completely impossible to resist.', bg: '#E8D8B8', flip: true },
-  { n: 'Matcha', tag: 'Premium', img: '/assets/products/matcha.jpg', desc: 'Stone-ground ceremonial-grade matcha from Uji, Japan, folded into our signature buttery dough alongside cacao-butter white-chocolate chips. Earthy bitterness balanced with creamy sweetness in every bite.', bg: '#DCE9D4', flip: false },
-  { n: 'ADC Special', tag: 'Signature', img: '/assets/products/adc-special.jpg', desc: 'Our crown jewel. We slow-brown the butter until it smells like toffee, fold in three kinds of premium chocolate, then finish each cookie with hand-harvested Maldon sea-salt flakes. No other cookie tells our story better than this one.', bg: '#F8D88A', flip: true },
-  { n: 'Red Velvet', tag: 'Premium', img: '/assets/products/red-velvet.jpg', desc: 'A bold, bakery-inspired creation — deep cocoa-red velvet dough wrapped around a tangy cream-cheese centre that softens as it bakes. The contrast of rich dough and silky filling makes it our most dramatic cookie.', bg: '#F5DCDA', flip: false },
-  { n: 'Peanut Butter Filled', tag: 'Bestseller', img: '/assets/products/peanut-butter.jpg', desc: 'Golden caramelised cookie dough surrounds a warm, molten river of Belgian Lotus Biscoff spread. We freeze the filling before baking to create a gooey, lava-like centre that flows the moment you break it open.', bg: '#F5C47C', flip: true },
-  { n: 'Caramel Cashew', tag: 'Filled', img: '/assets/products/caramel-cashew.jpg', desc: 'Pull it apart and watch the caramel flow. Our soft chocolate dough is wrapped around a generous frozen disc of smooth caramel and roasted cashews which bakes into a warm, silky centre.', bg: '#E8C49A', flip: false },
-  { n: 'Oatmeal Raisin', tag: 'Classic', img: '/assets/products/oatmeal-raisin.jpg', desc: 'Crafted with rolled oats, warm cinnamon and plump raisins — wholesome and deeply satisfying. We balance the earthy nuttiness with coconut palm sugar for a cookie that feels like home in every bite.', bg: '#D8C8B0', flip: true },
-  { n: 'M&M Cookie', tag: 'Fun', img: '/assets/products/m-and-m.jpg', desc: 'Our playful side. Buttery vanilla dough packed with colourful M&M candies that melt slightly as the cookie bakes, creating little pockets of colour and sweetness throughout.', bg: '#F0E0C8', flip: false },
-  { n: 'Coffee Almond', tag: 'Premium', img: '/assets/products/coffee-almond.jpg', desc: 'Espresso-infused dough meets toasted whole almonds in our most sophisticated cookie. The coffee deepens as it bakes, creating a complex, aromatic flavour with a satisfying crunch.', bg: '#E8D0A8', flip: true },
-  { n: 'White Chocolate', tag: 'Classic', img: '/assets/products/white-choc.jpg', desc: 'Buttery golden dough folded with generous chunks of Belgian white chocolate and a hint of vanilla bean. Sweet, creamy and utterly indulgent.', bg: '#F5ECD0', flip: false },
+interface MenuItem { n: string; tag: string; img: string; desc: string; price: number; bg: string; flip: boolean; }
+
+// Warm backdrop palette, cycled per card (presentation only).
+const BG_PALETTE = ['#F5E8C8', '#E8D8B8', '#DCE9D4', '#F8D88A', '#F5DCDA', '#F5C47C', '#E8C49A', '#D8C8B0', '#F0E0C8', '#E8D0A8', '#F5ECD0'];
+
+// Rendered instantly on first paint and if the backend is unreachable (mirrors the real menu).
+const FALLBACK: Omit<MenuItem, 'bg' | 'flip'>[] = [
+  { n: 'Chocolate Chip', tag: 'Classic', img: '/assets/products/blueberry.jpg', price: 60, desc: 'The original. Buttery dough, browned-butter base and premium dark chocolate chips — crisp at the edges, gooey at the core.' },
+  { n: 'Double Choc Chip', tag: 'Bestseller', img: '/assets/products/triple-choc.jpg', price: 65, desc: 'Rich cocoa dough loaded with extra-dark chocolate chunks and a dusting of Dutch cocoa. Fudgy and impossible to resist.' },
+  { n: 'Raagi (Gluten Free)', tag: 'Gluten Free', img: '/assets/products/oatmeal-raisin.jpg', price: 60, desc: 'Wholesome finger-millet cookie, naturally gluten free, with a warm nutty depth and just the right chew.' },
+  { n: 'Matcha', tag: 'Premium', img: '/assets/products/matcha.jpg', price: 90, desc: 'Stone-ground ceremonial matcha from Uji, Japan folded into buttery dough with cacao-butter white-chocolate chips.' },
+  { n: 'ADC Special', tag: 'Signature', img: '/assets/products/adc-special.jpg', price: 90, desc: 'Our crown jewel — slow-browned butter, three kinds of premium chocolate and hand-harvested Maldon sea-salt flakes.' },
+  { n: 'Red Velvet With Cheese', tag: 'Premium', img: '/assets/products/red-velvet.jpg', price: 90, desc: 'Deep cocoa-red velvet dough wrapped around a tangy cream-cheese centre that softens as it bakes.' },
+  { n: 'Biscoff Filled', tag: 'Bestseller', img: '/assets/products/peanut-butter.jpg', price: 110, desc: 'Caramelised cookie shell around a warm, molten river of Belgian Lotus Biscoff spread.' },
+  { n: 'Nutella Filled', tag: 'Recommended', img: '/assets/products/caramel-cashew.jpg', price: 90, desc: 'A gooey Nutella centre tucked inside a soft chocolate cookie. Absolutely irresistible warm.' },
+  { n: 'Nutella Tin', tag: 'Gift', img: '/assets/products/coffee-almond.jpg', price: 600, desc: 'Six premium Nutella-filled cookies in a keepsake gift tin. Perfect for gifting and celebrations.' },
+  { n: 'Biscoff Tin', tag: 'Gift', img: '/assets/products/m-and-m.jpg', price: 850, desc: 'Nine Biscoff-filled cookies, gift-ready in a premium tin with a ribbon wrap and name tag.' },
 ];
 
-function ProductCard({ p, i }: { p: typeof PRODUCTS[0]; i: number }) {
+const decorate = (items: Omit<MenuItem, 'bg' | 'flip'>[]): MenuItem[] =>
+  items.map((p, i) => ({ ...p, bg: BG_PALETTE[i % BG_PALETTE.length], flip: i % 2 === 1 }));
+
+function ProductCard({ p }: { p: MenuItem }) {
   const router = useRouter();
 
-  const onRight = !p.flip;
   const imageEl = (
     <div style={{ flex: 'none', width: 580, height: 500, borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,.14)' }}>
       <Image
@@ -67,24 +76,24 @@ function ProductCard({ p, i }: { p: typeof PRODUCTS[0]; i: number }) {
   );
 }
 
-function PatternSection({ children }: { children: React.ReactNode }) {
+function PatternSection({ items, children }: { items: MenuItem[]; children: React.ReactNode }) {
   return (
     <div style={{ position: 'relative' }}>
       {/* Floral background */}
       <div style={{ position: 'absolute', inset: 0, background: '#F9EDE1', backgroundImage: "url('/assets/floral-pattern-only.png')", backgroundSize: '620px auto', backgroundRepeat: 'repeat' }} />
 
       {/* Orange edge blobs - one per product card on alternating sides */}
-      {PRODUCTS.map((prod, i) => {
+      {items.map((prod, i) => {
         const onRight = !prod.flip;
         return onRight ? (
-          <svg key={'blob-r'+i} style={{ position: 'absolute', top: `calc(${i} * (100% / ${PRODUCTS.length}) + 2%)`, right: 0, width: 108, height: 160, pointerEvents: 'none', zIndex: 0 }} viewBox="0 0 108 160">
-            <path d="M108,0 L108,160 C88,148 78,118 82,80 C86,42 100,12 108,0 Z" fill="#EF7507"/>
-            <path d="M82,80 C86,42 100,12 108,0" fill="none" stroke="white" strokeWidth="2.2" strokeDasharray="8 6"/>
+          <svg key={'blob-r' + i} style={{ position: 'absolute', top: `calc(${i} * (100% / ${items.length}) + 2%)`, right: 0, width: 108, height: 160, pointerEvents: 'none', zIndex: 0 }} viewBox="0 0 108 160">
+            <path d="M108,0 L108,160 C88,148 78,118 82,80 C86,42 100,12 108,0 Z" fill="#EF7507" />
+            <path d="M82,80 C86,42 100,12 108,0" fill="none" stroke="white" strokeWidth="2.2" strokeDasharray="8 6" />
           </svg>
         ) : (
-          <svg key={'blob-l'+i} style={{ position: 'absolute', top: `calc(${i} * (100% / ${PRODUCTS.length}) + 2%)`, left: 0, width: 100, height: 152, pointerEvents: 'none', zIndex: 0 }} viewBox="0 0 100 152">
-            <path d="M0,0 L0,152 C20,140 30,110 26,76 C22,42 8,12 0,0 Z" fill="#EF7507"/>
-            <path d="M26,76 C22,42 8,12 0,0" fill="none" stroke="white" strokeWidth="2.2" strokeDasharray="8 6"/>
+          <svg key={'blob-l' + i} style={{ position: 'absolute', top: `calc(${i} * (100% / ${items.length}) + 2%)`, left: 0, width: 100, height: 152, pointerEvents: 'none', zIndex: 0 }} viewBox="0 0 100 152">
+            <path d="M0,0 L0,152 C20,140 30,110 26,76 C22,42 8,12 0,0 Z" fill="#EF7507" />
+            <path d="M26,76 C22,42 8,12 0,0" fill="none" stroke="white" strokeWidth="2.2" strokeDasharray="8 6" />
           </svg>
         );
       })}
@@ -95,15 +104,28 @@ function PatternSection({ children }: { children: React.ReactNode }) {
 }
 
 export default function Products() {
+  const [items, setItems] = useState<MenuItem[]>(() => decorate(FALLBACK));
+
+  // Load the full live menu from the DB (cookies first, then tins — backend order).
+  useEffect(() => {
+    getProducts().then(products => {
+      if (!products?.length) return;
+      setItems(decorate(products.map(p => ({
+        n: p.name, tag: p.tag || 'Cookie', img: firstImage(p.images),
+        desc: p.description || '', price: Number(p.price),
+      }))));
+    }).catch(() => {}); // keep fallback on error
+  }, []);
+
   return (
-    <PatternSection>
+    <PatternSection items={items}>
       <section style={{ padding: '56px 0 96px' }}>
         <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 var(--gutter)', display: 'flex', flexDirection: 'column', gap: 28 }}>
           <div style={{ marginBottom: 16 }}>
             <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' }}>Our Menu</p>
             <h2 style={{ font: 'var(--weight-extra) var(--text-h1)/1 var(--font-display)', color: 'var(--text-strong)', margin: 0, letterSpacing: '-.025em' }}>Every Cookie, Every Tin.</h2>
           </div>
-          {PRODUCTS.map((p, i) => <ProductCard key={p.n} p={p} i={i} />)}
+          {items.map((p) => <ProductCard key={p.n} p={p} />)}
         </div>
       </section>
 

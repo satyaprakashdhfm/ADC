@@ -6,7 +6,7 @@ import { ChevronLeft, User, Menu, X, Search, ShoppingBag, ChevronRight, Sparkles
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
-import { getProducts, getAddresses, validateCoupon, createOrder, type Product, type Address } from '@/lib/api';
+import { getProducts, getAddresses, validateCoupon, createOrder, firstImage, type Product, type Address, type OrderItemInput } from '@/lib/api';
 
 /* ---- Data ---- */
 const CATEGORIES = ['Recommended', 'Classic Cookies', 'Filled Cookies', 'Premium Cookies', 'Gift Tins'];
@@ -413,7 +413,12 @@ function CheckoutPage({ show, onBack, onPlace }: { show: boolean; onBack: () => 
     const doOrder = async () => {
       try {
         if (user) {
-          await createOrder(addr, applied ? coupon : undefined);
+          // Send the real cart line-items so the order persists with correct products.
+          // Only DB-backed products have numeric ids; filter out any non-DB extras.
+          const items: OrderItemInput[] = Object.values(cart)
+            .map(e => ({ productId: Number(e.id), quantity: e.qty }))
+            .filter(it => Number.isFinite(it.productId) && it.quantity > 0);
+          await createOrder(addr, applied ? coupon : undefined, items);
         }
       } catch {}
       setDone(true);
@@ -750,32 +755,37 @@ export default function OrderingApp() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
 
-  // Load products from backend
+  // Load products from backend — faithful mapping (real images, groups, tags, stable ratings)
   useEffect(() => {
     getProducts().then(products => {
       if (!products?.length) return;
       const cookies = products.filter(p => p.category === 'COOKIES');
       const tinProds = products.filter(p => p.category === 'TINS');
 
+      // Deterministic decorative rating/review-count from the product id (stable across renders).
+      const ratingOf = (p: Product) => Math.round((4.4 + ((p.id * 7) % 6) / 10) * 10) / 10;
+      const rcOf = (p: Product) => {
+        const n = (p.id * 137) % 4200 + 480;
+        return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+      };
+
       if (cookies.length > 0) {
-        const mappedMenu = cookies.map((p, i) => {
-          const fallback = FALLBACK_MENU[i % FALLBACK_MENU.length];
-          return {
-            id: String(p.id), name: p.name, price: Number(p.price),
-            cat: 'Classic Cookies', rec: i < 2, best: i === 0,
-            rating: 4.5 + Math.random() * 0.4, rc: `${Math.floor(Math.random() * 3000 + 500)}`,
-            veg: true, img: fallback.img, desc: p.description || fallback.desc,
-          };
-        });
-        setMenu(mappedMenu as any);
+        setMenu(cookies.map(p => ({
+          id: String(p.id), name: p.name, price: Number(p.price),
+          cat: p.menuGroup || 'Classic Cookies',
+          rec: p.featured || p.tag === 'Recommended',
+          best: p.tag === 'Bestseller' || p.tag === 'Signature',
+          rating: ratingOf(p), rc: rcOf(p),
+          veg: true, img: firstImage(p.images), desc: p.description || '',
+        })) as any);
       }
 
       if (tinProds.length > 0) {
-        const mappedTins = tinProds.map((p, i) => {
-          const fallback = FALLBACK_TINS[i % FALLBACK_TINS.length];
-          return { id: String(p.id), name: p.name, price: Number(p.price), count: 6, img: fallback.img, desc: p.description || fallback.desc };
-        });
-        setTins(mappedTins as any);
+        setTins(tinProds.map(p => ({
+          id: String(p.id), name: p.name, price: Number(p.price),
+          count: /biscoff/i.test(p.name) ? 9 : 6,
+          img: firstImage(p.images), desc: p.description || '',
+        })) as any);
       }
     }).catch(() => {}); // use fallback data on error
   }, []);

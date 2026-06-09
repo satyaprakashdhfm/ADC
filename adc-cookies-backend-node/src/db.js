@@ -2,10 +2,12 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
+// If DATABASE_URL is set (and non-empty) it wins; otherwise node-postgres reads
+// PGHOST / PGDATABASE / PGUSER / PGPASSWORD / PGPORT from the environment (.env).
 export const pool = new Pool(
   process.env.DATABASE_URL
     ? { connectionString: process.env.DATABASE_URL }
-    : { host: '/var/run/postgresql', database: 'adccookies', user: process.env.USER }
+    : {}
 );
 
 export const query  = (sql, p = []) => pool.query(sql, p);

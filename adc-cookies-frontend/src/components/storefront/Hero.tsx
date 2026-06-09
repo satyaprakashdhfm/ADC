@@ -1,30 +1,67 @@
 'use client';
 import { useState, useEffect, useRef, CSSProperties } from 'react';
-import Image from 'next/image';
 import Nav from './Nav';
 import { useRouter } from 'next/navigation';
+import { getProducts, firstImage } from '@/lib/api';
 
-const SLIDES = [
-  { n: 'ADC Special', tag: 'Signature', line: 'Our most loved cookie, ever.', desc: 'Handcrafted with browned butter, three kinds of premium chocolate and Maldon sea-salt flakes. Baked fresh every morning.', img: '/assets/products/adc-special.jpg', video: '/assets/hero-video.mp4', bg: '#1A1008' },
-  { n: 'Matcha', tag: 'Premium', line: 'Earthy, creamy, addictive.', desc: 'Stone-ground ceremonial matcha from Uji, Japan folded into our buttery dough with cacao-butter white chocolate chips.', img: '/assets/products/matcha.jpg', video: '/assets/hero-video-matcha.mp4', bg: '#0D1A10' },
-  { n: 'Triple Chocolate', tag: 'Bestseller', line: 'Warm dough. Three kinds of chocolate.', desc: 'Dark, milk and white chocolate folded into a deep cocoa dough. Rich, fudgy and completely impossible to stop at one.', img: '/assets/products/triple-choc.jpg', video: '/assets/hero-video-triple-choc.mp4', bg: '#1A0E06' },
-  { n: 'Red Velvet', tag: 'Premium', line: 'Bold cocoa. Silky cream cheese.', desc: 'Deep cocoa-red velvet dough wrapped around a tangy cream-cheese centre. Our most dramatic cookie.', img: '/assets/products/red-velvet.jpg', video: '/assets/hero-video-red-velvet.mp4', bg: '#1A0508' },
-  { n: 'Blueberry', tag: 'Classic', line: 'Butter, blueberry, pure joy.', desc: 'Buttery golden dough studded with plump blueberries and a hint of lemon zest. Simple, seasonal and utterly satisfying.', img: '/assets/products/blueberry.jpg', video: '/assets/hero-video-blueberry.mp4', bg: '#0A0D1A' },
-];
+interface Slide { n: string; tag: string; line: string; desc: string; img: string; video: string; bg: string; }
+
+/* Purely-presentational assets (hero video, backdrop colour, tagline) keyed by product
+   name. The product set itself + names/prices/descriptions/which are featured all come
+   from the database; this just maps each featured product to its cinematic treatment. */
+const PRESENTATION: Record<string, { video: string; bg: string; line: string }> = {
+  'ADC Special':            { video: '/assets/hero-video.mp4',             bg: '#1A1008', line: 'Our most loved cookie, ever.' },
+  'Matcha':                 { video: '/assets/hero-video-matcha.mp4',      bg: '#0D1A10', line: 'Earthy, creamy, addictive.' },
+  'Double Choc Chip':       { video: '/assets/hero-video-triple-choc.mp4', bg: '#1A0E06', line: 'Warm dough. Double the chocolate.' },
+  'Red Velvet With Cheese': { video: '/assets/hero-video-red-velvet.mp4',  bg: '#1A0508', line: 'Bold cocoa. Silky cream cheese.' },
+  'Biscoff Filled':         { video: '/assets/hero-video-blueberry.mp4',   bg: '#1A0E06', line: 'A molten Biscoff centre.' },
+};
+const DEFAULT_PRES = { video: '/assets/hero-video.mp4', bg: '#1A1008', line: 'Baked fresh every morning.' };
+
+// Lead order for the slideshow (Signature first); any other featured items follow.
+const LEAD_ORDER = ['ADC Special', 'Biscoff Filled', 'Matcha', 'Red Velvet With Cheese', 'Double Choc Chip'];
+
+// Shown instantly on first paint and if the backend is unreachable.
+const FALLBACK_SLIDES: Slide[] = LEAD_ORDER.map(n => ({
+  n, tag: 'Featured', line: PRESENTATION[n]?.line ?? DEFAULT_PRES.line,
+  desc: '', img: '/assets/products/adc-special.jpg',
+  video: PRESENTATION[n]?.video ?? DEFAULT_PRES.video, bg: PRESENTATION[n]?.bg ?? DEFAULT_PRES.bg,
+}));
 
 interface HeroProps { onMenuOpen: () => void; }
 
 export default function Hero({ onMenuOpen }: HeroProps) {
   const [idx, setIdx] = useState(0);
+  const [slides, setSlides] = useState<Slide[]>(FALLBACK_SLIDES);
   const router = useRouter();
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+
+  // Build the slideshow from the DB's featured products.
+  useEffect(() => {
+    getProducts().then(products => {
+      const featured = products.filter(p => p.featured);
+      if (!featured.length) return;
+      featured.sort((a, b) => {
+        const ia = LEAD_ORDER.indexOf(a.name), ib = LEAD_ORDER.indexOf(b.name);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      });
+      setSlides(featured.map(p => {
+        const pres = PRESENTATION[p.name] ?? DEFAULT_PRES;
+        return { n: p.name, tag: p.tag || 'Featured', line: pres.line, desc: p.description || '',
+                 img: firstImage(p.images), video: pres.video, bg: pres.bg };
+      }));
+      setIdx(0);
+    }).catch(() => {}); // keep fallback slides on error
+  }, []);
+
+  const SLIDES = slides;
 
   useEffect(() => {
     const t = setInterval(() => setIdx(i => (i + 1) % SLIDES.length), 7000);
     return () => clearInterval(t);
-  }, []);
+  }, [SLIDES.length]);
 
-  const s = SLIDES[idx];
+  const s = SLIDES[idx] ?? SLIDES[0];
 
   return (
     <section style={{ height: '100vh', background: s.bg, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'background .8s ease' }}>

@@ -16,10 +16,11 @@ router.post('/products', async (req, res) => {
   const b = req.body || {};
   const ts = nowIso();
   const row = await getOne(
-    `INSERT INTO products (name, category, description, price, stock_quantity, images, options, is_available, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    `INSERT INTO products (name, category, description, price, stock_quantity, images, options, is_available, menu_group, tag, featured, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
     [b.name, b.category, b.description ?? null, b.price, b.stockQuantity ?? 0,
-     b.images ?? null, b.options ?? null, b.isAvailable !== false, ts, ts]
+     b.images ?? null, b.options ?? null, b.isAvailable !== false,
+     b.menuGroup ?? null, b.tag ?? null, !!b.featured, ts, ts]
   );
   res.json(serializeProduct(row));
 });
@@ -30,9 +31,10 @@ router.put('/products/:id', async (req, res) => {
   const b = req.body || {};
   const row = await getOne(
     `UPDATE products SET name=$1, category=$2, description=$3, price=$4, stock_quantity=$5,
-       images=$6, options=$7, is_available=$8, updated_at=$9 WHERE id=$10 RETURNING *`,
+       images=$6, options=$7, is_available=$8, menu_group=$9, tag=$10, featured=$11, updated_at=$12 WHERE id=$13 RETURNING *`,
     [b.name, b.category, b.description ?? null, b.price, b.stockQuantity ?? 0,
-     b.images ?? null, b.options ?? null, b.isAvailable !== false, nowIso(), req.params.id]
+     b.images ?? null, b.options ?? null, b.isAvailable !== false,
+     b.menuGroup ?? null, b.tag ?? null, !!b.featured, nowIso(), req.params.id]
   );
   res.json(serializeProduct(row));
 });

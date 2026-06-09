@@ -37,6 +37,18 @@ export interface Product {
   id: number; name: string; category: 'COOKIES' | 'TINS';
   description: string; price: number; stockQuantity: number;
   images: string; options: string; isAvailable: boolean;
+  menuGroup: string; tag: string; featured: boolean;
+}
+
+/** Parse the JSON `images` column and return the first url, or a fallback. */
+export function firstImage(images: string | null | undefined, fallback = '/assets/products/adc-special.jpg'): string {
+  if (!images) return fallback;
+  try {
+    const arr = JSON.parse(images);
+    return Array.isArray(arr) && arr.length ? arr[0] : fallback;
+  } catch {
+    return images || fallback;
+  }
 }
 
 export async function getProducts(params?: { category?: string; search?: string }): Promise<Product[]> {
@@ -99,8 +111,10 @@ export interface Order {
   orderStatus: string; paymentStatus: string; createdAt: string;
 }
 
-export async function createOrder(addressId: number, couponCode?: string): Promise<Order> {
-  return request('/orders', { method: 'POST', body: JSON.stringify({ addressId, couponCode }) });
+export interface OrderItemInput { productId: number; quantity: number; selectedOptions?: string; specialNotes?: string; }
+
+export async function createOrder(addressId: number, couponCode?: string, items?: OrderItemInput[]): Promise<Order> {
+  return request('/orders', { method: 'POST', body: JSON.stringify({ addressId, couponCode, items }) });
 }
 
 export async function getOrders(): Promise<Order[]> { return request('/orders'); }
