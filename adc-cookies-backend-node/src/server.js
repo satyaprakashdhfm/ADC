@@ -1,0 +1,66 @@
+import 'dotenv/config';
+import 'express-async-errors';
+import express from 'express';
+import cors from 'cors';
+
+import { initSchema } from './db.js';
+import { seedIfEmpty } from './seed.js';
+import { parseAuth } from './middleware.js';
+
+import authRoutes from './routes/auth.js';
+import productRoutes from './routes/products.js';
+import cartRoutes from './routes/cart.js';
+import orderRoutes from './routes/orders.js';
+import addressRoutes from './routes/addresses.js';
+import couponRoutes from './routes/coupons.js';
+import adminRoutes from './routes/admin.js';
+
+const PORT = Number(process.env.PORT || 8080);
+
+const app = express();
+
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['*', 'Authorization', 'Content-Type'],
+}));
+
+app.use(express.json());
+app.use(parseAuth);
+
+app.get('/', (_req, res) => res.json({ status: 'ok', service: 'adc-cookies-backend (node/pg)' }));
+
+app.use('/api/auth', authRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/coupons', couponRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/addresses', addressRoutes);
+app.use('/api/admin', adminRoutes);
+
+app.use((_req, res) => res.status(404).json({ error: 'Not found', message: 'Resource not found' }));
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, _req, res, _next) => {
+  if (err.code === '23505') { // unique_violation
+    return res.status(400).json({ error: 'Already exists', message: 'A record with this value already exists' });
+  }
+  if (err.code === '23503') { // foreign_key_violation
+    return res.status(400).json({ error: 'Cannot delete', message: 'This record is referenced by existing orders and cannot be deleted' });
+  }
+  const status = err.status || 500;
+  const message = err.message || 'Something went wrong';
+  if (status >= 500) console.error(err);
+  res.status(status).json({ error: message, message });
+});
+
+async function main() {
+  await initSchema();
+  await seedIfEmpty();
+  app.listen(PORT, () => {
+    console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
+  });
+}
+
+main().catch(err => { console.error('Startup failed:', err); process.exit(1); });
