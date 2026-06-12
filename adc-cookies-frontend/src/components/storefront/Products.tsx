@@ -27,22 +27,26 @@ const DEFAULT_TINT = '#E8C68E';
 // A few faint cookie/crumb doodles sprinkled into the menu background — sparse and
 // subtle, layered over the floral pattern (not a dense tile). Positioned from the
 // page edges so they sit in the margins rather than over the product photos.
-const DOODLES: { src: string; top: string; side: 'left' | 'right'; pos: string; size: number; rot: number; op: number }[] = [
-  { src: 'cookie-1', top: '5%',  side: 'left',  pos: '7%',  size: 92,  rot: -12, op: 0.22 },
-  { src: 'cookie-2', top: '10%', side: 'right', pos: '6%',  size: 80,  rot: 6,   op: 0.18 },
-  { src: 'crumb-1',  top: '15%', side: 'right', pos: '14%', size: 50,  rot: 8,   op: 0.20 },
-  { src: 'cookie-4', top: '22%', side: 'left',  pos: '6%',  size: 84,  rot: -18, op: 0.20 },
-  { src: 'cookie-3', top: '29%', side: 'right', pos: '5%',  size: 100, rot: 14,  op: 0.20 },
-  { src: 'crumb-2',  top: '36%', side: 'left',  pos: '14%', size: 44,  rot: 12,  op: 0.22 },
-  { src: 'cookie-2', top: '44%', side: 'left',  pos: '11%', size: 88,  rot: 18,  op: 0.18 },
-  { src: 'cookie-1', top: '50%', side: 'right', pos: '7%',  size: 92,  rot: -10, op: 0.19 },
-  { src: 'crumb-2',  top: '57%', side: 'left',  pos: '5%',  size: 48,  rot: -10, op: 0.20 },
-  { src: 'cookie-4', top: '66%', side: 'right', pos: '9%',  size: 96,  rot: -16, op: 0.20 },
-  { src: 'crumb-1',  top: '72%', side: 'left',  pos: '13%', size: 46,  rot: 16,  op: 0.22 },
-  { src: 'cookie-1', top: '82%', side: 'left',  pos: '8%',  size: 84,  rot: 22,  op: 0.18 },
-  { src: 'cookie-3', top: '86%', side: 'right', pos: '6%',  size: 88,  rot: 20,  op: 0.19 },
-  { src: 'crumb-1',  top: '91%', side: 'right', pos: '15%', size: 50,  rot: -6,  op: 0.22 },
-];
+// Deterministic pseudo-jitter (Math.sin hash) — identical on server & client, so no
+// hydration mismatch (and no Math.random, which would differ between renders).
+const dRnd = (i: number, salt: number) => {
+  const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+// ~50 faint cookie/crumb doodles, evenly spaced down both margins, gently jittered.
+const DOODLE_COUNT = 50;
+const DOODLES = Array.from({ length: DOODLE_COUNT }, (_, i) => {
+  const side: 'left' | 'right' = i % 2 === 0 ? 'left' : 'right';
+  const isCrumb = i % 3 === 2;
+  const src = isCrumb ? (i % 2 ? 'crumb-2' : 'crumb-1') : `cookie-${(i % 4) + 1}`;
+  const top = (i * (100 / DOODLE_COUNT) + dRnd(i, 1) * 1.4).toFixed(2) + '%';
+  const pos = (4 + dRnd(i, 4) * 12).toFixed(1) + '%';
+  const size = isCrumb ? 38 + Math.round(dRnd(i, 2) * 14) : 70 + Math.round(dRnd(i, 3) * 30);
+  const rot = Math.round(dRnd(i, 5) * 40 - 20);
+  const op = isCrumb ? 0.2 : 0.17;
+  return { src, top, side, pos, size, rot, op };
+});
 
 // Rendered instantly on first paint and if the backend is unreachable (mirrors the real menu).
 const FALLBACK: Omit<MenuItem, 'bg' | 'flip'>[] = PRODUCT_DOCS.map((p) => ({
@@ -149,7 +153,8 @@ function PatternSection({ items, children }: { items: MenuItem[]; children: Reac
               backgroundRepeat: 'no-repeat',
               backgroundPosition: onRight ? 'right center' : 'left center',
               transform: onRight ? 'scaleX(-1)' : 'none',
-              filter: 'drop-shadow(0 8px 16px rgba(58,37,26,.18))',
+              opacity: 0.42,
+              filter: 'drop-shadow(0 4px 8px rgba(58,37,26,.08))',
               pointerEvents: 'none', zIndex: 0,
             }}
           />
