@@ -148,9 +148,32 @@ body::before {
   inset: 0;
   z-index: -1;
   background: #F9EDE1 url('/assets/floral-pattern-only.png') repeat;
-  background-size: 560px auto;
-  opacity: 0.28;
+  background-size: 620px auto;
+  opacity: 0.4;
   pointer-events: none;
+}
+
+.adc-pattern-page {
+  position: relative;
+  isolation: isolate;
+  background: #F9EDE1;
+}
+
+.adc-pattern-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: url('/assets/floral-pattern-only.png');
+  background-size: 620px auto;
+  background-repeat: repeat;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.adc-pattern-page > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* Animations */
@@ -165,4 +188,15 @@ body::before {
 @media (max-width:680px) {
   .prod-card { flex-direction: column !important; padding: 28px 22px !important; }
   .prod-card > div:first-child { width: 100% !important; height: 240px !important; justify-content: center; }
+  .product-doc-hero { grid-template-columns: 1fr !important; }
+  .product-doc-grid { grid-template-columns: 1fr !important; }
+  .about-card-grid { grid-template-columns: 1fr !important; }
+  .gallery-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (min-width:681px) and (max-width:980px) {
+  .product-doc-hero { grid-template-columns: 1fr !important; }
+  .product-doc-grid { grid-template-columns: 1fr !important; }
+  .about-card-grid { grid-template-columns: 1fr !important; }
+  .gallery-grid { grid-template-columns: repeat(2,1fr) !important; }
 }

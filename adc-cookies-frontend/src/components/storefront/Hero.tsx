@@ -18,6 +18,9 @@ const PRESENTATION: Record<string, { video: string; bg: string; line: string }> 
 };
 const DEFAULT_PRES = { video: '/assets/hero-video.mp4', bg: '#1A1008', line: 'Baked fresh every morning.' };
 
+// Seconds to skip at the start of every hero video (the cookie-fall begins ~1s in).
+const START_OFFSET = 1;
+
 // Lead order for the slideshow (Signature first); any other featured items follow.
 const LEAD_ORDER = ['ADC Special', 'Biscoff Filled', 'Matcha', 'Red Velvet With Cheese', 'Double Choc Chip'];
 
@@ -61,6 +64,26 @@ export default function Hero({ onMenuOpen }: HeroProps) {
     return () => clearInterval(t);
   }, [SLIDES.length]);
 
+  // Only the active slide's video plays. It starts 1s in (START_OFFSET) so the
+  // cookie-fall action is on screen the instant the slide appears — not the dead
+  // first second. Looping also restarts at START_OFFSET (see onEnded below).
+  useEffect(() => {
+    videoRefs.current.forEach((v, i) => {
+      if (!v) return;
+      if (i === idx) {
+        const seekAndPlay = () => {
+          try { v.currentTime = START_OFFSET; } catch {}
+          const p = v.play();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        };
+        if (v.readyState >= 2) seekAndPlay();            // HAVE_CURRENT_DATA — can seek now
+        else v.addEventListener('loadeddata', seekAndPlay, { once: true });
+      } else {
+        v.pause();
+      }
+    });
+  }, [idx, SLIDES]);
+
   const s = SLIDES[idx] ?? SLIDES[0];
 
   return (
@@ -69,9 +92,10 @@ export default function Hero({ onMenuOpen }: HeroProps) {
       {SLIDES.map((sl, i) => (
         <video
           key={sl.n}
-          autoPlay
-          loop
+          muted
           playsInline
+          preload="auto"
+          onEnded={e => { const v = e.currentTarget; try { v.currentTime = START_OFFSET; } catch {} v.play().catch(() => {}); }}
           ref={el => {
             videoRefs.current[i] = el;
             if (el) { el.muted = true; el.volume = 0; }
@@ -85,8 +109,8 @@ export default function Hero({ onMenuOpen }: HeroProps) {
       {/* Dark overlay */}
       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(10,6,2,.75) 0%,rgba(10,6,2,.35) 50%,rgba(10,6,2,.15) 100%)', zIndex: 1 }} />
 
-      {/* Nav */}
-      <div style={{ position: 'relative', zIndex: 2 }}>
+      {/* Nav — above the centered-text overlay so the Menu button stays clickable */}
+      <div style={{ position: 'relative', zIndex: 30 }}>
         <Nav onMenuOpen={onMenuOpen} />
       </div>
 
@@ -105,7 +129,7 @@ export default function Hero({ onMenuOpen }: HeroProps) {
             fontSize: 'clamp(3rem,2rem + 5vw,6.5rem)',
             lineHeight: .9, letterSpacing: '-.03em', color: '#fff', margin: '0 0 20px',
             textShadow: '0 4px 24px rgba(0,0,0,.4)',
-            whiteSpace: 'nowrap',
+            textAlign: 'center', textWrap: 'balance',
           }}>{s.n}</h1>
           <p style={{ fontSize: 'var(--text-lg)', color: 'rgba(255,245,220,.8)', margin: '0 0 32px', fontWeight: 400, lineHeight: 1.6, maxWidth: 520, marginLeft: 'auto', marginRight: 'auto', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as CSSProperties}>{s.desc}</p>
           <button

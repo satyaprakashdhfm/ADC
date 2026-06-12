@@ -7,10 +7,8 @@ import Products from '@/components/storefront/Products';
 import Footer from '@/components/storefront/Footer';
 import MenuDrawer from '@/components/storefront/MenuDrawer';
 import LoginModal from '@/components/ordering/LoginModal';
-import { AuthProvider } from '@/context/AuthContext';
-import { CartProvider } from '@/context/CartContext';
 
-function HomeInner() {
+export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -48,15 +46,5 @@ function HomeInner() {
         <ShoppingBag size={20} /> Order Now
       </button>
     </div>
-  );
-}
-
-export default function Home() {
-  return (
-    <AuthProvider>
-      <CartProvider>
-        <HomeInner />
-      </CartProvider>
-    </AuthProvider>
   );
 }

@@ -230,7 +230,7 @@ function TinModal({ tin, onClose, onAdd }: { tin: typeof FALLBACK_TINS[0] | null
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 82, background: 'var(--surface-overlay)', backdropFilter: 'blur(3px)', opacity: open ? 1 : 0, pointerEvents: open ? 'auto' : 'none', transition: 'opacity .3s' }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 83, background: 'var(--surface-page)', transform: open ? 'translateY(0)' : 'translateY(100%)', transition: 'transform .4s var(--ease-spring)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 83, transform: open ? 'translateY(0)' : 'translateY(100%)', transition: 'transform .4s var(--ease-spring)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {tin && (
           <>
             <div className="hide-sb" style={{ flex: 1, overflowY: 'auto' }}>
@@ -304,7 +304,7 @@ function CartReviewPage({ show, onBack, onProceed }: { show: boolean; onBack: ()
   const grand = total + delivery;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 72, background: 'var(--surface-page)', transform: show ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .38s cubic-bezier(.4,0,.2,1)', display: 'flex', flexDirection: 'column' }}>
+    <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, transform: show ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .38s cubic-bezier(.4,0,.2,1)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-card)' }}>
         <button onClick={onBack} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><ChevronLeft size={20} /></button>
         <div style={{ lineHeight: 1.1 }}>
@@ -431,7 +431,7 @@ function CheckoutPage({ show, onBack, onPlace }: { show: boolean; onBack: () => 
   const fmtExp = (v: string) => { const d = v.replace(/\D/g,'').slice(0,4); return d.length > 2 ? d.slice(0,2)+'/'+d.slice(2) : d; };
 
   if (placing || done) return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 72, background: 'linear-gradient(165deg,#FFF4E0 0%,var(--surface-page) 100%)', transform: show ? 'none' : 'translateX(100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, padding: 32, textAlign: 'center' }}>
+    <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, transform: show ? 'none' : 'translateX(100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, padding: 32, textAlign: 'center' }}>
       {done ? (
         <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', boxShadow: '0 20px 60px rgba(242,159,5,.4)', animation: 'riseIn .45s var(--ease-spring) both' }}><Check size={48} color="#fff" strokeWidth={3} /></div>
       ) : (
@@ -445,7 +445,7 @@ function CheckoutPage({ show, onBack, onPlace }: { show: boolean; onBack: () => 
   );
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 72, background: 'var(--surface-page)', transform: show ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .38s cubic-bezier(.4,0,.2,1)', display: 'flex', flexDirection: 'column' }}>
+    <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, transform: show ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .38s cubic-bezier(.4,0,.2,1)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-card)', flex: 'none' }}>
         <button onClick={onBack} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><ChevronLeft size={20} /></button>
         <div>
@@ -623,8 +623,8 @@ function OrderSuccessPage({ show, total, onBackToMenu }: { show: boolean; total:
     { icon: <Home size={18} />, label: 'Delivered', done: false },
   ];
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 72, background: 'var(--surface-page)', transform: show ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .38s cubic-bezier(.4,0,.2,1)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(165deg,#FFF4E0 0%,var(--surface-page) 100%)', padding: '32px 24px', textAlign: 'center', overflowY: 'auto' }}>
+    <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, transform: show ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .38s cubic-bezier(.4,0,.2,1)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', textAlign: 'center', overflowY: 'auto' }}>
         <div style={{ width: 120, height: 120, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', boxShadow: '0 20px 60px rgba(242,159,5,.38)', animation: 'riseIn .5s var(--ease-spring) both', marginBottom: 28 }}>
           <Check size={62} color="#fff" strokeWidth={3} />
         </div>
@@ -666,13 +666,14 @@ function AccountSheet({ open, onClose }: { open: boolean; onClose: () => void })
     { id: 'ADC-20338', date: 'Jun 2 · 5:10 PM', status: 'Delivered', total: 600, items: ['Nutella Tin'] },
   ];
 
+  if (!open) return null;
+
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 84, background: 'var(--surface-overlay)', backdropFilter: 'blur(3px)', opacity: open ? 1 : 0, pointerEvents: open ? 'auto' : 'none', transition: 'opacity .3s' }} />
-      <div style={{ position: 'fixed', inset: 0, zIndex: 85, background: 'var(--surface-page)', transform: open ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .4s var(--ease-spring)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-card)' }}>
-          <button onClick={onClose} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><ChevronLeft size={20} /></button>
-          <div style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>Account</div>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 84, background: 'var(--surface-overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(560px,94vw)', maxHeight: '88vh', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', overflow: 'hidden', display: 'flex', flexDirection: 'column', animation: 'riseIn .3s var(--ease-spring) both' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-card)', flex: 'none' }}>
+          <div style={{ flex: 1, font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>Account</div>
+          <button onClick={onClose} aria-label="Close" style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><X size={20} /></button>
         </div>
 
         <div className="hide-sb" style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 28px' }}>
@@ -732,7 +733,7 @@ function AccountSheet({ open, onClose }: { open: boolean; onClose: () => void })
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -811,7 +812,7 @@ export default function OrderingApp() {
   if (desktop) {
     return (
       <>
-        <div style={{ minHeight: '100vh', background: 'var(--surface-page)' }}>
+        <div className="adc-pattern-page" style={{ minHeight: '100vh' }}>
           {/* Desktop header */}
           <header style={{ position: 'sticky', top: 0, zIndex: 30, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-soft)' }}>
             <div style={{ maxWidth: 1240, margin: '0 auto', padding: '14px var(--gutter)', display: 'flex', alignItems: 'center', gap: 22 }}>
@@ -954,7 +955,7 @@ export default function OrderingApp() {
   /* Mobile layout */
   return (
     <>
-      <div style={{ minHeight: '100vh', background: 'var(--surface-page)' }}>
+      <div className="adc-pattern-page" style={{ minHeight: '100vh' }}>
         {/* Mobile top nav */}
         <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-soft)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 10px' }}>

@@ -4,9 +4,10 @@ const { Pool } = pg;
 
 // If DATABASE_URL is set (and non-empty) it wins; otherwise node-postgres reads
 // PGHOST / PGDATABASE / PGUSER / PGPASSWORD / PGPORT from the environment (.env).
+// Remote hosts (e.g. Supabase) require SSL; local Unix-socket auth does not.
 export const pool = new Pool(
   process.env.DATABASE_URL
-    ? { connectionString: process.env.DATABASE_URL }
+    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
     : {}
 );
 

@@ -52,11 +52,12 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   if (!open) return null;
 
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(20,12,4,.5)', backdropFilter: 'blur(4px)' }} />
-      <div style={{
-        position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-        zIndex: 91, width: 'min(440px,94vw)', background: 'var(--surface-page)',
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(20,12,4,.5)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        zIndex: 91, width: 'min(440px,94vw)', maxHeight: '92vh', background: 'var(--surface-page)',
         borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)',
         overflow: 'hidden', display: 'flex', flexDirection: 'column',
         animation: 'riseIn .3s var(--ease-spring) both',
@@ -118,11 +119,11 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
           {/* Demo accounts */}
           <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
             <strong style={{ color: 'var(--text-body)' }}>Demo accounts:</strong><br />
-            priya@example.com / password123<br />
+            priya@example.com / priya123<br />
             admin@adccookies.com / admin123
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

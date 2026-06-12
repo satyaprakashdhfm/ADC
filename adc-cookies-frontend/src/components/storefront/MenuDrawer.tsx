@@ -1,7 +1,8 @@
 'use client';
 import Image from 'next/image';
-import { X, Info, Image as ImageIcon, BookOpen, Mail, ShoppingBag, ChevronRight } from 'lucide-react';
+import { X, Info, Image as ImageIcon, BookOpen, Mail, ShoppingBag, ChevronRight, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 const NAV_LINKS = [
   { label: 'About Us', icon: <Info size={19} />, href: '/about' },
@@ -18,6 +19,7 @@ interface MenuDrawerProps {
 
 export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerProps) {
   const router = useRouter();
+  const { user, logout } = useAuth();
 
   return (
     <>
@@ -55,21 +57,37 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
           </button>
         </div>
 
-        {/* Login CTA */}
-        <div style={{ margin: '0 16px 16px', padding: '20px', borderRadius: 20, background: 'linear-gradient(135deg,var(--amber-100),#FDE8C4)' }}>
-          <div style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', marginBottom: 4 }}>Welcome back!</div>
-          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 14 }}>Log in to track orders &amp; save favourites.</div>
-          <div style={{ display: 'flex', gap: 10 }}>
+        {/* Account / Login CTA — reflects the shared auth state */}
+        {user ? (
+          <div style={{ margin: '0 16px 16px', padding: '18px 20px', borderRadius: 20, background: 'linear-gradient(135deg,var(--amber-100),#FDE8C4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, flex: 'none' }}>{user.initials}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</div>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
+              </div>
+            </div>
             <button
-              onClick={() => { onClose(); onLoginOpen(); }}
-              style={{ flex: 1, padding: '11px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
-            >Log in</button>
-            <button
-              onClick={() => { onClose(); onLoginOpen(); }}
-              style={{ flex: 1, padding: '11px 0', borderRadius: 'var(--radius-pill)', border: '2px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
-            >Sign up</button>
+              onClick={() => logout()}
+              style={{ width: '100%', padding: '11px 0', borderRadius: 'var(--radius-pill)', border: '2px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            ><LogOut size={16} /> Log out</button>
           </div>
-        </div>
+        ) : (
+          <div style={{ margin: '0 16px 16px', padding: '20px', borderRadius: 20, background: 'linear-gradient(135deg,var(--amber-100),#FDE8C4)' }}>
+            <div style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', marginBottom: 4 }}>Welcome back!</div>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 14 }}>Log in to track orders &amp; save favourites.</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => { onClose(); onLoginOpen(); }}
+                style={{ flex: 1, padding: '11px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
+              >Log in</button>
+              <button
+                onClick={() => { onClose(); onLoginOpen(); }}
+                style={{ flex: 1, padding: '11px 0', borderRadius: 'var(--radius-pill)', border: '2px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
+              >Sign up</button>
+            </div>
+          </div>
+        )}
 
         {/* Nav links */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 10px' }}>

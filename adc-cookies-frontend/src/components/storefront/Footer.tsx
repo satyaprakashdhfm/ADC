@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import Link from 'next/link';
+import { productPath } from '@/lib/products';
 
 export default function Footer() {
   return (
@@ -20,15 +22,30 @@ export default function Footer() {
           </div>
         </div>
         {([
-          ['Shop', ['Classic Cookies', 'Filled Cookies', 'Premium', 'Gift Tins']],
-          ['Company', ['Our Story', 'Stores', 'Careers', 'Press']],
-          ['Help', ['Track Order', 'FAQs', 'Contact', 'Returns']],
-        ] as [string, string[]][]).map(([h, items]) => (
+          ['Shop', [
+            ['ADC Special', productPath('ADC Special')],
+            ['Biscoff Filled', productPath('Biscoff Filled')],
+            ['Nutella Tin', productPath('Nutella Tin')],
+            ['All Products', '/#menu'],
+          ]],
+          ['Company', [
+            ['Our Story', '/about'],
+            ['Gallery', '/gallery'],
+            ['Order Online', '/order'],
+            ['Home', '/'],
+          ]],
+          ['Help', [
+            ['Track Order', '/order'],
+            ['FAQs', '/about'],
+            ['Contact', '/about'],
+            ['Returns', '/about'],
+          ]],
+        ] as [string, [string, string][]][]).map(([h, items]) => (
           <div key={h}>
             <div style={{ fontWeight: 700, color: '#fff', marginBottom: 14, fontSize: 'var(--text-sm)', letterSpacing: '.08em', textTransform: 'uppercase' }}>{h}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {items.map(it => (
-                <a key={it} href="#" style={{ color: 'rgba(255,248,241,.5)', textDecoration: 'none', fontSize: 'var(--text-sm)' }}>{it}</a>
+              {items.map(([it, href]) => (
+                <Link key={it} href={href} style={{ color: 'rgba(255,248,241,.5)', textDecoration: 'none', fontSize: 'var(--text-sm)' }}>{it}</Link>
               ))}
             </div>
           </div>
