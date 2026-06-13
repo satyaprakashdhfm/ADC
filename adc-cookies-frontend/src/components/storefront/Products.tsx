@@ -7,9 +7,8 @@ import { PRODUCT_DOCS, productPath } from '@/lib/products';
 
 interface MenuItem { n: string; tag: string; img: string; desc: string; price: number; bg: string; flip: boolean; }
 
-// Hover tint per product — each echoes the cookie itself, kept in one deeper,
-// on-brand register (light enough for the dark card text). Falls back to a warm
-// caramel for any product not listed.
+// Card tint per product — each echoes the cookie, in a light on-brand register that
+// keeps the dark card text readable. Falls back to a warm caramel.
 const HOVER_TINT: Record<string, string> = {
   'Chocolate Chip':         '#E6C79A', // warm caramel-tan
   'Double Choc Chip':       '#D9B98C', // deeper cocoa-tan
@@ -24,37 +23,45 @@ const HOVER_TINT: Record<string, string> = {
 };
 const DEFAULT_TINT = '#E8C68E';
 
-// A few faint cookie/crumb doodles sprinkled into the menu background — sparse and
-// subtle, layered over the floral pattern (not a dense tile). Positioned from the
-// page edges so they sit in the margins rather than over the product photos.
 // Deterministic pseudo-jitter (Math.sin hash) — identical on server & client, so no
-// hydration mismatch (and no Math.random, which would differ between renders).
+// hydration mismatch (no Math.random, which would differ between renders).
 const dRnd = (i: number, salt: number) => {
   const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
   return x - Math.floor(x);
 };
 
-// ~50 faint cookie/crumb doodles, evenly spaced down both margins, gently jittered.
-const DOODLE_COUNT = 50;
-const DOODLES = Array.from({ length: DOODLE_COUNT }, (_, i) => {
-  const side: 'left' | 'right' = i % 2 === 0 ? 'left' : 'right';
-  const isCrumb = i % 3 === 2;
-  const src = isCrumb ? (i % 2 ? 'crumb-2' : 'crumb-1') : `cookie-${(i % 4) + 1}`;
-  const top = (i * (100 / DOODLE_COUNT) + dRnd(i, 1) * 1.4).toFixed(2) + '%';
-  const pos = (4 + dRnd(i, 4) * 12).toFixed(1) + '%';
-  const size = isCrumb ? 38 + Math.round(dRnd(i, 2) * 14) : 70 + Math.round(dRnd(i, 3) * 30);
-  const rot = Math.round(dRnd(i, 5) * 40 - 20);
-  const op = isCrumb ? 0.2 : 0.17;
-  return { src, top, side, pos, size, rot, op };
+// Real cookie photos scattered as a medium-size background layer (behind the cards),
+// tucked into both margins. Cutouts live in /assets/bg-cookies.
+const COOKIE_SRCS = ['real-2', 'real-3', 'real-4', 'real-5', 'real-6', 'real-7'];
+// Even grid across the WHOLE section (middle + edges + top + bottom), gently jittered,
+// so it reads as a full background texture rather than only hugging the side edges.
+const BG_COLS = 6;
+const BG_ROWS = 18;
+const BG_COOKIES = Array.from({ length: BG_COLS * BG_ROWS }, (_, i) => {
+  const col = i % BG_COLS, row = Math.floor(i / BG_COLS);
+  const src = COOKIE_SRCS[i % COOKIE_SRCS.length];
+  const brick = (row % 2) * 0.5;                       // offset alternate rows so columns don't line up
+  const left = (((col + 0.5 + brick + (dRnd(i, 4) - 0.5) * 0.9) / BG_COLS) * 100).toFixed(1) + '%';
+  const top  = (((row + 0.5 + (dRnd(i, 1) - 0.5) * 0.9) / BG_ROWS) * 100).toFixed(1) + '%';
+  const size = 120 + Math.round(dRnd(i, 3) * 60);     // ~120–180px
+  const rot  = Math.round(dRnd(i, 5) * 40 - 20);
+  const op   = 0.16;                                   // faint — a true background texture
+  return { src, left, top, size, rot, op };
 });
 
 // Rendered instantly on first paint and if the backend is unreachable (mirrors the real menu).
+// Richer marketing copy for the home cards (description + texture + sweetness), keyed by
+// name, so the wide cards read full instead of empty.
+const LONG_DESC: Record<string, string> = Object.fromEntries(
+  PRODUCT_DOCS.map(d => [d.name, `${d.description} ${d.texture} ${d.sweetness}`])
+);
+
 const FALLBACK: Omit<MenuItem, 'bg' | 'flip'>[] = PRODUCT_DOCS.map((p) => ({
   n: p.name,
   tag: p.tag,
   img: p.image,
   price: p.price,
-  desc: p.description,
+  desc: LONG_DESC[p.name] ?? p.description,
 }));
 
 const decorate = (items: Omit<MenuItem, 'bg' | 'flip'>[]): MenuItem[] =>
@@ -62,11 +69,12 @@ const decorate = (items: Omit<MenuItem, 'bg' | 'flip'>[]): MenuItem[] =>
 
 function ProductCard({ p }: { p: MenuItem }) {
   const router = useRouter();
+  const [hover, setHover] = useState(false);
 
   const imageEl = (
-    <div style={{ flex: 'none', width: 720, height: 440, borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,.14)' }}>
+    <div style={{ flex: 'none', width: 490, height: 490, borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,.14)' }}>
       <Image
-        src={p.img} alt={p.n} width={720} height={440}
+        src={p.img} alt={p.n} width={490} height={490}
         style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .5s ease' }}
         onMouseEnter={e => ((e.target as HTMLImageElement).style.transform = 'scale(1.06)')}
         onMouseLeave={e => ((e.target as HTMLImageElement).style.transform = 'none')}
@@ -79,8 +87,8 @@ function ProductCard({ p }: { p: MenuItem }) {
       <div style={{ display: 'inline-flex', alignItems: 'center', padding: '5px 14px', borderRadius: 'var(--radius-pill)', background: 'rgba(255,255,255,.7)', backdropFilter: 'blur(8px)', marginBottom: 16 }}>
         <span style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', letterSpacing: '.04em' }}>{p.tag}</span>
       </div>
-      <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'clamp(1.5rem,1.1rem + 1.8vw,2.4rem)', lineHeight: .96, letterSpacing: '-.025em', color: 'var(--text-strong)', margin: '0 0 10px' }}>{p.n}</h2>
-      <p style={{ fontSize: 'var(--text-base)', color: 'rgba(30,18,8,.65)', lineHeight: 1.7, margin: '0 0 28px', maxWidth: 520 }}>{p.desc}</p>
+      <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'clamp(1.9rem,1.3rem + 2.2vw,2.9rem)', lineHeight: .98, letterSpacing: '-.025em', color: 'var(--text-strong)', margin: '0 0 14px' }}>{p.n}</h2>
+      <p style={{ fontSize: 'var(--text-lg)', color: 'rgba(30,18,8,.66)', lineHeight: 1.7, margin: '0 0 28px', maxWidth: 580 }}>{p.desc}</p>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <button
           onClick={() => router.push('/order')}
@@ -91,8 +99,6 @@ function ProductCard({ p }: { p: MenuItem }) {
         <button
           onClick={() => router.push(productPath(p.n))}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '14px 32px', cursor: 'pointer', borderRadius: 'var(--radius-pill)', border: '2px solid rgba(30,18,8,.25)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--text-strong)', whiteSpace: 'nowrap', transition: 'background .2s' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,.06)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >Learn More</button>
       </div>
     </div>
@@ -101,65 +107,38 @@ function ProductCard({ p }: { p: MenuItem }) {
   return (
     <div
       className="prod-card"
-      style={{ background: 'transparent', borderRadius: 32, padding: 'clamp(36px,5vw,72px) clamp(36px,6vw,80px)', display: 'flex', alignItems: 'center', gap: 56, flexWrap: 'wrap', overflow: 'hidden', transition: 'background .4s ease,transform .3s ease,box-shadow .3s ease', cursor: 'default' }}
-      onMouseEnter={e => { e.currentTarget.style.background = p.bg; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 24px 48px rgba(0,0,0,.13)'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+      style={{ background: hover ? p.bg : 'transparent', borderRadius: 32, padding: 'clamp(26px,3.2vw,48px) clamp(36px,6vw,80px)', display: 'flex', alignItems: 'center', gap: 56, flexWrap: 'wrap', overflow: 'hidden', transform: hover ? 'translateY(-3px)' : 'none', boxShadow: hover ? '0 24px 48px rgba(0,0,0,.28)' : 'none', transition: 'background .4s ease, transform .3s ease, box-shadow .3s ease', cursor: 'default' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
     >
       {p.flip ? <>{textEl}{imageEl}</> : <>{imageEl}{textEl}</>}
     </div>
   );
 }
 
-function PatternSection({ items, children }: { items: MenuItem[]; children: React.ReactNode }) {
+function PatternSection({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', overflow: 'hidden' }}>
       {/* Warm base colour */}
       <div style={{ position: 'absolute', inset: 0, background: '#F9EDE1' }} />
       {/* Floral pattern — kept faint so it reads as a subtle backdrop, not a loud overlay */}
       <div style={{ position: 'absolute', inset: 0, backgroundImage: "url('/assets/floral-pattern-only.png')", backgroundSize: '620px auto', backgroundRepeat: 'repeat', opacity: 0.4 }} />
 
-      {/* Faint cookie doodles sprinkled over the pattern */}
-      {DOODLES.map((d, i) => (
+      {/* Real cookie photos — faint, spread evenly across the whole section as a background */}
+      {BG_COOKIES.map((c, i) => (
         <div
-          key={'doodle' + i}
+          key={'bgc' + i}
           aria-hidden
           style={{
-            position: 'absolute', top: d.top, [d.side]: d.pos,
-            width: d.size, height: d.size,
-            backgroundImage: `url('/assets/doodles/${d.src}.png')`,
+            position: 'absolute', top: c.top, left: c.left,
+            width: c.size, height: c.size, marginLeft: -c.size / 2, marginTop: -c.size / 2,
+            backgroundImage: `url('/assets/bg-cookies/${c.src}.png')`,
             backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
-            transform: `rotate(${d.rot}deg)`, opacity: d.op,
+            transform: `rotate(${c.rot}deg)`, opacity: c.op,
             pointerEvents: 'none', zIndex: 0,
           }}
         />
       ))}
-
-      {/* Cookie mascots — one per product card, peeking in from alternating edges
-         (replaces the old orange blobs). 6 mascots cycle across the cards. */}
-      {items.map((prod, i) => {
-        const onRight = !prod.flip;
-        const src = `/assets/mascots/mascot-${(i % 6) + 1}.png`;
-        return (
-          <div
-            key={'masc' + i}
-            aria-hidden
-            style={{
-              position: 'absolute',
-              top: `calc(${i} * (100% / ${items.length}) + 3%)`,
-              [onRight ? 'right' : 'left']: 0,
-              width: 128, height: 150,
-              backgroundImage: `url('${src}')`,
-              backgroundSize: 'contain',
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: onRight ? 'right center' : 'left center',
-              transform: onRight ? 'scaleX(-1)' : 'none',
-              opacity: 0.42,
-              filter: 'drop-shadow(0 4px 8px rgba(58,37,26,.08))',
-              pointerEvents: 'none', zIndex: 0,
-            }}
-          />
-        );
-      })}
 
       <div style={{ position: 'relative', zIndex: 1 }}>{children}</div>
     </div>
@@ -175,15 +154,15 @@ export default function Products() {
       if (!products?.length) return;
       setItems(decorate(products.map(p => ({
         n: p.name, tag: p.tag || 'Cookie', img: firstImage(p.images),
-        desc: p.description || '', price: Number(p.price),
+        desc: LONG_DESC[p.name] ?? (p.description || ''), price: Number(p.price),
       }))));
     }).catch(() => {}); // keep fallback on error
   }, []);
 
   return (
-    <PatternSection items={items}>
+    <PatternSection>
       <section id="menu" style={{ padding: '56px 0 96px' }}>
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 var(--gutter)', display: 'flex', flexDirection: 'column', gap: 28 }}>
+        <div style={{ maxWidth: 1520, margin: '0 auto', padding: '0 var(--gutter)', display: 'flex', flexDirection: 'column', gap: 28 }}>
           <div style={{ marginBottom: 16 }}>
             <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' }}>Our Menu</p>
             <h2 style={{ font: 'var(--weight-extra) var(--text-h1)/1 var(--font-display)', color: 'var(--text-strong)', margin: 0, letterSpacing: '-.025em' }}>Every Cookie, Every Tin.</h2>
@@ -192,11 +171,11 @@ export default function Products() {
         </div>
       </section>
 
-      {/* Reviews section */}
-      <section style={{ padding: '72px 0' }}>
+      {/* Reviews section — dark-brown band matching the footer */}
+      <section style={{ padding: '88px 0', background: 'var(--surface-inverse)', position: 'relative', zIndex: 1 }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 var(--gutter)' }}>
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' }}>Customer Love</p>
-          <h2 style={{ font: 'var(--weight-extra) var(--text-h1)/1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 48px', letterSpacing: '-.025em' }}>People can&apos;t stop</h2>
+          <h2 style={{ font: 'var(--weight-extra) var(--text-h1)/1 var(--font-display)', color: '#fff', margin: '0 0 48px', letterSpacing: '-.025em' }}>People can&apos;t stop</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 40 }}>
             {[
               { q: 'The Biscoff filled is unreal — gooey, warm, perfect. My weekly ritual now.', a: 'Ananya R.', city: 'Bengaluru' },
@@ -205,12 +184,12 @@ export default function Products() {
             ].map((rv, i) => (
               <div key={i}>
                 <div style={{ color: 'var(--amber-500)', fontSize: 18, letterSpacing: 4, marginBottom: 16 }}>★★★★★</div>
-                <p style={{ fontSize: 'var(--text-lg)', color: 'var(--text-strong)', lineHeight: 1.65, margin: '0 0 20px', fontWeight: 500 }}>&ldquo;{rv.q}&rdquo;</p>
+                <p style={{ fontSize: 'var(--text-lg)', color: 'var(--cream-100)', lineHeight: 1.65, margin: '0 0 20px', fontWeight: 500 }}>&ldquo;{rv.q}&rdquo;</p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800 }}>{rv.a[0]}</div>
                   <div>
-                    <div style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{rv.a}</div>
-                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{rv.city}</div>
+                    <div style={{ fontWeight: 700, color: '#fff' }}>{rv.a}</div>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,248,241,.55)' }}>{rv.city}</div>
                   </div>
                 </div>
               </div>

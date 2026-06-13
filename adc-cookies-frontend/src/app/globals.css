@@ -192,6 +192,9 @@ body::before {
   .product-doc-grid { grid-template-columns: 1fr !important; }
   .about-card-grid { grid-template-columns: 1fr !important; }
   .gallery-grid { grid-template-columns: 1fr !important; }
+  .blog-grid { grid-template-columns: 1fr !important; }
+  .contact-layout { grid-template-columns: 1fr !important; }
+  .store-grid { grid-template-columns: 1fr !important; }
 }
 
 @media (min-width:681px) and (max-width:980px) {
@@ -199,4 +202,6 @@ body::before {
   .product-doc-grid { grid-template-columns: 1fr !important; }
   .about-card-grid { grid-template-columns: 1fr !important; }
   .gallery-grid { grid-template-columns: repeat(2,1fr) !important; }
+  .blog-grid { grid-template-columns: 1fr !important; }
+  .contact-layout { grid-template-columns: 1fr !important; }
 }

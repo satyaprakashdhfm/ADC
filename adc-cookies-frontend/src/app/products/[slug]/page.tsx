@@ -27,9 +27,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     <main className="adc-pattern-page" style={{ minHeight: '100vh' }}>
       <section style={{ padding: '28px var(--gutter) 72px' }}>
         <div style={{ maxWidth: 1180, margin: '0 auto' }}>
-          <Link href="/#menu" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text-strong)', fontWeight: 800, marginBottom: 28 }}>
-            <ArrowLeft size={18} /> Back to menu
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, marginBottom: 28, flexWrap: 'wrap' }}>
+            <Link href="/" aria-label="a dough cookie home" style={{ display: 'inline-block' }}>
+              <Image src="/assets/adc-logo.png" height={86} width={128} alt="a dough cookie" style={{ objectFit: 'contain' }} />
+            </Link>
+            <Link href="/#menu" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text-strong)', fontWeight: 800 }}>
+              <ArrowLeft size={18} /> Back to menu
+            </Link>
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px,520px) 1fr', gap: 48, alignItems: 'center' }} className="product-doc-hero">
             <div style={{ aspectRatio: '1 / 1', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-xl)', background: 'var(--surface-sunken)' }}>

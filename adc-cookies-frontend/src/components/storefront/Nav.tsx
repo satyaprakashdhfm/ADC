@@ -14,12 +14,12 @@ export default function Nav({ onMenuOpen }: NavProps) {
     }}>
       <div style={{
         maxWidth: 1280, margin: '0 auto', padding: '0 var(--gutter)',
-        height: 128, display: 'flex', alignItems: 'center',
+        height: 150, display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', position: 'relative',
       }}>
-        {/* Logo centered */}
-        <a href="#" style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textDecoration: 'none' }}>
-          <Image src="/assets/adc-logo.png" height={116} width={160} alt="a dough cookie" style={{ display: 'block', objectFit: 'contain' }} />
+        {/* Logo — left aligned, larger */}
+        <a href="#" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+          <Image src="/assets/adc-logo.png" height={168} width={232} alt="a dough cookie" style={{ display: 'block', objectFit: 'contain' }} />
         </a>
 
         {/* Menu button right */}

@@ -25,7 +25,9 @@ export default function GalleryPage() {
     <main className="adc-pattern-page" style={{ minHeight: '100vh' }}>
       <section style={{ padding: '36px var(--gutter) 48px' }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <Link href="/" style={{ display: 'inline-block', color: 'var(--text-strong)', fontWeight: 800, marginBottom: 32 }}>a dough cookie</Link>
+          <Link href="/" aria-label="a dough cookie home" style={{ display: 'inline-block', marginBottom: 32 }}>
+            <Image src="/assets/adc-logo.png" height={86} width={128} alt="a dough cookie" style={{ objectFit: 'contain' }} />
+          </Link>
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Gallery</p>
           <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 22 }}>Cookies, boxes, and fresh-baked moments.</h1>
           <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 680, color: 'var(--text-body)' }}>Images are pulled from the local cookies folder and staged into the site assets so the gallery works in the Next app.</p>

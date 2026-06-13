@@ -4,7 +4,7 @@ import { productPath } from '@/lib/products';
 
 export default function Footer() {
   return (
-    <footer style={{ background: 'var(--surface-inverse)', color: 'var(--cream-100)', padding: '60px 0 28px' }}>
+    <footer style={{ background: 'var(--surface-inverse)', color: 'var(--cream-100)', padding: '60px 0 28px', borderTop: '1px solid rgba(255,248,241,.14)' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 var(--gutter)', display: 'grid', gridTemplateColumns: '1.5fr repeat(3,1fr)', gap: 32 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -31,14 +31,14 @@ export default function Footer() {
           ['Company', [
             ['Our Story', '/about'],
             ['Gallery', '/gallery'],
+            ['Blog', '/blog'],
             ['Order Online', '/order'],
-            ['Home', '/'],
           ]],
           ['Help', [
             ['Track Order', '/order'],
-            ['FAQs', '/about'],
-            ['Contact', '/about'],
-            ['Returns', '/about'],
+            ['FAQs', '/contact'],
+            ['Contact', '/contact'],
+            ['Returns', '/contact'],
           ]],
         ] as [string, [string, string][]][]).map(([h, items]) => (
           <div key={h}>

@@ -14,7 +14,9 @@ export default function AboutPage() {
       <section style={{ padding: '36px var(--gutter) 82px' }}>
         <div style={{ maxWidth: 1120, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr minmax(280px,460px)', gap: 48, alignItems: 'center' }} className="product-doc-hero">
           <div>
-            <Link href="/" style={{ display: 'inline-block', color: 'var(--text-strong)', fontWeight: 800, marginBottom: 32 }}>a dough cookie</Link>
+            <Link href="/" aria-label="a dough cookie home" style={{ display: 'inline-block', marginBottom: 32 }}>
+              <Image src="/assets/adc-logo.png" height={86} width={128} alt="a dough cookie" style={{ objectFit: 'contain' }} />
+            </Link>
             <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>About Us</p>
             <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 24 }}>Fresh cookies, built with care.</h1>
             <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.8, maxWidth: 640, color: 'var(--text-body)' }}>This is a proper dummy About page for ADC. Use it for the brand story, bakery process, quality promise, delivery standards, team notes, and any founder message you want visitors to see.</p>

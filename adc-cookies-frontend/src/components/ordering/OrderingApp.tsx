@@ -115,22 +115,17 @@ function ProductMenuItem({ item, qty, onQtyChange, onOpen }: { item: typeof FALL
         <div style={{ display: 'flex', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
           {item.veg && <span style={{ width: 16, height: 16, border: '2px solid var(--mark-veg)', borderRadius: 3, display: 'grid', placeItems: 'center', flex: 'none' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--mark-veg)', display: 'block' }} /></span>}
           {(item as any).best && <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Bestseller</span>}
-          {(item as any).rec && !((item as any).best) && <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--teal-50)', color: 'var(--teal-700)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>★ Recommended</span>}
         </div>
-        <h3 onClick={onOpen} style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px', cursor: 'pointer' }}>{item.name}</h3>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--amber-600)', fontWeight: 700 }}>★ {item.rating}</span>
-          <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>({item.rc})</span>
-        </div>
+        <h3 onClick={onOpen} style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px', cursor: 'pointer' }}>{item.name}</h3>
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, margin: '0 0 10px' }}>{item.desc}</p>
         <span style={{ fontWeight: 800, fontSize: 'var(--text-base)', color: 'var(--text-strong)' }}>₹{item.price}</span>
       </div>
       <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 120, height: 120, borderRadius: 'var(--radius-image)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }} onClick={onOpen}>
-          <Image src={item.img} alt={item.name} width={120} height={120} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .3s' }} />
+        <div style={{ width: 160, height: 160, borderRadius: 'var(--radius-image)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }} onClick={onOpen}>
+          <Image src={item.img} alt={item.name} width={160} height={160} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .3s' }} />
         </div>
         {qty === 0 ? (
-          <button onClick={() => onQtyChange(1)} style={{ width: 120, padding: '8px 0', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>ADD</button>
+          <button onClick={() => onQtyChange(1)} style={{ width: 160, padding: '9px 0', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>ADD</button>
         ) : (
           <QStepper value={qty} onChange={onQtyChange} size="sm" />
         )}
