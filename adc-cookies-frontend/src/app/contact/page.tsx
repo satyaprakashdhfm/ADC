@@ -1,7 +1,8 @@
-import Image from 'next/image';
 import Link from 'next/link';
-import { Mail, MapPin, Phone, ShoppingBag } from 'lucide-react';
+import { Mail, MapPin, Navigation, Phone, ShoppingBag } from 'lucide-react';
 import Footer from '@/components/storefront/Footer';
+import SiteHeader from '@/components/storefront/SiteHeader';
+import ContactForm from '@/components/storefront/ContactForm';
 
 const STORES = [
   {
@@ -11,7 +12,6 @@ const STORES = [
     phone: '+91 98765 43210',
     email: 'bengaluru@adccookies.com',
     map: 'https://www.google.com/maps/search/?api=1&query=Indiranagar+Bengaluru+Karnataka',
-    pin: { left: '38%', top: '70%' },
   },
   {
     city: 'Mumbai',
@@ -20,7 +20,6 @@ const STORES = [
     phone: '+91 98765 43211',
     email: 'mumbai@adccookies.com',
     map: 'https://www.google.com/maps/search/?api=1&query=Bandra+West+Mumbai+Maharashtra',
-    pin: { left: '25%', top: '55%' },
   },
   {
     city: 'Delhi',
@@ -29,7 +28,6 @@ const STORES = [
     phone: '+91 98765 43212',
     email: 'delhi@adccookies.com',
     map: 'https://www.google.com/maps/search/?api=1&query=Connaught+Place+New+Delhi',
-    pin: { left: '39%', top: '30%' },
   },
   {
     city: 'Hyderabad',
@@ -38,7 +36,6 @@ const STORES = [
     phone: '+91 98765 43213',
     email: 'hyderabad@adccookies.com',
     map: 'https://www.google.com/maps/search/?api=1&query=Jubilee+Hills+Hyderabad+Telangana',
-    pin: { left: '43%', top: '61%' },
   },
 ];
 
@@ -50,14 +47,17 @@ export const metadata = {
 export default function ContactPage() {
   return (
     <main className="adc-pattern-page" style={{ minHeight: '100vh' }}>
+      <SiteHeader />
       <section style={{ padding: '36px var(--gutter) 48px' }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <Link href="/" aria-label="a dough cookie home" style={{ display: 'inline-block', marginBottom: 32 }}>
-            <Image src="/assets/adc-logo.png" height={86} width={128} alt="a dough cookie" style={{ objectFit: 'contain' }} />
-          </Link>
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Contact Us</p>
           <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 22 }}>Four ADC stores across India.</h1>
-          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 720, color: 'var(--text-body)' }}>Dummy store details for now. Replace these addresses, phone numbers, and emails with final branch information before publishing.</p>
+          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>Visit ADC for warm cookies, premium tins, gifting orders, and quick dessert pick-ups. Each store is positioned around busy neighborhoods so customers can order online, collect in person, or coordinate bulk boxes for events and celebrations.</p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
+            {['Store pickup', 'Bulk gifting', 'Fresh delivery', 'Custom notes'].map((item) => (
+              <span key={item} style={{ padding: '10px 16px', borderRadius: 'var(--radius-pill)', background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', color: 'var(--text-strong)', fontWeight: 800 }}>{item}</span>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -65,10 +65,15 @@ export default function ContactPage() {
         <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr minmax(320px,460px)', gap: 28, alignItems: 'start' }} className="contact-layout">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 18 }} className="store-grid">
             {STORES.map((store) => (
-              <article key={store.city} style={{ background: 'rgba(255,252,248,.86)', border: '1px solid var(--border-default)', borderRadius: 24, padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+              <article key={store.city} style={{ background: 'rgba(244,234,214,.86)', border: '1px solid var(--border-default)', borderRadius: 24, padding: 24, boxShadow: 'var(--shadow-sm)' }}>
                 <p style={{ fontSize: 'var(--text-sm)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>{store.city}</p>
                 <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 10 }}>{store.name}</h2>
                 <p style={{ color: 'var(--text-body)', lineHeight: 1.65, marginBottom: 16 }}>{store.address}</p>
+                <div style={{ display: 'grid', gap: 7, marginBottom: 16, color: 'var(--text-body)', fontSize: 'var(--text-sm)', lineHeight: 1.55 }}>
+                  <span>Fresh cookies and filled cookies available daily.</span>
+                  <span>Gift tins and bulk orders can be coordinated with the store team.</span>
+                  <span>Best for pickup, delivery support, and celebration boxes.</span>
+                </div>
                 <div style={{ display: 'grid', gap: 9, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)', marginBottom: 18 }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Phone size={16} /> {store.phone}</span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Mail size={16} /> {store.email}</span>
@@ -80,18 +85,42 @@ export default function ContactPage() {
             ))}
           </div>
 
-          <aside style={{ position: 'sticky', top: 24, background: 'rgba(255,252,248,.9)', border: '1px solid var(--border-default)', borderRadius: 26, padding: 22, boxShadow: 'var(--shadow-md)' }}>
-            <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 14 }}>India store map</h2>
-            <div style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 22, overflow: 'hidden', background: 'linear-gradient(160deg,#FDEBC2,#E3F8F9)', border: '1px solid var(--border-default)' }}>
-              <div style={{ position: 'absolute', inset: '9% 16% 10% 20%', borderRadius: '45% 45% 38% 42%', background: 'rgba(255,252,248,.72)', border: '2px solid rgba(43,29,18,.16)', boxShadow: 'inset 0 0 40px rgba(239,117,7,.12)' }} />
+          <aside style={{ position: 'sticky', top: 24, background: 'rgba(244,234,214,.9)', border: '1px solid var(--border-default)', borderRadius: 26, padding: 22, boxShadow: 'var(--shadow-md)' }}>
+            <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 14 }}>Find ADC on the map</h2>
+            <div style={{ borderRadius: 22, overflow: 'hidden', border: '1px solid var(--border-default)', background: 'var(--surface-sunken)', boxShadow: 'var(--shadow-sm)' }}>
+              <iframe
+                title="ADC store locations map"
+                src="https://www.google.com/maps?q=Indiranagar%20Bengaluru%20Bandra%20Mumbai%20Connaught%20Place%20Delhi%20Jubilee%20Hills%20Hyderabad&output=embed"
+                width="100%"
+                height="430"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                style={{ display: 'block', border: 0 }}
+              />
+            </div>
+            <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
               {STORES.map((store) => (
-                <Link key={store.city} href={store.map} target="_blank" rel="noreferrer" aria-label={`${store.city} map`} style={{ position: 'absolute', left: store.pin.left, top: store.pin.top, transform: 'translate(-50%,-100%)', display: 'grid', placeItems: 'center', width: 42, height: 42, borderRadius: '50%', background: 'var(--gradient-warm)', color: '#fff', boxShadow: '0 10px 24px rgba(239,117,7,.36)', border: '3px solid #fff' }}>
-                  <MapPin size={22} fill="currentColor" />
+                <Link key={store.city} href={store.map} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-strong)', fontWeight: 800 }}>
+                  <Navigation size={16} color="var(--brand-secondary)" /> Directions to {store.city}
                 </Link>
               ))}
             </div>
-            <p style={{ color: 'var(--text-muted)', lineHeight: 1.7, marginTop: 16 }}>Pins link to Google Maps searches for each dummy location.</p>
           </aside>
+        </div>
+      </section>
+
+      <section id="get-in-touch" style={{ padding: '0 var(--gutter) 96px' }}>
+        <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr minmax(320px,460px)', gap: 28, alignItems: 'start' }} className="contact-layout">
+          <div>
+            <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Get in Touch</p>
+            <h2 style={{ font: '900 clamp(2.2rem,1.6rem + 3vw,3.4rem)/1 var(--font-display)', letterSpacing: '-.02em', marginBottom: 16 }}>Leave your details and we&apos;ll reach out.</h2>
+            <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, color: 'var(--text-body)', marginBottom: 18 }}>Have a bulk order, a gifting request, or a question about our cookies? Share your details and our team will get back to you.</p>
+            <div style={{ display: 'grid', gap: 7, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Mail size={16} /> hello@adccookies.com</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Phone size={16} /> +91 98765 43210</span>
+            </div>
+          </div>
+          <ContactForm />
         </div>
       </section>
 

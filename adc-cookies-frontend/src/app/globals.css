@@ -1,6 +1,33 @@
 @import "tailwindcss";
 
 /* ============================================================
+   PRIMARY FONT — Aribau Grotesk (Emtype Foundry)
+   ⚠️ TRIAL FILES — preview/personal use only, NOT production.
+   Replace /public/fonts/*.woff2 with the licensed webfont files
+   before launch (keep the same filenames = no code change needed).
+   ============================================================ */
+@font-face {
+  font-family: 'Aribau Grotesk';
+  src: url('/fonts/AribauGrotesk-Regular.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Aribau Grotesk';
+  src: url('/fonts/AribauGrotesk-Medium.woff2') format('woff2');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Aribau Grotesk';
+  src: url('/fonts/AribauGrotesk-Bold.woff2') format('woff2');
+  font-weight: 600 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Aribau Grotesk';
+  src: url('/fonts/AribauGrotesk-Black.woff2') format('woff2');
+  font-weight: 800 900; font-style: normal; font-display: swap;
+}
+
+/* ============================================================
    ADC COOKIES — DESIGN TOKENS
    ============================================================ */
 
@@ -68,7 +95,7 @@
   --focus-ring: rgba(242,159,5,.45);
 
   /* Typography */
-  --font-display: 'Hanken Grotesk', system-ui, sans-serif;
+  --font-display: 'Aribau Grotesk', 'Hanken Grotesk', system-ui, sans-serif;
   --font-body: 'Cabin', system-ui, sans-serif;
   --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600;
   --weight-bold: 700; --weight-extra: 800;
@@ -95,8 +122,8 @@
 
   /* Shadows */
   --shadow-xs: 0 1px 2px rgba(58,37,26,.06);
-  --shadow-sm: 0 2px 8px rgba(58,37,26,.06),0 1px 2px rgba(58,37,26,.05);
-  --shadow-md: 0 8px 24px rgba(58,37,26,.08),0 2px 6px rgba(58,37,26,.05);
+  --shadow-sm: 0 2px 8px rgba(58,37,26,.06),0 1px 2px rgba(58,37,26,.05),0 0 18px rgba(58,37,26,.03);
+  --shadow-md: 0 8px 24px rgba(58,37,26,.08),0 2px 6px rgba(58,37,26,.05),0 0 28px rgba(58,37,26,.038);
   --shadow-lg: 0 18px 44px rgba(58,37,26,.10),0 4px 12px rgba(58,37,26,.06);
   --shadow-xl: 0 32px 70px rgba(58,37,26,.14),0 8px 20px rgba(58,37,26,.07);
   --shadow-brand: 0 12px 30px rgba(242,159,5,.34),0 4px 10px rgba(239,117,7,.22);
@@ -157,6 +184,13 @@ body::before {
   position: relative;
   isolation: isolate;
   background: #F9EDE1;
+
+  /* Warm, non-white surfaces for every page that uses this wrapper (i.e. everything
+     except the home page). Cards/inputs become warm ivory, headers a soft amber wash,
+     and the page itself (#F9EDE1) sits a touch darker behind the products. */
+  --surface-card: #F4EAD6;
+  --surface-raised: #EEE0C8;
+  --surface-glass: rgba(250,242,226,.92);
 }
 
 .adc-pattern-page::before {
@@ -186,8 +220,10 @@ body::before {
 @media (max-width:760px) { :root { --hc: 300px; } }
 @media (max-width:480px) { :root { --hc: 240px; } }
 @media (max-width:680px) {
-  .prod-card { flex-direction: column !important; padding: 28px 22px !important; }
-  .prod-card > div:first-child { width: 100% !important; height: 240px !important; justify-content: center; }
+  .prod-card { flex-direction: column !important; padding: 20px !important; gap: 16px !important; align-items: stretch !important; }
+  .prod-card-img { width: 100% !important; height: clamp(200px,56vw,300px) !important; order: -1 !important; }
+  .prod-card-text { width: 100% !important; padding: 0 !important; }
+  .bg-cookies-layer { display: none !important; }
   .product-doc-hero { grid-template-columns: 1fr !important; }
   .product-doc-grid { grid-template-columns: 1fr !important; }
   .about-card-grid { grid-template-columns: 1fr !important; }
@@ -195,6 +231,25 @@ body::before {
   .blog-grid { grid-template-columns: 1fr !important; }
   .contact-layout { grid-template-columns: 1fr !important; }
   .store-grid { grid-template-columns: 1fr !important; }
+  .account-layout { grid-template-columns: 1fr !important; }
+  .account-sidebar { position: static !important; }
+  .account-order-detail-grid { grid-template-columns: 1fr !important; }
+  .account-address-list { grid-template-columns: 1fr !important; }
+  .account-address-grid { grid-template-columns: 1fr !important; }
+  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px 24px !important; }
+  .footer-grid > div:first-child { grid-column: 1 / -1 !important; }
+}
+
+@media (max-width:420px) {
+  .footer-grid { grid-template-columns: 1fr !important; }
+}
+
+/* Homepage hero nav — shrink the oversized logo/menu on phones (desktop unchanged) */
+@media (max-width:760px) {
+  .home-nav { height: 84px !important; }
+  .home-nav-logo { height: 58px !important; width: auto !important; }
+  .home-nav-menu { padding: 10px 18px !important; font-size: 1rem !important; }
+  .home-nav-menu svg { width: 20px; height: 20px; }
 }
 
 @media (min-width:681px) and (max-width:980px) {
@@ -204,4 +259,7 @@ body::before {
   .gallery-grid { grid-template-columns: repeat(2,1fr) !important; }
   .blog-grid { grid-template-columns: 1fr !important; }
   .contact-layout { grid-template-columns: 1fr !important; }
+  .account-layout { grid-template-columns: 1fr !important; }
+  .account-sidebar { position: static !important; }
+  .account-address-list { grid-template-columns: 1fr !important; }
 }

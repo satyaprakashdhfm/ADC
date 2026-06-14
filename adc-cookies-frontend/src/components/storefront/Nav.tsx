@@ -12,20 +12,21 @@ export default function Nav({ onMenuOpen }: NavProps) {
       position: 'absolute', top: 0, left: 0, right: 0, zIndex: 60,
       background: 'transparent',
     }}>
-      <div style={{
+      <div className="home-nav" style={{
         maxWidth: 1280, margin: '0 auto', padding: '0 var(--gutter)',
         height: 150, display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', position: 'relative',
       }}>
         {/* Logo — left aligned, larger */}
         <a href="#" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
-          <Image src="/assets/adc-logo.png" height={168} width={232} alt="a dough cookie" style={{ display: 'block', objectFit: 'contain' }} />
+          <Image className="home-nav-logo" src="/assets/adc-logo.png" height={168} width={232} alt="a dough cookie" style={{ display: 'block', objectFit: 'contain' }} />
         </a>
 
         {/* Menu button right */}
         <div style={{ marginLeft: 'auto' }}>
           <button
             onClick={onMenuOpen}
+            className="home-nav-menu"
             style={{
               display: 'flex', alignItems: 'center', gap: 10,
               background: 'rgba(255,255,255,.22)', backdropFilter: 'blur(8px)',

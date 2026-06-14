@@ -1,6 +1,6 @@
 import Image from 'next/image';
-import Link from 'next/link';
 import Footer from '@/components/storefront/Footer';
+import SiteHeader from '@/components/storefront/SiteHeader';
 
 const GALLERY = [
   '/assets/gallery/ADC1.jpeg',
@@ -23,14 +23,25 @@ export const metadata = {
 export default function GalleryPage() {
   return (
     <main className="adc-pattern-page" style={{ minHeight: '100vh' }}>
+      <SiteHeader />
       <section style={{ padding: '36px var(--gutter) 48px' }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <Link href="/" aria-label="a dough cookie home" style={{ display: 'inline-block', marginBottom: 32 }}>
-            <Image src="/assets/adc-logo.png" height={86} width={128} alt="a dough cookie" style={{ objectFit: 'contain' }} />
-          </Link>
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Gallery</p>
           <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 22 }}>Cookies, boxes, and fresh-baked moments.</h1>
-          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 680, color: 'var(--text-body)' }}>Images are pulled from the local cookies folder and staged into the site assets so the gallery works in the Next app.</p>
+          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>A closer look at ADC cookies, boxes, and fresh-baked moments. The gallery should help customers see the product texture, packaging style, gifting quality, and the kind of care that goes into every order.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginTop: 26 }} className="store-grid">
+            {[
+              ['Fresh bakes', 'Soft centers and golden edges.'],
+              ['Gift boxes', 'Packed neatly for sharing.'],
+              ['Signature flavors', 'Chocolate, Biscoff, Matcha, and more.'],
+              ['Store moments', 'A warm bakery experience.'],
+            ].map(([title, body]) => (
+              <div key={title} style={{ background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', borderRadius: 18, padding: 18 }}>
+                <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 6 }}>{title}</h2>
+                <p style={{ color: 'var(--text-muted)', lineHeight: 1.55 }}>{body}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

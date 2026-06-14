@@ -14,6 +14,7 @@ import orderRoutes from './routes/orders.js';
 import addressRoutes from './routes/addresses.js';
 import couponRoutes from './routes/coupons.js';
 import adminRoutes from './routes/admin.js';
+import contactRoutes from './routes/contact.js';
 
 const PORT = Number(process.env.PORT || 8080);
 
@@ -38,6 +39,7 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/contact', contactRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found', message: 'Resource not found' }));
 

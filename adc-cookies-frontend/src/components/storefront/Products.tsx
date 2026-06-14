@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { getProducts, firstImage } from '@/lib/api';
@@ -10,18 +10,18 @@ interface MenuItem { n: string; tag: string; img: string; desc: string; price: n
 // Card tint per product — each echoes the cookie, in a light on-brand register that
 // keeps the dark card text readable. Falls back to a warm caramel.
 const HOVER_TINT: Record<string, string> = {
-  'Chocolate Chip':         '#E6C79A', // warm caramel-tan
-  'Double Choc Chip':       '#D9B98C', // deeper cocoa-tan
-  'Raagi (Gluten Free)':    '#E0CBA0', // millet beige
-  'Matcha':                 '#CFD9A6', // soft matcha green
-  'ADC Special':            '#ECC988', // signature honey/gold
-  'Red Velvet With Cheese': '#E7BEB0', // soft dusty rose
-  'Biscoff Filled':         '#E6C188', // biscoff caramel
-  'Nutella Filled':         '#DCB98E', // hazelnut
-  'Nutella Tin':            '#D8B488', // hazelnut (tin)
-  'Biscoff Tin':            '#E3BE84', // caramel (tin)
+  'Chocolate Chip':         '#C8AD86', // warm caramel-tan
+  'Double Choc Chip':       '#BDA17A', // deeper cocoa-tan
+  'Raagi (Gluten Free)':    '#C3B18B', // millet beige
+  'Matcha':                 '#B4BD90', // soft matcha green
+  'ADC Special':            '#CDAF76', // signature honey/gold
+  'Red Velvet With Cheese': '#C9A599', // soft dusty rose
+  'Biscoff Filled':         '#C8A876', // biscoff caramel
+  'Nutella Filled':         '#BFA17C', // hazelnut
+  'Nutella Tin':            '#BC9D76', // hazelnut (tin)
+  'Biscoff Tin':            '#C5A573', // caramel (tin)
 };
-const DEFAULT_TINT = '#E8C68E';
+const DEFAULT_TINT = '#CAAC7C';
 
 // Deterministic pseudo-jitter (Math.sin hash) — identical on server & client, so no
 // hydration mismatch (no Math.random, which would differ between renders).
@@ -35,8 +35,8 @@ const dRnd = (i: number, salt: number) => {
 const COOKIE_SRCS = ['real-2', 'real-3', 'real-4', 'real-5', 'real-6', 'real-7'];
 // Even grid across the WHOLE section (middle + edges + top + bottom), gently jittered,
 // so it reads as a full background texture rather than only hugging the side edges.
-const BG_COLS = 6;
-const BG_ROWS = 18;
+const BG_COLS = 5;
+const BG_ROWS = 14;
 const BG_COOKIES = Array.from({ length: BG_COLS * BG_ROWS }, (_, i) => {
   const col = i % BG_COLS, row = Math.floor(i / BG_COLS);
   const src = COOKIE_SRCS[i % COOKIE_SRCS.length];
@@ -45,7 +45,7 @@ const BG_COOKIES = Array.from({ length: BG_COLS * BG_ROWS }, (_, i) => {
   const top  = (((row + 0.5 + (dRnd(i, 1) - 0.5) * 0.9) / BG_ROWS) * 100).toFixed(1) + '%';
   const size = 120 + Math.round(dRnd(i, 3) * 60);     // ~120–180px
   const rot  = Math.round(dRnd(i, 5) * 40 - 20);
-  const op   = 0.16;                                   // faint — a true background texture
+  const op   = 0.15;                                   // faint — a true background texture
   return { src, left, top, size, rot, op };
 });
 
@@ -70,9 +70,22 @@ const decorate = (items: Omit<MenuItem, 'bg' | 'flip'>[]): MenuItem[] =>
 function ProductCard({ p }: { p: MenuItem }) {
   const router = useRouter();
   const [hover, setHover] = useState(false);
+  const [active, setActive] = useState(false); // scroll-into-view tint for touch (no-hover) devices
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia?.('(hover: none)').matches) return;
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => setActive(e.isIntersecting), { rootMargin: '-42% 0px -42% 0px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const lit = hover || active;
 
   const imageEl = (
-    <div style={{ flex: 'none', width: 490, height: 490, borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,.14)' }}>
+    <div className="prod-card-img" style={{ flex: 'none', width: 490, height: 490, borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,.14)' }}>
       <Image
         src={p.img} alt={p.n} width={490} height={490}
         style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .5s ease' }}
@@ -83,7 +96,7 @@ function ProductCard({ p }: { p: MenuItem }) {
   );
 
   const textEl = (
-    <div style={{ flex: 1, minWidth: 0, padding: '0 8px' }}>
+    <div className="prod-card-text" style={{ flex: 1, minWidth: 0, padding: '0 8px' }}>
       <div style={{ display: 'inline-flex', alignItems: 'center', padding: '5px 14px', borderRadius: 'var(--radius-pill)', background: 'rgba(255,255,255,.7)', backdropFilter: 'blur(8px)', marginBottom: 16 }}>
         <span style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', letterSpacing: '.04em' }}>{p.tag}</span>
       </div>
@@ -106,8 +119,9 @@ function ProductCard({ p }: { p: MenuItem }) {
 
   return (
     <div
+      ref={ref}
       className="prod-card"
-      style={{ background: hover ? p.bg : 'transparent', borderRadius: 32, padding: 'clamp(26px,3.2vw,48px) clamp(36px,6vw,80px)', display: 'flex', alignItems: 'center', gap: 56, flexWrap: 'wrap', overflow: 'hidden', transform: hover ? 'translateY(-3px)' : 'none', boxShadow: hover ? '0 24px 48px rgba(0,0,0,.28)' : 'none', transition: 'background .4s ease, transform .3s ease, box-shadow .3s ease', cursor: 'default' }}
+      style={{ background: lit ? p.bg : 'transparent', borderRadius: 32, padding: 'clamp(26px,3.2vw,48px) clamp(36px,6vw,80px)', display: 'flex', alignItems: 'center', gap: 56, flexWrap: 'wrap', overflow: 'hidden', transform: lit ? 'translateY(-3px)' : 'none', boxShadow: lit ? '0 18px 40px rgba(58,37,26,.18),0 0 28px rgba(58,37,26,.07)' : 'none', transition: 'background .4s ease, transform .3s ease, box-shadow .3s ease', cursor: 'default' }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -118,27 +132,27 @@ function ProductCard({ p }: { p: MenuItem }) {
 
 function PatternSection({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ position: 'relative', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', overflow: 'hidden', zIndex: 2, boxShadow: '0 -9px 26px rgba(20,12,4,.2)' }}>
       {/* Warm base colour */}
       <div style={{ position: 'absolute', inset: 0, background: '#F9EDE1' }} />
       {/* Floral pattern — kept faint so it reads as a subtle backdrop, not a loud overlay */}
       <div style={{ position: 'absolute', inset: 0, backgroundImage: "url('/assets/floral-pattern-only.png')", backgroundSize: '620px auto', backgroundRepeat: 'repeat', opacity: 0.4 }} />
 
       {/* Real cookie photos — faint, spread evenly across the whole section as a background */}
-      {BG_COOKIES.map((c, i) => (
-        <div
-          key={'bgc' + i}
-          aria-hidden
-          style={{
-            position: 'absolute', top: c.top, left: c.left,
-            width: c.size, height: c.size, marginLeft: -c.size / 2, marginTop: -c.size / 2,
-            backgroundImage: `url('/assets/bg-cookies/${c.src}.png')`,
-            backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
-            transform: `rotate(${c.rot}deg)`, opacity: c.op,
-            pointerEvents: 'none', zIndex: 0,
-          }}
-        />
-      ))}
+      <div className="bg-cookies-layer" aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+        {BG_COOKIES.map((c, i) => (
+          <div
+            key={'bgc' + i}
+            style={{
+              position: 'absolute', top: c.top, left: c.left,
+              width: c.size, height: c.size, marginLeft: -c.size / 2, marginTop: -c.size / 2,
+              backgroundImage: `url('/assets/bg-cookies/${c.src}.png')`,
+              backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
+              transform: `rotate(${c.rot}deg)`, opacity: c.op,
+            }}
+          />
+        ))}
+      </div>
 
       <div style={{ position: 'relative', zIndex: 1 }}>{children}</div>
     </div>

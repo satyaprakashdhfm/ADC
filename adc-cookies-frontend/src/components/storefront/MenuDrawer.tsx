@@ -1,13 +1,13 @@
 'use client';
 import Image from 'next/image';
-import { X, Info, Image as ImageIcon, BookOpen, Mail, ShoppingBag, ChevronRight, LogOut } from 'lucide-react';
+import { X, Info, Image as ImageIcon, BookOpen, Mail, ShoppingBag, ChevronRight, LogOut, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
 const NAV_LINKS = [
   { label: 'About Us', icon: <Info size={19} />, href: '/about' },
   { label: 'Gallery', icon: <ImageIcon size={19} />, href: '/gallery' },
-  { label: 'Blog', icon: <BookOpen size={19} />, href: '/blog' },
+  { label: 'Blog', icon: <BookOpen size={19} />, href: '/blogs' },
   { label: 'Contact Us', icon: <Mail size={19} />, href: '/contact' },
 ];
 
@@ -67,6 +67,10 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
                 <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
               </div>
             </div>
+            <button
+              onClick={() => { onClose(); router.push('/account'); }}
+              style={{ width: '100%', padding: '12px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 }}
+            ><User size={16} /> My Account</button>
             <button
               onClick={() => logout()}
               style={{ width: '100%', padding: '11px 0', borderRadius: 'var(--radius-pill)', border: '2px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}

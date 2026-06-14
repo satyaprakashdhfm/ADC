@@ -169,5 +169,15 @@ export async function initSchema() {
       order_id INTEGER NOT NULL REFERENCES orders(id),
       used_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS contact_messages (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT,
+      message TEXT NOT NULL,
+      handled BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TEXT NOT NULL
+    );
   `);
 }

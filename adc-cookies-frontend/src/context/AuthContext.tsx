@@ -2,13 +2,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { login as apiLogin, register as apiRegister, AuthResponse } from '@/lib/api';
 
-interface User { name: string; email: string; role: string; initials: string; }
+interface User { name: string; email: string; role: string; initials: string; phone?: string; }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, phone: string, password: string) => Promise<void>;
+  updateUser: (patch: Partial<Pick<User, 'name' | 'phone'>>) => void;
   logout: () => void;
 }
 
@@ -47,6 +48,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveUser(res);
   };
 
+  // Local profile edit. NOTE: no backend update-profile endpoint exists yet,
+  // so this persists to localStorage only (survives reload, not a new device).
+  const updateUser = (patch: Partial<Pick<User, 'name' | 'phone'>>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const next: User = { ...prev, ...patch };
+      if (patch.name) next.initials = patch.name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+      localStorage.setItem('adc_user', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const logout = () => {
     localStorage.removeItem('adc_token');
     localStorage.removeItem('adc_user');
@@ -54,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../db.js';
 import { requireAdmin, ApiError } from '../middleware.js';
-import { serializeProduct, serializeOrder, serializeOrderItem, serializeAddress, serializeCoupon } from '../serializers.js';
+import { serializeProduct, serializeOrder, serializeOrderItem, serializeAddress, serializeCoupon, serializeUser } from '../serializers.js';
 
 const router = Router();
 router.use(requireAdmin);
@@ -110,13 +110,60 @@ router.patch('/coupons/:id/toggle', async (req, res) => {
   res.json(serializeCoupon(row));
 });
 
+/* ---------- Users ---------- */
+router.get('/users', async (_req, res) => {
+  const rows = await getAll('SELECT * FROM users ORDER BY id DESC');
+  const withCounts = await Promise.all(rows.map(async (u) => {
+    const { c } = await getOne('SELECT COUNT(*) AS c FROM orders WHERE user_id = $1', [u.id]);
+    return { ...serializeUser(u), orderCount: Number(c) };
+  }));
+  res.json(withCounts);
+});
+
+/* ---------- Contact messages ---------- */
+router.get('/contact', async (_req, res) => {
+  const rows = await getAll('SELECT * FROM contact_messages ORDER BY id DESC');
+  res.json(rows.map(m => ({ id: m.id, name: m.name, email: m.email, phone: m.phone, message: m.message, handled: !!m.handled, createdAt: m.created_at })));
+});
+
+router.patch('/contact/:id/handled', async (req, res) => {
+  const row = await getOne('UPDATE contact_messages SET handled = TRUE WHERE id = $1 RETURNING *', [req.params.id]);
+  if (!row) throw new ApiError('Message not found');
+  res.json({ id: row.id, handled: !!row.handled });
+});
+
 /* ---------- Dashboard ---------- */
 router.get('/dashboard', async (_req, res) => {
-  const orders = await getAll('SELECT total_amount FROM orders');
+  const orders = await getAll('SELECT total_amount, order_status, payment_status, created_at FROM orders');
   const totalOrders = orders.length;
   const totalRevenue = orders.reduce((s, o) => s + Number(o.total_amount), 0);
+  const paidRevenue = orders.filter(o => o.payment_status === 'PAID').reduce((s, o) => s + Number(o.total_amount), 0);
+
   const { c: totalProducts } = await getOne('SELECT COUNT(*) AS c FROM products');
-  res.json({ totalOrders, totalRevenue, totalProducts: Number(totalProducts) });
+  const { c: totalUsers } = await getOne("SELECT COUNT(*) AS c FROM users WHERE role = 'CUSTOMER'");
+  const { c: totalAdmins } = await getOne("SELECT COUNT(*) AS c FROM users WHERE role = 'ADMIN'");
+  const { c: lowStock } = await getOne('SELECT COUNT(*) AS c FROM products WHERE stock_quantity <= 10');
+  let newMessages = 0;
+  try { const r = await getOne('SELECT COUNT(*) AS c FROM contact_messages WHERE handled = FALSE'); newMessages = Number(r.c); } catch {}
+
+  // Orders grouped by status (e.g. PLACED / PREPARING / DELIVERED …)
+  const ordersByStatus = {};
+  for (const o of orders) ordersByStatus[o.order_status] = (ordersByStatus[o.order_status] || 0) + 1;
+
+  // Top products by quantity sold
+  const topRows = await getAll(
+    `SELECT product_name, SUM(quantity) AS qty, SUM(total_price) AS revenue
+       FROM order_items GROUP BY product_name ORDER BY qty DESC LIMIT 5`
+  );
+  const topProducts = topRows.map(r => ({ name: r.product_name, qty: Number(r.qty), revenue: Number(r.revenue) }));
+
+  res.json({
+    totalOrders, totalRevenue, paidRevenue,
+    totalProducts: Number(totalProducts),
+    totalUsers: Number(totalUsers), totalAdmins: Number(totalAdmins),
+    lowStock: Number(lowStock), newMessages,
+    ordersByStatus, topProducts,
+  });
 });
 
 export default router;

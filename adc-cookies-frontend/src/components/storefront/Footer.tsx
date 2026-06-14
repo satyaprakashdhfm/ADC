@@ -4,8 +4,8 @@ import { productPath } from '@/lib/products';
 
 export default function Footer() {
   return (
-    <footer style={{ background: 'var(--surface-inverse)', color: 'var(--cream-100)', padding: '60px 0 28px', borderTop: '1px solid rgba(255,248,241,.14)' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 var(--gutter)', display: 'grid', gridTemplateColumns: '1.5fr repeat(3,1fr)', gap: 32 }}>
+    <footer style={{ background: '#160D06', color: 'var(--cream-100)', padding: '60px 0 28px', borderTop: '1px solid rgba(255,248,241,.14)' }}>
+      <div className="footer-grid" style={{ maxWidth: 1100, margin: '0 auto', padding: '0 var(--gutter)', display: 'grid', gridTemplateColumns: '1.5fr repeat(3,1fr)', gap: 32 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <Image src="/assets/adc-logo.png" height={48} width={80} alt="a dough cookie" style={{ objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
@@ -31,7 +31,7 @@ export default function Footer() {
           ['Company', [
             ['Our Story', '/about'],
             ['Gallery', '/gallery'],
-            ['Blog', '/blog'],
+            ['Blog', '/blogs'],
             ['Order Online', '/order'],
           ]],
           ['Help', [

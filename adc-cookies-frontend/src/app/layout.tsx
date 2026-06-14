@@ -1,10 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "a dough cookie — Aroma of Freshness",
   description: "Handcrafted cookies baked fresh daily. Premium cookies delivered warm to your door.",
+};
+
+// Without this, mobile browsers use a ~980px layout viewport and scale down,
+// so no max-width media query fires and pages render as a shrunk desktop layout.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
