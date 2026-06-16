@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { X, ArrowRight } from 'lucide-react';
+import { X, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { forgotPassword, resetPassword } from '@/lib/api';
 
 interface LoginModalProps {
   open: boolean;
@@ -11,35 +12,53 @@ interface LoginModalProps {
   onSuccess?: () => void;
 }
 
+type Mode = 'login' | 'register' | 'forgot' | 'reset';
+
 export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, register } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (open) { setError(''); setEmail(''); setPassword(''); setName(''); setPhone(''); }
+    if (open) {
+      setError(''); setSuccess('');
+      setEmail(''); setPassword(''); setName(''); setPhone('');
+      setOtp(''); setNewPassword('');
+      setMode('login');
+    }
   }, [open]);
 
   const handleSubmit = async () => {
-    setError('');
+    setError(''); setSuccess('');
     setLoading(true);
     try {
-      let role = 'CUSTOMER';
       if (mode === 'login') {
-        role = await login(email, password);
-      } else {
+        const role = await login(email, password);
+        onSuccess?.();
+        onClose();
+        if (role === 'ADMIN') router.push('/admin');
+      } else if (mode === 'register') {
         await register(name, email, phone, password);
+        onSuccess?.();
+        onClose();
+      } else if (mode === 'forgot') {
+        await forgotPassword(email);
+        setSuccess('OTP sent! Check your email.');
+        setMode('reset');
+      } else if (mode === 'reset') {
+        await resetPassword(email, otp, newPassword);
+        setSuccess('Password reset! You can now log in.');
+        setMode('login');
       }
-      onSuccess?.();
-      onClose();
-      // Admins belong in the dashboard, not the storefront.
-      if (role === 'ADMIN') router.push('/admin');
     } catch (e: any) {
       setError(e.message || 'Something went wrong');
     } finally {
@@ -52,6 +71,25 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
     borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)',
     fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)',
     background: 'var(--surface-raised)', outline: 'none', marginBottom: 12,
+  };
+
+  const headings: Record<Mode, string> = {
+    login: 'Welcome back',
+    register: 'Create account',
+    forgot: 'Forgot password',
+    reset: 'Reset password',
+  };
+  const subheadings: Record<Mode, string> = {
+    login: 'Log in to order and track cookies.',
+    register: 'Join to start ordering premium cookies.',
+    forgot: 'Enter your email and we\'ll send you an OTP.',
+    reset: 'Enter the OTP from your email and a new password.',
+  };
+  const buttonLabels: Record<Mode, string> = {
+    login: 'Log in',
+    register: 'Create account',
+    forgot: 'Send OTP',
+    reset: 'Reset password',
   };
 
   if (!open) return null;
@@ -80,24 +118,71 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
         </div>
 
         <div style={{ padding: '24px 24px 28px', display: 'flex', flexDirection: 'column' }}>
+          {/* Back button for forgot/reset modes */}
+          {(mode === 'forgot' || mode === 'reset') && (
+            <button
+              onClick={() => { setMode('login'); setError(''); setSuccess(''); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 12, padding: 0 }}
+            >
+              <ArrowLeft size={14} /> Back to login
+            </button>
+          )}
+
           <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>
-            {mode === 'login' ? 'Welcome back' : 'Create account'}
+            {headings[mode]}
           </h2>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 20px' }}>
-            {mode === 'login' ? 'Log in to order and track cookies.' : 'Join to start ordering premium cookies.'}
+            {subheadings[mode]}
           </p>
 
+          {/* Register fields */}
           {mode === 'register' && (
             <>
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={inputStyle} />
               <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" style={inputStyle} />
             </>
           )}
-          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email" style={inputStyle} />
-          <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" style={inputStyle} />
+
+          {/* Email — shown for login, register, forgot, reset */}
+          {(mode === 'login' || mode === 'register' || mode === 'forgot' || mode === 'reset') && (
+            <input
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="Email address"
+              type="email"
+              style={{ ...inputStyle, ...(mode === 'reset' ? { background: 'var(--surface-sunken)', color: 'var(--text-muted)' } : {}) }}
+              readOnly={mode === 'reset'}
+            />
+          )}
+
+          {/* Password — login and register only */}
+          {(mode === 'login' || mode === 'register') && (
+            <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" style={inputStyle} />
+          )}
+
+          {/* OTP + new password — reset mode */}
+          {mode === 'reset' && (
+            <>
+              <input value={otp} onChange={e => setOtp(e.target.value)} placeholder="Enter OTP" style={{ ...inputStyle, letterSpacing: 4, fontWeight: 700 }} maxLength={6} />
+              <input value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" type="password" style={inputStyle} />
+            </>
+          )}
+
+          {/* Forgot password link — login mode only */}
+          {mode === 'login' && (
+            <button
+              onClick={() => { setMode('forgot'); setError(''); setSuccess(''); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary, #EF7507)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600, textAlign: 'right', marginBottom: 4, padding: 0 }}
+            >
+              Forgot password?
+            </button>
+          )}
 
           {error && (
             <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', marginBottom: 12 }}>{error}</div>
+          )}
+          {success && (
+            <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--status-success-bg, #f0fdf4)', color: 'var(--status-success, #16a34a)', fontSize: 'var(--text-sm)', marginBottom: 12 }}>{success}</div>
           )}
 
           <button
@@ -110,22 +195,27 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 14,
             }}
           >
-            {loading ? 'Please wait...' : (mode === 'login' ? 'Log in' : 'Create account')}
+            {loading ? 'Please wait...' : buttonLabels[mode]}
             {!loading && <ArrowRight size={18} />}
           </button>
 
-          <button
-            onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', textAlign: 'center' }}
-          >
-            {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
-          </button>
+          {/* Toggle login/register */}
+          {(mode === 'login' || mode === 'register') && (
+            <button
+              onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', textAlign: 'center' }}
+            >
+              {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
+            </button>
+          )}
 
           {/* Demo account (customer only — admin signs in at /admin) */}
-          <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-            <strong style={{ color: 'var(--text-body)' }}>Demo account:</strong><br />
-            priya@example.com / priya123
-          </div>
+          {mode === 'login' && (
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+              <strong style={{ color: 'var(--text-body)' }}>Demo account:</strong><br />
+              priya@example.com / priya123
+            </div>
+          )}
         </div>
       </div>
     </div>
