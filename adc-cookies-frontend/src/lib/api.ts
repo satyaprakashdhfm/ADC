@@ -34,6 +34,14 @@ export async function register(name: string, email: string, phone: string, passw
   return request('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, phone, password }) });
 }
 
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  return request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function resetPassword(email: string, otp: string, newPassword: string): Promise<{ message: string }> {
+  return request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email, otp, newPassword }) });
+}
+
 /* ---- Products ---- */
 export interface Product {
   id: number; name: string; category: 'COOKIES' | 'TINS';
