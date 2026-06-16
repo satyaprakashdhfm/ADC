@@ -57,12 +57,16 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ error: message, message });
 });
 
-async function main() {
-  await initSchema();
-  await seedIfEmpty();
-  app.listen(PORT, () => {
-    console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
-  });
-}
+// Export the configured app so Vercel can use it as a serverless function (see api/index.js).
+export default app;
 
-main().catch(err => { console.error('Startup failed:', err); process.exit(1); });
+// Only run a long-lived server when started directly (local dev) — not on Vercel serverless.
+if (!process.env.VERCEL) {
+  (async () => {
+    await initSchema();
+    await seedIfEmpty();
+    app.listen(PORT, () => {
+      console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
+    });
+  })().catch(err => { console.error('Startup failed:', err); process.exit(1); });
+}

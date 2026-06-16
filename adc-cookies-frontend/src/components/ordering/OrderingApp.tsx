@@ -6,6 +6,7 @@ import { ChevronLeft, User, Menu, X, Search, ShoppingBag, ChevronRight, Sparkles
 import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
+import MascotLoader from '@/components/MascotLoader';
 import { getProducts, getAddresses, addAddress, validateCoupon, createOrder, submitContact, firstImage, type Product, type Address, type OrderItemInput } from '@/lib/api';
 
 /* ---- Data ---- */
@@ -98,10 +99,6 @@ const FALLBACK_TINS = [
   { id: 'biscoff-tin', name: 'Biscoff Tin', price: 850, count: 9, img: '/assets/products/m-and-m.jpg', desc: 'Nine Biscoff-filled cookies, gift-ready.' },
 ];
 
-const DEMO_ADDRESSES: Address[] = [
-  { id: 1, fullName: 'Aarav Mehta', phone: '+91 98765 43210', addressLine1: '12B, Lakeview Residency', addressLine2: 'Whitefield', city: 'Bengaluru', state: 'Karnataka', pincode: '560066', isDefault: true },
-  { id: 2, fullName: 'Aarav Mehta', phone: '+91 98765 43210', addressLine1: '4th Floor, Prestige Tech Park', addressLine2: 'Marathahalli', city: 'Bengaluru', state: 'Karnataka', pincode: '560103', isDefault: false },
-];
 
 const BANKS = ['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra', 'Yes Bank'];
 const UPI_APPS = [
@@ -191,11 +188,11 @@ function ProductMenuItem({ item, qty, onQtyChange, onOpen }: { item: typeof FALL
         <span style={{ fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}>₹{item.price}</span>
       </div>
       <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 'clamp(132px,34vw,184px)', height: 'clamp(132px,34vw,184px)', borderRadius: 'var(--radius-image)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }} onClick={onOpen}>
+        <div style={{ width: 'clamp(132px,34vw,184px)', height: 'clamp(132px,34vw,184px)', borderRadius: 'var(--radius-image)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
           <Image src={item.img} alt={item.name} width={184} height={184} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .3s' }} />
         </div>
         {qty === 0 ? (
-          <button onClick={() => onQtyChange(1)} style={{ width: 'clamp(132px,34vw,184px)', padding: '11px 0', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>ADD</button>
+          <button onClick={onOpen} style={{ width: 'clamp(132px,34vw,184px)', padding: '11px 0', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>ADD</button>
         ) : (
           <QStepper value={qty} onChange={onQtyChange} size="sm" />
         )}
@@ -205,7 +202,7 @@ function ProductMenuItem({ item, qty, onQtyChange, onOpen }: { item: typeof FALL
 }
 
 /* ---- Detail Sheet ---- */
-function DetailSheet({ item, onClose, onAdd }: { item: typeof FALLBACK_MENU[0] | null; onClose: () => void; onAdd: (item: typeof FALLBACK_MENU[0], qty: number) => void }) {
+function DetailSheet({ item, onClose, onAdd }: { item: typeof FALLBACK_MENU[0] | null; onClose: () => void; onAdd: (item: typeof FALLBACK_MENU[0], qty: number, unit: number, addOns: string[], note: string) => void }) {
   const [qty, setQty] = useState(1);
   const [adds, setAdds] = useState<Record<string, boolean>>({});
   const [note, setNote] = useState('');
@@ -273,7 +270,7 @@ function DetailSheet({ item, onClose, onAdd }: { item: typeof FALLBACK_MENU[0] |
         <div style={{ borderTop: '1px solid var(--border-soft)', padding: '14px 18px', display: 'flex', gap: 14, alignItems: 'center', background: 'var(--surface-card)' }}>
           <QStepper value={qty} onChange={n => setQty(Math.max(1, n))} />
           <button
-            onClick={() => item && onAdd(item, qty)}
+            onClick={() => item && onAdd(item, qty, unit, ADDONS.filter(a => adds[a.id]).map(a => a.label), note.trim())}
             style={{ flex: 1, padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer' }}
           >Add to Cart · ₹{unit * qty}</button>
         </div>
@@ -344,7 +341,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const router = useRouter();
   const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, clearAll } = useCart();
   const { user } = useAuth();
-  const [addresses, setAddresses] = useState<Address[]>(DEMO_ADDRESSES);
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [asap, setAsap] = useState(true);
   const [couponErr, setCouponErr] = useState('');
   const [adding, setAdding] = useState(false);
@@ -359,7 +356,14 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [paid, setPaid] = useState(0);
   const [loginOpen, setLoginOpen] = useState(false);
 
-  useEffect(() => { if (user) { getAddresses().then(setAddresses).catch(() => {}); } }, [user]);
+  // Addresses are private to the signed-in user — fetch on login, clear on logout.
+  useEffect(() => {
+    if (user) getAddresses().then(setAddresses).catch(() => setAddresses([]));
+    else setAddresses([]);
+  }, [user]);
+
+  // Checkout needs an account (for delivery address) — prompt login the moment they arrive signed-out.
+  useEffect(() => { if (!user) setLoginOpen(true); }, [user]);
 
   const lines = Object.values(cart);
   const delivery = total > 0 ? 29 : 0;
@@ -398,11 +402,17 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       try {
         if (user) {
           const items: OrderItemInput[] = Object.values(cart)
-            .map((e, index) => ({
-              productId: Number(e.id),
-              quantity: e.qty,
-              selectedOptions: index === 0 && gift ? { giftWrap: true, giftMessage } : undefined,
-            }))
+            .map((e, index) => {
+              const opts: Record<string, unknown> = {};
+              if (e.addOns && e.addOns.length) opts.addOns = e.addOns;
+              if (index === 0 && gift) { opts.giftWrap = true; opts.giftMessage = giftMessage; }
+              return {
+                productId: Number(e.id),
+                quantity: e.qty,
+                selectedOptions: Object.keys(opts).length ? opts : undefined,
+                specialNotes: e.note || undefined,
+              };
+            })
             .filter(it => Number.isFinite(it.productId) && it.quantity > 0);
           await createOrder(addr, applied ? coupon : undefined, items);
         }
@@ -426,12 +436,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   if (done) return <OrderSuccessPage show total={paid} orderId={orderId} onBackToMenu={() => router.push('/order')} />;
 
   if (placing) return (
-    <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, padding: 32, textAlign: 'center' }}>
-      <div style={{ width: 80, height: 80, borderRadius: '50%', border: '5px solid var(--amber-200)', borderTopColor: 'var(--brand-secondary)', animation: 'spin 1s linear infinite' }} />
-      <div>
-        <div style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)' }}>Processing payment…</div>
-        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 8 }}>Please don&apos;t close this page</div>
-      </div>
+    <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32, textAlign: 'center' }}>
+      <MascotLoader label="Processing payment…" size={96} />
+      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Please don&apos;t close this page</div>
     </div>
   );
 
@@ -444,6 +451,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             {l.img ? <div style={{ width: 52, height: 52, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none' }}><Image src={l.img} alt={l.name} width={52} height={52} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div> : <Thumb size={52} seed={i} />}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</div>
+              {l.addOns && l.addOns.length > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 600 }}>+ {l.addOns.join(', ')}</div>}
+              {l.note && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', fontStyle: 'italic' }}>&ldquo;{l.note}&rdquo;</div>}
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>₹{l.price}</div>
             </div>
             <QStepper value={l.qty} onChange={n => setQty(l.id, n, l.name, l.price, l.img)} size="sm" />
@@ -486,6 +495,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               <div style={card$}>
                 {head(<MapPin size={18} color="var(--brand-secondary)" />, 'Delivery address')}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {!user ? (
+                    <div style={{ textAlign: 'center', padding: '12px 8px' }}>
+                      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 12 }}>Please log in to choose your delivery address.</p>
+                      <button onClick={() => setLoginOpen(true)} style={{ padding: '11px 22px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Log in</button>
+                    </div>
+                  ) : (
+                  <>
+                  {addresses.length === 0 && !adding && (
+                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 2 }}>No saved addresses yet — please add your delivery address below.</p>
+                  )}
                   {addresses.map(a => {
                     const on = addr === a.id;
                     return (
@@ -521,6 +540,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       <Plus size={16} color="var(--brand-secondary)" />
                       <span style={{ fontWeight: 700, color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Add new address</span>
                     </button>
+                  )}
+                  </>
                   )}
                 </div>
               </div>
@@ -724,10 +745,13 @@ function OrderSuccessPage({ show, total, orderId, onBackToMenu }: { show: boolea
 /* ---- Location Sheet — pick a saved delivery address or add a new one ---- */
 function LocationSheet({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (a: Address) => void }) {
   const { user } = useAuth();
-  const [addresses, setAddresses] = useState<Address[]>(DEMO_ADDRESSES);
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [adding, setAdding] = useState(false);
   const [f, setF] = useState({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '' });
-  useEffect(() => { if (open && user) getAddresses().then(a => { if (a?.length) setAddresses(a); }).catch(() => {}); }, [open, user]);
+  useEffect(() => {
+    if (open && user) getAddresses().then(a => setAddresses(a || [])).catch(() => setAddresses([]));
+    else if (!user) setAddresses([]);
+  }, [open, user]);
   if (!open) return null;
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
@@ -908,8 +932,9 @@ export default function OrderingApp() {
     }).catch(() => {}); // use fallback data on error
   }, []);
 
-  const addFromSheet = (item: typeof FALLBACK_MENU[0], qty: number) => {
-    setQty(item.id, (cart[item.id]?.qty || 0) + qty, item.name, item.price, item.img);
+  const addFromSheet = (item: typeof FALLBACK_MENU[0], qty: number, unit: number, addOns: string[], note: string) => {
+    // Store the per-unit price *including* add-ons, plus the chosen add-ons and note.
+    setQty(item.id, (cart[item.id]?.qty || 0) + qty, item.name, unit, item.img, addOns, note);
     setSheet(null);
   };
 
@@ -946,8 +971,8 @@ export default function OrderingApp() {
                 <MapPin size={18} color="var(--brand-secondary)" /> {location} <ChevronRight size={15} color="var(--text-subtle)" style={{ transform: 'rotate(90deg)' }} />
               </button>
               {user ? (
-                <button onClick={() => router.push('/account')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px 8px 10px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
-                  <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 'var(--text-sm)', fontWeight: 800, flex: 'none' }}>{user.initials}</span>
+                <button onClick={() => router.push(user.role === 'ADMIN' ? '/admin' : '/account')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px 8px 10px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
+                  <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: '#fff', flex: 'none' }}><User size={17} /></span>
                   {user.name.split(' ')[0]}
                 </button>
               ) : (
@@ -1000,7 +1025,7 @@ export default function OrderingApp() {
               ) : (
                 filtered.map((m) => (
                   <div key={m.id}>
-                    <ProductMenuItem item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, m.price, m.img)} onOpen={() => setSheet(m as any)} />
+                    <ProductMenuItem item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} onOpen={() => setSheet(m as any)} />
                     {/* "Goes great with" pairings — hidden per request; uncomment to restore (full markup in git history).
                     {count > 0 && i === 0 && ( <div> Sparkles + "Goes great with" + PAIRINGS carousel of Thumb + QStepper </div> )}
                     */}
@@ -1028,12 +1053,11 @@ export default function OrderingApp() {
               <ShoppingBag size={20} /> View cart · {count} item{count !== 1 ? 's' : ''} · ₹{total} <ArrowRight size={18} />
             </button>
           )}
-        </div>
-
         <DetailSheet item={sheet} onClose={() => setSheet(null)} onAdd={addFromSheet} />
         <TinModal tin={tin} onClose={() => setTin(null)} onAdd={addTin} />
         <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
         <LocationSheet open={locationOpen} onClose={() => setLocationOpen(false)} onPick={a => setLocation(a.city)} />
+        </div>
       </>
     );
   }
@@ -1046,11 +1070,11 @@ export default function OrderingApp() {
         <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-default)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 10px' }}>
             <button onClick={() => router.push('/')} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><ChevronLeft size={20} /></button>
-            <div style={{ flex: 1 }}>
+            <a href="/" aria-label="a dough cookie home" style={{ flex: 1, display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
               <Image src="/assets/adc-logo.png" height={54} width={92} alt="a dough cookie" style={{ objectFit: 'contain' }} />
-            </div>
+            </a>
             {user ? (
-              <button onClick={() => router.push('/account')} aria-label="Profile" style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>{user.initials}</button>
+              <button onClick={() => router.push(user.role === 'ADMIN' ? '/admin' : '/account')} aria-label="Profile" style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', background: 'var(--gradient-warm)', color: '#fff', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><User size={20} /></button>
             ) : (
               <button onClick={() => setLoginOpen(true)} aria-label="Login" style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><User size={20} /></button>
             )}
@@ -1095,7 +1119,7 @@ export default function OrderingApp() {
           ) : (
             filtered.map((m) => (
               <div key={m.id}>
-                <ProductMenuItem item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, m.price, m.img)} onOpen={() => setSheet(m as any)} />
+                <ProductMenuItem item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} onOpen={() => setSheet(m as any)} />
                 {/* "Goes great with" pairings — hidden per request; uncomment to restore (full markup in git history).
                 {count > 0 && i === 0 && ( <div> Sparkles + "Goes great with" + PAIRINGS carousel of Thumb + QStepper </div> )}
                 */}
@@ -1119,6 +1143,10 @@ export default function OrderingApp() {
             </button>
           )}
         </div>
+        <DetailSheet item={sheet} onClose={() => setSheet(null)} onAdd={addFromSheet} />
+        <TinModal tin={tin} onClose={() => setTin(null)} onAdd={addTin} />
+        <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+        <LocationSheet open={locationOpen} onClose={() => setLocationOpen(false)} onPick={a => setLocation(a.city)} />
       </div>
 
       {/* Category popup — compact dark menu, opens above the floating menu button */}
@@ -1142,10 +1170,6 @@ export default function OrderingApp() {
         </>
       )}
 
-      <DetailSheet item={sheet} onClose={() => setSheet(null)} onAdd={addFromSheet} />
-      <TinModal tin={tin} onClose={() => setTin(null)} onAdd={addTin} />
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
-      <LocationSheet open={locationOpen} onClose={() => setLocationOpen(false)} onPick={a => setLocation(a.city)} />
     </>
   );
 }

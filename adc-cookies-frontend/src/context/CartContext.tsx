@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { addToCart, updateCartItem, removeCartItem, clearCart } from '@/lib/api';
 
-export interface CartEntry { id: string; name: string; price: number; qty: number; img?: string; }
+export interface CartEntry { id: string; name: string; price: number; qty: number; img?: string; addOns?: string[]; note?: string; }
 
 // Flat fee to wrap the whole order as a gift (with an optional message card).
 export const GIFT_FEE = 30;
@@ -11,7 +11,7 @@ interface CartContextType {
   cart: Record<string, CartEntry>;
   count: number;
   total: number;
-  setQty: (id: string, qty: number, name?: string, price?: number, img?: string) => void;
+  setQty: (id: string, qty: number, name?: string, price?: number, img?: string, addOns?: string[], note?: string) => void;
   gift: boolean;
   setGift: (v: boolean) => void;
   giftMessage: string;
@@ -39,7 +39,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [applied, setApplied] = useState(false);
   const [discount, setDiscount] = useState(0);
 
-  const setQty = useCallback((id: string, qty: number, name?: string, price?: number, img?: string) => {
+  const setQty = useCallback((id: string, qty: number, name?: string, price?: number, img?: string, addOns?: string[], note?: string) => {
     setCart(prev => {
       const next = { ...prev };
       if (qty <= 0) {
@@ -51,6 +51,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
           price: price ?? prev[id]?.price ?? 0,
           qty,
           img: img || prev[id]?.img,
+          addOns: addOns !== undefined ? addOns : prev[id]?.addOns,
+          note: note !== undefined ? note : prev[id]?.note,
         };
       }
       return next;

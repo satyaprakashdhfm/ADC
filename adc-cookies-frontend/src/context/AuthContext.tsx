@@ -7,7 +7,7 @@ interface User { name: string; email: string; role: string; initials: string; ph
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<string>;
   register: (name: string, email: string, phone: string, password: string) => Promise<void>;
   updateUser: (patch: Partial<Pick<User, 'name' | 'phone'>>) => void;
   logout: () => void;
@@ -41,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const res = await apiLogin(email, password);
     saveUser(res);
+    return res.role;
   };
 
   const register = async (name: string, email: string, phone: string, password: string) => {

@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const BACKEND = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:8080';
+
 const nextConfig: NextConfig = {
   // Allow the dev server's HMR/assets to be loaded from your LAN IP (phone on same Wi-Fi).
   allowedDevOrigins: ['192.168.1.24'],
@@ -10,7 +12,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:8080/api/:path*',
+        destination: `${BACKEND}/api/:path*`,
       },
     ];
   },

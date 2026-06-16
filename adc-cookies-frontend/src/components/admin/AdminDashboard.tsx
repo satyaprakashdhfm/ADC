@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import LoginModal from '@/components/ordering/LoginModal';
 import {
   adminDashboard, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
@@ -11,7 +12,7 @@ import {
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
-  IndianRupee, AlertTriangle, Plus, Pencil, Trash2, Check, X, LogOut,
+  IndianRupee, AlertTriangle, Plus, Pencil, Trash2, Check, X, LogOut, Gift,
 } from 'lucide-react';
 
 const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
@@ -45,11 +46,11 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [messages, setMessages] = useState<AdminMessage[] | null>(null);
   const [editing, setEditing] = useState<{ id?: number; data: ProductInput } | null>(null);
+  const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [err, setErr] = useState('');
+  const [loginOpen, setLoginOpen] = useState(false);
 
   const isAdmin = !!user && user.role === 'ADMIN';
-
-  useEffect(() => { if (!loading && !isAdmin) router.replace('/'); }, [loading, isAdmin, router]);
 
   useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
 
@@ -92,7 +93,28 @@ export default function AdminDashboard() {
     adminDashboard().then(setStats).catch(() => {});
   };
 
-  if (loading || !isAdmin) return null;
+  if (loading) return null;
+
+  // Not an admin (or signed out) → show a clear sign-in gate instead of silently bouncing home.
+  if (!isAdmin) {
+    return (
+      <main className="adc-pattern-page" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <div style={{ ...card, padding: '36px 30px', maxWidth: 420, width: '100%', textAlign: 'center' }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: '#fff', margin: '0 auto 18px' }}><LayoutDashboard size={26} /></div>
+          <h1 style={{ fontSize: 'var(--text-h3)', marginBottom: 8 }}>Admin access</h1>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 22 }}>
+            {user
+              ? <>You&apos;re signed in as <strong>{user.email}</strong>, which isn&apos;t an admin account. Log in with an admin account to manage the store.</>
+              : <>Please sign in with an admin account to open the dashboard.</>}
+          </p>
+          <button onClick={() => setLoginOpen(true)} style={addBtn}>Log in as admin</button>
+          {user && <div style={{ marginTop: 12 }}><button onClick={() => { logout(); }} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>Switch account</button></div>}
+          <div style={{ marginTop: 18, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Demo admin: admin@adccookies.com / admin123</div>
+        </div>
+        <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      </main>
+    );
+  }
 
   return (
     <main className="adc-pattern-page" style={{ minHeight: '100vh' }}>
@@ -141,9 +163,9 @@ export default function AdminDashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
               <div style={{ ...card, padding: 20 }}>
                 <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Orders by status</h3>
-                {stats && Object.keys(stats.ordersByStatus).length ? (
+                {stats && Object.keys(stats.ordersByStatus || {}).length ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {Object.entries(stats.ordersByStatus).map(([s, n]) => {
+                    {Object.entries(stats.ordersByStatus || {}).map(([s, n]) => {
                       const pct = stats.totalOrders ? Math.round((n / stats.totalOrders) * 100) : 0;
                       return (
                         <div key={s}>
@@ -158,9 +180,9 @@ export default function AdminDashboard() {
 
               <div style={{ ...card, padding: 20 }}>
                 <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Top products</h3>
-                {stats && stats.topProducts.length ? (
+                {stats && (stats.topProducts || []).length ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {stats.topProducts.map((p, i) => (
+                    {(stats.topProducts || []).map((p, i) => (
                       <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ width: 22, height: 22, borderRadius: 7, background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 12, fontWeight: 900, display: 'grid', placeItems: 'center', flex: 'none' }}>{i + 1}</span>
                         <span style={{ flex: 1, fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{p.name}</span>
@@ -179,12 +201,12 @@ export default function AdminDashboard() {
           <Panel title="All orders" loading={orders === null}>
             <Table head={['Order', 'Customer', 'Total', 'Payment', 'Status', 'Date']}>
               {(orders || []).map(o => (
-                <tr key={o.id}>
-                  <td style={td}><strong>{o.orderNumber}</strong></td>
+                <tr key={o.id} onClick={() => setViewOrder(o)} style={{ cursor: 'pointer' }}>
+                  <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{(o.items || []).length} item{(o.items || []).length !== 1 ? 's' : ''} · tap for details</span></td>
                   <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city || ''}</span></td>
                   <td style={td}>{money(o.totalAmount)}</td>
                   <td style={td}><Badge text={o.paymentStatus} ok={o.paymentStatus === 'PAID'} /></td>
-                  <td style={td}>
+                  <td style={td} onClick={e => e.stopPropagation()}>
                     <select value={o.orderStatus} onChange={e => changeOrderStatus(o.id, e.target.value)} style={{ padding: '7px 10px', borderRadius: 10, border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', cursor: 'pointer' }}>
                       {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -316,6 +338,81 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Order detail popup */}
+      {viewOrder && (() => {
+        const o = viewOrder;
+        const items = o.items || [];
+        const parse = (s?: string | null) => { try { return s ? JSON.parse(s) : {}; } catch { return {}; } };
+        const giftItem = items.find(it => { const p = parse(it.selectedOptions); return p.giftWrap || p.giftPackaging; });
+        const giftOpts = giftItem ? parse(giftItem.selectedOptions) : null;
+        const a = o.address;
+        const row = (label: string, val: string) => (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>{label}</span><span>{val}</span></div>
+        );
+        return (
+          <div onClick={() => setViewOrder(null)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'var(--surface-overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} className="hide-sb" style={{ width: 'min(520px,96vw)', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ fontSize: 'var(--text-h4)' }}>{o.orderNumber}</h3>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 2 }}>{fmtDate(o.createdAt)}</div>
+                </div>
+                <button onClick={() => setViewOrder(null)} style={iconBtn}><X size={18} /></button>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                <Badge text={o.orderStatus} />
+                <Badge text={o.paymentStatus} ok={o.paymentStatus === 'PAID'} />
+              </div>
+
+              <div style={{ ...card, padding: 14, marginBottom: 14, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: giftOpts ? 'var(--gradient-warm)' : 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{giftOpts ? <Gift size={18} color="#fff" /> : <Package size={18} color="var(--text-muted)" />}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{giftOpts ? 'Gift packaging' : 'Standard packaging'}</div>
+                  {giftOpts && (giftOpts.giftMessage ? <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', marginTop: 4, fontStyle: 'italic' }}>&ldquo;{giftOpts.giftMessage}&rdquo;</div> : <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>No gift message</div>)}
+                </div>
+              </div>
+
+              <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Items</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {items.map(it => {
+                  const opts = parse(it.selectedOptions);
+                  const addOns = Array.isArray(opts.addOns) ? opts.addOns : Array.isArray(opts.addons) ? opts.addons : [];
+                  return (
+                    <div key={it.id} style={{ ...card, padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                        <span style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{it.productName} × {it.quantity}</span>
+                        <span style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{money(it.totalPrice)}</span>
+                      </div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{money(it.unitPrice)} each</div>
+                      {addOns.length > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4 }}>Add-ons: {addOns.join(', ')}</div>}
+                      {it.specialNotes && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 4 }}>Note: {it.specialNotes}</div>}
+                    </div>
+                  );
+                })}
+                {!items.length && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No item details recorded for this order.</div>}
+              </div>
+
+              {a && (
+                <div style={{ ...card, padding: 14, marginBottom: 14 }}>
+                  <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 4 }}>Deliver to</div>
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>{a.fullName} · {a.phone}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>{[a.addressLine1, a.addressLine2, a.city, a.state, a.pincode].filter(Boolean).join(', ')}</div>
+                </div>
+              )}
+
+              <div style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {row('Item total', money(o.subtotal ?? o.totalAmount))}
+                {!!o.discountAmount && row(`Discount${o.couponCode ? ` (${o.couponCode})` : ''}`, `−${money(o.discountAmount)}`)}
+                {o.deliveryFee != null && row('Delivery fee', money(o.deliveryFee))}
+                {!!o.taxAmount && row('Tax / GST', money(o.taxAmount))}
+                <div style={{ height: 1, background: 'var(--border-default)', margin: '2px 0' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--text-base)', color: 'var(--text-strong)' }}><span>Total</span><span>{money(o.totalAmount)}</span></div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </main>
   );
 }

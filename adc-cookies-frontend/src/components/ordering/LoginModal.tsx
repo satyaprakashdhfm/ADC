@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { X, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -19,6 +20,7 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, register } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     if (open) { setError(''); setEmail(''); setPassword(''); setName(''); setPhone(''); }
@@ -28,13 +30,16 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
     setError('');
     setLoading(true);
     try {
+      let role = 'CUSTOMER';
       if (mode === 'login') {
-        await login(email, password);
+        role = await login(email, password);
       } else {
         await register(name, email, phone, password);
       }
       onSuccess?.();
       onClose();
+      // Admins belong in the dashboard, not the storefront.
+      if (role === 'ADMIN') router.push('/admin');
     } catch (e: any) {
       setError(e.message || 'Something went wrong');
     } finally {
@@ -116,11 +121,10 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
             {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
           </button>
 
-          {/* Demo accounts */}
+          {/* Demo account (customer only — admin signs in at /admin) */}
           <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-            <strong style={{ color: 'var(--text-body)' }}>Demo accounts:</strong><br />
-            priya@example.com / priya123<br />
-            admin@adccookies.com / admin123
+            <strong style={{ color: 'var(--text-body)' }}>Demo account:</strong><br />
+            priya@example.com / priya123
           </div>
         </div>
       </div>
