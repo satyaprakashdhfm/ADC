@@ -1,10 +1,8 @@
-import 'dotenv/config';
 import 'express-async-errors';
 import express from 'express';
 import cors from 'cors';
 
-import { initSchema } from './db.js';
-import { seedIfEmpty } from './seed.js';
+import { PORT, IS_VERCEL } from './config/env.js';
 import { parseAuth } from './middleware.js';
 
 import authRoutes from './routes/auth.js';
@@ -15,8 +13,6 @@ import addressRoutes from './routes/addresses.js';
 import couponRoutes from './routes/coupons.js';
 import adminRoutes from './routes/admin.js';
 import contactRoutes from './routes/contact.js';
-
-const PORT = Number(process.env.PORT || 8080);
 
 const app = express();
 
@@ -30,7 +26,7 @@ app.use(cors({
 app.use(express.json());
 app.use(parseAuth);
 
-app.get('/', (_req, res) => res.json({ status: 'ok', service: 'adc-cookies-backend (node/pg)' }));
+app.get('/', (_req, res) => res.json({ status: 'ok', service: 'adc-cookies-backend' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
@@ -45,10 +41,10 @@ app.use((_req, res) => res.status(404).json({ error: 'Not found', message: 'Reso
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
-  if (err.code === '23505') { // unique_violation
+  if (err.code === 'P2002') {
     return res.status(400).json({ error: 'Already exists', message: 'A record with this value already exists' });
   }
-  if (err.code === '23503') { // foreign_key_violation
+  if (err.code === 'P2003') {
     return res.status(400).json({ error: 'Cannot delete', message: 'This record is referenced by existing orders and cannot be deleted' });
   }
   const status = err.status || 500;
@@ -57,16 +53,10 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ error: message, message });
 });
 
-// Export the configured app so Vercel can use it as a serverless function (see api/index.js).
 export default app;
 
-// Only run a long-lived server when started directly (local dev) — not on Vercel serverless.
-if (!process.env.VERCEL) {
-  (async () => {
-    await initSchema();
-    await seedIfEmpty();
-    app.listen(PORT, () => {
-      console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
-    });
-  })().catch(err => { console.error('Startup failed:', err); process.exit(1); });
+if (!IS_VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
+  });
 }

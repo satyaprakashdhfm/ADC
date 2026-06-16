@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        Int     @id @default(autoincrement())
+  name      String
+  email     String  @unique
+  phone     String? @unique
+  password  String
+  role      String  @default("CUSTOMER")
+  createdAt String  @map("created_at")
+  updatedAt String  @map("updated_at")
+
+  addresses   Address[]
+  cart        Cart?
+  orders      Order[]
+  couponUsage CouponUsage[]
+
+  @@map("users")
+}
+
+model Address {
+  id           Int     @id @default(autoincrement())
+  userId       Int     @map("user_id")
+  fullName     String  @map("full_name")
+  phone        String
+  addressLine1 String  @map("address_line1")
+  addressLine2 String? @map("address_line2")
+  city         String
+  state        String
+  pincode      String
+  latitude     Float?
+  longitude    Float?
+  isDefault    Boolean @default(false) @map("is_default")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@map("addresses")
+}
+
+model Product {
+  id            Int     @id @default(autoincrement())
+  name          String
+  category      String
+  description   String?
+  price         Float
+  stockQuantity Int     @map("stock_quantity")
+  images        String?
+  options       String?
+  isAvailable   Boolean @default(true) @map("is_available")
+  menuGroup     String? @map("menu_group")
+  tag           String?
+  featured      Boolean @default(false)
+  createdAt     String  @map("created_at")
+  updatedAt     String  @map("updated_at")
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@map("products")
+}
+
+model Coupon {
+  id                 Int     @id @default(autoincrement())
+  code               String  @unique
+  discountType       String  @map("discount_type")
+  discountValue      Float   @map("discount_value")
+  minimumOrderAmount Float?  @map("minimum_order_amount")
+  maximumDiscount    Float?  @map("maximum_discount")
+  expiryDate         String? @map("expiry_date")
+  usageLimit         Int?    @map("usage_limit")
+  isActive           Boolean @default(true) @map("is_active")
+
+  usage CouponUsage[]
+
+  @@map("coupons")
+}
+
+model Cart {
+  id        Int    @id @default(autoincrement())
+  userId    Int    @unique @map("user_id")
+  createdAt String @map("created_at")
+  updatedAt String @map("updated_at")
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@map("cart")
+}
+
+model CartItem {
+  id              Int     @id @default(autoincrement())
+  cartId          Int     @map("cart_id")
+  productId       Int     @map("product_id")
+  quantity        Int
+  selectedOptions String? @map("selected_options")
+  unitPrice       Float   @map("unit_price")
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("cart_items")
+}
+
+model Order {
+  id                  Int     @id @default(autoincrement())
+  orderNumber         String  @unique @map("order_number")
+  userId              Int     @map("user_id")
+  addressId           Int?    @map("address_id")
+  subtotal            Float
+  discountAmount      Float   @default(0) @map("discount_amount")
+  deliveryFee         Float   @default(0) @map("delivery_fee")
+  taxAmount           Float   @default(0) @map("tax_amount")
+  totalAmount         Float   @map("total_amount")
+  couponCode          String? @map("coupon_code")
+  paymentStatus       String  @default("PENDING") @map("payment_status")
+  orderStatus         String  @default("PLACED") @map("order_status")
+  delhiveryWaybill    String? @map("delhivery_waybill")
+  delhiveryShipmentId String? @map("delhivery_shipment_id")
+  trackingUrl         String? @map("tracking_url")
+  shipmentStatus      String  @default("NOT_CREATED") @map("shipment_status")
+  labelGenerated      Boolean @default(false) @map("label_generated")
+  createdAt           String  @map("created_at")
+  updatedAt           String  @map("updated_at")
+
+  user        User            @relation(fields: [userId], references: [id])
+  address     Address?        @relation(fields: [addressId], references: [id])
+  items       OrderItem[]
+  tracking    OrderTracking[]
+  payments    Payment[]
+  couponUsage CouponUsage[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id              Int     @id @default(autoincrement())
+  orderId         Int     @map("order_id")
+  productId       Int?    @map("product_id")
+  productName     String  @map("product_name")
+  quantity        Int
+  unitPrice       Float   @map("unit_price")
+  totalPrice      Float   @map("total_price")
+  selectedOptions String? @map("selected_options")
+  specialNotes    String? @map("special_notes")
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model OrderTracking {
+  id        Int     @id @default(autoincrement())
+  orderId   Int     @map("order_id")
+  status    String
+  remarks   String?
+  createdAt String  @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_tracking")
+}
+
+model Payment {
+  id            Int     @id @default(autoincrement())
+  orderId       Int     @map("order_id")
+  provider      String
+  transactionId String? @map("transaction_id")
+  amount        Float
+  status        String
+  paidAt        String? @map("paid_at")
+  createdAt     String  @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model CouponUsage {
+  id       Int    @id @default(autoincrement())
+  couponId Int    @map("coupon_id")
+  userId   Int    @map("user_id")
+  orderId  Int    @map("order_id")
+  usedAt   String @map("used_at")
+
+  coupon Coupon @relation(fields: [couponId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  order  Order  @relation(fields: [orderId], references: [id])
+
+  @@map("coupon_usage")
+}
+
+model ContactMessage {
+  id        Int     @id @default(autoincrement())
+  name      String
+  email     String
+  phone     String?
+  message   String
+  handled   Boolean @default(false)
+  createdAt String  @map("created_at")
+
+  @@map("contact_messages")
+}
+
+model PasswordResetOtp {
+  id        Int     @id @default(autoincrement())
+  email     String
+  otp       String
+  expiresAt String  @map("expires_at")
+  used      Boolean @default(false)
+  createdAt String  @map("created_at")
+
+  @@map("password_reset_otps")
+}
