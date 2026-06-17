@@ -250,6 +250,14 @@ body::before {
   .footer-grid > div:first-child { grid-column: 1 / -1 !important; }
 }
 
+/* Homepage header: full nav bar on desktop, compact logo+menu bar on mobile.
+   Pure CSS toggle (no JS) so it can't cause hydration mismatches. */
+.home-nav--desktop { display: none; }
+@media (min-width: 900px) {
+  .home-topbar--mobile { display: none !important; }
+  .home-nav--desktop { display: block !important; }
+}
+
 /* Homepage category cards — two-up on desktop/tablet, stacked on phones */
 @media (max-width:680px) {
   .home-cat-grid { grid-template-columns: 1fr !important; }
