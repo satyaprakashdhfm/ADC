@@ -8,7 +8,7 @@ const REVIEWS = [
 export default function Reviews() {
   return (
     <section style={{ padding: 'clamp(36px,5vw,60px) 0', background: 'var(--surface-inverse)' }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 var(--gutter)' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter)' }}>
         <p style={{ fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 6px' }}>Customer Love</p>
         <h2 style={{ font: 'var(--weight-extra) clamp(1.4rem,1.1rem + 1.4vw,2rem)/1.05 var(--font-display)', color: '#fff', margin: '0 0 28px', letterSpacing: '-.02em' }}>People can&apos;t stop</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 24 }}>

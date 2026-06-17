@@ -7,7 +7,7 @@ import { STORES } from '@/lib/stores';
 export default function StoresAbout() {
   return (
     <section id="about" style={{ padding: 'clamp(32px,4.5vw,56px) 0', background: 'var(--cream-100)', borderBottom: '1px solid var(--border-default)' }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 var(--gutter)' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter)' }}>
         {/* About */}
         <div className="product-doc-hero" style={{ display: 'grid', gridTemplateColumns: '1fr minmax(260px,400px)', gap: 'clamp(22px,3vw,40px)', alignItems: 'center', marginBottom: 'clamp(28px,4vw,44px)' }}>
           <div>

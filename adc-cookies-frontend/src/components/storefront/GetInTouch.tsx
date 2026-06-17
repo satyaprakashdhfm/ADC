@@ -6,7 +6,7 @@ import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 export default function GetInTouch() {
   return (
     <section id="get-in-touch" style={{ padding: 'clamp(32px,4.5vw,56px) 0', background: 'linear-gradient(180deg, var(--amber-100), var(--amber-50))', borderTop: '1px solid var(--border-default)', borderBottom: '1px solid var(--border-default)' }}>
-      <div className="contact-layout" style={{ maxWidth: 1080, margin: '0 auto', padding: '0 var(--gutter)', display: 'grid', gridTemplateColumns: '1fr minmax(300px,420px)', gap: 'clamp(22px,3vw,40px)', alignItems: 'start' }}>
+      <div className="contact-layout" style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter)', display: 'grid', gridTemplateColumns: '1fr minmax(320px,440px)', gap: 'clamp(22px,3.5vw,48px)', alignItems: 'start' }}>
         <div>
           <p style={{ fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' }}>Get in Touch</p>
           <h2 style={{ font: '900 clamp(1.4rem,1.1rem + 1.4vw,2rem)/1.05 var(--font-display)', letterSpacing: '-.02em', margin: '0 0 10px' }}>Leave your details and we&apos;ll reach out.</h2>

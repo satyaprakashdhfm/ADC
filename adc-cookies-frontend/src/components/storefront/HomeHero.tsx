@@ -79,7 +79,7 @@ function CategoryCard({ c, onGo, priority }: { c: Category; onGo: (href: string)
       onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; }}
       onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}
     >
-      <div style={{ position: 'relative', width: '100%', height: 'clamp(124px,14vw,176px)', background: c.tint }}>
+      <div style={{ position: 'relative', width: '100%', height: 'clamp(130px,15vw,200px)', background: c.tint }}>
         <Image src={c.img} alt={c.label} fill priority={priority} sizes="(max-width:760px) 100vw, 50vw" style={{ objectFit: 'cover' }} />
       </div>
       <div style={{ padding: 'clamp(13px,1.5vw,20px)', display: 'flex', flexDirection: 'column', gap: 9, flex: 1 }}>
@@ -103,7 +103,7 @@ export default function HomeHero({ onMenuOpen }: HomeHeroProps) {
       <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Top bar — big logo (left) · single menu button (right; opens drawer with nav + login) */}
         <div className="home-topbar" style={{
-          maxWidth: 1320, margin: '0 auto', padding: 'clamp(10px,1.4vw,18px) var(--gutter)',
+          maxWidth: 1180, margin: '0 auto', padding: 'clamp(10px,1.4vw,18px) var(--gutter)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         }}>
           <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center' }}>
@@ -137,14 +137,14 @@ export default function HomeHero({ onMenuOpen }: HomeHeroProps) {
         </section>
 
         {/* Category entry points — Cookies & Tins first… */}
-        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '0 var(--gutter) clamp(14px,1.8vw,22px)' }}>
+        <section style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter) clamp(14px,1.8vw,22px)' }}>
           <div className="home-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 'clamp(14px,1.8vw,22px)' }}>
             {CATEGORIES.map((c, i) => <CategoryCard key={c.key} c={c} onGo={go} priority={i === 0} />)}
           </div>
         </section>
 
         {/* …then Corporate / bulk gifting just below */}
-        <section style={{ maxWidth: 1100, margin: '0 auto', padding: '0 var(--gutter) clamp(36px,5vw,64px)' }}>
+        <section style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter) clamp(36px,5vw,64px)' }}>
           <button
             onClick={() => go(CORPORATE.href)}
             className="home-corp"
