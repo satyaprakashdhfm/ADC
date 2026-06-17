@@ -47,6 +47,7 @@
   --ink-600: #5C4636; --ink-700: #4A3525; --ink-800: #36251A; --ink-900: #2B1D12;
   --white: #FFFFFF;
   --green-500: #2E9E5B; --green-600: #1F8A4C; --green-50: #E7F6EE;
+  --whatsapp-green: #25D366;
   --red-500: #E2483D; --red-600: #C7372D; --red-50: #FCEAE8;
   --yellow-500: #F2B705; --yellow-50: #FEF6DE;
 
@@ -218,6 +219,7 @@ body::before {
 @keyframes cookieHop { 0%,70%,100%{transform:translateY(0) scale(.8);opacity:.4} 35%{transform:translateY(-12px) scale(1);opacity:1} }
 @keyframes mascotPop { 0%{opacity:0;transform:scale(.7) translateY(12px)} 18%,68%{opacity:1;transform:scale(1) translateY(0)} 100%{opacity:0;transform:scale(.92) translateY(-8px)} }
 @keyframes loaderFadeIn { from{opacity:0} to{opacity:1} }
+@keyframes waPulse { 0%{transform:scale(1);opacity:.55} 70%,100%{transform:scale(1.6);opacity:0} }
 
 /* Mobile */
 @media (max-width:760px) { :root { --hc: 300px; } }
@@ -249,12 +251,15 @@ body::before {
   .footer-grid { grid-template-columns: 1fr !important; }
 }
 
-/* Homepage hero nav — shrink the oversized logo/menu on phones (desktop unchanged) */
-@media (max-width:760px) {
-  .home-nav { height: 84px !important; }
-  .home-nav-logo { height: 58px !important; width: auto !important; }
-  .home-nav-menu { padding: 10px 18px !important; font-size: 1rem !important; }
-  .home-nav-menu svg { width: 20px; height: 20px; }
+/* Homepage category cards — two-up on desktop/tablet, stacked on phones */
+@media (max-width:680px) {
+  .home-cat-grid { grid-template-columns: 1fr !important; }
+  .home-corp-body { max-width: 100% !important; }
+}
+
+/* Homepage top bar — drop the menu/account text on small phones, keep icons only */
+@media (max-width:480px) {
+  .home-topbar-menu-label, .home-topbar-acct-label { display: none !important; }
 }
 
 @media (min-width:681px) and (max-width:980px) {

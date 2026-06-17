@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { ChevronLeft, User, Menu, X, Search, ShoppingBag, ChevronRight, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie } from 'lucide-react';
+import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie } from 'lucide-react';
 import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
@@ -67,14 +67,6 @@ function CategoryTab({ label, selected, onClick, compact = false }: { label: str
     </button>
   );
 }
-
-const ADDONS = [
-  { id: 'nutella', label: 'Extra Nutella', price: 30 },
-  { id: 'biscoff', label: 'Extra Biscoff', price: 30 },
-  { id: 'chips', label: 'Extra Chocolate Chips', price: 20 },
-  { id: 'scoop', label: 'Ice Cream Scoop', price: 60 },
-  { id: 'gift', label: 'Gift Packaging', price: 50 },
-];
 
 const PAIRINGS = [
   { id: 'shake', name: 'Vanilla Milkshake', price: 120, img: null },
@@ -161,7 +153,7 @@ function QStepper({ value, onChange, size = 'md' }: { value: number; onChange: (
 }
 
 /* ---- Product Card (menu item) ---- */
-function ProductMenuItem({ item, qty, onQtyChange, onOpen }: { item: typeof FALLBACK_MENU[0]; qty: number; onQtyChange: (n: number) => void; onOpen: () => void }) {
+function ProductMenuItem({ item, qty, onQtyChange }: { item: typeof FALLBACK_MENU[0]; qty: number; onQtyChange: (n: number) => void }) {
   const rating = (item as any).rating as number | undefined;
   const rc = (item as any).rc as string | undefined;
   return (
@@ -176,7 +168,7 @@ function ProductMenuItem({ item, qty, onQtyChange, onOpen }: { item: typeof FALL
           {(item as any).best && <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Bestseller</span>}
           {item.cat && <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', color: 'var(--text-muted)', fontSize: 'var(--text-2xs)', fontWeight: 700 }}>{item.cat}</span>}
         </div>
-        <h3 onClick={onOpen} style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px', cursor: 'pointer' }}>{item.name}</h3>
+        <h3 style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>{item.name}</h3>
         {rating != null && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 'var(--text-sm)' }}>
             <span style={{ color: 'var(--amber-500)', letterSpacing: 1 }}>★</span>
@@ -192,7 +184,7 @@ function ProductMenuItem({ item, qty, onQtyChange, onOpen }: { item: typeof FALL
           <Image src={item.img} alt={item.name} width={184} height={184} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .3s' }} />
         </div>
         {qty === 0 ? (
-          <button onClick={onOpen} style={{ width: 'clamp(132px,34vw,184px)', padding: '11px 0', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>ADD</button>
+          <button onClick={() => onQtyChange(1)} style={{ width: 'clamp(132px,34vw,184px)', padding: '11px 0', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>ADD</button>
         ) : (
           <QStepper value={qty} onChange={onQtyChange} size="sm" />
         )}
@@ -201,81 +193,30 @@ function ProductMenuItem({ item, qty, onQtyChange, onOpen }: { item: typeof FALL
   );
 }
 
-/* ---- Detail Sheet ---- */
-function DetailSheet({ item, onClose, onAdd }: { item: typeof FALLBACK_MENU[0] | null; onClose: () => void; onAdd: (item: typeof FALLBACK_MENU[0], qty: number, unit: number, addOns: string[], note: string) => void }) {
-  const [qty, setQty] = useState(1);
-  const [adds, setAdds] = useState<Record<string, boolean>>({});
-  const [note, setNote] = useState('');
-  const open = !!item;
-
-  useEffect(() => { if (item) { setQty(1); setAdds({}); setNote(''); } }, [item]);
-
-  const addTotal = ADDONS.reduce((s, a) => s + (adds[a.id] ? a.price : 0), 0);
-  const unit = (item?.price || 0) + addTotal;
-  const toggle = (id: string) => setAdds(a => ({ ...a, [id]: !a[id] }));
-
+/* ---- Compact mobile product card — two-up grid, no ratings, ADD goes straight to cart ---- */
+function MobileProductCard({ item, qty, onQtyChange }: { item: typeof FALLBACK_MENU[0]; qty: number; onQtyChange: (n: number) => void }) {
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'var(--surface-overlay)', backdropFilter: 'blur(3px)', opacity: open ? 1 : 0, pointerEvents: open ? 'auto' : 'none', transition: 'opacity var(--dur-base) var(--ease-out)' }} />
-      <div style={{
-        position: 'fixed', left: '50%', top: '50%', zIndex: 81,
-        width: 'min(460px,94vw)', maxHeight: '86vh',
-        background: 'var(--surface-card)', borderRadius: 'var(--radius-modal)',
-        boxShadow: 'var(--shadow-xl)',
-        transform: open ? 'translate(-50%,-50%) scale(1)' : 'translate(-50%,-50%) scale(.96)',
-        opacity: open ? 1 : 0, pointerEvents: open ? 'auto' : 'none',
-        transition: 'opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-spring)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      }}>
-        <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, zIndex: 3, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,.9)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}><X size={18} /></button>
-
-        <div className="hide-sb" style={{ flex: 1, overflowY: 'auto' }}>
-          {/* Image */}
-          <div style={{ width: '100%', height: 180, position: 'relative', overflow: 'hidden' }}>
-            {item?.img ? <Image src={item.img} alt={item.name} fill style={{ objectFit: 'cover' }} /> : (
-              <div style={{ width: '100%', height: '100%', background: 'radial-gradient(130% 120% at 40% 25%,#F8C24D,#EF7507)' }} />
-            )}
-          </div>
-
-          <div style={{ padding: '18px 20px 8px' }}>
-            <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>{item?.name}</h2>
-            <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '0 0 4px' }}>{item?.desc}</p>
-            <div style={{ fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}>₹{item?.price}</div>
-          </div>
-
-          <div style={{ padding: '8px 20px 0' }}>
-            <div style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)', marginBottom: 4 }}>Make it yours</div>
-            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-subtle)', marginBottom: 12 }}>Optional · add as many as you like</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {ADDONS.map(a => {
-                const on = !!adds[a.id];
-                return (
-                  <button key={a.id} onClick={() => toggle(a.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '13px 16px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: on ? '1.5px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-card)', textAlign: 'left' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center', border: on ? 'none' : '2px solid var(--border-strong)', background: on ? 'var(--gradient-warm)' : 'transparent', color: '#fff' }}>{on && <Check size={14} strokeWidth={3} />}</span>
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--text-strong)' }}>{a.label}</span>
-                    </span>
-                    <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>+₹{a.price}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{ marginTop: 16 }}>
-              <div style={{ font: 'var(--weight-bold) var(--text-base) var(--font-body)', color: 'var(--text-strong)', marginBottom: 8 }}>Special request</div>
-              <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. extra soft, less sweet…" rows={2} style={{ width: '100%', boxSizing: 'border-box', resize: 'none', padding: '12px 14px', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', outline: 'none', background: 'var(--surface-raised)' }} />
-            </div>
-          </div>
-          <div style={{ height: 24 }} />
+    <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface-card)', borderRadius: 'var(--radius-image)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3' }}>
+        <Image src={item.img} alt={item.name} fill sizes="50vw" style={{ objectFit: 'cover' }} />
+        {(item as any).best && <span style={{ position: 'absolute', top: 6, left: 6, padding: '2px 7px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Bestseller</span>}
+      </div>
+      <div style={{ padding: '8px 10px 10px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          {item.veg && <span style={{ width: 12, height: 12, border: '2px solid var(--mark-veg)', borderRadius: 2, display: 'grid', placeItems: 'center', flex: 'none' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--mark-veg)', display: 'block' }} /></span>}
+          <h3 style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</h3>
         </div>
-
-        <div style={{ borderTop: '1px solid var(--border-soft)', padding: '14px 18px', display: 'flex', gap: 14, alignItems: 'center', background: 'var(--surface-card)' }}>
-          <QStepper value={qty} onChange={n => setQty(Math.max(1, n))} />
-          <button
-            onClick={() => item && onAdd(item, qty, unit, ADDONS.filter(a => adds[a.id]).map(a => a.label), note.trim())}
-            style={{ flex: 1, padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer' }}
-          >Add to Cart · ₹{unit * qty}</button>
+        <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
+          <span style={{ fontWeight: 800, fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>₹{item.price}</span>
+          {qty === 0 ? (
+            <button onClick={() => onQtyChange(1)} style={{ padding: '6px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>ADD</button>
+          ) : (
+            <QStepper value={qty} onChange={onQtyChange} size="sm" />
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -891,7 +832,6 @@ export default function OrderingApp() {
   const [active, setActive] = useState('Cookies');
   const [drawer, setDrawer] = useState(false);
   const [search, setSearch] = useState('');
-  const [sheet, setSheet] = useState<typeof FALLBACK_MENU[0] | null>(null);
   const [tin, setTin] = useState<typeof FALLBACK_TINS[0] | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
@@ -932,11 +872,12 @@ export default function OrderingApp() {
     }).catch(() => {}); // use fallback data on error
   }, []);
 
-  const addFromSheet = (item: typeof FALLBACK_MENU[0], qty: number, unit: number, addOns: string[], note: string) => {
-    // Store the per-unit price *including* add-ons, plus the chosen add-ons and note.
-    setQty(item.id, (cart[item.id]?.qty || 0) + qty, item.name, unit, item.img, addOns, note);
-    setSheet(null);
-  };
+  // Deep-link the category from the home page cards: /order?cat=cookies|tins|corporate
+  useEffect(() => {
+    const cat = new URLSearchParams(window.location.search).get('cat');
+    const map: Record<string, string> = { cookies: 'Cookies', tins: 'Gift Tins', corporate: 'Corporate Gifting' };
+    if (cat && map[cat]) setActive(map[cat]);
+  }, []);
 
   const addTin = (t: typeof FALLBACK_TINS[0], qty: number) => {
     setQty(t.id, (cart[t.id]?.qty || 0) + qty, t.name, t.price, t.img);
@@ -1025,7 +966,7 @@ export default function OrderingApp() {
               ) : (
                 filtered.map((m) => (
                   <div key={m.id}>
-                    <ProductMenuItem item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} onOpen={() => setSheet(m as any)} />
+                    <ProductMenuItem item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} />
                     {/* "Goes great with" pairings — hidden per request; uncomment to restore (full markup in git history).
                     {count > 0 && i === 0 && ( <div> Sparkles + "Goes great with" + PAIRINGS carousel of Thumb + QStepper </div> )}
                     */}
@@ -1053,7 +994,6 @@ export default function OrderingApp() {
               <ShoppingBag size={20} /> View cart · {count} item{count !== 1 ? 's' : ''} · ₹{total} <ArrowRight size={18} />
             </button>
           )}
-        <DetailSheet item={sheet} onClose={() => setSheet(null)} onAdd={addFromSheet} />
         <TinModal tin={tin} onClose={() => setTin(null)} onAdd={addTin} />
         <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
         <LocationSheet open={locationOpen} onClose={() => setLocationOpen(false)} onPick={a => setLocation(a.city)} />
@@ -1117,21 +1057,18 @@ export default function OrderingApp() {
               </div>
             ))
           ) : (
-            filtered.map((m) => (
-              <div key={m.id}>
-                <ProductMenuItem item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} onOpen={() => setSheet(m as any)} />
-                {/* "Goes great with" pairings — hidden per request; uncomment to restore (full markup in git history).
-                {count > 0 && i === 0 && ( <div> Sparkles + "Goes great with" + PAIRINGS carousel of Thumb + QStepper </div> )}
-                */}
-              </div>
-            ))
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+              {filtered.map((m) => (
+                <MobileProductCard key={m.id} item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} />
+              ))}
+            </div>
           )}
         </div>
         <div style={{ height: count > 0 ? 150 : 96 }} />
 
         {/* Floating bottom-right stack: menu on top, cart below it */}
         <div style={{ position: 'fixed', right: 16, bottom: 18, zIndex: 40, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12 }}>
-          <button onClick={() => setDrawer(true)} aria-label="Menu" style={{ width: 56, height: 56, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--text-strong)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-lg)' }}><Menu size={24} /></button>
+          <button onClick={() => setDrawer(true)} aria-label="Menu" style={{ width: 60, height: 60, borderRadius: 18, border: 'none', background: 'var(--surface-inverse)', color: '#fff', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, boxShadow: 'var(--shadow-lg)' }}><BookOpen size={21} /><span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.04em' }}>Menu</span></button>
           {count > 0 && (
             <button onClick={() => router.push('/checkout')} aria-label="View cart" style={{ border: 'none', cursor: 'pointer', background: 'var(--gradient-warm)', color: '#fff', borderRadius: 'var(--radius-pill)', boxShadow: 'var(--shadow-brand)', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', fontFamily: 'var(--font-body)', fontWeight: 800, animation: 'riseIn .3s var(--ease-spring) both' }}>
               <span style={{ position: 'relative', display: 'grid', placeItems: 'center' }}>
@@ -1143,7 +1080,6 @@ export default function OrderingApp() {
             </button>
           )}
         </div>
-        <DetailSheet item={sheet} onClose={() => setSheet(null)} onAdd={addFromSheet} />
         <TinModal tin={tin} onClose={() => setTin(null)} onAdd={addTin} />
         <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
         <LocationSheet open={locationOpen} onClose={() => setLocationOpen(false)} onPick={a => setLocation(a.city)} />
