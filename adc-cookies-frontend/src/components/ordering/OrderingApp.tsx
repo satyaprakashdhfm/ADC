@@ -320,6 +320,13 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     else setAddresses([]);
   }, [user]);
 
+  // Auto-select the default address (if one exists) once addresses load and nothing valid is selected.
+  useEffect(() => {
+    if (addr && addresses.some(a => a.id === addr)) return;
+    const def = addresses.find(a => a.isDefault);
+    if (def) setAddr(def.id);
+  }, [addresses, addr, setAddr]);
+
   // Checkout needs an account (for delivery address) — prompt login the moment they arrive signed-out.
   useEffect(() => { if (!user) setLoginOpen(true); }, [user]);
 
@@ -328,10 +335,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const gstIncl = total > 0 ? Math.round(total - total / 1.05) : 0;  // 5% GST is already inside the prices
   const giftFee = gift ? GIFT_FEE : 0;
   const grand = total + delivery + giftFee - discount;               // GST included in `total`, not added on top
-  const selected = addresses.find(a => a.id === addr) || addresses[0];
+  const chosen = addresses.find(a => a.id === addr);                 // the address the user actually selected (or auto-selected default)
+  const selected = chosen || addresses[0];                           // fallback only for the pay-step display
 
-  // Dummy delivery estimate from the pincode — to be wired to real logistics later.
-  const etaPincode = (adding ? aform.pincode : selected?.pincode) || '';
+  // Delivery estimate shows ONLY once an address is actually selected (clicked, or the auto-selected default).
+  const etaPincode = chosen?.pincode || '';
   const etaDigits = etaPincode.replace(/\D/g, '');
   const etaDays = etaDigits.length >= 6 ? (Number(etaDigits[etaDigits.length - 1]) % 2 === 0 ? 2 : 3) : null;
 
@@ -363,15 +371,20 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`, { headers: { Accept: 'application/json' } });
           const j = await res.json();
           const a = j.address || {};
+          // "Bengaluru Urban" / "Mumbai Suburban" → "Bengaluru" / "Mumbai"
+          const cleanDistrict = (s: string | undefined) => (s || '').replace(/\s*(urban|rural|suburban|district|division)\s*$/i, '').trim();
+          // Street/cross + locality go into Area/Landmark (not the flat field).
+          const area = [a.road, a.neighbourhood || a.suburb || a.residential || a.quarter].filter(Boolean).join(', ');
           setAform(f => ({
             ...f,
-            addressLine1: f.addressLine1 || [a.house_number, a.road].filter(Boolean).join(' '),
-            addressLine2: f.addressLine2 || a.neighbourhood || a.suburb || a.residential || a.quarter || '',
-            city: a.city || a.town || a.village || a.county || f.city,
+            // Flat / House / Building is user-specific — GPS can't know it, so leave it for the user to type.
+            addressLine2: f.addressLine2 || area,
+            city: a.city || cleanDistrict(a.state_district) || a.town || a.municipality || a.county || a.village || f.city,
             state: a.state || f.state,
             pincode: a.postcode || f.pincode,
           }));
-          if (!a.postcode && !a.city) setDetectErr('Got your location, but couldn’t read the full address — please complete it.');
+          if (!a.postcode && !a.city && !a.state_district) setDetectErr('Got your location, but couldn’t read the full address — please complete it.');
+          else setDetectErr('');
         } catch {
           setDetectErr('Could not look up your address. Please fill it in manually.');
         } finally { setDetecting(false); }
@@ -625,13 +638,19 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         ) : (
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={card$}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{selected?.label === 'Office' ? <Briefcase size={18} color="var(--brand-secondary)" /> : selected?.label === 'Other' ? <MapPin size={18} color="var(--brand-secondary)" /> : <Home size={18} color="var(--brand-secondary)" />}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Deliver to {selected?.label || 'Home'}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected ? [selected.addressLine1, selected.city, selected.pincode].filter(Boolean).join(', ') : ''}</div>
+                  <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 3 }}>Deliver to {selected?.label || 'Home'}</div>
+                  {selected && (
+                    <>
+                      {selected.fullName && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 600 }}>{selected.fullName}</div>}
+                      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>{[selected.addressLine1, selected.addressLine2, selected.city, selected.state, selected.pincode].filter(Boolean).join(', ')}</div>
+                      {selected.phone && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>Phone: {selected.phone}</div>}
+                    </>
+                  )}
                 </div>
-                <button onClick={() => router.push('/checkout')} style={{ border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>Change</button>
+                <button onClick={() => router.push('/checkout')} style={{ border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', flex: 'none' }}>Change</button>
               </div>
             </div>
 

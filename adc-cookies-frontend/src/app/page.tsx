@@ -9,6 +9,7 @@ import Footer from '@/components/storefront/Footer';
 import MenuDrawer from '@/components/storefront/MenuDrawer';
 import LoginModal from '@/components/ordering/LoginModal';
 import WhatsAppButton from '@/components/storefront/WhatsAppButton';
+import PromoPopup from '@/components/storefront/PromoPopup';
 
 export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -27,6 +28,7 @@ export default function Home() {
       <Footer />
 
       <WhatsAppButton />
+      <PromoPopup />
     </main>
   );
 }

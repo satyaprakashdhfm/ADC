@@ -69,8 +69,8 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
       }}>
         {/* Header image */}
         <div style={{ height: 200, background: 'var(--gradient-hero)', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', right: -20, top: 20, width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(130% 130% at 34% 26%,#F8C24D,#EF7507)', boxShadow: 'var(--shadow-lg)' }} />
-          <div style={{ position: 'absolute', right: 120, top: 120, width: 80, height: 80, borderRadius: '50%', background: 'radial-gradient(130% 130% at 34% 26%,#FBD98A,#F29F05)', boxShadow: 'var(--shadow-md)' }} />
+          <Image src="/assets/login-cookies/cookie-1.png" alt="" width={160} height={160} style={{ position: 'absolute', right: -20, top: 20, width: 160, height: 160, objectFit: 'contain', filter: 'drop-shadow(0 12px 20px rgba(58,37,26,.30))' }} />
+          <Image src="/assets/login-cookies/cookie-2.png" alt="" width={80} height={80} style={{ position: 'absolute', right: 120, top: 120, width: 80, height: 80, objectFit: 'contain', filter: 'drop-shadow(0 8px 14px rgba(58,37,26,.26))' }} />
           <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,.8)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
             <X size={18} />
           </button>
