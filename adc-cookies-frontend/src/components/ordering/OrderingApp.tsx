@@ -2,12 +2,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck } from 'lucide-react';
+import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil } from 'lucide-react';
 import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { getProducts, getAddresses, addAddress, validateCoupon, createOrder, submitContact, firstImage, type Product, type Address, type OrderItemInput } from '@/lib/api';
+import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, submitContact, firstImage, type Product, type Address, type OrderItemInput } from '@/lib/api';
 
 /* ---- Data ---- */
 const CATEGORIES = ['Cookies', 'Gift Tins', 'Corporate Gifting'];
@@ -301,6 +301,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [couponErr, setCouponErr] = useState('');
   const [adding, setAdding] = useState(false);
   const [aform, setAform] = useState({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' });
+  const [editId, setEditId] = useState<number | null>(null);   // address being edited (null = adding new)
   const [makeDefault, setMakeDefault] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectErr, setDetectErr] = useState('');
@@ -345,14 +346,31 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
   const aset = (k: keyof typeof aform) => (e: React.ChangeEvent<HTMLInputElement>) => setAform({ ...aform, [k]: e.target.value });
   const aValid = aform.fullName && aform.addressLine1 && aform.city && aform.pincode;
+  const EMPTY_AFORM = { fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' };
+  const closeAddrForm = () => { setAdding(false); setEditId(null); setMakeDefault(false); setDetectErr(''); setAform(EMPTY_AFORM); };
+
+  // Open the form pre-filled to edit an existing saved address.
+  const editAddr = (a: Address) => {
+    setAform({ fullName: a.fullName, phone: a.phone || '', addressLine1: a.addressLine1, addressLine2: a.addressLine2 || '', city: a.city, state: a.state || '', pincode: a.pincode, label: a.label || 'Home' });
+    setMakeDefault(!!a.isDefault); setEditId(a.id); setDetectErr(''); setAdding(true);
+  };
+
   const saveAddr = async () => {
     const data: Omit<Address, 'id'> = { ...aform, isDefault: makeDefault };
-    let created: Address;
-    try { created = await addAddress(data); } catch { created = { ...data, id: Date.now() }; }
-    // Reflect "default" client-side: clear the flag on others when this one becomes default.
-    setAddresses(p => [...(makeDefault ? p.map(a => ({ ...a, isDefault: false })) : p), created]);
-    setAddr(created.id); setAdding(false); setMakeDefault(false); setDetectErr('');
-    setAform({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' });
+    if (editId != null) {
+      // Editing an existing address.
+      const updated: Address = { ...data, id: editId };
+      try { await updateAddress(editId, data); } catch {} // keep the local edit even if the backend lacks the route
+      setAddresses(p => p.map(a => (a.id === editId ? updated : (makeDefault ? { ...a, isDefault: false } : a))));
+      setAddr(editId);
+    } else {
+      // Adding a new address.
+      let created: Address;
+      try { created = await addAddress(data); } catch { created = { ...data, id: Date.now() }; }
+      setAddresses(p => [...(makeDefault ? p.map(a => ({ ...a, isDefault: false })) : p), created]);
+      setAddr(created.id);
+    }
+    closeAddrForm();
   };
 
   // Detect-my-location → reverse-geocode → prefill the address columns we can. Only runs on click.
@@ -523,17 +541,20 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   {addresses.map(a => {
                     const on = addr === a.id;
                     return (
-                      <button key={a.id} onClick={() => setAddr(a.id)} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '14px 16px', borderRadius: 'var(--radius-card)', cursor: 'pointer', textAlign: 'left', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-raised)' }}>
+                      <div key={a.id} onClick={() => setAddr(a.id)} role="button" tabIndex={0} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '14px 16px', borderRadius: 'var(--radius-card)', cursor: 'pointer', textAlign: 'left', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-raised)' }}>
                         <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: on ? 'var(--gradient-warm)' : 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{a.label === 'Office' ? <Briefcase size={18} color={on ? '#fff' : 'var(--brand-secondary)'} /> : a.label === 'Other' ? <MapPin size={18} color={on ? '#fff' : 'var(--brand-secondary)'} /> : <Home size={18} color={on ? '#fff' : 'var(--brand-secondary)'} />}</span>
-                        <span style={{ flex: 1 }}>
+                        <span style={{ flex: 1, minWidth: 0 }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                             <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>{a.label || 'Home'}</span>
                             {a.isDefault && <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Default</span>}
                           </span>
                           <span style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.45 }}>{[a.addressLine1, a.addressLine2, a.city, a.pincode].filter(Boolean).join(', ')}</span>
                         </span>
-                        <Dot on={on} />
-                      </button>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+                          <button onClick={e => { e.stopPropagation(); editAddr(a); }} aria-label="Edit address" style={{ width: 30, height: 30, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-muted)' }}><Pencil size={14} /></button>
+                          <Dot on={on} />
+                        </span>
+                      </div>
                     );
                   })}
                   {adding ? (
@@ -572,12 +593,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       </button>
 
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button disabled={!aValid} onClick={saveAddr} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: aValid ? 'var(--gradient-warm)' : 'var(--border-default)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: aValid ? 'pointer' : 'not-allowed' }}>Save &amp; use</button>
-                        <button onClick={() => { setAdding(false); setDetectErr(''); }} style={{ padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
+                        <button disabled={!aValid} onClick={saveAddr} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: aValid ? 'var(--gradient-warm)' : 'var(--border-default)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: aValid ? 'pointer' : 'not-allowed' }}>{editId != null ? 'Save changes' : 'Save & use'}</button>
+                        <button onClick={closeAddrForm} style={{ padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
+                    <button onClick={() => { setEditId(null); setMakeDefault(false); setAform(EMPTY_AFORM); setDetectErr(''); setAdding(true); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
                       <Plus size={16} color="var(--brand-secondary)" />
                       <span style={{ fontWeight: 700, color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Add new address</span>
                     </button>

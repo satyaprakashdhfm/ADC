@@ -67,15 +67,14 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
         overflow: 'hidden', display: 'flex', flexDirection: 'column',
         animation: 'riseIn .3s var(--ease-spring) both',
       }}>
-        {/* Header image */}
-        <div style={{ height: 200, background: 'var(--gradient-hero)', position: 'relative', overflow: 'hidden' }}>
-          <Image src="/assets/login-cookies/cookie-1.png" alt="" width={160} height={160} style={{ position: 'absolute', right: -20, top: 20, width: 160, height: 160, objectFit: 'contain', filter: 'drop-shadow(0 12px 20px rgba(58,37,26,.30))' }} />
-          <Image src="/assets/login-cookies/cookie-2.png" alt="" width={80} height={80} style={{ position: 'absolute', right: 120, top: 120, width: 80, height: 80, objectFit: 'contain', filter: 'drop-shadow(0 8px 14px rgba(58,37,26,.26))' }} />
-          <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,.8)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
-            <X size={18} />
+        {/* Header — cookie photo kept faint in the background, big logo on top */}
+        <div style={{ height: 230, position: 'relative', overflow: 'hidden', background: '#160D06' }}>
+          <Image src="/assets/login-bg.jpg" alt="" fill priority sizes="440px" style={{ objectFit: 'cover', opacity: 0.4 }} />
+          <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,.9)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
+            <X size={18} color="var(--text-strong)" />
           </button>
-          <div style={{ position: 'absolute', left: 20, bottom: 16 }}>
-            <Image src="/assets/adc-logo.png" width={120} height={60} alt="a dough cookie" style={{ objectFit: 'contain' }} />
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
+            <Image src="/assets/adc-logo.png" width={232} height={168} alt="a dough cookie" priority style={{ height: 188, width: 'auto', maxWidth: '84%', objectFit: 'contain', filter: 'drop-shadow(0 4px 16px rgba(0,0,0,.55))' }} />
           </div>
         </div>
 

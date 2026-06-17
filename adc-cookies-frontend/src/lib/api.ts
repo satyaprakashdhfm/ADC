@@ -98,6 +98,10 @@ export async function addAddress(data: Omit<Address, 'id'>): Promise<Address> {
   return request('/addresses', { method: 'POST', body: JSON.stringify(data) });
 }
 
+export async function updateAddress(id: number, data: Omit<Address, 'id'>): Promise<Address> {
+  return request(`/addresses/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
 /* ---- Contact ---- */
 export interface ContactInput { name: string; email: string; phone?: string; message: string; }
 
