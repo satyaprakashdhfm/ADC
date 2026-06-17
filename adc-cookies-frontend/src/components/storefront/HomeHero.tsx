@@ -65,44 +65,6 @@ const descClamp: React.CSSProperties = {
   display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
 };
 
-/* --- A handful of cookie photos scattered at hand-picked (spread-out) spots, pushed deep
-   into the background: very faint and blurred so they read as soft texture, never content.
-   Fixed positions (no Math.random) keep SSR and client markup identical. --- */
-const BG_SRCS = ['real-2', 'real-3', 'real-4', 'real-5', 'real-6', 'real-7'];
-const BG_COOKIES = [
-  { left: '6%',  top: '12%', size: 140, rot: -12 },
-  { left: '89%', top: '7%',  size: 120, rot: 14 },
-  { left: '20%', top: '40%', size: 100, rot: 8 },
-  { left: '77%', top: '33%', size: 150, rot: -18 },
-  { left: '3%',  top: '67%', size: 125, rot: 18 },
-  { left: '95%', top: '58%', size: 110, rot: -10 },
-  { left: '32%', top: '84%', size: 120, rot: 13 },
-  { left: '66%', top: '89%', size: 135, rot: -15 },
-  { left: '49%', top: '23%', size: 95,  rot: 6 },
-];
-
-function CookieBackdrop() {
-  return (
-    <div
-      className="home-bg-cookies"
-      aria-hidden
-      style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden', opacity: 0.07, filter: 'blur(4px)' }}
-    >
-      {BG_COOKIES.map((c, i) => (
-        <div
-          key={i}
-          style={{
-            position: 'absolute', left: c.left, top: c.top, width: c.size, height: c.size,
-            backgroundImage: `url('/assets/bg-cookies/${BG_SRCS[i % BG_SRCS.length]}.png')`,
-            backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
-            transform: `translate(-50%,-50%) rotate(${c.rot}deg)`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 function CategoryCard({ c, onGo, priority }: { c: Category; onGo: (href: string) => void; priority?: boolean }) {
   return (
     <button
@@ -138,8 +100,6 @@ export default function HomeHero({ onMenuOpen }: HomeHeroProps) {
 
   return (
     <header style={{ position: 'relative', overflow: 'hidden' }}>
-      <CookieBackdrop />
-
       <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Top bar — big logo (left) · single menu button (right; opens drawer with nav + login) */}
         <div className="home-topbar" style={{
@@ -153,7 +113,7 @@ export default function HomeHero({ onMenuOpen }: HomeHeroProps) {
               height={168}
               alt="a dough cookie"
               priority
-              style={{ height: 'clamp(110px,18vw,260px)', width: 'auto', objectFit: 'contain', display: 'block' }}
+              style={{ height: 'clamp(124px,20vw,290px)', width: 'auto', objectFit: 'contain', display: 'block' }}
             />
           </a>
 
@@ -167,8 +127,7 @@ export default function HomeHero({ onMenuOpen }: HomeHeroProps) {
         </div>
 
         {/* Compact hero band */}
-        <section style={{ maxWidth: 1000, margin: '0 auto', padding: 'clamp(4px,1vw,14px) var(--gutter) clamp(14px,2vw,22px)', textAlign: 'center' }}>
-          <p style={{ fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' }}>Aroma of Freshness</p>
+        <section style={{ maxWidth: 1000, margin: '0 auto', padding: 'clamp(8px,1.6vw,20px) var(--gutter) clamp(14px,2vw,22px)', textAlign: 'center' }}>
           <h1 style={{ font: '900 clamp(1.6rem,1.2rem + 2.4vw,2.9rem)/1 var(--font-display)', letterSpacing: '-.03em', color: 'var(--text-strong)', margin: '0 0 10px', textWrap: 'balance' }}>
             Fresh-baked cookies, delivered warm.
           </h1>

@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import AnnouncementBar from '@/components/storefront/AnnouncementBar';
 import HomeHero from '@/components/storefront/HomeHero';
 import GetInTouch from '@/components/storefront/GetInTouch';
 import StoresAbout from '@/components/storefront/StoresAbout';
@@ -18,6 +19,7 @@ export default function Home() {
       <MenuDrawer open={menuOpen} onClose={() => setMenuOpen(false)} onLoginOpen={() => setLoginOpen(true)} />
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
 
+      <AnnouncementBar />
       <HomeHero onMenuOpen={() => setMenuOpen(true)} />
       <GetInTouch />
       <StoresAbout />

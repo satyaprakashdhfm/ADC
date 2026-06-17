@@ -89,6 +89,7 @@ export interface Address {
   id: number; fullName: string; phone: string;
   addressLine1: string; addressLine2?: string;
   city: string; state: string; pincode: string; isDefault: boolean;
+  label?: string; // Home / Office / Other
 }
 
 export async function getAddresses(): Promise<Address[]> { return request('/addresses'); }

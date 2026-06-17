@@ -175,7 +175,7 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: #F9EDE1 url('/assets/floral-pattern-only.png') repeat;
+  background: #EFE1CC url('/assets/floral-pattern-only.png') repeat;
   background-size: 620px auto;
   opacity: 0.4;
   pointer-events: none;
@@ -184,11 +184,11 @@ body::before {
 .adc-pattern-page {
   position: relative;
   isolation: isolate;
-  background: #F9EDE1;
+  background: #EFE1CC;
 
   /* Warm, non-white surfaces for every page that uses this wrapper (i.e. everything
      except the home page). Cards/inputs become warm ivory, headers a soft amber wash,
-     and the page itself (#F9EDE1) sits a touch darker behind the products. */
+     and the page itself (#EFE1CC) sits a touch darker behind the products. */
   --surface-card: #F4EAD6;
   --surface-raised: #EEE0C8;
   --surface-glass: rgba(250,242,226,.92);
@@ -219,6 +219,7 @@ body::before {
 @keyframes cookieHop { 0%,70%,100%{transform:translateY(0) scale(.8);opacity:.4} 35%{transform:translateY(-12px) scale(1);opacity:1} }
 @keyframes mascotPop { 0%{opacity:0;transform:scale(.7) translateY(12px)} 18%,68%{opacity:1;transform:scale(1) translateY(0)} 100%{opacity:0;transform:scale(.92) translateY(-8px)} }
 @keyframes loaderFadeIn { from{opacity:0} to{opacity:1} }
+@keyframes annSlide { from{opacity:0;transform:translateY(7px)} to{opacity:1;transform:none} }
 @keyframes waPulse { 0%{transform:scale(1);opacity:.55} 70%,100%{transform:scale(1.6);opacity:0} }
 
 /* Mobile */
@@ -243,12 +244,10 @@ body::before {
   .account-order-detail-grid { grid-template-columns: 1fr !important; }
   .account-address-list { grid-template-columns: 1fr !important; }
   .account-address-grid { grid-template-columns: 1fr !important; }
-  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px 24px !important; }
+  /* Footer: brand on top (full width), then Shop | Company / Help side by side — keeps
+     the page short on phones instead of stacking every column. */
+  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 20px 18px !important; }
   .footer-grid > div:first-child { grid-column: 1 / -1 !important; }
-}
-
-@media (max-width:420px) {
-  .footer-grid { grid-template-columns: 1fr !important; }
 }
 
 /* Homepage category cards — two-up on desktop/tablet, stacked on phones */

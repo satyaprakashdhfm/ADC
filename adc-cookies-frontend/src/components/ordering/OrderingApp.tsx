@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie } from 'lucide-react';
+import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck } from 'lucide-react';
 import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
@@ -193,6 +193,21 @@ function ProductMenuItem({ item, qty, onQtyChange }: { item: typeof FALLBACK_MEN
   );
 }
 
+// Short, precise card blurbs (shown in full on the cards) keyed by product name —
+// falls back to the product's own description for anything not listed here.
+const SHORT_DESC: Record<string, string> = {
+  'Chocolate Chip': 'Buttery dough, dark chocolate chips, soft centre.',
+  'Double Choc Chip': 'Cocoa dough loaded with dark chocolate chunks.',
+  'Raagi (Gluten Free)': 'Wholesome finger-millet cookie, naturally gluten-free.',
+  'Matcha': 'Stone-ground matcha with white-chocolate chips.',
+  'ADC Special': 'Browned butter, sea salt, three chocolates.',
+  'Red Velvet With Cheese': 'Cocoa-red velvet with a cream-cheese centre.',
+  'Biscoff Filled': 'Molten Biscoff inside a caramelised shell.',
+  'Nutella Filled': 'Gooey Nutella centre in a soft chocolate cookie.',
+  'Nutella Tin': 'Six Nutella-filled cookies in a gift tin.',
+  'Biscoff Tin': 'Nine Biscoff-filled cookies, gift-ready.',
+};
+
 /* ---- Compact mobile product card — two-up grid, no ratings, ADD goes straight to cart ---- */
 function MobileProductCard({ item, qty, onQtyChange }: { item: typeof FALLBACK_MENU[0]; qty: number; onQtyChange: (n: number) => void }) {
   return (
@@ -201,16 +216,16 @@ function MobileProductCard({ item, qty, onQtyChange }: { item: typeof FALLBACK_M
         <Image src={item.img} alt={item.name} fill sizes="50vw" style={{ objectFit: 'cover' }} />
         {(item as any).best && <span style={{ position: 'absolute', top: 6, left: 6, padding: '2px 7px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Bestseller</span>}
       </div>
-      <div style={{ padding: '8px 10px 10px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          {item.veg && <span style={{ width: 12, height: 12, border: '2px solid var(--mark-veg)', borderRadius: 2, display: 'grid', placeItems: 'center', flex: 'none' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--mark-veg)', display: 'block' }} /></span>}
-          <h3 style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</h3>
+      <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {item.veg && <span style={{ width: 13, height: 13, border: '2px solid var(--mark-veg)', borderRadius: 2, display: 'grid', placeItems: 'center', flex: 'none' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--mark-veg)', display: 'block' }} /></span>}
+          <h3 style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</h3>
         </div>
-        <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</p>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
-          <span style={{ fontWeight: 800, fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>₹{item.price}</span>
+        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>{SHORT_DESC[item.name] ?? item.desc}</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 'auto', paddingTop: 6 }}>
+          <span style={{ fontWeight: 800, fontSize: 'var(--text-base)', color: 'var(--text-strong)' }}>₹{item.price}</span>
           {qty === 0 ? (
-            <button onClick={() => onQtyChange(1)} style={{ padding: '6px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>ADD</button>
+            <button onClick={() => onQtyChange(1)} style={{ padding: '7px 18px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>ADD</button>
           ) : (
             <QStepper value={qty} onChange={onQtyChange} size="sm" />
           )}
@@ -283,10 +298,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, clearAll } = useCart();
   const { user } = useAuth();
   const [addresses, setAddresses] = useState<Address[]>([]);
-  const [asap, setAsap] = useState(true);
   const [couponErr, setCouponErr] = useState('');
   const [adding, setAdding] = useState(false);
-  const [aform, setAform] = useState({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '' });
+  const [aform, setAform] = useState({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' });
+  const [makeDefault, setMakeDefault] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [detectErr, setDetectErr] = useState('');
   const [method, setMethod] = useState('upi');
   const [upiApp, setUpiApp] = useState('gpay');
   const [upiId, setUpiId] = useState('');
@@ -307,20 +324,61 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   useEffect(() => { if (!user) setLoginOpen(true); }, [user]);
 
   const lines = Object.values(cart);
-  const delivery = total > 0 ? 29 : 0;
-  const gst = Math.round(total * 0.05);
+  const delivery = total > 0 ? 100 : 0;                              // flat ₹100 per order
+  const gstIncl = total > 0 ? Math.round(total - total / 1.05) : 0;  // 5% GST is already inside the prices
   const giftFee = gift ? GIFT_FEE : 0;
-  const grand = total + delivery + gst + giftFee - discount;
+  const grand = total + delivery + giftFee - discount;               // GST included in `total`, not added on top
   const selected = addresses.find(a => a.id === addr) || addresses[0];
+
+  // Dummy delivery estimate from the pincode — to be wired to real logistics later.
+  const etaPincode = (adding ? aform.pincode : selected?.pincode) || '';
+  const etaDigits = etaPincode.replace(/\D/g, '');
+  const etaDays = etaDigits.length >= 6 ? (Number(etaDigits[etaDigits.length - 1]) % 2 === 0 ? 2 : 3) : null;
 
   const aset = (k: keyof typeof aform) => (e: React.ChangeEvent<HTMLInputElement>) => setAform({ ...aform, [k]: e.target.value });
   const aValid = aform.fullName && aform.addressLine1 && aform.city && aform.pincode;
   const saveAddr = async () => {
-    const data: Omit<Address, 'id'> = { ...aform, isDefault: false };
+    const data: Omit<Address, 'id'> = { ...aform, isDefault: makeDefault };
     let created: Address;
     try { created = await addAddress(data); } catch { created = { ...data, id: Date.now() }; }
-    setAddresses(p => [...p, created]); setAddr(created.id); setAdding(false);
-    setAform({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '' });
+    // Reflect "default" client-side: clear the flag on others when this one becomes default.
+    setAddresses(p => [...(makeDefault ? p.map(a => ({ ...a, isDefault: false })) : p), created]);
+    setAddr(created.id); setAdding(false); setMakeDefault(false); setDetectErr('');
+    setAform({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' });
+  };
+
+  // Detect-my-location → reverse-geocode → prefill the address columns we can. Only runs on click.
+  const detectLocation = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) { setDetectErr('Location is not available on this device.'); return; }
+    // Browsers only show the permission prompt on a secure origin (localhost or https).
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      setDetectErr('Location needs a secure connection. Open the site on localhost or its https link — then it will ask permission.');
+      return;
+    }
+    setDetecting(true); setDetectErr('');
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`, { headers: { Accept: 'application/json' } });
+          const j = await res.json();
+          const a = j.address || {};
+          setAform(f => ({
+            ...f,
+            addressLine1: f.addressLine1 || [a.house_number, a.road].filter(Boolean).join(' '),
+            addressLine2: f.addressLine2 || a.neighbourhood || a.suburb || a.residential || a.quarter || '',
+            city: a.city || a.town || a.village || a.county || f.city,
+            state: a.state || f.state,
+            pincode: a.postcode || f.pincode,
+          }));
+          if (!a.postcode && !a.city) setDetectErr('Got your location, but couldn’t read the full address — please complete it.');
+        } catch {
+          setDetectErr('Could not look up your address. Please fill it in manually.');
+        } finally { setDetecting(false); }
+      },
+      err => { setDetecting(false); setDetectErr(err.code === 1 ? 'Location permission denied — allow it or type your address.' : 'Could not get your location. Please type your address.'); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
   };
 
   const applyCoupon = async () => {
@@ -408,10 +466,13 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     <div style={card$}>
       {head(<Receipt size={18} color="var(--brand-secondary)" />, 'Bill details')}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>Item total</span><span>₹{total}</span></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--text-base)', color: 'var(--text-strong)' }}><span>Price</span><span>₹{total}</span></div>
+        <div style={{ marginLeft: 2, paddingLeft: 12, borderLeft: '2px solid var(--border-default)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-subtle)' }}>Break-up</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>GST (5%)</span><span>₹{gstIncl}</span></div>
+        </div>
         {gift && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>Gift wrap</span><span>₹{giftFee}</span></div>}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>Delivery fee</span><span>₹{delivery}</span></div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>GST (5%)</span><span>₹{gst}</span></div>
         {applied && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#1F8A5B', fontWeight: 700 }}><span>Coupon ({coupon})</span><span>−₹{discount}</span></div>}
         <Dash />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}><span>To pay</span><span>₹{grand}</span></div>
@@ -450,10 +511,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     const on = addr === a.id;
                     return (
                       <button key={a.id} onClick={() => setAddr(a.id)} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '14px 16px', borderRadius: 'var(--radius-card)', cursor: 'pointer', textAlign: 'left', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-raised)' }}>
-                        <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: on ? 'var(--gradient-warm)' : 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{a.isDefault ? <Home size={18} color={on ? '#fff' : 'var(--brand-secondary)'} /> : <Briefcase size={18} color={on ? '#fff' : 'var(--brand-secondary)'} />}</span>
+                        <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: on ? 'var(--gradient-warm)' : 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{a.label === 'Office' ? <Briefcase size={18} color={on ? '#fff' : 'var(--brand-secondary)'} /> : a.label === 'Other' ? <MapPin size={18} color={on ? '#fff' : 'var(--brand-secondary)'} /> : <Home size={18} color={on ? '#fff' : 'var(--brand-secondary)'} />}</span>
                         <span style={{ flex: 1 }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>{a.isDefault ? 'Home' : 'Work'}</span>
+                            <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>{a.label || 'Home'}</span>
                             {a.isDefault && <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Default</span>}
                           </span>
                           <span style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.45 }}>{[a.addressLine1, a.addressLine2, a.city, a.pincode].filter(Boolean).join(', ')}</span>
@@ -464,6 +525,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   })}
                   {adding ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)' }}>
+                      {/* Detect my location — only runs on click; fills the columns we can read */}
+                      <button onClick={detectLocation} disabled={detecting} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--brand-secondary)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: detecting ? 'wait' : 'pointer' }}>
+                        <Navigation size={16} /> {detecting ? 'Detecting…' : 'Detect my location'}
+                      </button>
+                      {detectErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 600, lineHeight: 1.4 }}>{detectErr}</div>}
+
                       {[['fullName', 'Full name'], ['phone', 'Phone'], ['addressLine1', 'Flat / House / Building'], ['addressLine2', 'Area / Landmark']].map(([k, ph]) => (
                         <input key={k} value={aform[k as keyof typeof aform]} onChange={aset(k as keyof typeof aform)} placeholder={ph} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                       ))}
@@ -471,9 +538,29 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                         <input value={aform.city} onChange={aset('city')} placeholder="City" style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                         <input value={aform.pincode} onChange={aset('pincode')} placeholder="Pincode" style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                       </div>
+
+                      {/* Save this address as … */}
+                      <div>
+                        <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>Save address as</div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {(['Home', 'Office', 'Other'] as const).map(lb => {
+                            const on = aform.label === lb;
+                            return (
+                              <button key={lb} onClick={() => setAform(f => ({ ...f, label: lb }))} style={{ flex: 1, padding: '9px 0', borderRadius: 'var(--radius-pill)', cursor: 'pointer', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-card)', color: on ? 'var(--orange-800)' : 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>{lb}</button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Mark as default */}
+                      <button onClick={() => setMakeDefault(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '3px 2px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                        <span style={{ width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center', border: makeDefault ? 'none' : '2px solid var(--border-strong)', background: makeDefault ? 'var(--gradient-warm)' : 'transparent', color: '#fff', flex: 'none' }}>{makeDefault && <Check size={13} strokeWidth={3} />}</span>
+                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>Mark as default address</span>
+                      </button>
+
                       <div style={{ display: 'flex', gap: 10 }}>
                         <button disabled={!aValid} onClick={saveAddr} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: aValid ? 'var(--gradient-warm)' : 'var(--border-default)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: aValid ? 'pointer' : 'not-allowed' }}>Save &amp; use</button>
-                        <button onClick={() => setAdding(false)} style={{ padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
+                        <button onClick={() => { setAdding(false); setDetectErr(''); }} style={{ padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
                       </div>
                     </div>
                   ) : (
@@ -485,21 +572,15 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   </>
                   )}
                 </div>
-              </div>
-
-              <div style={card$}>
-                {head(<Clock size={18} color="var(--brand-secondary)" />, 'Delivery time')}
-                <div style={{ display: 'flex', gap: 10 }}>
-                  {[{ v: true, label: 'ASAP', sub: '~30 min' }, { v: false, label: 'Schedule', sub: 'Pick a slot' }].map(opt => {
-                    const on = asap === opt.v;
-                    return (
-                      <button key={opt.label} onClick={() => setAsap(opt.v)} style={{ flex: 1, padding: '13px 16px', borderRadius: 'var(--radius-card)', cursor: 'pointer', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-raised)', textAlign: 'left' }}>
-                        <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)' }}>{opt.label}</div>
-                        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 2 }}>{opt.sub}</div>
-                      </button>
-                    );
-                  })}
-                </div>
+                {etaDays && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
+                    <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} color="#fff" /></span>
+                    <div>
+                      <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Expected delivery in {etaDays} day{etaDays > 1 ? 's' : ''}</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>Estimated for pincode {etaPincode}</div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -545,9 +626,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={card$}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{selected?.isDefault ? <Home size={18} color="var(--brand-secondary)" /> : <Briefcase size={18} color="var(--brand-secondary)" />}</span>
+                <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{selected?.label === 'Office' ? <Briefcase size={18} color="var(--brand-secondary)" /> : selected?.label === 'Other' ? <MapPin size={18} color="var(--brand-secondary)" /> : <Home size={18} color="var(--brand-secondary)" />}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Deliver to {selected?.isDefault ? 'Home' : 'Work'}</div>
+                  <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Deliver to {selected?.label || 'Home'}</div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected ? [selected.addressLine1, selected.city, selected.pincode].filter(Boolean).join(', ') : ''}</div>
                 </div>
                 <button onClick={() => router.push('/checkout')} style={{ border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>Change</button>
@@ -1089,19 +1170,19 @@ export default function OrderingApp() {
       {drawer && (
         <>
           <div onClick={() => setDrawer(false)} style={{ position: 'fixed', inset: 0, zIndex: 45, background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(2px)' }} />
-          <div className="hide-sb" style={{ position: 'fixed', right: 16, bottom: 86, zIndex: 47, width: 'min(330px,88vw)', maxHeight: '64vh', overflowY: 'auto', background: '#1C140C', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: 8, animation: 'riseIn .25s var(--ease-spring) both' }}>
-            <div style={{ padding: '12px 16px 8px', fontSize: 'var(--text-xs)', letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,248,241,.5)', fontWeight: 800 }}>Menu</div>
+          <div className="hide-sb" style={{ position: 'fixed', right: 16, bottom: 84, zIndex: 47, width: 'min(252px,80vw)', maxHeight: '56vh', overflowY: 'auto', background: '#1C140C', borderRadius: 'var(--radius-sheet)', boxShadow: 'var(--shadow-xl)', padding: 6, animation: 'riseIn .25s var(--ease-spring) both' }}>
+            <div style={{ padding: '8px 12px 5px', fontSize: 'var(--text-2xs)', letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,248,241,.5)', fontWeight: 800 }}>Menu</div>
             {CATEGORIES.map(c => {
               const on = c === active;
               const cnt = c === 'Gift Tins' ? tins.length : c === 'Cookies' ? menu.length : null;
               return (
-                <button key={c} onClick={() => { setActive(c); setDrawer(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '15px 16px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid rgba(255,248,241,.08)', textAlign: 'left' }}>
-                  <span style={{ fontFamily: 'var(--font-body)', fontWeight: on ? 800 : 600, fontSize: 'var(--text-base)', color: on ? 'var(--amber-400)' : 'var(--cream-100)' }}>{c}</span>
-                  {cnt != null && <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: on ? 'var(--amber-400)' : 'rgba(255,248,241,.5)' }}>{cnt}</span>}
+                <button key={c} onClick={() => { setActive(c); setDrawer(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid rgba(255,248,241,.08)', textAlign: 'left' }}>
+                  <span style={{ fontFamily: 'var(--font-body)', fontWeight: on ? 800 : 600, fontSize: 'var(--text-sm)', color: on ? 'var(--amber-400)' : 'var(--cream-100)' }}>{c}</span>
+                  {cnt != null && <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: on ? 'var(--amber-400)' : 'rgba(255,248,241,.5)' }}>{cnt}</span>}
                 </button>
               );
             })}
-            <button onClick={() => setDrawer(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', marginTop: 8, padding: '13px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'rgba(255,255,255,.12)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}><X size={16} /> Close</button>
+            <button onClick={() => setDrawer(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', marginTop: 6, padding: '9px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'rgba(255,255,255,.12)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}><X size={14} /> Close</button>
           </div>
         </>
       )}
