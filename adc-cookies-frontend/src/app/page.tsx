@@ -21,7 +21,7 @@ export default function Home() {
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
 
       <AnnouncementBar />
-      <HomeHero onMenuOpen={() => setMenuOpen(true)} />
+      <HomeHero onMenuOpen={() => setMenuOpen(true)} onLoginOpen={() => setLoginOpen(true)} />
       <GetInTouch />
       <StoresAbout />
       <Reviews />

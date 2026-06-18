@@ -11,11 +11,6 @@ import {
   MessageSquare, ReceiptText, PackageCheck, Truck,
 } from 'lucide-react';
 
-const DEMO_ADDRESSES: Address[] = [
-  { id: 1, fullName: 'Satya Prakash Reddy', phone: '+91 98765 43210', addressLine1: '12B, Lakeview Residency', addressLine2: 'Whitefield', city: 'Bengaluru', state: 'Karnataka', pincode: '560066', isDefault: true },
-  { id: 2, fullName: 'Satya Prakash Reddy', phone: '+91 98765 43210', addressLine1: '4th Floor, Prestige Tech Park', addressLine2: 'Marathahalli', city: 'Bengaluru', state: 'Karnataka', pincode: '560103', isDefault: false },
-];
-
 const card: React.CSSProperties = {
   background: 'rgba(244,234,214,.92)',
   border: '1px solid var(--border-default)',
@@ -220,14 +215,15 @@ export default function AccountPage() {
   const [phone, setPhone] = useState('');
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
-  const [addresses, setAddresses] = useState<Address[]>(DEMO_ADDRESSES);
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [addingAddr, setAddingAddr] = useState(false);
   const [editingAddr, setEditingAddr] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) return;
     getOrders().then(o => setOrders(o ?? [])).catch(() => setOrders([]));
-    getAddresses().then(a => { if (a?.length) setAddresses(a); }).catch(() => {});
+    // Always reflect THIS user's saved addresses (empty if none) — never show sample/other data.
+    getAddresses().then(a => setAddresses(a ?? [])).catch(() => setAddresses([]));
   }, [user]);
 
   if (loading || !user) return null;
@@ -345,6 +341,10 @@ export default function AccountPage() {
                 </div>
                 {!addingAddr && <button onClick={() => setAddingAddr(true)} style={{ padding: '8px 13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 'var(--text-sm)' }}><Plus size={15} /> Add address</button>}
               </div>
+
+              {addresses.length === 0 && !addingAddr && (
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>No saved addresses yet — add your delivery address to speed up checkout.</p>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }} className="account-address-list">
                 {addresses.map(a => editingAddr === a.id ? (

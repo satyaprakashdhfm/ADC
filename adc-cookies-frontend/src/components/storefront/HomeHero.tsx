@@ -2,9 +2,11 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Menu, User, Cookie, Gift, Briefcase, ArrowRight } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 interface HomeHeroProps {
   onMenuOpen: () => void;
+  onLoginOpen: () => void;
 }
 
 interface Category {
@@ -56,11 +58,9 @@ const CORPORATE: Category = {
 
 // Desktop-only top-nav links (the mobile bar keeps the logo + hamburger, untouched).
 const NAV_DESKTOP = [
-  { label: 'Cookies', href: '/order?cat=cookies' },
-  { label: 'Gift Tins', href: '/order?cat=tins' },
-  { label: 'Corporate', href: '/order?cat=corporate' },
-  { label: 'Our Stores', href: '#about' },
+  { label: 'About Us', href: '/about' },
   { label: 'Gallery', href: '/gallery' },
+  { label: 'Blog', href: '/blogs' },
   { label: 'Contact', href: '/contact' },
 ];
 
@@ -104,9 +104,12 @@ function CategoryCard({ c, onGo, priority }: { c: Category; onGo: (href: string)
   );
 }
 
-export default function HomeHero({ onMenuOpen }: HomeHeroProps) {
+export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const go = (href: string) => router.push(href);
+  // Account icon → straight to the centered login modal (or account page if already signed in).
+  const accountClick = () => { if (user) router.push(user.role === 'ADMIN' ? '/admin' : '/account'); else onLoginOpen(); };
 
   return (
     <header style={{ position: 'relative', overflow: 'hidden' }}>
@@ -115,22 +118,21 @@ export default function HomeHero({ onMenuOpen }: HomeHeroProps) {
         <nav className="home-nav--desktop" style={{ borderBottom: '1px solid var(--border-default)' }}>
           <div style={{ maxWidth: 1180, margin: '0 auto', padding: '14px var(--gutter)', display: 'flex', alignItems: 'center', gap: 24 }}>
             <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
-              <Image src="/assets/adc-logo.png" width={232} height={168} alt="a dough cookie" priority style={{ height: 88, width: 'auto', objectFit: 'contain', display: 'block' }} />
+              <Image src="/assets/adc-logo.png" width={232} height={168} alt="a dough cookie" priority style={{ height: 140, width: 'auto', objectFit: 'contain', display: 'block' }} />
             </a>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(16px,2.2vw,34px)', margin: '0 auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(20px,2.6vw,40px)', margin: '0 auto' }}>
               {NAV_DESKTOP.map(n => (
                 <a
                   key={n.label}
                   href={n.href}
-                  style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--text-strong)', textDecoration: 'none', whiteSpace: 'nowrap', transition: 'color .18s' }}
+                  style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--text-strong)', textDecoration: 'none', whiteSpace: 'nowrap', transition: 'color .18s' }}
                   onMouseEnter={e => (e.currentTarget.style.color = 'var(--brand-secondary)')}
                   onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-strong)')}
                 >{n.label}</a>
               ))}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
-              <button onClick={onMenuOpen} aria-label="Account &amp; menu" style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}><User size={20} /></button>
-              <a href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', textDecoration: 'none', boxShadow: 'var(--shadow-brand)', whiteSpace: 'nowrap' }}>Order Now</a>
+              <button onClick={accountClick} aria-label={user ? 'My account' : 'Log in'} style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}><User size={21} /></button>
             </div>
           </div>
         </nav>

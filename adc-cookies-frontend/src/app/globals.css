@@ -250,6 +250,10 @@ body::before {
   .footer-grid > div:first-child { grid-column: 1 / -1 !important; }
 }
 
+/* Home promo popup — portrait card on mobile, larger landscape card on desktop */
+.promo-card { width: min(400px, 92vw); aspect-ratio: 4 / 5; }
+@media (min-width: 900px) { .promo-card { width: 660px; aspect-ratio: 16 / 11; } }
+
 /* Homepage header: full nav bar on desktop, compact logo+menu bar on mobile.
    Pure CSS toggle (no JS) so it can't cause hydration mismatches. */
 .home-nav--desktop { display: none; }

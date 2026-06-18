@@ -152,47 +152,6 @@ function QStepper({ value, onChange, size = 'md' }: { value: number; onChange: (
   );
 }
 
-/* ---- Product Card (menu item) ---- */
-function ProductMenuItem({ item, qty, onQtyChange }: { item: typeof FALLBACK_MENU[0]; qty: number; onQtyChange: (n: number) => void }) {
-  const rating = (item as any).rating as number | undefined;
-  const rc = (item as any).rc as string | undefined;
-  return (
-    <div
-      style={{ display: 'flex', gap: 20, padding: 20, marginBottom: 16, background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', alignItems: 'center', transition: 'transform .2s, box-shadow .2s' }}
-      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-md)'; }}
-      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-          {item.veg && <span style={{ width: 16, height: 16, border: '2px solid var(--mark-veg)', borderRadius: 3, display: 'grid', placeItems: 'center', flex: 'none' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--mark-veg)', display: 'block' }} /></span>}
-          {(item as any).best && <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Bestseller</span>}
-          {item.cat && <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', color: 'var(--text-muted)', fontSize: 'var(--text-2xs)', fontWeight: 700 }}>{item.cat}</span>}
-        </div>
-        <h3 style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>{item.name}</h3>
-        {rating != null && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 'var(--text-sm)' }}>
-            <span style={{ color: 'var(--amber-500)', letterSpacing: 1 }}>★</span>
-            <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{rating}</span>
-            {rc && <span style={{ color: 'var(--text-subtle)' }}>· {rc} ratings</span>}
-          </div>
-        )}
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55, margin: '0 0 12px' }}>{item.desc}</p>
-        <span style={{ fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}>₹{item.price}</span>
-      </div>
-      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 'clamp(132px,34vw,184px)', height: 'clamp(132px,34vw,184px)', borderRadius: 'var(--radius-image)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-          <Image src={item.img} alt={item.name} width={184} height={184} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .3s' }} />
-        </div>
-        {qty === 0 ? (
-          <button onClick={() => onQtyChange(1)} style={{ width: 'clamp(132px,34vw,184px)', padding: '11px 0', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>ADD</button>
-        ) : (
-          <QStepper value={qty} onChange={onQtyChange} size="sm" />
-        )}
-      </div>
-    </div>
-  );
-}
-
 // Short, precise card blurbs (shown in full on the cards) keyed by product name —
 // falls back to the product's own description for anything not listed here.
 const SHORT_DESC: Record<string, string> = {
@@ -1069,30 +1028,30 @@ export default function OrderingApp() {
               {active === 'Corporate Gifting' ? (
                 <CorporatePanel />
               ) : active === 'Gift Tins' ? (
-                tins.map(t => (
-                  <div key={t.id} onClick={() => setTin(t as any)} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 14, background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', marginBottom: 14, cursor: 'pointer', transition: 'transform .2s,box-shadow .2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-md)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}>
-                    <Thumb size={92} img={t.img} seed={2} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
-                        <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Gift Tin</span>
-                        <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', color: 'var(--text-muted)', fontSize: 'var(--text-2xs)', fontWeight: 600 }}>{t.count} cookies</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 18 }}>
+                  {tins.map(t => (
+                    <div key={t.id} onClick={() => setTin(t as any)} style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', overflow: 'hidden', cursor: 'pointer', transition: 'transform .2s,box-shadow .2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}>
+                      <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3' }}>
+                        <Image src={t.img} alt={t.name} fill sizes="50vw" style={{ objectFit: 'cover' }} />
+                        <span style={{ position: 'absolute', top: 10, left: 10, padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Gift Tin · {t.count} cookies</span>
                       </div>
-                      <h3 style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 2px' }}>{t.name}</h3>
-                      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 8px' }}>{t.desc}</p>
-                      <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>₹{t.price}</span>
+                      <div style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                        <h3 style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>{t.name}</h3>
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>{t.desc}</p>
+                        <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}>₹{t.price}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>Choose <ChevronRight size={15} /></span>
+                        </div>
+                      </div>
                     </div>
-                    <ChevronRight size={20} color="var(--text-subtle)" />
-                  </div>
-                ))
+                  ))}
+                </div>
               ) : (
-                filtered.map((m) => (
-                  <div key={m.id}>
-                    <ProductMenuItem item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} />
-                    {/* "Goes great with" pairings — hidden per request; uncomment to restore (full markup in git history).
-                    {count > 0 && i === 0 && ( <div> Sparkles + "Goes great with" + PAIRINGS carousel of Thumb + QStepper </div> )}
-                    */}
-                  </div>
-                ))
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 18 }}>
+                  {filtered.map((m) => (
+                    <MobileProductCard key={m.id} item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} />
+                  ))}
+                </div>
               )}
             </main>
 

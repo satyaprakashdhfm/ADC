@@ -1,14 +1,18 @@
 // Same-origin by default: the browser calls /api/... on whatever host served the page
 // (localhost or your LAN IP on a phone), and Next.js rewrites it to the backend server-side.
+import { supabase } from './supabase';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
-function getToken(): string | null {
+// The bearer token is the current Supabase session access token (auto-refreshed by the client).
+async function getToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('adc_token');
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
+  const token = await getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
@@ -24,14 +28,23 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 /* ---- Auth ---- */
-export interface AuthResponse { token: string; email: string; name: string; role: string; }
+// Google + email/password run through Supabase directly (see AuthContext). Phone OTP is
+// driven by our backend (Message Central), which returns a real Supabase session on success.
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
-  return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+/** Start phone verification — texts an OTP and returns a verificationId to confirm it. */
+export async function sendOtp(phone: string): Promise<{ verificationId: string; timeout: number }> {
+  return request('/auth/otp/send', { method: 'POST', body: JSON.stringify({ phone }) });
 }
 
-export async function register(name: string, email: string, phone: string, password: string): Promise<AuthResponse> {
-  return request('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, phone, password }) });
+/** Confirm the OTP. On success returns Supabase session tokens to hydrate the client. */
+export async function verifyOtp(phone: string, verificationId: string, code: string): Promise<{ accessToken: string; refreshToken: string }> {
+  return request('/auth/otp/verify', { method: 'POST', body: JSON.stringify({ phone, verificationId, code }) });
+}
+
+/** The signed-in user as our backend sees them (synced from the Supabase session). */
+export interface MeResponse { email: string; name: string; role: string; }
+export async function getMe(): Promise<MeResponse> {
+  return request('/auth/me');
 }
 
 /* ---- Products ---- */

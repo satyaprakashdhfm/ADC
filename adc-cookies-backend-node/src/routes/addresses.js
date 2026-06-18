@@ -37,7 +37,9 @@ router.post('/', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-  await query('DELETE FROM addresses WHERE id = $1', [req.params.id]);
+  const user = await userByEmail(req.user.email);
+  // Scope to the owner so one user can never delete another's address.
+  await query('DELETE FROM addresses WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   res.status(200).end();
 });
 

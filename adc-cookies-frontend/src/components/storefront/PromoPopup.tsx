@@ -5,17 +5,17 @@ import { useRouter } from 'next/navigation';
 import { X, ArrowRight } from 'lucide-react';
 
 /**
- * Home-page promo popup shown to visitors (e.g. arriving from an Instagram/social link).
- * Dummy content for now — designed so the admin can later drive `PROMO` (title, image, CTA)
- * from the dashboard/backend. Shows once per browser session; closing returns to the normal page.
+ * Home-page promo popup for visitors (e.g. arriving from an Instagram/social link).
+ * Full-bleed cookie photo with the offer overlaid. Dummy content for now — designed so
+ * the admin can later drive `PROMO` (title, image, CTA). Shows once per browser session.
  */
 const PROMO = {
-  badge: 'Bestseller',
-  title: 'Festive Gift Tins',
-  subtitle: 'Premium filled-cookie tins — ribbon-wrapped and ready to gift. Our most-loved pick right now.',
-  image: '/assets/products/m-and-m.jpg',
-  ctaLabel: 'Shop Gift Tins',
-  ctaHref: '/order?cat=tins',
+  badge: 'Fresh batch · Trending',
+  title: 'Cookies worth the hype.',
+  subtitle: '20% off your first order with code FRESH20 — baked fresh, delivered warm.',
+  image: '/assets/promo-cookies.jpg',
+  ctaLabel: 'Grab the offer',
+  ctaHref: '/order?cat=cookies',
 };
 
 export default function PromoPopup() {
@@ -39,27 +39,31 @@ export default function PromoPopup() {
   return (
     <div
       onClick={close}
-      style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(20,12,4,.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, animation: 'loaderFadeIn .25s ease both' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(20,12,4,.55)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, animation: 'loaderFadeIn .25s ease both' }}
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ position: 'relative', width: 'min(400px,92vw)', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', overflow: 'hidden', animation: 'riseIn .3s var(--ease-spring) both' }}
+        className="promo-card"
+        style={{ position: 'relative', borderRadius: 'var(--radius-modal)', overflow: 'hidden', boxShadow: '0 40px 90px rgba(0,0,0,.5)', animation: 'riseIn .35s var(--ease-spring) both' }}
       >
-        <button onClick={close} aria-label="Close" style={{ position: 'absolute', top: 12, right: 12, zIndex: 2, width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,.9)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
-          <X size={18} color="var(--text-strong)" />
+        {/* Full-bleed cookie photo */}
+        <Image src={PROMO.image} alt="" fill priority sizes="(max-width:900px) 92vw, 640px" style={{ objectFit: 'cover' }} />
+
+        {/* Warm-dark gradient so the text reads, image still shines at the top */}
+        <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(20,12,4,.95) 4%, rgba(20,12,4,.62) 38%, rgba(20,12,4,.10) 70%, rgba(20,12,4,.30) 100%)' }} />
+
+        <button onClick={close} aria-label="Close" style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.42)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+          <X size={18} color="#fff" />
         </button>
 
-        <div style={{ position: 'relative', width: '100%', height: 196 }}>
-          <Image src={PROMO.image} alt={PROMO.title} fill sizes="400px" style={{ objectFit: 'cover' }} />
-        </div>
-
-        <div style={{ padding: '20px 22px 24px', textAlign: 'center' }}>
-          <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 10 }}>{PROMO.badge}</span>
-          <h2 style={{ font: '900 clamp(1.4rem,1.1rem + 1.2vw,1.9rem)/1.05 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 8px', letterSpacing: '-.02em' }}>{PROMO.title}</h2>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.55, margin: '0 0 18px' }}>{PROMO.subtitle}</p>
+        {/* Offer content, anchored to the bottom */}
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 'clamp(22px,3.5vw,36px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 'clamp(9px,1.2vw,15px)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>🔥 {PROMO.badge}</span>
+          <h2 style={{ font: '900 clamp(1.7rem,1.2rem + 2.4vw,2.9rem)/1.02 var(--font-display)', color: '#fff', margin: 0, letterSpacing: '-.02em', textShadow: '0 2px 16px rgba(0,0,0,.5)' }}>{PROMO.title}</h2>
+          <p style={{ fontSize: 'clamp(0.95rem,0.6rem + 0.9vw,1.2rem)', color: 'rgba(255,245,230,.92)', lineHeight: 1.5, margin: 0, maxWidth: 540, textShadow: '0 1px 10px rgba(0,0,0,.5)' }}>{PROMO.subtitle}</p>
           <button
             onClick={() => { close(); router.push(PROMO.ctaHref); }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '13px 26px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' }}
+            style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, padding: 'clamp(12px,1.3vw,16px) clamp(24px,2.2vw,36px)', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' }}
           >
             {PROMO.ctaLabel} <ArrowRight size={18} />
           </button>

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query, nowIso } from '../db.js';
 import { ApiError } from '../middleware.js';
+import { sendContactEmail } from '../mailer.js';
 
 const router = Router();
 
@@ -22,6 +23,9 @@ router.post('/', async (req, res) => {
      VALUES ($1,$2,$3,$4,$5) RETURNING id`,
     [name, email, phone, message, nowIso()]
   );
+
+  // Notify the business by email (best-effort — never blocks the response on failure).
+  await sendContactEmail({ name, email, phone, message });
 
   res.status(201).json({ ok: true, id: row.id });
 });

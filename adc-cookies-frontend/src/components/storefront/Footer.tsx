@@ -58,7 +58,7 @@ export default function Footer() {
         color: 'rgba(255,248,241,.3)', fontSize: 'var(--text-xs)', flexWrap: 'wrap', gap: 8,
       }}>
         <span>© 2026 a dough cookie. All rights reserved.</span>
-        <span>hello@adccookies.com · +91 98765 43210</span>
+        <span>satyaprakashreddy6789@gmail.com · +91 93815 02998</span>
       </div>
     </footer>
   );

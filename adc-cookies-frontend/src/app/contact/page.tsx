@@ -82,8 +82,8 @@ export default function ContactPage() {
             <h2 style={{ font: '900 clamp(2.2rem,1.6rem + 3vw,3.4rem)/1 var(--font-display)', letterSpacing: '-.02em', marginBottom: 16 }}>Leave your details and we&apos;ll reach out.</h2>
             <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, color: 'var(--text-body)', marginBottom: 18 }}>Have a bulk order, a gifting request, or a question about our cookies? Share your details and our team will get back to you.</p>
             <div style={{ display: 'grid', gap: 7, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Mail size={16} /> hello@adccookies.com</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Phone size={16} /> +91 98765 43210</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Mail size={16} /> satyaprakashreddy6789@gmail.com</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Phone size={16} /> +91 93815 02998</span>
             </div>
           </div>
           <ContactForm />

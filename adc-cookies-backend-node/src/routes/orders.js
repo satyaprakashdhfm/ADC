@@ -4,6 +4,7 @@ import { requireAuth, ApiError } from '../middleware.js';
 import { serializeOrder, serializeOrderItem, serializeTracking, serializeAddress } from '../serializers.js';
 import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount } from './coupons.js';
+import { sendOrderEmails } from '../mailer.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -59,7 +60,8 @@ router.post('/', async (req, res) => {
     }));
   }
 
-  const address = await getOne('SELECT * FROM addresses WHERE id = $1', [addressId]);
+  // Scope the address to the caller so an order can never reference another user's address.
+  const address = await getOne('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [addressId, user.id]);
   if (!address) throw new ApiError('Address not found');
 
   const subtotal = lineItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
@@ -69,7 +71,7 @@ router.post('/', async (req, res) => {
     discount = calculateDiscount(coupon, subtotal);
   }
 
-  const deliveryFee = subtotal >= 500 ? 0 : 49;
+  const deliveryFee = subtotal > 0 ? 100 : 0;   // flat ₹100 delivery (matches the storefront)
   const total = subtotal - discount + deliveryFee;
   const ts = nowIso();
   const orderNumber = await genOrderNumber();
@@ -110,6 +112,14 @@ router.post('/', async (req, res) => {
   const cart = await getOne('SELECT * FROM cart WHERE user_id = $1', [user.id]);
   if (cart) await query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
 
+  // Confirmation email to the customer + a copy to the business (best-effort; never throws).
+  await sendOrderEmails({
+    orderNumber, subtotal, discount, deliveryFee, total,
+    customerName: user.name, customerEmail: user.email,
+    items: lineItems.map((li) => ({ name: li.productName, qty: li.quantity, total: li.unitPrice * li.quantity })),
+    address,
+  });
+
   res.json(await fullOrder(orderId));
 });
 
@@ -127,20 +137,28 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  const user = await userByEmail(req.user.email);
+  // Scope to the owner so one user can never read another's order.
+  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) throw new ApiError('Order not found');
   res.json(await fullOrder(order.id));
 });
 
 router.get('/:id/tracking', async (req, res) => {
+  const user = await userByEmail(req.user.email);
+  // Only expose tracking for an order the caller owns.
+  const order = await getOne('SELECT id FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
+  if (!order) throw new ApiError('Order not found');
   const rows = await getAll(
-    'SELECT * FROM order_tracking WHERE order_id = $1 ORDER BY created_at ASC, id ASC', [req.params.id]
+    'SELECT * FROM order_tracking WHERE order_id = $1 ORDER BY created_at ASC, id ASC', [order.id]
   );
   res.json(rows.map(serializeTracking));
 });
 
 router.post('/:id/payment/verify', async (req, res) => {
-  const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  const user = await userByEmail(req.user.email);
+  // Scope to the owner so one user can never mark another's order as paid.
+  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) throw new ApiError('Order not found');
   const { razorpayPaymentId } = req.body || {};
   const ts = nowIso();

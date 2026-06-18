@@ -179,5 +179,17 @@ export async function initSchema() {
       handled BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TEXT NOT NULL
     );
+
+    -- Security: enable Row Level Security on every public table so the Supabase auto REST
+    -- API (reachable with the public anon key) denies all anon/authenticated access. This
+    -- backend connects as the table owner, which bypasses RLS, so the app is unaffected.
+    DO $$ DECLARE r RECORD; BEGIN
+      FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+        BEGIN
+          EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', r.tablename);
+        EXCEPTION WHEN OTHERS THEN NULL; -- skip tables this role can't alter
+        END;
+      END LOOP;
+    END $$;
   `);
 }
