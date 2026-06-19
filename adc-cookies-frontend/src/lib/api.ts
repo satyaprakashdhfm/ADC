@@ -160,6 +160,11 @@ export async function createOrder(addressId: number, couponCode?: string, items?
   return request('/orders', { method: 'POST', body: JSON.stringify({ addressId, couponCode, items }) });
 }
 
+/** Mark an order paid — the backend then creates the Delhivery shipment + label automatically. */
+export async function verifyPayment(orderId: number, razorpayPaymentId?: string): Promise<Order> {
+  return request(`/orders/${orderId}/payment/verify`, { method: 'POST', body: JSON.stringify({ razorpayPaymentId }) });
+}
+
 export async function getOrders(): Promise<Order[]> { return request('/orders'); }
 
 export async function getOrder(id: number): Promise<Order> { return request(`/orders/${id}`); }

@@ -7,7 +7,7 @@ import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, submitContact, firstImage, checkDeliveryPin, type Product, type Address, type OrderItemInput, type DeliveryCheck } from '@/lib/api';
+import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, type Product, type Address, type OrderItemInput, type DeliveryCheck } from '@/lib/api';
 
 /* ---- Data ---- */
 const CATEGORIES = ['Cookies', 'Gift Tins', 'Corporate Gifting'];
@@ -396,6 +396,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const handlePlace = () => {
     setPlacing(true);
     const doOrder = async () => {
+      let placedNumber = '';
       try {
         if (user) {
           const items: OrderItemInput[] = Object.values(cart)
@@ -411,11 +412,14 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               };
             })
             .filter(it => Number.isFinite(it.productId) && it.quantity > 0);
-          await createOrder(addr, applied ? coupon : undefined, items);
+          const order = await createOrder(addr, applied ? coupon : undefined, items);
+          placedNumber = order.orderNumber;
+          // Confirm payment — this is what triggers the Delhivery shipment + label on the backend.
+          try { await verifyPayment(order.id); } catch {}
         }
       } catch {}
       setPaid(grand);
-      setOrderId(`ADC-${20480 + Math.floor(Math.random() * 90)}`);
+      setOrderId(placedNumber || `ADC-${20480 + Math.floor(Math.random() * 90)}`);
       clearAll();
       setDone(true);
     };
@@ -535,9 +539,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       {[['fullName', 'Full name'], ['phone', 'Phone'], ['addressLine1', 'Flat / House / Building'], ['addressLine2', 'Area / Landmark']].map(([k, ph]) => (
                         <input key={k} value={aform[k as keyof typeof aform]} onChange={aset(k as keyof typeof aform)} placeholder={ph} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                       ))}
-                      <div style={{ display: 'flex', gap: 10 }}>
-                        <input value={aform.city} onChange={aset('city')} placeholder="City" style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
-                        <input value={aform.pincode} onChange={aset('pincode')} placeholder="Pincode" style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <input value={aform.city} onChange={aset('city')} placeholder="City" style={{ flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
+                        <input value={aform.state} onChange={aset('state')} placeholder="State" style={{ flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
+                        <input value={aform.pincode} onChange={aset('pincode')} placeholder="Pincode" inputMode="numeric" maxLength={6} style={{ flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                       </div>
 
                       {/* Save this address as … */}

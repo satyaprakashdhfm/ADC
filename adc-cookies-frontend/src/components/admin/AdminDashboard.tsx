@@ -64,7 +64,7 @@ export default function AdminDashboard() {
   const [whForm, setWhForm] = useState<{ id?: number; data: WarehouseInput } | null>(null);
   const [costPin, setCostPin] = useState('');
   const [costWeight, setCostWeight] = useState('0.5');
-  const [costResult, setCostResult] = useState<string | null>(null);
+  const [costResult, setCostResult] = useState<{ ok: boolean; data?: { total_amount: number; gross_amount: number; zone: string; charged_weight: number; charge_DL: number; tax_data: { SGST: number; CGST: number; IGST: number } }[]; reason?: string } | null>(null);
   const [costLoading, setCostLoading] = useState(false);
   const [purDate, setPurDate] = useState('');
   const [purTime, setPurTime] = useState('10:00');
@@ -340,15 +340,35 @@ export default function AdminDashboard() {
                 <Field label="Weight (kg)">
                   <input type="number" style={{ ...inp, width: 100 }} value={costWeight} onChange={e => setCostWeight(e.target.value)} min="0.1" step="0.1" />
                 </Field>
-                <button onClick={async () => { setCostLoading(true); setCostResult(null); const r = await adminGetShippingCost(costPin, Number(costWeight)).catch(e => ({ ok: false, reason: String(e.message || e) })); setCostResult(JSON.stringify(r, null, 2)); setCostLoading(false); }} disabled={costPin.length !== 6 || costLoading} style={{ ...addBtn, opacity: costPin.length !== 6 ? 0.5 : 1 }}>
+                <button onClick={async () => { setCostLoading(true); setCostResult(null); const r = await adminGetShippingCost(costPin, Number(costWeight)).catch(e => ({ ok: false, reason: String(e.message || e) })); setCostResult(r as typeof costResult); setCostLoading(false); }} disabled={costPin.length !== 6 || costLoading} style={{ ...addBtn, opacity: costPin.length !== 6 ? 0.5 : 1 }}>
                   {costLoading ? 'Checking…' : 'Calculate'}
                 </button>
               </div>
-              {costResult && (
-                <pre style={{ fontSize: 'var(--text-xs)', background: 'var(--surface-sunken)', borderRadius: 8, padding: 12, overflowX: 'auto', color: 'var(--text-body)' }}>
-                  {costResult}
-                </pre>
+              {costResult && !costResult.ok && (
+                <div style={{ marginTop: 10, color: 'var(--status-error)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>Error: {costResult.reason}</div>
               )}
+              {costResult?.ok && costResult.data?.[0] && (() => {
+                const d = costResult.data[0];
+                const tax = (d.tax_data.SGST || 0) + (d.tax_data.CGST || 0) + (d.tax_data.IGST || 0);
+                const rows: [string, string][] = [
+                  ['Zone', d.zone],
+                  ['Charged weight', `${d.charged_weight} kg`],
+                  ['Delivery charge', `₹${d.charge_DL.toFixed(2)}`],
+                  ['GST', `₹${tax.toFixed(2)}`],
+                  ['Total (Delhivery)', `₹${d.total_amount.toFixed(2)}`],
+                  ['Customer pays', '₹100.00'],
+                ];
+                return (
+                  <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 10, overflow: 'hidden' }}>
+                    {rows.map(([label, value], i) => (
+                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 14px', borderBottom: i < rows.length - 1 ? '1px solid var(--border-default)' : 'none', fontSize: 'var(--text-sm)' }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{label}</span>
+                        <span style={{ fontWeight: label === 'Total (Delhivery)' || label === 'Customer pays' ? 800 : 600, color: label === 'Customer pays' ? 'var(--brand-secondary)' : 'var(--text-strong)' }}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </Panel>
 
             {/* Pickup request */}

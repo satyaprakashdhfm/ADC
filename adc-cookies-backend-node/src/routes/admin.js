@@ -287,12 +287,20 @@ router.post('/orders/:id/shipment', async (req, res) => {
 
   const wh = await getOne('SELECT * FROM warehouses WHERE is_default = TRUE AND is_active = TRUE LIMIT 1');
   if (!wh) throw new ApiError('No active default warehouse configured — create one in Delivery > Warehouses', 400);
-  console.log(`[ADMIN-SHIPMENT] create | order=${order.order_number} | wh=${wh.pickup_location} | dest=${address.pincode} | weight=${req.body?.weight || 0.5}`);
+
+  const waybillRes = await fetchWaybill(1);
+  if (!waybillRes.ok || !waybillRes.waybills?.length) {
+    console.log(`[ADMIN-SHIPMENT] create FAILED | order=${order.order_number} | waybill_fetch=FAILED | reason=${waybillRes.reason}`);
+    throw new ApiError(`Could not fetch waybill from Delhivery: ${waybillRes.reason}`, 502);
+  }
+  const waybill = String(waybillRes.waybills[0]);
+  console.log(`[ADMIN-SHIPMENT] create | order=${order.order_number} | wh=${wh.pickup_location} | dest=${address.pincode} | weight=${req.body?.weight || 0.5} | waybill=${waybill}`);
 
   const items = await getAll('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
   const productsDesc = items.map(i => `${i.product_name} x${i.quantity}`).join(', ') || 'Cookies';
 
   const shipmentData = {
+    waybill,
     name: address.full_name,
     add: [address.address_line1, address.address_line2].filter(Boolean).join(', '),
     pin: address.pincode,
@@ -301,7 +309,7 @@ router.post('/orders/:id/shipment', async (req, res) => {
     country: 'India',
     phone: address.phone,
     order: order.order_number,
-    payment_mode: 'Prepaid',
+    payment_mode: 'Pre-paid',
     return_pin: wh.return_pincode || wh.pincode,
     return_city: wh.city || '',
     return_state: wh.state || '',
@@ -311,8 +319,7 @@ router.post('/orders/:id/shipment', async (req, res) => {
     return_phone: wh.phone || '',
     products_desc: productsDesc,
     hsn_code: '19053100',
-    cod_amount: '0',
-    cod_info: '',
+    cod_amount: 0,
     order_date: order.created_at ? order.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
     total_amount: String(order.total_amount),
     seller_add: [wh.address_line1, wh.city].filter(Boolean).join(', '),
@@ -322,7 +329,9 @@ router.post('/orders/:id/shipment', async (req, res) => {
     shipment_type: 0,
     origin_scan: 1,
     weight: String(req.body?.weight || 0.5),
-    waybill: '',
+    shipping_mode: 'Surface',
+    address_type: 'home',
+    seller_gst_tin: '',
   };
 
   const result = await createShipment(shipmentData, wh.pickup_location);
@@ -332,10 +341,10 @@ router.post('/orders/:id/shipment', async (req, res) => {
   }
 
   await query(
-    `UPDATE orders SET delhivery_waybill=$1, shipment_status='CREATED', tracking_url=$2, updated_at=$3 WHERE id=$4`,
-    [result.waybill, `https://track.delhivery.com/p/${result.waybill}`, nowIso(), order.id]
+    `UPDATE orders SET delhivery_waybill=$1, shipment_status='CREATED', tracking_url=$2, label_generated=TRUE, updated_at=$3 WHERE id=$4`,
+    [result.waybill, `https://www.delhivery.com/track/package/${result.waybill}`, nowIso(), order.id]
   );
-  console.log(`[ADMIN-SHIPMENT] create OK | order=${order.order_number} | waybill=${result.waybill}`);
+  console.log(`[ADMIN-SHIPMENT] create OK | order=${order.order_number} | waybill=${result.waybill} | label=ready`);
   const updated = await getOne('SELECT * FROM orders WHERE id = $1', [order.id]);
   const serialized = serializeOrder(updated, items, address);
   res.json({ ...serialized, waybill: result.waybill });
@@ -381,20 +390,42 @@ router.get('/orders/:id/track', async (req, res) => {
   res.json(result);
 });
 
-// GET /api/admin/delivery/label?waybills=X,Y — proxy shipping label PDF
+// GET /api/admin/delivery/label?waybills=X,Y — proxy the Delhivery shipping label PDF.
+// packing_slip returns EITHER raw PDF bytes OR JSON with a pre-signed pdf_download_link;
+// we stream the PDF through our server either way so the browser just downloads it.
 router.get('/delivery/label', async (req, res) => {
   if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
   const { waybills } = req.query;
   if (!waybills) throw new ApiError('waybills param required', 400);
 
   const { url, headers } = shippingLabelUrl(waybills);
+  const sendPdf = (buf, via) => {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="label-${waybills}.pdf"`);
+    console.log(`[ADMIN-LABEL] wbns=${waybills} | ✓ ${via} | ${buf.byteLength}b`);
+    res.send(Buffer.from(buf));
+  };
+
   try {
     const upstream = await fetch(url, { headers });
-    res.setHeader('Content-Type', upstream.headers.get('Content-Type') || 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="label-${waybills}.pdf"`);
-    const buf = await upstream.arrayBuffer();
-    res.send(Buffer.from(buf));
-  } catch {
+    const ct = upstream.headers.get('Content-Type') || '';
+
+    if (ct.includes('application/pdf')) {
+      return sendPdf(await upstream.arrayBuffer(), 'direct pdf');
+    }
+
+    // JSON response: pull the pre-signed PDF link and stream that.
+    const data = await upstream.json().catch(() => null);
+    const pkg = Array.isArray(data?.packages) ? data.packages[0] : null;
+    const pdfUrl = pkg?.pdf_download_link || pkg?.pdf_download_url || data?.pdf_download_link || null;
+    if (!pdfUrl) {
+      console.log(`[ADMIN-LABEL] wbns=${waybills} | ✗ no_pdf_link | ${JSON.stringify(data || {}).slice(0, 200)}`);
+      return res.status(502).json({ error: 'no_pdf_link', detail: data });
+    }
+    const pdfRes = await fetch(pdfUrl);
+    return sendPdf(await pdfRes.arrayBuffer(), 'via link');
+  } catch (e) {
+    console.log(`[ADMIN-LABEL] wbns=${waybills} | ✗ ${e.message}`);
     throw new ApiError('Could not fetch label from Delhivery', 502);
   }
 });

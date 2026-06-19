@@ -65,16 +65,25 @@ async function dhRequest(path, { method = 'GET', query, body, headers = {}, time
 /* ------------------------------------------------------------------ */
 export async function checkServiceability(pincode) {
   const pin = String(pincode || '').replace(/\D/g, '');
-  if (!/^\d{6}$/.test(pin)) return { serviceable: false, reason: 'invalid_pincode' };
+  if (!/^\d{6}$/.test(pin)) {
+    log('serviceability | SKIP', `pin=${pin} | ✗ invalid_pincode`);
+    return { serviceable: false, reason: 'invalid_pincode' };
+  }
   try {
     const { ok, status, data } = await dhRequest('/c/api/pin-codes/json/', { query: { filter_codes: pin } });
-    if (!ok) return { serviceable: false, reason: `api_error_${status}` };
+    if (!ok) {
+      log('serviceability', `pin=${pin} | ✗ api_error_${status}`);
+      return { serviceable: false, reason: `api_error_${status}` };
+    }
     const codes = data?.delivery_codes || [];
-    if (!codes.length) return { serviceable: false, reason: 'non_serviceable', pincode: pin };
+    if (!codes.length) {
+      log('serviceability', `pin=${pin} | ✗ non_serviceable (no codes returned)`);
+      return { serviceable: false, reason: 'non_serviceable', pincode: pin };
+    }
     const raw = codes[0]?.postal_code;
     const pc = Array.isArray(raw) ? (raw[0] || {}) : (raw || {});
     const remark = pc.remarks ?? pc.remark ?? '';
-    return {
+    const result = {
       serviceable: remark === '',
       embargo: remark === 'Embargo',
       reason: remark === '' ? 'serviceable' : (remark === 'Embargo' ? 'embargo' : remark || 'non_serviceable'),
@@ -82,7 +91,10 @@ export async function checkServiceability(pincode) {
       prepaid: pc.pre_paid === 'Y' || pc.pre_paid === true,
       pincode: pin,
     };
-  } catch {
+    log('serviceability', `pin=${pin} | ${result.serviceable ? '✓ serviceable' : `✗ ${result.reason}`} | cod=${result.cod}`);
+    return result;
+  } catch (err) {
+    log('serviceability', `pin=${pin} | ✗ network_error: ${err.message}`);
     return { serviceable: false, reason: 'network_error', pincode: pin };
   }
 }
@@ -94,16 +106,25 @@ export async function checkServiceability(pincode) {
 export async function expectedTat({ originPin, destinationPin, mot = 'S', pdt = 'B2C', pickupDate } = {}) {
   const o = String(originPin || '').replace(/\D/g, '');
   const d = String(destinationPin || '').replace(/\D/g, '');
-  if (!/^\d{6}$/.test(o) || !/^\d{6}$/.test(d)) return { ok: false, reason: 'invalid_pincode' };
+  if (!/^\d{6}$/.test(o) || !/^\d{6}$/.test(d)) {
+    log('TAT | SKIP', `${o}→${d} | ✗ invalid_pincode`);
+    return { ok: false, reason: 'invalid_pincode' };
+  }
   try {
     const query = { origin_pin: o, destination_pin: d, mot, pdt };
     if (pickupDate) query.expected_pickup_date = pickupDate;
     const { ok, status, data } = await dhRequest('/api/dc/expected_tat', { query });
     if (ok && data?.success) {
-      return { ok: true, tat: data.data?.tat ?? null, expectedDeliveryDate: data.data?.expected_delivery_date ?? null };
+      const tat = data.data?.tat ?? null;
+      const edd = data.data?.expected_delivery_date ?? null;
+      log('TAT', `${o}→${d} | ✓ tat=${tat} days | edd=${edd}`);
+      return { ok: true, tat, expectedDeliveryDate: edd };
     }
-    return { ok: false, reason: data?.msg || data?.detail || `api_error_${status}` };
-  } catch {
+    const reason = data?.msg || data?.detail || `api_error_${status}`;
+    log('TAT', `${o}→${d} | ✗ ${reason}`);
+    return { ok: false, reason };
+  } catch (err) {
+    log('TAT', `${o}→${d} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
 }
@@ -115,11 +136,16 @@ export async function expectedTat({ originPin, destinationPin, mot = 'S', pdt = 
 export async function fetchWaybill(count = 1) {
   try {
     const { ok, status, data } = await dhRequest('/waybill/api/fetch/json/', { query: { count } });
-    if (!ok) return { ok: false, reason: `api_error_${status}`, detail: data };
+    if (!ok) {
+      log('waybill-fetch', `count=${count} | ✗ api_error_${status}`);
+      return { ok: false, reason: `api_error_${status}`, detail: data };
+    }
     const waybills = Array.isArray(data?.waybill_response) ? data.waybill_response
       : Array.isArray(data) ? data : [data].filter(Boolean);
+    log('waybill-fetch', `count=${count} | ✓ waybills=[${waybills.slice(0, 3).join(', ')}]`);
     return { ok: true, waybills };
-  } catch {
+  } catch (err) {
+    log('waybill-fetch', `count=${count} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
 }
@@ -151,9 +177,14 @@ export async function createWarehouseOnDelhivery(w) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!ok) return { ok: false, reason: `api_error_${status}`, detail: data };
+    if (!ok) {
+      log('warehouse-create', `"${w.name}" pin=${w.pincode} | ✗ api_error_${status} | ${JSON.stringify(data).slice(0, 120)}`);
+      return { ok: false, reason: `api_error_${status}`, detail: data };
+    }
+    log('warehouse-create', `"${w.name}" pin=${w.pincode} | ✓`);
     return { ok: true, data };
-  } catch {
+  } catch (err) {
+    log('warehouse-create', `"${w.name}" | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
 }
@@ -179,9 +210,14 @@ export async function updateWarehouseOnDelhivery(w) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!ok) return { ok: false, reason: `api_error_${status}`, detail: data };
+    if (!ok) {
+      log('warehouse-update', `"${w.name}" pin=${w.pincode} | ✗ api_error_${status} | ${JSON.stringify(data).slice(0, 120)}`);
+      return { ok: false, reason: `api_error_${status}`, detail: data };
+    }
+    log('warehouse-update', `"${w.name}" pin=${w.pincode} | ✓`);
     return { ok: true, data };
-  } catch {
+  } catch (err) {
+    log('warehouse-update', `"${w.name}" | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
 }
@@ -193,22 +229,23 @@ export async function updateWarehouseOnDelhivery(w) {
 export async function getShippingCost({ originPin, destPin, weight = 0.5, cod = 0, mode = 'S' } = {}) {
   const o = String(originPin || '').replace(/\D/g, '');
   const d = String(destPin || '').replace(/\D/g, '');
-  if (!/^\d{6}$/.test(o) || !/^\d{6}$/.test(d)) return { ok: false, reason: 'invalid_pincode' };
+  if (!/^\d{6}$/.test(o) || !/^\d{6}$/.test(d)) {
+    log('shipping-cost | SKIP', `${o}→${d} | ✗ invalid_pincode`);
+    return { ok: false, reason: 'invalid_pincode' };
+  }
   try {
     const { ok, status, data } = await dhRequest('/api/kinko/v1/invoice/charges/.json', {
-      query: {
-        md: mode,
-        cgm: weight,
-        o_pin: o,
-        d_pin: d,
-        ss: cod > 0 ? 'COD' : 'Delivered',
-        c_flag: cod > 0 ? 'C' : 'P',
-        cod,
-      },
+      query: { md: mode, cgm: weight, o_pin: o, d_pin: d, ss: cod > 0 ? 'COD' : 'Delivered', c_flag: cod > 0 ? 'C' : 'P', cod },
     });
-    if (!ok) return { ok: false, reason: `api_error_${status}`, detail: data };
+    if (!ok) {
+      log('shipping-cost', `${o}→${d} ${weight}kg | ✗ api_error_${status}`);
+      return { ok: false, reason: `api_error_${status}`, detail: data };
+    }
+    const row = Array.isArray(data) ? data[0] : data?.[0];
+    log('shipping-cost', `${o}→${d} ${weight}kg | ✓ total=₹${row?.total_amount ?? '?'} zone=${row?.zone ?? '?'} charged=${row?.charged_weight ?? '?'}kg`);
     return { ok: true, data };
-  } catch {
+  } catch (err) {
+    log('shipping-cost', `${o}→${d} ${weight}kg | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
 }
@@ -218,6 +255,8 @@ export async function getShippingCost({ originPin, destPin, weight = 0.5, cod = 
 /* POST /api/cmu/create.json  (form-encoded: format=json&data=<json>) */
 /* ------------------------------------------------------------------ */
 export async function createShipment(shipmentData, pickupLocation) {
+  const wbn = shipmentData?.waybill || '?';
+  const ref = shipmentData?.client_name || shipmentData?.order || '?';
   try {
     const payload = JSON.stringify({
       shipments: [shipmentData],
@@ -229,12 +268,23 @@ export async function createShipment(shipmentData, pickupLocation) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,
     });
-    if (!ok) return { ok: false, reason: `api_error_${status}`, detail: data };
+    if (!ok) {
+      log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ api_error_${status}`);
+      return { ok: false, reason: `api_error_${status}`, detail: data };
+    }
     const pkg = data?.packages?.[0];
-    if (!pkg) return { ok: false, reason: 'no_package_in_response', detail: data };
-    if (pkg.status !== 'Success') return { ok: false, reason: pkg.remarks || pkg.status, detail: data };
+    if (!pkg) {
+      log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ no_package_in_response`);
+      return { ok: false, reason: 'no_package_in_response', detail: data };
+    }
+    if (pkg.status !== 'Success') {
+      log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ ${pkg.remarks || pkg.status}`);
+      return { ok: false, reason: pkg.remarks || pkg.status, detail: data };
+    }
+    log('shipment-create', `waybill=${pkg.waybill} ref=${ref} | ✓ sort=${pkg.sort_code}`);
     return { ok: true, waybill: pkg.waybill, sortCode: pkg.sort_code, data };
-  } catch {
+  } catch (err) {
+    log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
 }
@@ -253,9 +303,14 @@ export async function cancelShipment(waybill) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,
     });
-    if (!ok) return { ok: false, reason: `api_error_${status}`, detail: data };
+    if (!ok) {
+      log('shipment-cancel', `waybill=${waybill} | ✗ api_error_${status}`);
+      return { ok: false, reason: `api_error_${status}`, detail: data };
+    }
+    log('shipment-cancel', `waybill=${waybill} | ✓`);
     return { ok: true, data };
-  } catch {
+  } catch (err) {
+    log('shipment-cancel', `waybill=${waybill} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
 }
@@ -276,9 +331,14 @@ export async function createPickupRequest({ pickupDate, pickupTime, pickupLocati
         expected_package_count: packageCount || 1,
       }),
     });
-    if (!ok) return { ok: false, reason: `api_error_${status}`, detail: data };
+    if (!ok) {
+      log('pickup-request', `${pickupDate} ${pickupTime} count=${packageCount || 1} | ✗ api_error_${status}`);
+      return { ok: false, reason: `api_error_${status}`, detail: data };
+    }
+    log('pickup-request', `${pickupDate} ${pickupTime} count=${packageCount || 1} | ✓`);
     return { ok: true, data };
-  } catch {
+  } catch (err) {
+    log('pickup-request', `${pickupDate} ${pickupTime} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
 }
@@ -291,7 +351,9 @@ export async function createPickupRequest({ pickupDate, pickupTime, pickupLocati
 export function shippingLabelUrl(waybills) {
   const wbns = Array.isArray(waybills) ? waybills.join(',') : String(waybills);
   return {
-    url: `${BASE_URL}/api/p/packing_slip?wbns=${encodeURIComponent(wbns)}`,
+    // pdf=true → Delhivery returns JSON with a pre-signed PDF link (the label carries your
+    // uploaded logo). Some accounts return the PDF bytes directly — the route handles both.
+    url: `${BASE_URL}/api/p/packing_slip?wbns=${encodeURIComponent(wbns)}&pdf=true`,
     headers: authHeaders(),
   };
 }
@@ -303,9 +365,16 @@ export function shippingLabelUrl(waybills) {
 export async function trackShipment(waybill) {
   try {
     const { ok, status, data } = await dhRequest('/api/v1/packages/json/', { query: { waybill } });
-    if (!ok) return { ok: false, reason: `api_error_${status}` };
+    if (!ok) {
+      log('track', `waybill=${waybill} | ✗ api_error_${status}`);
+      return { ok: false, reason: `api_error_${status}` };
+    }
+    const pkg = data?.ShipmentData?.[0]?.Shipment;
+    const status_str = pkg?.Status || pkg?.status || '?';
+    log('track', `waybill=${waybill} | ✓ status=${status_str}`);
     return { ok: true, data };
-  } catch {
+  } catch (err) {
+    log('track', `waybill=${waybill} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
 }

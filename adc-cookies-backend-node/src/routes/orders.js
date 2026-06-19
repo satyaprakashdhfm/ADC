@@ -10,49 +10,60 @@ import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from
 const router = Router();
 router.use(requireAuth);
 
-// Auto-create a Delhivery shipment for a newly placed order (fire-and-forget).
-async function autoCreateShipment(orderId, address) {
-  if (!delhiveryConfigured()) { console.log(`[SHIPMENT] auto | order=${orderId} | skip=delhivery_not_configured`); return; }
+// Auto-create a Delhivery shipment once an order is PAID.
+// Never throws — returns { ok, reason?, waybill? } so the caller (payment verify) stays safe.
+// Idempotent: if the order already has a waybill, it does nothing.
+async function autoCreateShipment(orderId, addressArg) {
+  if (!delhiveryConfigured()) { console.log(`[SHIPMENT] auto | order=${orderId} | skip=delhivery_not_configured`); return { ok: false, reason: 'not_configured' }; }
+
+  const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
+  if (!order) { console.log(`[SHIPMENT] auto | order=${orderId} | skip=order_not_found`); return { ok: false, reason: 'order_not_found' }; }
+  if (order.delhivery_waybill) { console.log(`[SHIPMENT] auto | order=${order.order_number} | skip=already_created (waybill=${order.delhivery_waybill})`); return { ok: true, waybill: order.delhivery_waybill }; }
+
+  const address = addressArg || (order.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null);
+  if (!address) { console.log(`[SHIPMENT] auto | order=${order.order_number} | skip=no_address`); return { ok: false, reason: 'no_address' }; }
+
   const defaultWh = await getOne('SELECT * FROM warehouses WHERE is_active = TRUE ORDER BY is_default DESC, id ASC LIMIT 1');
-  if (!defaultWh) { console.log(`[SHIPMENT] auto | order=${orderId} | skip=no_active_warehouse`); return; }
+  if (!defaultWh) { console.log(`[SHIPMENT] auto | order=${order.order_number} | skip=no_active_warehouse`); return { ok: false, reason: 'no_warehouse' }; }
 
   const waybillRes = await fetchWaybill(1);
   if (!waybillRes.ok || !waybillRes.waybills?.length) {
-    console.log(`[SHIPMENT] auto | order=${orderId} | waybill_fetch=FAILED | reason=${waybillRes.reason}`);
-    return;
+    console.log(`[SHIPMENT] auto | order=${order.order_number} | waybill_fetch=FAILED | reason=${waybillRes.reason}`);
+    return { ok: false, reason: `waybill_fetch:${waybillRes.reason}` };
   }
   const waybill = String(waybillRes.waybills[0]);
 
-  const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
-  if (!order) return;
+  const items = await getAll('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+  const productsDesc = items.map(i => `${i.product_name} x${i.quantity}`).join(', ') || 'Cookies';
+  const quantity = String(items.reduce((s, i) => s + i.quantity, 0) || 1);
 
   const shipmentData = {
     waybill,
     name: address.full_name || 'Customer',
     add: [address.address_line1, address.address_line2].filter(Boolean).join(', '),
     city: address.city,
-    state: address.state,
+    state: address.state || '',
     country: 'India',
     pin: address.pincode,
     phone: address.phone,
     order: order.order_number,
     payment_mode: 'Pre-paid',
-    return_pin: defaultWh.pincode,
+    return_pin: defaultWh.return_pincode || defaultWh.pincode,
     return_city: defaultWh.city || '',
     return_phone: defaultWh.phone || '',
     return_name: defaultWh.name || '',
-    return_add: defaultWh.address_line1 || '',
+    return_add: [defaultWh.address_line1, defaultWh.address_line2].filter(Boolean).join(', ') || defaultWh.city || '',
     return_state: defaultWh.state || '',
     return_country: 'India',
-    products_desc: 'Cookies',
-    hsn_code: '',
+    products_desc: productsDesc,
+    hsn_code: '19053100',
     cod_amount: 0,
     order_date: order.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-    total_amount: order.total_amount,
-    seller_add: defaultWh.address_line1 || '',
-    seller_name: defaultWh.name || '',
+    total_amount: String(order.total_amount),
+    seller_add: [defaultWh.address_line1, defaultWh.city].filter(Boolean).join(', '),
+    seller_name: defaultWh.registered_name || defaultWh.name || '',
     seller_inv: order.order_number,
-    quantity: 1,
+    quantity,
     shipment_width: 20,
     shipment_height: 10,
     weight: 0.5,
@@ -61,18 +72,19 @@ async function autoCreateShipment(orderId, address) {
     address_type: 'home',
   };
 
-  console.log(`[SHIPMENT] auto | order=${orderId} | waybill=${waybill} | wh=${defaultWh.pickup_location} | creating…`);
+  console.log(`[SHIPMENT] auto | order=${order.order_number} | waybill=${waybill} | wh=${defaultWh.pickup_location} | dest=${address.pincode} | creating…`);
   const result = await createShipment(shipmentData, defaultWh.pickup_location);
   if (!result.ok) {
-    console.log(`[SHIPMENT] auto | order=${orderId} | create=FAILED | reason=${result.reason} | detail=${JSON.stringify(result.detail || '').slice(0, 200)}`);
-    return;
+    console.log(`[SHIPMENT] auto | order=${order.order_number} | create=FAILED | reason=${result.reason} | detail=${JSON.stringify(result.detail || '').slice(0, 200)}`);
+    return { ok: false, reason: result.reason };
   }
 
   await query(
-    `UPDATE orders SET delhivery_waybill=$1, shipment_status='CREATED', updated_at=$2 WHERE id=$3`,
-    [result.waybill, nowIso(), orderId]
+    `UPDATE orders SET delhivery_waybill=$1, shipment_status='CREATED', tracking_url=$2, label_generated=TRUE, updated_at=$3 WHERE id=$4`,
+    [result.waybill, `https://www.delhivery.com/track/package/${result.waybill}`, nowIso(), orderId]
   );
-  console.log(`[SHIPMENT] auto | order=${orderId} | waybill=${result.waybill} | ok=true`);
+  console.log(`[SHIPMENT] auto | order=${order.order_number} | waybill=${result.waybill} | ok=true | label=ready`);
+  return { ok: true, waybill: result.waybill };
 }
 
 async function userByEmail(email) {
@@ -186,9 +198,8 @@ router.post('/', async (req, res) => {
     address,
   });
 
-  // Auto-create Delhivery shipment in the background — never delays the response.
-  setImmediate(() => autoCreateShipment(orderId, address).catch(() => {}));
-
+  // NOTE: the Delhivery shipment is created on payment success (see /:id/payment/verify),
+  // not here — we only ship orders that are actually paid.
   res.json(await fullOrder(orderId));
 });
 
@@ -257,6 +268,17 @@ router.post('/:id/payment/verify', async (req, res) => {
     'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [order.id, 'CONFIRMED', 'Payment received via Razorpay', ts]
   );
+
+  // Now that the order is PAID, create the Delhivery shipment + label. Never throws,
+  // so a Delhivery hiccup can't fail the payment confirmation — admin can retry from the panel.
+  const ship = await autoCreateShipment(order.id);
+  if (ship.ok && ship.waybill) {
+    await query(
+      'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+      [order.id, 'SHIPMENT_CREATED', `Delhivery waybill ${ship.waybill}`, nowIso()]
+    );
+  }
+
   res.json(await fullOrder(order.id));
 });
 
