@@ -37,18 +37,22 @@ router.get('/check', async (req, res) => {
   if (!/^\d{6}$/.test(pin)) return res.json({ serviceable: false, reason: 'invalid_pincode' });
 
   if (!delhiveryConfigured()) {
-    // When not configured, return a graceful default so checkout still works.
+    console.log(`[DELIVERY] check | pin=${pin} | delhivery=unconfigured → returning serviceable=true`);
     return res.json({ serviceable: true, reason: 'unconfigured', tat: null, expectedDeliveryDate: null });
   }
+
+  const origin = await getOriginPin();
+  console.log(`[DELIVERY] check | pin=${pin} | origin=${origin || 'MISSING'}`);
 
   const [svc, tat] = await Promise.all([
     checkServiceability(pin),
     (async () => {
-      const origin = await getOriginPin();
       if (!origin) return { ok: false, reason: 'origin_not_set' };
       return expectedTat({ originPin: origin, destinationPin: pin });
     })(),
   ]);
+
+  console.log(`[DELIVERY] check result | pin=${pin} | serviceable=${svc.serviceable} | reason=${svc.reason} | tat=${tat.ok ? tat.tat : tat.reason}`);
 
   res.json({
     serviceable: svc.serviceable,

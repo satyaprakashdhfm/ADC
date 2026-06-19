@@ -287,6 +287,7 @@ router.post('/orders/:id/shipment', async (req, res) => {
 
   const wh = await getOne('SELECT * FROM warehouses WHERE is_default = TRUE AND is_active = TRUE LIMIT 1');
   if (!wh) throw new ApiError('No active default warehouse configured — create one in Delivery > Warehouses', 400);
+  console.log(`[ADMIN-SHIPMENT] create | order=${order.order_number} | wh=${wh.pickup_location} | dest=${address.pincode} | weight=${req.body?.weight || 0.5}`);
 
   const items = await getAll('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
   const productsDesc = items.map(i => `${i.product_name} x${i.quantity}`).join(', ') || 'Cookies';
@@ -325,12 +326,16 @@ router.post('/orders/:id/shipment', async (req, res) => {
   };
 
   const result = await createShipment(shipmentData, wh.pickup_location);
-  if (!result.ok) return res.status(502).json({ error: result.reason, detail: result.detail });
+  if (!result.ok) {
+    console.log(`[ADMIN-SHIPMENT] create FAILED | order=${order.order_number} | reason=${result.reason} | detail=${JSON.stringify(result.detail || '').slice(0, 300)}`);
+    return res.status(502).json({ error: result.reason, detail: result.detail });
+  }
 
   await query(
     `UPDATE orders SET delhivery_waybill=$1, shipment_status='CREATED', tracking_url=$2, updated_at=$3 WHERE id=$4`,
     [result.waybill, `https://track.delhivery.com/p/${result.waybill}`, nowIso(), order.id]
   );
+  console.log(`[ADMIN-SHIPMENT] create OK | order=${order.order_number} | waybill=${result.waybill}`);
   const updated = await getOne('SELECT * FROM orders WHERE id = $1', [order.id]);
   const serialized = serializeOrder(updated, items, address);
   res.json({ ...serialized, waybill: result.waybill });
@@ -343,8 +348,12 @@ router.delete('/orders/:id/shipment', async (req, res) => {
   if (!order) throw new ApiError('Order not found', 404);
   if (!order.delhivery_waybill) throw new ApiError('No shipment exists for this order', 400);
 
+  console.log(`[ADMIN-SHIPMENT] cancel | order=${order.order_number} | waybill=${order.delhivery_waybill}`);
   const result = await cancelShipment(order.delhivery_waybill);
-  if (!result.ok) return res.status(502).json({ error: result.reason, detail: result.detail });
+  if (!result.ok) {
+    console.log(`[ADMIN-SHIPMENT] cancel FAILED | waybill=${order.delhivery_waybill} | reason=${result.reason}`);
+    return res.status(502).json({ error: result.reason, detail: result.detail });
+  }
 
   await query(
     `UPDATE orders SET shipment_status='CANCELLED', updated_at=$1 WHERE id=$2`,

@@ -21,6 +21,13 @@ const TOKEN = process.env.DELIVERY_API_TOKEN || process.env.DELHIVERY_API_TOKEN 
 export const delhiveryConfigured = () => !!TOKEN;
 export const delhiveryBaseUrl = () => BASE_URL;
 
+// Log which config is active at startup so Railway logs show it immediately.
+console.log(`[DELHIVERY] config | base=${BASE_URL} | token=${TOKEN ? TOKEN.slice(0, 6) + '…' : 'MISSING'}`);
+
+function log(label, extra = '') {
+  console.log(`[DELHIVERY] ${label}${extra ? ' | ' + extra : ''}`);
+}
+
 function authHeaders(extra = {}) {
   return { Authorization: `Token ${TOKEN}`, Accept: 'application/json', ...extra };
 }
@@ -31,12 +38,22 @@ async function dhRequest(path, { method = 'GET', query, body, headers = {}, time
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const t0 = Date.now();
   try {
     const res = await fetch(url, { method, headers: authHeaders(headers), body, signal: ctrl.signal });
     const text = await res.text();
     let data;
     try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    const ms = Date.now() - t0;
+    if (!res.ok) {
+      log(`${method} ${path} ERROR`, `status=${res.status} | body=${text.slice(0, 200)} | ${ms}ms`);
+    } else {
+      log(`${method} ${path}`, `status=${res.status} | ${ms}ms`);
+    }
     return { ok: res.ok, status: res.status, data };
+  } catch (err) {
+    log(`${method} ${path} TIMEOUT/NET`, `err=${err.message} | ${Date.now() - t0}ms`);
+    throw err;
   } finally {
     clearTimeout(timer);
   }

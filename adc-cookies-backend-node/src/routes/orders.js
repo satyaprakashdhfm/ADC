@@ -12,12 +12,15 @@ router.use(requireAuth);
 
 // Auto-create a Delhivery shipment for a newly placed order (fire-and-forget).
 async function autoCreateShipment(orderId, address) {
-  if (!delhiveryConfigured()) return;
+  if (!delhiveryConfigured()) { console.log(`[SHIPMENT] auto | order=${orderId} | skip=delhivery_not_configured`); return; }
   const defaultWh = await getOne('SELECT * FROM warehouses WHERE is_active = TRUE ORDER BY is_default DESC, id ASC LIMIT 1');
-  if (!defaultWh) return;
+  if (!defaultWh) { console.log(`[SHIPMENT] auto | order=${orderId} | skip=no_active_warehouse`); return; }
 
   const waybillRes = await fetchWaybill(1);
-  if (!waybillRes.ok || !waybillRes.waybills?.length) return;
+  if (!waybillRes.ok || !waybillRes.waybills?.length) {
+    console.log(`[SHIPMENT] auto | order=${orderId} | waybill_fetch=FAILED | reason=${waybillRes.reason}`);
+    return;
+  }
   const waybill = String(waybillRes.waybills[0]);
 
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
@@ -58,13 +61,18 @@ async function autoCreateShipment(orderId, address) {
     address_type: 'home',
   };
 
+  console.log(`[SHIPMENT] auto | order=${orderId} | waybill=${waybill} | wh=${defaultWh.pickup_location} | creating…`);
   const result = await createShipment(shipmentData, defaultWh.pickup_location);
-  if (!result.ok) return;
+  if (!result.ok) {
+    console.log(`[SHIPMENT] auto | order=${orderId} | create=FAILED | reason=${result.reason} | detail=${JSON.stringify(result.detail || '').slice(0, 200)}`);
+    return;
+  }
 
   await query(
     `UPDATE orders SET delhivery_waybill=$1, shipment_status='CREATED', updated_at=$2 WHERE id=$3`,
     [result.waybill, nowIso(), orderId]
   );
+  console.log(`[SHIPMENT] auto | order=${orderId} | waybill=${result.waybill} | ok=true`);
 }
 
 async function userByEmail(email) {
