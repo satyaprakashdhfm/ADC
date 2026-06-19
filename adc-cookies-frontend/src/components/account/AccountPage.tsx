@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { getOrders, getAddresses, addAddress, type Address, type Order, type OrderItem } from '@/lib/api';
+import { getOrders, getAddresses, addAddress, trackOrderShipment, type DelhiveryTrackResult, type Address, type Order, type OrderItem } from '@/lib/api';
 import {
   ChevronLeft, Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
   Info, LifeBuoy, ChevronRight, LogOut, ShoppingBag, MapPin, Gift,
@@ -107,6 +107,89 @@ function formatDate(value: string) {
   return isNaN(d.getTime()) ? value : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+// Stored canonically as 91XXXXXXXXXX — show it as "+91 XXXXXXXXXX".
+function formatPhone(value?: string | null) {
+  const p = String(value ?? '');
+  if (/^91\d{10}$/.test(p)) return `+91 ${p.slice(2)}`;
+  if (/^\d{10}$/.test(p)) return `+91 ${p}`;
+  return p;
+}
+const national10 = (value?: string | null) => {
+  const p = String(value ?? '');
+  return /^91\d{10}$/.test(p) ? p.slice(2) : p;
+};
+
+function ShipmentTracker({ order }: { order: Order }) {
+  const [trackResult, setTrackResult] = useState<DelhiveryTrackResult | null>(null);
+  const [tracking, setTracking] = useState(false);
+  const [err, setErr] = useState('');
+
+  const doTrack = async () => {
+    setTracking(true); setErr('');
+    try {
+      const r = await trackOrderShipment(order.id);
+      setTrackResult(r);
+    } catch {
+      setErr('Could not fetch tracking. Please try again.');
+    }
+    setTracking(false);
+  };
+
+  const shipment = trackResult?.data?.ShipmentData?.[0]?.Shipment;
+  const scans = shipment?.Scans ?? [];
+  const latestStatus = shipment?.Status?.Status;
+  const latestNote = shipment?.Status?.Instructions;
+
+  return (
+    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        {order.delhiveryWaybill && (
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
+            Waybill: <span style={{ fontFamily: 'monospace', color: 'var(--text-strong)' }}>{order.delhiveryWaybill}</span>
+          </span>
+        )}
+        {order.delhiveryWaybill ? (
+          <button onClick={doTrack} disabled={tracking} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: tracking ? 'default' : 'pointer', fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Truck size={14} /> {tracking ? 'Tracking…' : 'Track shipment'}
+          </button>
+        ) : (
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Shipment being prepared…</span>
+        )}
+        <a href="/contact" style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-link)', fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <LifeBuoy size={13} /> Need help or want to cancel? Contact us
+        </a>
+      </div>
+      {err && <p style={{ color: 'var(--status-error)', fontSize: 'var(--text-sm)', marginTop: 8, fontWeight: 700 }}>{err}</p>}
+      {trackResult && trackResult.tracked && (
+        <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 14, padding: 14 }}>
+          {latestStatus && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: scans.length ? 10 : 0 }}>
+              <span style={{ padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: latestStatus.toLowerCase().includes('deliver') ? 'var(--status-success-bg)' : 'var(--amber-100)', color: latestStatus.toLowerCase().includes('deliver') ? 'var(--status-success)' : 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 900 }}>{latestStatus}</span>
+              {latestNote && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{latestNote}</span>}
+            </div>
+          )}
+          {scans.slice(0, 4).map((s, i) => {
+            const sd = s?.ScanDetail;
+            return sd ? (
+              <div key={i} style={{ display: 'flex', gap: 10, paddingTop: 8, marginTop: 8, borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)' }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--brand-secondary)', marginTop: 5, flex: 'none' }} />
+                <div>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{sd.Scan || sd.Instructions}</div>
+                  {sd.ScanDateTime && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{sd.ScanDateTime}</div>}
+                </div>
+              </div>
+            ) : null;
+          })}
+          {!scans.length && !latestStatus && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No tracking events yet.</p>}
+        </div>
+      )}
+      {trackResult && !trackResult.tracked && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 8 }}>Tracking not available yet. Try again in a few minutes.</p>
+      )}
+    </div>
+  );
+}
+
 function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; expanded: boolean; onToggle: () => void; onReorder: () => void }) {
   const colors = statusColor(order.orderStatus);
   const items = order.items ?? [];
@@ -176,7 +259,7 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
             ) : (
               <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Delivery address will appear here once the order is synced.</p>
             )}
-            {order.trackingUrl && <Link href={order.trackingUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 10, color: 'var(--brand-secondary)', fontWeight: 900 }}>Track shipment</Link>}
+            <ShipmentTracker order={order} />
           </div>
           <div style={{ padding: 14, borderRadius: 18, background: 'var(--surface-sunken)' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-base)', marginBottom: 9 }}><ReceiptText size={17} /> Bill summary</h3>
@@ -206,11 +289,13 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
 
 export default function AccountPage() {
   const router = useRouter();
-  const { user, loading, updateUser, logout } = useAuth();
+  const { user, loading, updateProfile, logout } = useAuth();
 
   useEffect(() => { if (!loading && !user) router.replace('/'); }, [loading, user, router]);
 
   const [editing, setEditing] = useState(false);
+  const [profileErr, setProfileErr] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [orders, setOrders] = useState<Order[] | null>(null);
@@ -228,8 +313,18 @@ export default function AccountPage() {
 
   if (loading || !user) return null;
 
-  const startEdit = () => { setName(user.name); setPhone(user.phone ?? ''); setEditing(true); };
-  const saveProfile = () => { updateUser({ name: name.trim() || user.name, phone: phone.trim() }); setEditing(false); };
+  const startEdit = () => { setProfileErr(''); setName(user.name); setPhone(national10(user.phone)); setEditing(true); };
+  const saveProfile = async () => {
+    setProfileErr(''); setSavingProfile(true);
+    try {
+      await updateProfile({ name: name.trim() || user.name, phone: phone.trim() || undefined });
+      setEditing(false);
+    } catch (e) {
+      setProfileErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
   const doLogout = () => { logout(); router.push('/'); };
 
   const handleAddAddress = async (data: Omit<Address, 'id'>) => {
@@ -271,18 +366,24 @@ export default function AccountPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h1 style={{ fontSize: 'var(--text-h4)', marginBottom: 3 }}>{user.name}</h1>
                   <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>{user.email}</p>
-                  {user.phone && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 2 }}>{user.phone}</p>}
+                  {user.phone && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 2 }}>{formatPhone(user.phone)}</p>}
                 </div>
                 {!editing && <button onClick={startEdit} aria-label="Edit profile" style={{ width: 36, height: 36, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><Pencil size={15} /></button>}
               </div>
+              {!editing && !user.phone && (
+                <button onClick={startEdit} style={{ marginTop: 13, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1.5px dashed var(--brand-secondary)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
+                  <Plus size={15} /> Add your phone number for order updates
+                </button>
+              )}
               {editing && (
                 <div style={{ marginTop: 15, display: 'grid', gap: 9 }}>
                   <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={{ width: '100%', padding: '11px 13px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                   <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" style={{ width: '100%', padding: '11px 13px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Email cannot be changed from this page.</div>
+                  {profileErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)' }}>{profileErr}</div>}
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={saveProfile} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Check size={15} /> Save</button>
-                    <button onClick={() => { setEditing(false); setName(user.name); setPhone(user.phone ?? ''); }} style={{ padding: '10px 14px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><X size={15} /> Cancel</button>
+                    <button onClick={saveProfile} disabled={savingProfile} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: savingProfile ? 'var(--border-default)' : 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: savingProfile ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Check size={15} /> {savingProfile ? 'Saving…' : 'Save'}</button>
+                    <button onClick={() => { setEditing(false); setProfileErr(''); setName(user.name); setPhone(national10(user.phone)); }} style={{ padding: '10px 14px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><X size={15} /> Cancel</button>
                   </div>
                 </div>
               )}

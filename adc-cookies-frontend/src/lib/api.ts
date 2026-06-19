@@ -36,15 +36,21 @@ export async function sendOtp(phone: string): Promise<{ verificationId: string; 
   return request('/auth/otp/send', { method: 'POST', body: JSON.stringify({ phone }) });
 }
 
-/** Confirm the OTP. On success returns Supabase session tokens to hydrate the client. */
-export async function verifyOtp(phone: string, verificationId: string, code: string): Promise<{ accessToken: string; refreshToken: string }> {
+/** Confirm the OTP. Returns Supabase session tokens plus whether we still need the user's name
+ *  (true for a brand-new number or an account that never set one). */
+export async function verifyOtp(phone: string, verificationId: string, code: string): Promise<{ accessToken: string; refreshToken: string; needsName: boolean }> {
   return request('/auth/otp/verify', { method: 'POST', body: JSON.stringify({ phone, verificationId, code }) });
 }
 
 /** The signed-in user as our backend sees them (synced from the Supabase session). */
-export interface MeResponse { email: string; name: string; role: string; }
+export interface MeResponse { email: string; name: string; role: string; phone: string | null; }
 export async function getMe(): Promise<MeResponse> {
   return request('/auth/me');
+}
+
+/** Update the signed-in user's profile (name and/or phone). Persists to the DB. */
+export async function updateMe(patch: { name?: string; phone?: string }): Promise<MeResponse> {
+  return request('/auth/me', { method: 'PATCH', body: JSON.stringify(patch) });
 }
 
 /* ---- Products ---- */
@@ -138,6 +144,7 @@ export interface Order {
   orderStatus: string; paymentStatus: string; createdAt: string;
   subtotal?: number; discountAmount?: number; deliveryFee?: number; taxAmount?: number;
   couponCode?: string | null; shipmentStatus?: string; trackingUrl?: string | null;
+  delhiveryWaybill?: string | null; delhiveryShipmentId?: string | null; labelGenerated?: boolean;
   address?: Address | null; items?: OrderItem[];
 }
 
@@ -156,6 +163,30 @@ export async function createOrder(addressId: number, couponCode?: string, items?
 export async function getOrders(): Promise<Order[]> { return request('/orders'); }
 
 export async function getOrder(id: number): Promise<Order> { return request(`/orders/${id}`); }
+
+export interface DelhiveryTrackResult {
+  tracked: boolean; waybill?: string; reason?: string;
+  data?: { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
+}
+export async function trackOrderShipment(orderId: number): Promise<DelhiveryTrackResult> {
+  return request(`/orders/${orderId}/delhivery-track`);
+}
+
+/* ---- Delivery (user-facing) ---- */
+export interface DeliveryCheck {
+  serviceable: boolean;
+  embargo?: boolean;
+  reason: string;
+  cod?: boolean;
+  pincode?: string;
+  tat?: number | null;
+  expectedDeliveryDate?: string | null;
+}
+
+/** Combined serviceability + TAT check — used at checkout when an address is selected. */
+export async function checkDeliveryPin(pincode: string): Promise<DeliveryCheck> {
+  return request(`/delivery/check?pincode=${encodeURIComponent(pincode)}`);
+}
 
 /* ---- Admin ---- */
 export interface AdminStats {
@@ -201,4 +232,57 @@ export async function adminGetUsers(): Promise<AdminUser[]> { return request('/a
 export async function adminGetMessages(): Promise<AdminMessage[]> { return request('/admin/contact'); }
 export async function adminMarkMessageHandled(id: number): Promise<{ id: number; handled: boolean }> {
   return request(`/admin/contact/${id}/handled`, { method: 'PATCH' });
+}
+
+/* ---- Admin: Delivery — Warehouses ---- */
+export interface Warehouse {
+  id: number; name: string; registeredName?: string;
+  pickupLocation: string; addressLine1?: string; addressLine2?: string;
+  city?: string; state?: string; pincode: string; returnPincode?: string;
+  phone?: string; email?: string; isActive: boolean; isDefault: boolean; createdAt: string;
+}
+export interface WarehouseInput {
+  name: string; registeredName?: string; pickupLocation: string;
+  addressLine1?: string; addressLine2?: string; city?: string; state?: string;
+  pincode: string; returnPincode?: string; phone?: string; email?: string; isDefault?: boolean;
+}
+
+export async function adminGetWarehouses(): Promise<Warehouse[]> { return request('/admin/delivery/warehouses'); }
+export async function adminCreateWarehouse(data: WarehouseInput): Promise<Warehouse> {
+  return request('/admin/delivery/warehouses', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function adminUpdateWarehouse(id: number, data: WarehouseInput): Promise<Warehouse> {
+  return request(`/admin/delivery/warehouses/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+export async function adminSetDefaultWarehouse(id: number): Promise<{ ok: boolean }> {
+  return request(`/admin/delivery/warehouses/${id}/default`, { method: 'PATCH' });
+}
+export async function adminToggleWarehouse(id: number): Promise<Warehouse> {
+  return request(`/admin/delivery/warehouses/${id}/toggle`, { method: 'PATCH' });
+}
+
+/* ---- Admin: Delivery — Shipping cost ---- */
+export interface ShippingCostResult { ok: boolean; data?: unknown; reason?: string; }
+export async function adminGetShippingCost(destPin: string, weight = 0.5): Promise<ShippingCostResult> {
+  return request(`/admin/delivery/shipping-cost?destPin=${encodeURIComponent(destPin)}&weight=${weight}`);
+}
+
+/* ---- Admin: Delivery — Shipment actions ---- */
+export async function adminCreateShipment(orderId: number, weight = 0.5): Promise<Order> {
+  return request(`/admin/orders/${orderId}/shipment`, { method: 'POST', body: JSON.stringify({ weight }) });
+}
+export async function adminCancelShipment(orderId: number): Promise<{ ok: boolean; waybill: string }> {
+  return request(`/admin/orders/${orderId}/shipment`, { method: 'DELETE' });
+}
+export async function adminTrackOrder(orderId: number): Promise<{ ok: boolean; data?: unknown; reason?: string }> {
+  return request(`/admin/orders/${orderId}/track`);
+}
+export function adminLabelUrl(waybills: string): string {
+  const base = process.env.NEXT_PUBLIC_API_URL || '/api';
+  return `${base}/admin/delivery/label?waybills=${encodeURIComponent(waybills)}`;
+}
+
+/* ---- Admin: Delivery — Pickup request ---- */
+export async function adminCreatePickupRequest(pickupDate: string, pickupTime: string, packageCount: number): Promise<{ ok: boolean; data?: unknown; reason?: string }> {
+  return request('/admin/delivery/pickup-request', { method: 'POST', body: JSON.stringify({ pickupDate, pickupTime, packageCount }) });
 }

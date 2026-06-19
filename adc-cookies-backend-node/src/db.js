@@ -180,6 +180,32 @@ export async function initSchema() {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS warehouses (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      registered_name VARCHAR(255),
+      pickup_location VARCHAR(255) NOT NULL,
+      address_line1 TEXT,
+      address_line2 TEXT,
+      city VARCHAR(100),
+      state VARCHAR(100),
+      pincode VARCHAR(10) NOT NULL,
+      phone VARCHAR(20),
+      email VARCHAR(255),
+      return_pincode VARCHAR(10),
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      is_default BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TEXT NOT NULL
+    );
+
+    -- Idempotent migrations
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT 'Home';
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS delhivery_waybill TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS delhivery_shipment_id TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipment_status TEXT NOT NULL DEFAULT 'NOT_CREATED';
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS label_generated BOOLEAN NOT NULL DEFAULT FALSE;
+
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This
     -- backend connects as the table owner, which bypasses RLS, so the app is unaffected.

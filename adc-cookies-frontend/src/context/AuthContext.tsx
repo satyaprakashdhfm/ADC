@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { getMe, sendOtp as apiSendOtp, verifyOtp as apiVerifyOtp } from '@/lib/api';
+import { getMe, updateMe, sendOtp as apiSendOtp, verifyOtp as apiVerifyOtp, type MeResponse } from '@/lib/api';
 
 interface User { name: string; email: string; role: string; initials: string; phone?: string; }
 
@@ -13,7 +13,8 @@ interface AuthContextType {
   register: (name: string, email: string, phone: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   sendOtp: (phone: string) => Promise<{ verificationId: string; timeout: number }>;
-  verifyOtp: (phone: string, verificationId: string, code: string) => Promise<string>; // returns role
+  verifyOtp: (phone: string, verificationId: string, code: string) => Promise<{ role: string; needsName: boolean }>;
+  updateProfile: (patch: { name?: string; phone?: string }) => Promise<void>; // persists to the backend
   updateUser: (patch: Partial<Pick<User, 'name' | 'phone'>>) => void;
   logout: () => void;
 }
@@ -22,6 +23,9 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const initialsOf = (name: string) =>
   (name || '').split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase();
+
+const userFromMe = (me: MeResponse): User =>
+  ({ name: me.name, email: me.email, role: me.role, initials: initialsOf(me.name), phone: me.phone ?? undefined });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -33,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!session) return null;
     try {
       const me = await getMe();
-      return { name: me.name, email: me.email, role: me.role, initials: initialsOf(me.name) };
+      return userFromMe(me);
     } catch {
       const meta = (session.user.user_metadata || {}) as Record<string, string>;
       const email = session.user.email || '';
@@ -58,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     if (error) throw new Error(error.message);
     const me = await getMe();
-    setUser({ name: me.name, email: me.email, role: me.role, initials: initialsOf(me.name) });
+    setUser(userFromMe(me));
     return me.role;
   };
 
@@ -70,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
     if (!data.session) throw new Error('Account created — please check your email to confirm, then log in.');
     const me = await getMe();
-    setUser({ name: me.name, email: me.email, role: me.role, initials: initialsOf(me.name) });
+    setUser(userFromMe(me));
   };
 
   const loginWithGoogle = async () => {
@@ -87,15 +91,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendOtp = (phone: string) => apiSendOtp(phone);
 
   const verifyOtp = async (phone: string, verificationId: string, code: string) => {
-    const { accessToken, refreshToken } = await apiVerifyOtp(phone, verificationId, code);
+    const { accessToken, refreshToken, needsName } = await apiVerifyOtp(phone, verificationId, code);
     const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
     if (error) throw new Error(error.message);
     const me = await getMe();
-    setUser({ name: me.name, email: me.email, role: me.role, initials: initialsOf(me.name) });
-    return me.role;
+    setUser(userFromMe(me));
+    return { role: me.role, needsName };
   };
 
-  // Local profile edit only (no backend update-profile endpoint yet).
+  // Persist name/phone to the backend (DB) and reflect it in the session.
+  const updateProfile = async (patch: { name?: string; phone?: string }) => {
+    const me = await updateMe(patch);
+    setUser(userFromMe(me));
+  };
+
+  // Local-only profile patch (optimistic UI; not persisted).
   const updateUser = (patch: Partial<Pick<User, 'name' | 'phone'>>) => {
     setUser((prev) => {
       if (!prev) return prev;
@@ -111,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, sendOtp, verifyOtp, updateUser, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

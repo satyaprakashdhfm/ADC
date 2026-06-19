@@ -1,5 +1,6 @@
 import { verifySupabaseToken } from './supabaseJwt.js';
-import { getOne, nowIso } from './db.js';
+import { getOne, query, nowIso } from './db.js';
+import { adminClient, supabaseConfigured } from './supabaseAdmin.js';
 
 /*
  * Auth now runs on Supabase. The frontend sends the Supabase session access token as
@@ -10,6 +11,32 @@ import { getOne, nowIso } from './db.js';
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+
+// Transfer all data from `fromId` into `intoId` and delete the `from` account.
+// Used when two accounts (Google + phone-OTP) are identified as the same person.
+async function absorbAccount(intoId, fromId) {
+  await query('UPDATE orders       SET user_id = $1 WHERE user_id = $2', [intoId, fromId]);
+  await query('UPDATE addresses    SET user_id = $1 WHERE user_id = $2', [intoId, fromId]);
+  await query('UPDATE coupon_usage SET user_id = $1 WHERE user_id = $2', [intoId, fromId]);
+  const keepCart = await getOne('SELECT id FROM cart WHERE user_id = $1', [intoId]);
+  const fromCart = await getOne('SELECT id FROM cart WHERE user_id = $1', [fromId]);
+  if (fromCart) {
+    if (keepCart) {
+      await query('UPDATE cart_items SET cart_id = $1 WHERE cart_id = $2', [keepCart.id, fromCart.id]);
+      await query('DELETE FROM cart WHERE id = $1', [fromCart.id]);
+    } else {
+      await query('UPDATE cart SET user_id = $1 WHERE id = $2', [intoId, fromCart.id]);
+    }
+  }
+  const fromUser = await getOne('SELECT email FROM users WHERE id = $1', [fromId]);
+  await query('DELETE FROM users WHERE id = $1', [fromId]);
+  if (fromUser && supabaseConfigured()) {
+    try {
+      const supaRow = await getOne('SELECT id FROM auth.users WHERE email = $1', [fromUser.email]).catch(() => null);
+      if (supaRow) await adminClient().auth.admin.deleteUser(supaRow.id);
+    } catch { /* non-critical */ }
+  }
+}
 
 // Find-or-create the local user row for a Supabase-authenticated identity. The identity is
 // either an email (Google / email-password) or a phone (phone-OTP login).
@@ -30,6 +57,17 @@ async function syncUser({ email, phone, name }) {
     } else if (isAdmin && user.role !== 'ADMIN') {
       user = await getOne('UPDATE users SET role = $2, updated_at = $3 WHERE email = $1 RETURNING *', [email, 'ADMIN', nowIso()]);
     }
+
+    // If this Google/email user has a phone number in their token metadata, and there's a
+    // separate phone-OTP account for that number, silently absorb it so the person has one account.
+    if (phone && !user.phone) {
+      const phoneAcct = await getOne('SELECT * FROM users WHERE phone = $1 AND id <> $2', [phone, user.id]);
+      if (phoneAcct) {
+        await absorbAccount(user.id, phoneAcct.id);
+        user = await getOne('UPDATE users SET phone = $1, updated_at = $2 WHERE id = $3 RETURNING *', [phone, nowIso(), user.id]);
+      }
+    }
+
     return user;
   }
   // Phone identity — keyed by phone, with a synthetic email so the rest of the app
@@ -64,7 +102,7 @@ export async function parseAuth(req, _res, next) {
       if (email || phone) {
         const name = meta.full_name || meta.name || (email ? email.split('@')[0] : 'Guest');
         const user = await syncUser({ email, phone, name });
-        if (user) req.user = { id: user.id, email: user.email, name: user.name, role: user.role };
+        if (user) req.user = { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone };
       }
     } catch { /* invalid/expired token — treat as anonymous */ }
   }

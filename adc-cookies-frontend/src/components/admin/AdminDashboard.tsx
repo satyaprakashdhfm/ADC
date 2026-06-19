@@ -7,12 +7,16 @@ import {
   adminDashboard, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
   adminToggleCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
+  adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
+  adminToggleWarehouse, adminGetShippingCost, adminCreateShipment, adminCancelShipment,
+  adminTrackOrder, adminLabelUrl, adminCreatePickupRequest,
   type AdminStats, type AdminUser, type AdminCoupon, type AdminMessage,
-  type Product, type Order, type ProductInput,
+  type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
   IndianRupee, AlertTriangle, Plus, Pencil, Trash2, Check, X, LogOut, Gift,
+  Truck, Warehouse as WarehouseIcon, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download,
 } from 'lucide-react';
 
 const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
@@ -20,6 +24,7 @@ const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
   { id: 'products', label: 'Products', icon: Package },
+  { id: 'delivery', label: 'Delivery', icon: Truck },
   { id: 'coupons', label: 'Coupons', icon: Ticket },
   { id: 'users', label: 'Customers', icon: Users },
   { id: 'messages', label: 'Messages', icon: MessageSquare },
@@ -50,6 +55,22 @@ export default function AdminDashboard() {
   const [err, setErr] = useState('');
   const [loginOpen, setLoginOpen] = useState(false);
 
+  // Delivery tab state
+  const [warehouses, setWarehouses] = useState<Warehouse[] | null>(null);
+  const [whForm, setWhForm] = useState<{ id?: number; data: WarehouseInput } | null>(null);
+  const [costPin, setCostPin] = useState('');
+  const [costWeight, setCostWeight] = useState('0.5');
+  const [costResult, setCostResult] = useState<string | null>(null);
+  const [costLoading, setCostLoading] = useState(false);
+  const [purDate, setPurDate] = useState('');
+  const [purTime, setPurTime] = useState('10:00');
+  const [purCount, setPurCount] = useState('1');
+  const [purResult, setPurResult] = useState<string>('');
+  const [shipmentBusy, setShipmentBusy] = useState<number | null>(null);
+  const [trackResult, setTrackResult] = useState<Record<number, string>>({});
+
+  const EMPTY_WH: WarehouseInput = { name: '', registeredName: '', pickupLocation: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', returnPincode: '', phone: '', email: '', isDefault: false };
+
   const isAdmin = !!user && user.role === 'ADMIN';
 
   useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
@@ -62,6 +83,10 @@ export default function AdminDashboard() {
     if (tab === 'coupons' && coupons === null) adminGetCoupons().then(setCoupons).catch(() => setCoupons([]));
     if (tab === 'users' && users === null) adminGetUsers().then(setUsers).catch(() => setUsers([]));
     if (tab === 'messages' && messages === null) adminGetMessages().then(setMessages).catch(() => setMessages([]));
+    if (tab === 'delivery') {
+      if (warehouses === null) adminGetWarehouses().then(setWarehouses).catch(() => setWarehouses([]));
+      if (orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
+    }
   }, [tab, isAdmin, orders, products, coupons, users, messages]);
 
   const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); adminDashboard().then(setStats).catch(() => {}); }, []);
@@ -241,6 +266,140 @@ export default function AdminDashboard() {
           </Panel>
         )}
 
+        {/* ===== Delivery ===== */}
+        {tab === 'delivery' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Warehouses */}
+            <Panel title="Warehouses" loading={warehouses === null}
+              action={<button onClick={() => setWhForm({ data: { ...EMPTY_WH } })} style={addBtn}><Plus size={16} /> Add warehouse</button>}>
+              {warehouses && warehouses.length > 0 ? (
+                <Table head={['Name', 'Location', 'Pincode', 'Status', 'Default', '']}>
+                  {warehouses.map(w => (
+                    <tr key={w.id}>
+                      <td style={td}><strong>{w.name}</strong><br /><span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{w.pickupLocation}</span></td>
+                      <td style={td}>{[w.city, w.state].filter(Boolean).join(', ') || '—'}</td>
+                      <td style={td}>{w.pincode}</td>
+                      <td style={td}><Badge text={w.isActive ? 'Active' : 'Inactive'} ok={w.isActive} /></td>
+                      <td style={td}>
+                        {w.isDefault
+                          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--brand-secondary)', fontWeight: 700, fontSize: 'var(--text-xs)' }}><Star size={13} fill="currentColor" /> Default</span>
+                          : <button onClick={async () => { await adminSetDefaultWarehouse(w.id); adminGetWarehouses().then(setWarehouses).catch(() => {}); }} style={{ ...iconBtn, width: 'auto', padding: '4px 10px', fontSize: 'var(--text-xs)', fontWeight: 700 }}>Set default</button>}
+                      </td>
+                      <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                        <button onClick={() => setWhForm({ id: w.id, data: { name: w.name, registeredName: w.registeredName || '', pickupLocation: w.pickupLocation, addressLine1: w.addressLine1 || '', addressLine2: w.addressLine2 || '', city: w.city || '', state: w.state || '', pincode: w.pincode, returnPincode: w.returnPincode || '', phone: w.phone || '', email: w.email || '' } })} style={iconBtn} aria-label="Edit"><Pencil size={15} /></button>
+                        <button onClick={async () => { const u = await adminToggleWarehouse(w.id).catch(() => null); if (u) setWarehouses(p => (p || []).map(x => x.id === w.id ? u : x)); }} style={iconBtn} aria-label="Toggle active">
+                          {w.isActive ? <ToggleRight size={15} color="var(--brand-secondary)" /> : <ToggleLeft size={15} />}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </Table>
+              ) : warehouses !== null && <Empty text="No warehouses yet — add one to create shipments." />}
+            </Panel>
+
+            {/* Shipping cost calculator */}
+            <Panel title="Shipping cost calculator (admin only — customer always pays ₹100)">
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 10 }}>
+                <Field label="Destination pincode">
+                  <input style={{ ...inp, width: 140 }} value={costPin} onChange={e => setCostPin(e.target.value)} placeholder="560001" maxLength={6} />
+                </Field>
+                <Field label="Weight (kg)">
+                  <input type="number" style={{ ...inp, width: 100 }} value={costWeight} onChange={e => setCostWeight(e.target.value)} min="0.1" step="0.1" />
+                </Field>
+                <button onClick={async () => { setCostLoading(true); setCostResult(null); const r = await adminGetShippingCost(costPin, Number(costWeight)).catch(e => ({ ok: false, reason: String(e.message || e) })); setCostResult(JSON.stringify(r, null, 2)); setCostLoading(false); }} disabled={costPin.length !== 6 || costLoading} style={{ ...addBtn, opacity: costPin.length !== 6 ? 0.5 : 1 }}>
+                  {costLoading ? 'Checking…' : 'Calculate'}
+                </button>
+              </div>
+              {costResult && (
+                <pre style={{ fontSize: 'var(--text-xs)', background: 'var(--surface-sunken)', borderRadius: 8, padding: 12, overflowX: 'auto', color: 'var(--text-body)' }}>
+                  {costResult}
+                </pre>
+              )}
+            </Panel>
+
+            {/* Pickup request */}
+            <Panel title="Create pickup request">
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <Field label="Pickup date"><input type="date" style={{ ...inp, width: 160 }} value={purDate} onChange={e => setPurDate(e.target.value)} /></Field>
+                <Field label="Pickup time"><input type="time" style={{ ...inp, width: 120 }} value={purTime} onChange={e => setPurTime(e.target.value)} /></Field>
+                <Field label="Package count"><input type="number" style={{ ...inp, width: 80 }} value={purCount} onChange={e => setPurCount(e.target.value)} min="1" /></Field>
+                <button onClick={async () => {
+                  setPurResult('Submitting…');
+                  const r = await adminCreatePickupRequest(purDate, purTime, Number(purCount)).catch(e => ({ ok: false, reason: String(e.message || e), data: undefined }));
+                  setPurResult(r.ok ? `Pickup request created! ${JSON.stringify((r as { ok: boolean; data?: unknown }).data || {})}` : `Error: ${(r as { ok: boolean; reason?: string }).reason}`);
+                }} disabled={!purDate || !purTime} style={{ ...addBtn, opacity: !purDate ? 0.5 : 1 }}>Request pickup</button>
+              </div>
+              {purResult && <div style={{ marginTop: 10, fontSize: 'var(--text-sm)', color: purResult.startsWith('Error') ? 'var(--status-error)' : 'var(--status-success)', fontWeight: 700 }}>{purResult}</div>}
+            </Panel>
+
+            {/* Orders with shipment actions */}
+            <Panel title="Order shipments" loading={orders === null}
+              action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+              {orders && (
+                <Table head={['Order', 'Customer', 'Waybill', 'Shipment status', 'Actions']}>
+                  {(orders || []).map(o => (
+                    <tr key={o.id}>
+                      <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{o.orderStatus}</span></td>
+                      <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.pincode || ''}</span></td>
+                      <td style={td}>
+                        {o.delhiveryWaybill
+                          ? <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill}</span>
+                          : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>—</span>}
+                      </td>
+                      <td style={td}><Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} /></td>
+                      <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                        {!o.delhiveryWaybill ? (
+                          <button disabled={shipmentBusy === o.id} onClick={async () => {
+                            setShipmentBusy(o.id); setErr('');
+                            const r = await adminCreateShipment(o.id).catch(e => { setErr(String(e.message || e)); return null; });
+                            if (r) setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, delhiveryWaybill: r.delhiveryWaybill, shipmentStatus: r.shipmentStatus } : x));
+                            setShipmentBusy(null);
+                          }} style={{ ...addBtn, padding: '7px 12px', fontSize: 'var(--text-xs)', marginRight: 6 }}>
+                            {shipmentBusy === o.id ? '…' : <><Truck size={13} /> Create</>}
+                          </button>
+                        ) : (
+                          <>
+                            <a href={adminLabelUrl(o.delhiveryWaybill!)} target="_blank" rel="noreferrer" style={{ ...iconBtn, display: 'inline-grid', textDecoration: 'none', marginRight: 4 }} title="Download label"><Download size={14} /></a>
+                            <button title="Track" onClick={async () => {
+                              const r = await adminTrackOrder(o.id).catch(() => null);
+                              if (r?.ok) {
+                                const shipment = (r.data as { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string } } }[] })?.ShipmentData?.[0]?.Shipment;
+                                const status = shipment?.Status?.Status || 'No status';
+                                const note = shipment?.Status?.Instructions || '';
+                                setTrackResult(p => ({ ...p, [o.id]: note ? `${status} — ${note}` : status }));
+                              } else if (r) {
+                                setTrackResult(p => ({ ...p, [o.id]: `Error: ${(r as { reason?: string }).reason || 'unknown'}` }));
+                              }
+                            }} style={{ ...iconBtn, marginRight: 4 }}><ExternalLink size={14} /></button>
+                            {o.shipmentStatus !== 'CANCELLED' && (
+                              <button disabled={shipmentBusy === o.id} onClick={async () => {
+                                if (!confirm(`Cancel shipment ${o.delhiveryWaybill}?`)) return;
+                                setShipmentBusy(o.id); setErr('');
+                                await adminCancelShipment(o.id).catch(e => { setErr(String(e.message || e)); });
+                                setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
+                                setShipmentBusy(null);
+                              }} style={{ ...iconBtn, color: 'var(--status-error)', marginRight: 0 }} title="Cancel shipment"><X size={14} /></button>
+                            )}
+                          </>
+                        )}
+                        {trackResult[o.id] && (
+                          <div style={{ marginTop: 6, fontSize: 'var(--text-xs)', background: 'var(--surface-sunken)', borderRadius: 6, padding: '6px 10px', maxWidth: 320, whiteSpace: 'normal' }}>
+                            <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>Status: </span>
+                            <span style={{ color: 'var(--text-body)' }}>{trackResult[o.id]}</span>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </Table>
+              )}
+              {orders !== null && !orders.length && <Empty text="No orders yet." />}
+              {orders === null && <button onClick={() => adminGetOrders().then(setOrders).catch(() => setOrders([]))} style={addBtn}>Load orders</button>}
+            </Panel>
+          </div>
+        )}
+
         {/* ===== Coupons ===== */}
         {tab === 'coupons' && (
           <Panel title="Coupons" loading={coupons === null}>
@@ -301,6 +460,60 @@ export default function AdminDashboard() {
           </Panel>
         )}
       </div>
+
+      {/* Warehouse editor modal */}
+      {whForm && (
+        <div onClick={() => setWhForm(null)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'var(--surface-overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 'min(560px,96vw)', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: 24 }} className="hide-sb">
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ flex: 1, fontSize: 'var(--text-h3)' }}>{whForm.id ? 'Edit warehouse' : 'Add warehouse'}</h3>
+              <button onClick={() => setWhForm(null)} style={iconBtn}><X size={18} /></button>
+            </div>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="Warehouse name *"><input style={inp} value={whForm.data.name} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, name: e.target.value } })} /></Field>
+                <Field label="Registered name"><input style={inp} value={whForm.data.registeredName || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, registeredName: e.target.value } })} /></Field>
+              </div>
+              <Field label="Pickup location key * (e.g. ADC_MAIN — no spaces, used in shipment API)">
+                <input style={inp} value={whForm.data.pickupLocation} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, pickupLocation: e.target.value.replace(/\s/g, '_').toUpperCase() } })} placeholder="ADC_MAIN" />
+              </Field>
+              <Field label="Address line 1"><input style={inp} value={whForm.data.addressLine1 || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, addressLine1: e.target.value } })} /></Field>
+              <Field label="Address line 2 / Area"><input style={inp} value={whForm.data.addressLine2 || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, addressLine2: e.target.value } })} /></Field>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <Field label="City"><input style={inp} value={whForm.data.city || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, city: e.target.value } })} /></Field>
+                <Field label="State"><input style={inp} value={whForm.data.state || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, state: e.target.value } })} /></Field>
+                <Field label="Pincode *"><input style={inp} value={whForm.data.pincode} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, pincode: e.target.value } })} placeholder="500034" maxLength={6} /></Field>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="Phone"><input style={inp} value={whForm.data.phone || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, phone: e.target.value } })} /></Field>
+                <Field label="Email"><input style={inp} value={whForm.data.email || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, email: e.target.value } })} /></Field>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!whForm.data.isDefault} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, isDefault: e.target.checked } })} /> Set as default warehouse
+              </label>
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button
+                  disabled={!whForm.data.name || !whForm.data.pickupLocation || !whForm.data.pincode}
+                  onClick={async () => {
+                    try {
+                      if (whForm.id) {
+                        await adminUpdateWarehouse(whForm.id, whForm.data);
+                      } else {
+                        await adminCreateWarehouse(whForm.data);
+                      }
+                      setWhForm(null);
+                      adminGetWarehouses().then(setWarehouses).catch(() => {});
+                    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Save failed'); }
+                  }}
+                  style={{ ...addBtn, flex: 1, justifyContent: 'center', opacity: (!whForm.data.name || !whForm.data.pickupLocation || !whForm.data.pincode) ? 0.5 : 1 }}>
+                  <Check size={16} /> Save warehouse
+                </button>
+                <button onClick={() => setWhForm(null)} style={{ padding: '12px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Product editor modal */}
       {editing && (
@@ -400,6 +613,46 @@ export default function AdminDashboard() {
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>{[a.addressLine1, a.addressLine2, a.city, a.state, a.pincode].filter(Boolean).join(', ')}</div>
                 </div>
               )}
+
+              {/* Shipment info */}
+              <div style={{ ...card, padding: 14, marginBottom: 14 }}>
+                <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Shipment</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} />
+                  {o.delhiveryWaybill && <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill}</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  {!o.delhiveryWaybill ? (
+                    <button disabled={shipmentBusy === o.id} onClick={async () => {
+                      setShipmentBusy(o.id); setErr('');
+                      const r = await adminCreateShipment(o.id).catch(e => { setErr(String(e.message || e)); return null; });
+                      if (r) {
+                        setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, delhiveryWaybill: r.delhiveryWaybill, shipmentStatus: r.shipmentStatus } : x));
+                        setViewOrder(prev => prev ? { ...prev, delhiveryWaybill: r.delhiveryWaybill, shipmentStatus: r.shipmentStatus } : prev);
+                      }
+                      setShipmentBusy(null);
+                    }} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)' }}>
+                      <Truck size={14} /> {shipmentBusy === o.id ? 'Creating…' : 'Create shipment'}
+                    </button>
+                  ) : (
+                    <>
+                      <a href={adminLabelUrl(o.delhiveryWaybill!)} target="_blank" rel="noreferrer" style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', textDecoration: 'none' }}><Download size={14} /> Label</a>
+                      {o.shipmentStatus !== 'CANCELLED' && (
+                        <button disabled={shipmentBusy === o.id} onClick={async () => {
+                          if (!confirm(`Cancel shipment ${o.delhiveryWaybill}?`)) return;
+                          setShipmentBusy(o.id); setErr('');
+                          await adminCancelShipment(o.id).catch(e => { setErr(String(e.message || e)); });
+                          setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
+                          setViewOrder(prev => prev ? { ...prev, shipmentStatus: 'CANCELLED' } : prev);
+                          setShipmentBusy(null);
+                        }} style={{ padding: '8px 14px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--status-error)', background: 'transparent', color: 'var(--status-error)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <X size={14} /> Cancel shipment
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
 
               <div style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {row('Item total', money(o.subtotal ?? o.totalAmount))}

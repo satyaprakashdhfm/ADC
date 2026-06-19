@@ -5,9 +5,67 @@ import { serializeOrder, serializeOrderItem, serializeTracking, serializeAddress
 import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
+import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
 
 const router = Router();
 router.use(requireAuth);
+
+// Auto-create a Delhivery shipment for a newly placed order (fire-and-forget).
+async function autoCreateShipment(orderId, address) {
+  if (!delhiveryConfigured()) return;
+  const defaultWh = await getOne('SELECT * FROM warehouses WHERE is_default = TRUE AND is_active = TRUE LIMIT 1');
+  if (!defaultWh) return;
+
+  const waybillRes = await fetchWaybill(1);
+  if (!waybillRes.ok || !waybillRes.waybills?.length) return;
+  const waybill = String(waybillRes.waybills[0]);
+
+  const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
+  if (!order) return;
+
+  const shipmentData = {
+    waybill,
+    name: address.full_name || 'Customer',
+    add: [address.address_line1, address.address_line2].filter(Boolean).join(', '),
+    city: address.city,
+    state: address.state,
+    country: 'India',
+    pin: address.pincode,
+    phone: address.phone,
+    order: order.order_number,
+    payment_mode: 'Pre-paid',
+    return_pin: defaultWh.pincode,
+    return_city: defaultWh.city || '',
+    return_phone: defaultWh.phone || '',
+    return_name: defaultWh.name || '',
+    return_add: defaultWh.address_line1 || '',
+    return_state: defaultWh.state || '',
+    return_country: 'India',
+    products_desc: 'Cookies',
+    hsn_code: '',
+    cod_amount: 0,
+    order_date: order.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+    total_amount: order.total_amount,
+    seller_add: defaultWh.address_line1 || '',
+    seller_name: defaultWh.name || '',
+    seller_inv: order.order_number,
+    quantity: 1,
+    shipment_width: 20,
+    shipment_height: 10,
+    weight: 0.5,
+    seller_gst_tin: '',
+    shipping_mode: 'Surface',
+    address_type: 'home',
+  };
+
+  const result = await createShipment(shipmentData, defaultWh.pickup_location);
+  if (!result.ok) return;
+
+  await query(
+    `UPDATE orders SET delhivery_waybill=$1, shipment_status='CREATED', updated_at=$2 WHERE id=$3`,
+    [result.waybill, nowIso(), orderId]
+  );
+}
 
 async function userByEmail(email) {
   const user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
@@ -120,6 +178,9 @@ router.post('/', async (req, res) => {
     address,
   });
 
+  // Auto-create Delhivery shipment in the background — never delays the response.
+  setImmediate(() => autoCreateShipment(orderId, address).catch(() => {}));
+
   res.json(await fullOrder(orderId));
 });
 
@@ -153,6 +214,22 @@ router.get('/:id/tracking', async (req, res) => {
     'SELECT * FROM order_tracking WHERE order_id = $1 ORDER BY created_at ASC, id ASC', [order.id]
   );
   res.json(rows.map(serializeTracking));
+});
+
+router.get('/:id/delhivery-track', async (req, res) => {
+  const user = await userByEmail(req.user.email);
+  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
+  if (!order) throw new ApiError('Order not found');
+  if (!order.delhivery_waybill) return res.json({ tracked: false, reason: 'no_waybill' });
+  const result = await trackShipment(order.delhivery_waybill);
+  if (!result.ok) return res.json({ tracked: false, reason: result.reason });
+  // Pull the latest status string from the Delhivery response for the status update
+  const pkg = Array.isArray(result.data?.ShipmentData) ? result.data.ShipmentData[0]?.Shipment : null;
+  const latestStatus = pkg?.Status?.Status || null;
+  if (latestStatus) {
+    await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [latestStatus, nowIso(), order.id]);
+  }
+  return res.json({ tracked: true, waybill: order.delhivery_waybill, data: result.data });
 });
 
 router.post('/:id/payment/verify', async (req, res) => {

@@ -42,20 +42,21 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   // Phone OTP flow
-  const [otpStep, setOtpStep] = useState<'phone' | 'code'>('phone');
+  const [otpStep, setOtpStep] = useState<'phone' | 'code' | 'name'>('phone');
   const [otpPhone, setOtpPhone] = useState('');
+  const [profileName, setProfileName] = useState(''); // collected only for brand-new accounts
   const [verificationId, setVerificationId] = useState('');
   const [code, setCode] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState('');
   const [resendIn, setResendIn] = useState(0); // seconds until "Resend OTP" re-enables
-  const { login, register, loginWithGoogle, sendOtp, verifyOtp } = useAuth();
+  const { login, register, loginWithGoogle, sendOtp, verifyOtp, updateProfile } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (open) {
       setError(''); setEmail(''); setPassword(''); setName(''); setPhone(''); setLoading(false); setGoogleLoading(false);
-      setOtpStep('phone'); setOtpPhone(''); setVerificationId(''); setCode(''); setOtpLoading(false); setOtpError(''); setResendIn(0);
+      setOtpStep('phone'); setOtpPhone(''); setProfileName(''); setVerificationId(''); setCode(''); setOtpLoading(false); setOtpError(''); setResendIn(0);
     }
   }, [open]);
 
@@ -107,15 +108,33 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
     }
   };
 
+  const finishLogin = (role: string) => {
+    onSuccess?.();
+    onClose();
+    if (role === 'ADMIN') router.push('/admin');
+  };
+
   const handleVerifyOtp = async () => {
     setOtpError(''); setOtpLoading(true);
     try {
-      const role = await verifyOtp(otpPhone, verificationId, code);
-      onSuccess?.();
-      onClose();
-      if (role === 'ADMIN') router.push('/admin');
+      const { role, needsName } = await verifyOtp(otpPhone, verificationId, code);
+      // New number (or no name yet) → ask the name now; returning users go straight in.
+      if (needsName) { setProfileName(''); setOtpStep('name'); }
+      else finishLogin(role);
     } catch (e) {
       setOtpError(e instanceof Error ? e.message : 'Invalid OTP');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleSaveName = async () => {
+    setOtpError(''); setOtpLoading(true);
+    try {
+      await updateProfile({ name: profileName.trim() });
+      finishLogin('CUSTOMER'); // a brand-new phone signup is always a customer
+    } catch (e) {
+      setOtpError(e instanceof Error ? e.message : 'Could not save your name');
     } finally {
       setOtpLoading(false);
     }
@@ -169,6 +188,28 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
         </div>
 
         <div className="hide-sb" style={{ padding: '22px 24px 26px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+          {otpStep === 'name' ? (
+            /* Post-verify name capture — only shown for a brand-new phone signup. */
+            <div>
+              <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>Almost there!</h2>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 18px' }}>What should we call you?</p>
+              <label style={labelStyle}>Full name</label>
+              <input
+                value={profileName}
+                onChange={e => setProfileName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && profileName.trim()) handleSaveName(); }}
+                placeholder="Your name" autoComplete="name" autoFocus
+                style={{ ...inputStyle, marginBottom: 14 }}
+              />
+              <button onClick={handleSaveName} disabled={otpLoading || !profileName.trim()} style={primaryBtn(!otpLoading && !!profileName.trim())}>
+                {otpLoading ? 'Saving…' : 'Continue'}{!otpLoading && !!profileName.trim() && <ArrowRight size={18} />}
+              </button>
+              {otpError && (
+                <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', textAlign: 'center' }}>{otpError}</div>
+              )}
+            </div>
+          ) : (
+          <>
           <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>Log in or sign up</h2>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 18px' }}>Order and track your fresh cookies.</p>
 
@@ -184,14 +225,14 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
                   value={otpPhone}
                   onChange={e => setOtpPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   onKeyDown={e => { if (e.key === 'Enter' && otpPhone.length === 10) handleSendOtp(); }}
-                  placeholder="98765 43210" inputMode="numeric" autoComplete="tel" autoFocus
+                  placeholder="Mobile number" inputMode="numeric" autoComplete="tel" autoFocus
                   style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', minWidth: 0, letterSpacing: '.04em' }}
                 />
               </div>
               <button onClick={handleSendOtp} disabled={otpLoading || otpPhone.length !== 10} style={primaryBtn(!otpLoading && otpPhone.length === 10)}>
                 {otpLoading ? 'Sending…' : 'Send OTP'}{!otpLoading && otpPhone.length === 10 && <ArrowRight size={18} />}
               </button>
-              <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '8px 2px 0' }}>We’ll text you a one-time code. Standard rates may apply.</p>
+              <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '8px 2px 0' }}>We’ll text you a one-time code.</p>
             </div>
           ) : (
             <div>
@@ -259,6 +300,8 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
           <button onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', textAlign: 'center' }}>
             {mode === 'login' ? "New here? Create an account" : 'Already have an account? Log in'}
           </button>
+          </>
+          )}
         </div>
       </div>
     </div>

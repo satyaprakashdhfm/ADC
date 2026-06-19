@@ -1,10 +1,43 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
-import { getOne } from '../db.js';
+import { getOne, query, nowIso } from '../db.js';
 import { requireAuth, ApiError } from '../middleware.js';
 import { normalizePhone, sendOtp, validateOtp, messageCentralConfigured } from '../messageCentral.js';
 import { adminClient, anonClient, supabaseConfigured } from '../supabaseAdmin.js';
+
+// Merge `fromId` (phone-OTP account) into `intoId` (Google/email account).
+// Transfers all data, then deletes the phone account from our DB and Supabase.
+async function mergeAccounts(intoId, fromId) {
+  // Reparent all user data
+  await query('UPDATE orders       SET user_id = $1 WHERE user_id = $2', [intoId, fromId]);
+  await query('UPDATE addresses    SET user_id = $1 WHERE user_id = $2', [intoId, fromId]);
+  await query('UPDATE coupon_usage SET user_id = $1 WHERE user_id = $2', [intoId, fromId]);
+
+  // Cart — merge items into the keeper's cart, or re-own the whole cart
+  const keepCart = await getOne('SELECT id FROM cart WHERE user_id = $1', [intoId]);
+  const fromCart = await getOne('SELECT id FROM cart WHERE user_id = $1', [fromId]);
+  if (fromCart) {
+    if (keepCart) {
+      await query('UPDATE cart_items SET cart_id = $1 WHERE cart_id = $2', [keepCart.id, fromCart.id]);
+      await query('DELETE FROM cart WHERE id = $1', [fromCart.id]);
+    } else {
+      await query('UPDATE cart SET user_id = $1 WHERE id = $2', [intoId, fromCart.id]);
+    }
+  }
+
+  // Grab the synthetic email before deletion so we can remove from Supabase
+  const fromUser = await getOne('SELECT email FROM users WHERE id = $1', [fromId]);
+  await query('DELETE FROM users WHERE id = $1', [fromId]);
+
+  // Best-effort: remove the now-orphaned Supabase auth record for the phone account
+  if (fromUser && supabaseConfigured()) {
+    try {
+      const supaRow = await getOne("SELECT id FROM auth.users WHERE email = $1", [fromUser.email]).catch(() => null);
+      if (supaRow) await adminClient().auth.admin.deleteUser(supaRow.id);
+    } catch { /* non-critical */ }
+  }
+}
 
 const router = Router();
 
@@ -22,7 +55,56 @@ const verifyLimiter = rateLimit({
 // Most auth (Google + email/password) runs through Supabase on the client. This endpoint
 // lets the frontend resolve the app role (CUSTOMER/ADMIN) + canonical name after login.
 router.get('/me', requireAuth, (req, res) => {
-  res.json({ email: req.user.email, name: req.user.name, role: req.user.role });
+  res.json({ email: req.user.email, name: req.user.name, role: req.user.role, phone: req.user.phone ?? null });
+});
+
+// Update the signed-in user's profile. Phone-OTP users fill in their name here; Google /
+// email users add a phone. Persists to our users table (authoritative for the app) and
+// best-effort syncs the display name + phone into Supabase user_metadata.
+router.patch('/me', requireAuth, async (req, res) => {
+  const sets = [];
+  const params = [];
+  let i = 1;
+
+  if (req.body?.name != null) {
+    const name = String(req.body.name).trim();
+    if (!name) throw new ApiError('Name cannot be empty.');
+    sets.push(`name = $${i++}`); params.push(name);
+  }
+
+  let normalizedPhone = null;
+  if (req.body?.phone != null && String(req.body.phone).trim() !== '') {
+    const p = normalizePhone(req.body.phone);
+    if (!p) throw new ApiError('Enter a valid 10-digit mobile number.');
+    normalizedPhone = p.digits;
+    // If the phone belongs to another account (phone-OTP), merge that account into this one
+    // instead of rejecting. The user can then log in either way.
+    const taken = await getOne('SELECT * FROM users WHERE phone = $1 AND id <> $2', [normalizedPhone, req.user.id]);
+    if (taken) {
+      await mergeAccounts(req.user.id, taken.id);
+      // Fall through — we still set the phone on the current account below.
+    }
+    sets.push(`phone = $${i++}`); params.push(normalizedPhone);
+  }
+
+  if (!sets.length) throw new ApiError('Nothing to update.');
+
+  sets.push(`updated_at = $${i++}`); params.push(nowIso());
+  params.push(req.user.id);
+  const row = await getOne(`UPDATE users SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, params);
+
+  // Best-effort mirror into Supabase (never blocks the response).
+  try {
+    if (supabaseConfigured()) {
+      const meta = {};
+      if (req.body?.name != null) meta.full_name = String(req.body.name).trim();
+      if (normalizedPhone) meta.phone = normalizedPhone;
+      const su = await getOne('SELECT id FROM auth.users WHERE email = $1', [req.user.email]).catch(() => null);
+      if (su) await adminClient().auth.admin.updateUserById(su.id, { user_metadata: meta });
+    }
+  } catch { /* metadata sync is non-critical */ }
+
+  res.json({ email: row.email, name: row.name, role: row.role, phone: row.phone ?? null });
 });
 
 /* ---------------- Phone OTP login (Message Central + Supabase) ----------------
@@ -69,6 +151,7 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
   if (!supabaseConfigured()) throw new ApiError('Phone login is not fully configured (Supabase admin missing).', 503);
 
   const { verificationId, code } = req.body || {};
+  const name = String(req.body?.name || '').trim();
   const phone = normalizePhone(req.body?.phone);
   if (!verificationId || !code) throw new ApiError('verificationId and code are required.');
   if (!phone) throw new ApiError('Enter a valid 10-digit mobile number.');
@@ -86,19 +169,27 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
   const password = crypto.randomBytes(24).toString('base64url');
 
   let supaUserId = null;
+  let existingName = null;
   try {
-    const row = await getOne('SELECT id FROM auth.users WHERE email = $1 OR phone = $2', [email, phone.digits]);
-    if (row) supaUserId = row.id;
+    const row = await getOne(
+      "SELECT id, raw_user_meta_data->>'full_name' AS full_name FROM auth.users WHERE email = $1 OR phone = $2",
+      [email, phone.digits]
+    );
+    if (row) { supaUserId = row.id; existingName = row.full_name; }
   } catch { /* no access to the auth schema — fall back to create-then-recover below */ }
+  // New number, or an existing account that never set a real name → the UI should ask for it.
+  const needsName = supaUserId == null || !existingName || existingName === 'Guest';
 
   if (supaUserId) {
-    const { error } = await admin.auth.admin.updateUserById(supaUserId, { password, email_confirm: true, phone_confirm: true });
+    const fields = { password, email_confirm: true, phone_confirm: true };
+    if (name) fields.user_metadata = { phone: phone.digits, full_name: name };
+    const { error } = await admin.auth.admin.updateUserById(supaUserId, fields);
     if (error) throw new ApiError(error.message, 502);
   } else {
     const { error } = await admin.auth.admin.createUser({
       email, phone: phone.e164, password,
       email_confirm: true, phone_confirm: true,
-      user_metadata: { phone: phone.digits, full_name: 'Guest' },
+      user_metadata: { phone: phone.digits, full_name: name || 'Guest' },
     });
     if (error) {
       // Most likely already exists — recover the id and reset the password.
@@ -116,6 +207,7 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
   res.json({
     accessToken: data.session.access_token,
     refreshToken: data.session.refresh_token,
+    needsName,
   });
 });
 

@@ -7,7 +7,7 @@ import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, submitContact, firstImage, type Product, type Address, type OrderItemInput } from '@/lib/api';
+import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, submitContact, firstImage, checkDeliveryPin, type Product, type Address, type OrderItemInput, type DeliveryCheck } from '@/lib/api';
 
 /* ---- Data ---- */
 const CATEGORIES = ['Cookies', 'Gift Tins', 'Corporate Gifting'];
@@ -273,6 +273,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [orderId, setOrderId] = useState('');
   const [paid, setPaid] = useState(0);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [delivCheck, setDelivCheck] = useState<DeliveryCheck | null>(null);
+  const [delivChecking, setDelivChecking] = useState(false);
 
   // Addresses are private to the signed-in user — fetch on login, clear on logout.
   useEffect(() => {
@@ -290,18 +292,24 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   // Checkout needs an account (for delivery address) — prompt login the moment they arrive signed-out.
   useEffect(() => { if (!user) setLoginOpen(true); }, [user]);
 
+  // Real serviceability + TAT from Delhivery when the selected address pincode changes.
+  const chosen = addresses.find(a => a.id === addr);
+  useEffect(() => {
+    const pin = chosen?.pincode?.replace(/\D/g, '') || '';
+    if (pin.length !== 6) { setDelivCheck(null); return; }
+    let cancelled = false;
+    setDelivChecking(true);
+    checkDeliveryPin(pin).then(r => { if (!cancelled) { setDelivCheck(r); setDelivChecking(false); } })
+      .catch(() => { if (!cancelled) { setDelivCheck(null); setDelivChecking(false); } });
+    return () => { cancelled = true; };
+  }, [chosen?.pincode]);
+
   const lines = Object.values(cart);
   const delivery = total > 0 ? 100 : 0;                              // flat ₹100 per order
   const gstIncl = total > 0 ? Math.round(total - total / 1.05) : 0;  // 5% GST is already inside the prices
   const giftFee = gift ? GIFT_FEE : 0;
   const grand = total + delivery + giftFee - discount;               // GST included in `total`, not added on top
-  const chosen = addresses.find(a => a.id === addr);                 // the address the user actually selected (or auto-selected default)
   const selected = chosen || addresses[0];                           // fallback only for the pay-step display
-
-  // Delivery estimate shows ONLY once an address is actually selected (clicked, or the auto-selected default).
-  const etaPincode = chosen?.pincode || '';
-  const etaDigits = etaPincode.replace(/\D/g, '');
-  const etaDays = etaDigits.length >= 6 ? (Number(etaDigits[etaDigits.length - 1]) % 2 === 0 ? 2 : 3) : null;
 
   const aset = (k: keyof typeof aform) => (e: React.ChangeEvent<HTMLInputElement>) => setAform({ ...aform, [k]: e.target.value });
   const aValid = aform.fullName && aform.addressLine1 && aform.city && aform.pincode;
@@ -565,14 +573,31 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   </>
                   )}
                 </div>
-                {etaDays && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
-                    <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} color="#fff" /></span>
-                    <div>
-                      <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Expected delivery in {etaDays} day{etaDays > 1 ? 's' : ''}</div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>Estimated for pincode {etaPincode}</div>
-                    </div>
+                {delivChecking && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                    <Truck size={16} /> Checking delivery to {chosen?.pincode}…
                   </div>
+                )}
+                {!delivChecking && delivCheck && (
+                  delivCheck.serviceable ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
+                      <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} color="#fff" /></span>
+                      <div>
+                        {delivCheck.tat != null
+                          ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Expected delivery in {delivCheck.tat} day{delivCheck.tat !== 1 ? 's' : ''}{delivCheck.expectedDeliveryDate ? ` (by ${delivCheck.expectedDeliveryDate})` : ''}</div>
+                          : <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Delivery available{delivCheck.embargo ? ' — minor delays possible' : ''}</div>}
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>Pincode {chosen?.pincode}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--status-error)', background: '#FFF0F0' }}>
+                      <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--status-error)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} color="#fff" /></span>
+                      <div>
+                        <div style={{ fontWeight: 800, color: 'var(--status-error)', fontSize: 'var(--text-sm)' }}>Delivery not available to {chosen?.pincode}</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>Please use a different address</div>
+                      </div>
+                    </div>
+                  )
                 )}
               </div>
             </div>

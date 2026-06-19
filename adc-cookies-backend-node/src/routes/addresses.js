@@ -28,17 +28,38 @@ router.post('/', async (req, res) => {
 
   const row = await getOne(
     `INSERT INTO addresses
-       (user_id, full_name, phone, address_line1, address_line2, city, state, pincode, latitude, longitude, is_default)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+       (user_id, full_name, phone, address_line1, address_line2, city, state, pincode, latitude, longitude, is_default, label)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [user.id, b.fullName, b.phone, b.addressLine1, b.addressLine2 ?? null,
-     b.city, b.state, b.pincode, b.latitude ?? null, b.longitude ?? null, !!b.isDefault]
+     b.city, b.state ?? '', b.pincode, b.latitude ?? null, b.longitude ?? null, !!b.isDefault, b.label || 'Home']
+  );
+  res.json(serializeAddress(row));
+});
+
+router.put('/:id', async (req, res) => {
+  const user = await userByEmail(req.user.email);
+  const existing = await getOne('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
+  if (!existing) throw new ApiError('Address not found', 404);
+  const b = req.body || {};
+
+  if (b.isDefault) {
+    await query('UPDATE addresses SET is_default = FALSE WHERE user_id = $1', [user.id]);
+  }
+
+  const row = await getOne(
+    `UPDATE addresses SET
+       full_name=$1, phone=$2, address_line1=$3, address_line2=$4,
+       city=$5, state=$6, pincode=$7, is_default=$8, label=$9
+     WHERE id=$10 AND user_id=$11 RETURNING *`,
+    [b.fullName, b.phone, b.addressLine1, b.addressLine2 ?? null,
+     b.city, b.state ?? '', b.pincode, !!b.isDefault, b.label || 'Home',
+     req.params.id, user.id]
   );
   res.json(serializeAddress(row));
 });
 
 router.delete('/:id', async (req, res) => {
   const user = await userByEmail(req.user.email);
-  // Scope to the owner so one user can never delete another's address.
   await query('DELETE FROM addresses WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   res.status(200).end();
 });

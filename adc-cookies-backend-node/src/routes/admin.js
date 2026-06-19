@@ -1,7 +1,19 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../db.js';
 import { requireAdmin, ApiError } from '../middleware.js';
-import { serializeProduct, serializeOrder, serializeOrderItem, serializeAddress, serializeCoupon, serializeUser } from '../serializers.js';
+import { serializeProduct, serializeOrder, serializeOrderItem, serializeAddress, serializeCoupon, serializeUser, serializeWarehouse } from '../serializers.js';
+import {
+  delhiveryConfigured,
+  fetchWaybill,
+  createWarehouseOnDelhivery,
+  updateWarehouseOnDelhivery,
+  getShippingCost,
+  createShipment,
+  cancelShipment,
+  createPickupRequest,
+  shippingLabelUrl,
+  trackShipment,
+} from '../delhivery.js';
 
 const router = Router();
 router.use(requireAdmin);
@@ -164,6 +176,218 @@ router.get('/dashboard', async (_req, res) => {
     lowStock: Number(lowStock), newMessages,
     ordersByStatus, topProducts,
   });
+});
+
+/* ======================================================================
+   Delivery — Warehouses
+   ====================================================================== */
+
+router.get('/delivery/warehouses', async (_req, res) => {
+  const rows = await getAll('SELECT * FROM warehouses ORDER BY is_default DESC, id ASC');
+  res.json(rows.map(serializeWarehouse));
+});
+
+router.post('/delivery/warehouses', async (req, res) => {
+  const b = req.body || {};
+  if (!b.name || !b.pickupLocation || !b.pincode) throw new ApiError('name, pickupLocation and pincode are required', 400);
+
+  // Register with Delhivery (best-effort — save locally even if Delhivery call fails)
+  const dhResult = delhiveryConfigured() ? await createWarehouseOnDelhivery(b) : { ok: false, reason: 'not_configured' };
+
+  if (b.isDefault) await query('UPDATE warehouses SET is_default = FALSE');
+
+  const row = await getOne(
+    `INSERT INTO warehouses (name, registered_name, pickup_location, address_line1, address_line2, city, state, pincode, return_pincode, phone, email, is_active, is_default, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+    [b.name, b.registeredName || b.name, b.pickupLocation, b.addressLine1 || null, b.addressLine2 || null,
+     b.city || null, b.state || null, b.pincode, b.returnPincode || b.pincode,
+     b.phone || null, b.email || null, true, !!b.isDefault, nowIso()]
+  );
+  res.json({ ...serializeWarehouse(row), delhivery: dhResult });
+});
+
+router.put('/delivery/warehouses/:id', async (req, res) => {
+  const existing = await getOne('SELECT * FROM warehouses WHERE id = $1', [req.params.id]);
+  if (!existing) throw new ApiError('Warehouse not found', 404);
+  const b = req.body || {};
+
+  const dhResult = delhiveryConfigured() ? await updateWarehouseOnDelhivery({ ...b, pickupLocation: existing.pickup_location }) : { ok: false, reason: 'not_configured' };
+
+  const row = await getOne(
+    `UPDATE warehouses SET name=$1, registered_name=$2, address_line1=$3, address_line2=$4, city=$5, state=$6, pincode=$7, return_pincode=$8, phone=$9, email=$10
+     WHERE id=$11 RETURNING *`,
+    [b.name || existing.name, b.registeredName || existing.registered_name,
+     b.addressLine1 || null, b.addressLine2 || null, b.city || null, b.state || null,
+     b.pincode || existing.pincode, b.returnPincode || existing.return_pincode,
+     b.phone || null, b.email || null, req.params.id]
+  );
+  res.json({ ...serializeWarehouse(row), delhivery: dhResult });
+});
+
+router.patch('/delivery/warehouses/:id/default', async (req, res) => {
+  const existing = await getOne('SELECT 1 FROM warehouses WHERE id = $1', [req.params.id]);
+  if (!existing) throw new ApiError('Warehouse not found', 404);
+  await query('UPDATE warehouses SET is_default = FALSE');
+  await query('UPDATE warehouses SET is_default = TRUE WHERE id = $1', [req.params.id]);
+  res.json({ ok: true });
+});
+
+router.patch('/delivery/warehouses/:id/toggle', async (req, res) => {
+  const existing = await getOne('SELECT * FROM warehouses WHERE id = $1', [req.params.id]);
+  if (!existing) throw new ApiError('Warehouse not found', 404);
+  const row = await getOne('UPDATE warehouses SET is_active = $1 WHERE id = $2 RETURNING *', [!existing.is_active, req.params.id]);
+  res.json(serializeWarehouse(row));
+});
+
+/* ======================================================================
+   Delivery — Shipping cost (admin reference; customer always pays ₹100)
+   ====================================================================== */
+
+router.get('/delivery/shipping-cost', async (req, res) => {
+  if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
+  const { destPin, weight = '0.5', cod = '0', mode = 'S' } = req.query;
+  // Origin from default warehouse, fall back to env
+  const wh = await getOne('SELECT pincode FROM warehouses WHERE is_default = TRUE AND is_active = TRUE LIMIT 1');
+  const originPin = wh?.pincode || process.env.ORIGIN_PINCODE || '';
+  if (!originPin) throw new ApiError('No default warehouse / origin pincode configured', 400);
+  if (!destPin) throw new ApiError('destPin is required', 400);
+  const result = await getShippingCost({ originPin, destPin, weight: Number(weight), cod: Number(cod), mode });
+  res.json(result);
+});
+
+/* ======================================================================
+   Delivery — Shipment actions per order
+   ====================================================================== */
+
+// POST /api/admin/orders/:id/shipment — create shipment on Delhivery for this order
+router.post('/orders/:id/shipment', async (req, res) => {
+  if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
+
+  const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  if (!order) throw new ApiError('Order not found', 404);
+  if (order.delhivery_waybill) throw new ApiError('Shipment already created for this order', 409);
+
+  const address = order.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null;
+  if (!address) throw new ApiError('Order has no delivery address', 400);
+
+  const wh = await getOne('SELECT * FROM warehouses WHERE is_default = TRUE AND is_active = TRUE LIMIT 1');
+  if (!wh) throw new ApiError('No active default warehouse configured — create one in Delivery > Warehouses', 400);
+
+  const items = await getAll('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+  const productsDesc = items.map(i => `${i.product_name} x${i.quantity}`).join(', ') || 'Cookies';
+
+  const shipmentData = {
+    name: address.full_name,
+    add: [address.address_line1, address.address_line2].filter(Boolean).join(', '),
+    pin: address.pincode,
+    city: address.city,
+    state: address.state || '',
+    country: 'India',
+    phone: address.phone,
+    order: order.order_number,
+    payment_mode: 'Prepaid',
+    return_pin: wh.return_pincode || wh.pincode,
+    return_city: wh.city || '',
+    return_state: wh.state || '',
+    return_country: 'India',
+    return_add: [wh.address_line1, wh.address_line2].filter(Boolean).join(', ') || wh.city || '',
+    return_name: wh.name,
+    return_phone: wh.phone || '',
+    products_desc: productsDesc,
+    hsn_code: '19053100',
+    cod_amount: '0',
+    cod_info: '',
+    order_date: order.created_at ? order.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
+    total_amount: String(order.total_amount),
+    seller_add: [wh.address_line1, wh.city].filter(Boolean).join(', '),
+    seller_name: wh.registered_name || wh.name,
+    seller_inv: order.order_number,
+    quantity: String(items.reduce((s, i) => s + i.quantity, 0) || 1),
+    shipment_type: 0,
+    origin_scan: 1,
+    weight: String(req.body?.weight || 0.5),
+    waybill: '',
+  };
+
+  const result = await createShipment(shipmentData, wh.pickup_location);
+  if (!result.ok) return res.status(502).json({ error: result.reason, detail: result.detail });
+
+  await query(
+    `UPDATE orders SET delhivery_waybill=$1, shipment_status='CREATED', tracking_url=$2, updated_at=$3 WHERE id=$4`,
+    [result.waybill, `https://track.delhivery.com/p/${result.waybill}`, nowIso(), order.id]
+  );
+  const updated = await getOne('SELECT * FROM orders WHERE id = $1', [order.id]);
+  const serialized = serializeOrder(updated, items, address);
+  res.json({ ...serialized, waybill: result.waybill });
+});
+
+// DELETE /api/admin/orders/:id/shipment — cancel shipment
+router.delete('/orders/:id/shipment', async (req, res) => {
+  if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
+  const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  if (!order) throw new ApiError('Order not found', 404);
+  if (!order.delhivery_waybill) throw new ApiError('No shipment exists for this order', 400);
+
+  const result = await cancelShipment(order.delhivery_waybill);
+  if (!result.ok) return res.status(502).json({ error: result.reason, detail: result.detail });
+
+  await query(
+    `UPDATE orders SET shipment_status='CANCELLED', updated_at=$1 WHERE id=$2`,
+    [nowIso(), order.id]
+  );
+  res.json({ ok: true, waybill: order.delhivery_waybill });
+});
+
+// GET /api/admin/orders/:id/track — pull fresh tracking from Delhivery
+router.get('/orders/:id/track', async (req, res) => {
+  if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
+  const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  if (!order) throw new ApiError('Order not found', 404);
+  if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
+
+  const result = await trackShipment(order.delhivery_waybill);
+  if (result.ok && result.data) {
+    // Update our local shipment_status from tracking data
+    const pkg = Array.isArray(result.data?.ShipmentData) ? result.data.ShipmentData[0]?.Shipment : null;
+    if (pkg?.Status?.Status) {
+      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3',
+        [pkg.Status.Status, nowIso(), order.id]);
+    }
+  }
+  res.json(result);
+});
+
+// GET /api/admin/delivery/label?waybills=X,Y — proxy shipping label PDF
+router.get('/delivery/label', async (req, res) => {
+  if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
+  const { waybills } = req.query;
+  if (!waybills) throw new ApiError('waybills param required', 400);
+
+  const { url, headers } = shippingLabelUrl(waybills);
+  try {
+    const upstream = await fetch(url, { headers });
+    res.setHeader('Content-Type', upstream.headers.get('Content-Type') || 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="label-${waybills}.pdf"`);
+    const buf = await upstream.arrayBuffer();
+    res.send(Buffer.from(buf));
+  } catch {
+    throw new ApiError('Could not fetch label from Delhivery', 502);
+  }
+});
+
+// POST /api/admin/delivery/pickup-request
+router.post('/delivery/pickup-request', async (req, res) => {
+  if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
+  const { pickupDate, pickupTime, packageCount } = req.body || {};
+  if (!pickupDate || !pickupTime) throw new ApiError('pickupDate and pickupTime are required', 400);
+
+  const wh = await getOne('SELECT * FROM warehouses WHERE is_default = TRUE AND is_active = TRUE LIMIT 1');
+  if (!wh) throw new ApiError('No active default warehouse configured', 400);
+
+  const result = await createPickupRequest({
+    pickupDate, pickupTime, pickupLocation: wh.pickup_location, packageCount: Number(packageCount || 1),
+  });
+  res.json(result);
 });
 
 export default router;

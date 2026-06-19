@@ -11,6 +11,21 @@ export function serializeAddress(a) {
     addressLine1: a.address_line1, addressLine2: a.address_line2,
     city: a.city, state: a.state, pincode: a.pincode,
     latitude: a.latitude, longitude: a.longitude, isDefault: !!a.is_default,
+    label: a.label || 'Home',
+  };
+}
+
+export function serializeWarehouse(w) {
+  if (!w) return null;
+  return {
+    id: w.id, name: w.name, registeredName: w.registered_name,
+    pickupLocation: w.pickup_location,
+    addressLine1: w.address_line1, addressLine2: w.address_line2,
+    city: w.city, state: w.state, pincode: w.pincode,
+    returnPincode: w.return_pincode || w.pincode,
+    phone: w.phone, email: w.email,
+    isActive: !!w.is_active, isDefault: !!w.is_default,
+    createdAt: w.created_at,
   };
 }
 
