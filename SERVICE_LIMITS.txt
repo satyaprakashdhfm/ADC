@@ -1,0 +1,48 @@
+==========================================================
+ADC — SERVICE LIMITS & CAPACITY (quick reference)
+Estimates from architecture review, not load-tested.
+==========================================================
+
+[1] VERCEL  (frontend — Next.js)
+  Plan: Hobby (non-commercial ToS — move to Pro for a real store).
+  Auto-scales; serving pages is NOT the bottleneck.
+  Limits: bandwidth + function invocations capped on Hobby.
+  Capacity: thousands of concurrent page loads — fine.
+  Action: upgrade Hobby -> Pro before launch.
+
+[2] RAILWAY  (backend — Node/Express)
+  Setup: SINGLE instance, one CPU thread (no replicas).
+  Light JSON is fast; real ceiling is the DB pool below.
+  Limits: ~100-200 req/sec sustained as configured.
+  Capacity: ~300-500 active users comfortable, ~800 peak.
+  Action: bigger instance or add replicas (stateless = easy).
+
+[3] SUPABASE  (Postgres DB + Auth)
+  DB pool: max 10 connections (db.js) = main bottleneck.
+  Pooler: session mode (port 5432); tier likely free/small.
+  Auth: logins/sessions effectively unlimited (JWT).
+  Capacity: ~150 req/s DB; ~10-25 simultaneous checkouts.
+  Action: Pro tier + transaction pooler (6543) + pool 10->25.
+
+[4] DELHIVERY  (shipping)
+  Auth: API token (Authorization: Token ...). Working.
+  All APIs validated; shipment+label BLOCKED on wallet balance.
+  No rate issue at our volume; add prepaid balance to ship.
+  Label PDF (with logo) pulled via API into admin.
+  Action: keep Delhivery wallet funded.
+
+[5] RAZORPAY  (payments)
+  Checkout currently SIMULATED (no real charge wired yet).
+  When live: Razorpay handles its own scaling, not a limit.
+  Verify hook (/payment/verify) is where it plugs in.
+  Action: wire real Razorpay keys + signature verification.
+
+----------------------------------------------------------
+OVERALL (current architecture, right now)
+  Logged-in & idle ...... unlimited (thousands+)
+  Active browsing ....... ~300-500 comfortable, ~1000 stretch
+  Requests/sec .......... ~100-200 sustained
+  Simultaneous checkouts  ~10-25
+  Top fix: Supabase Pro + pool size + Railway replicas
+           -> raises comfortable load to ~2000-3000+.
+==========================================================

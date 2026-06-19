@@ -547,8 +547,8 @@ export default function AdminDashboard() {
                 <Field label="Warehouse name *"><input style={inp} value={whForm.data.name} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, name: e.target.value } })} /></Field>
                 <Field label="Registered name"><input style={inp} value={whForm.data.registeredName || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, registeredName: e.target.value } })} /></Field>
               </div>
-              <Field label="Pickup location key * (e.g. ADC_MAIN — no spaces, used in shipment API)">
-                <input style={inp} value={whForm.data.pickupLocation} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, pickupLocation: e.target.value.replace(/\s/g, '_').toUpperCase() } })} placeholder="ADC_MAIN" />
+              <Field label="Pickup location * (must EXACTLY match the pickup name in your Delhivery panel)">
+                <input style={inp} value={whForm.data.pickupLocation} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, pickupLocation: e.target.value } })} placeholder="e.g. ADC Cookies" />
               </Field>
               <Field label="Address line 1"><input style={inp} value={whForm.data.addressLine1 || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, addressLine1: e.target.value } })} /></Field>
               <Field label="Address line 2 / Area"><input style={inp} value={whForm.data.addressLine2 || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, addressLine2: e.target.value } })} /></Field>

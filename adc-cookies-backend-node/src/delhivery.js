@@ -158,19 +158,26 @@ export async function fetchWaybill(count = 1) {
 /* ------------------------------------------------------------------ */
 export async function createWarehouseOnDelhivery(w) {
   try {
+    // Delhivery identifies a warehouse by `name`, and shipment creation references that same
+    // `name` via pickup_location. We register under the pickup_location key so the two always
+    // match — otherwise shipments fail with "ClientWarehouse matching query does not exist."
+    // Field names are exactly what the API requires: address/pin/return_address/return_pin
+    // (NOT address_line_1/pin_code/return_pincode — those are silently rejected).
+    const address = [w.addressLine1, w.addressLine2].filter(Boolean).join(', ');
     const payload = {
-      name: w.name,
-      email: w.email || '',
+      name: w.pickupLocation || w.name,
       registered_name: w.registeredName || w.name,
-      return_pincode: w.returnPincode || w.pincode,
-      pickup_location: w.pickupLocation,
-      address_line_1: w.addressLine1 || '',
-      address_line_2: w.addressLine2 || '',
+      email: w.email || '',
+      phone: w.phone || '',
+      address,
       city: w.city || '',
       country: 'India',
-      pin_code: w.pincode,
-      phone: w.phone || '',
-      state: w.state || '',
+      pin: w.pincode,
+      return_address: address,
+      return_pin: w.returnPincode || w.pincode,
+      return_city: w.city || '',
+      return_state: w.state || '',
+      return_country: 'India',
     };
     const { ok, status, data } = await dhRequest('/api/backend/clientwarehouse/create/', {
       method: 'POST',
@@ -191,19 +198,22 @@ export async function createWarehouseOnDelhivery(w) {
 
 export async function updateWarehouseOnDelhivery(w) {
   try {
+    // `name` is the immutable identifier Delhivery looks the warehouse up by; the rest are edits.
+    const address = [w.addressLine1, w.addressLine2].filter(Boolean).join(', ');
     const payload = {
-      name: w.name,
-      email: w.email || '',
+      name: w.pickupLocation || w.name,
       registered_name: w.registeredName || w.name,
-      return_pincode: w.returnPincode || w.pincode,
-      pickup_location: w.pickupLocation,
-      address_line_1: w.addressLine1 || '',
-      address_line_2: w.addressLine2 || '',
+      email: w.email || '',
+      phone: w.phone || '',
+      address,
       city: w.city || '',
       country: 'India',
-      pin_code: w.pincode,
-      phone: w.phone || '',
-      state: w.state || '',
+      pin: w.pincode,
+      return_address: address,
+      return_pin: w.returnPincode || w.pincode,
+      return_city: w.city || '',
+      return_state: w.state || '',
+      return_country: 'India',
     };
     const { ok, status, data } = await dhRequest('/api/backend/clientwarehouse/edit/', {
       method: 'POST',
@@ -272,10 +282,17 @@ export async function createShipment(shipmentData, pickupLocation) {
       log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ api_error_${status}`);
       return { ok: false, reason: `api_error_${status}`, detail: data };
     }
+    // Delhivery returns HTTP 200 even on a rejected shipment — the real reason is in `rmk`
+    // (e.g. "ClientWarehouse matching query does not exist." = pickup location not registered).
+    if (data && (data.error === true || data.success === false) && !data?.packages?.length) {
+      const reason = data.rmk || data.remarks || 'shipment_rejected';
+      log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ ${reason}`);
+      return { ok: false, reason, detail: data };
+    }
     const pkg = data?.packages?.[0];
     if (!pkg) {
       log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ no_package_in_response`);
-      return { ok: false, reason: 'no_package_in_response', detail: data };
+      return { ok: false, reason: data?.rmk || 'no_package_in_response', detail: data };
     }
     if (pkg.status !== 'Success') {
       log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ ${pkg.remarks || pkg.status}`);

@@ -22,7 +22,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(err.message || `HTTP ${res.status}`);
+    // Surface the real backend reason. Delhivery failures put the human-readable cause in
+    // `error` (e.g. shipment_rejected) and the carrier's own message in `detail.rmk`.
+    const detailRmk = err?.detail?.rmk || err?.detail?.remarks;
+    const base = err.message || err.error || `HTTP ${res.status}`;
+    throw new Error(detailRmk && detailRmk !== base ? `${base}: ${detailRmk}` : base);
   }
   return res.json();
 }
