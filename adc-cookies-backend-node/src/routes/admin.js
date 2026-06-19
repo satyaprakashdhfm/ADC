@@ -65,8 +65,21 @@ router.delete('/products/:id', async (req, res) => {
 });
 
 /* ---------- Orders ---------- */
-router.get('/orders', async (_req, res) => {
-  const rows = await getAll('SELECT * FROM orders ORDER BY created_at DESC, id DESC');
+router.get('/orders', async (req, res) => {
+  const { search, status } = req.query;
+  let sql = 'SELECT o.* FROM orders o';
+  const params = [];
+  const where = [];
+  if (status) { params.push(status); where.push(`o.order_status = $${params.length}`); }
+  if (search) {
+    params.push(`%${search}%`);
+    where.push(`(o.order_number ILIKE $${params.length} OR EXISTS (
+      SELECT 1 FROM addresses a WHERE a.id = o.address_id AND (a.full_name ILIKE $${params.length} OR a.city ILIKE $${params.length})
+    ))`);
+  }
+  if (where.length) sql += ' WHERE ' + where.join(' AND ');
+  sql += ' ORDER BY o.created_at DESC, o.id DESC';
+  const rows = await getAll(sql, params);
   const serialized = await Promise.all(rows.map(async (o) => {
     const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [o.id]);
     const address = o.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [o.address_id]) : null;
@@ -191,8 +204,10 @@ router.post('/delivery/warehouses', async (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.pickupLocation || !b.pincode) throw new ApiError('name, pickupLocation and pincode are required', 400);
 
-  // Register with Delhivery (best-effort — save locally even if Delhivery call fails)
-  const dhResult = delhiveryConfigured() ? await createWarehouseOnDelhivery(b) : { ok: false, reason: 'not_configured' };
+  // Register with Delhivery unless caller says it's already registered there.
+  const dhResult = (!b.skipDelhivery && delhiveryConfigured())
+    ? await createWarehouseOnDelhivery(b)
+    : { ok: true, skipped: true };
 
   if (b.isDefault) await query('UPDATE warehouses SET is_default = FALSE');
 

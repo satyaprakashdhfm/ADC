@@ -13,7 +13,7 @@ router.use(requireAuth);
 // Auto-create a Delhivery shipment for a newly placed order (fire-and-forget).
 async function autoCreateShipment(orderId, address) {
   if (!delhiveryConfigured()) return;
-  const defaultWh = await getOne('SELECT * FROM warehouses WHERE is_default = TRUE AND is_active = TRUE LIMIT 1');
+  const defaultWh = await getOne('SELECT * FROM warehouses WHERE is_active = TRUE ORDER BY is_default DESC, id ASC LIMIT 1');
   if (!defaultWh) return;
 
   const waybillRes = await fetchWaybill(1);

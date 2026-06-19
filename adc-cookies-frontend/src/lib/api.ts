@@ -245,6 +245,7 @@ export interface WarehouseInput {
   name: string; registeredName?: string; pickupLocation: string;
   addressLine1?: string; addressLine2?: string; city?: string; state?: string;
   pincode: string; returnPincode?: string; phone?: string; email?: string; isDefault?: boolean;
+  skipDelhivery?: boolean;
 }
 
 export async function adminGetWarehouses(): Promise<Warehouse[]> { return request('/admin/delivery/warehouses'); }

@@ -5,10 +5,12 @@ import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhiv
 
 const router = Router();
 
-// Origin pincode: prefer default warehouse, fall back to ORIGIN_PINCODE env var.
+// Origin pincode: prefer default active warehouse, fall back to any active warehouse, then env var.
 async function getOriginPin() {
   try {
-    const wh = await getOne('SELECT pincode FROM warehouses WHERE is_default = TRUE AND is_active = TRUE LIMIT 1');
+    const wh = await getOne(
+      'SELECT pincode FROM warehouses WHERE is_active = TRUE ORDER BY is_default DESC, id ASC LIMIT 1'
+    );
     if (wh?.pincode) return wh.pincode;
   } catch {}
   return process.env.ORIGIN_PINCODE || '';
