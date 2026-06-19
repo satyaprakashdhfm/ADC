@@ -1,6 +1,6 @@
 {
   "name": "adc-cookies-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ADC Cookies REST API — Node.js/Express port of the Spring Boot backend",
   "type": "module",
   "main": "src/server.js",
