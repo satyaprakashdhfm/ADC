@@ -164,9 +164,17 @@ export async function createOrder(addressId: number, couponCode?: string, items?
   return request('/orders', { method: 'POST', body: JSON.stringify({ addressId, couponCode, items }) });
 }
 
-/** Mark an order paid — the backend then creates the Delhivery shipment + label automatically. */
-export async function verifyPayment(orderId: number, razorpayPaymentId?: string): Promise<Order> {
-  return request(`/orders/${orderId}/payment/verify`, { method: 'POST', body: JSON.stringify({ razorpayPaymentId }) });
+export interface RazorpayOrder { keyId: string; orderId: string; amount: number; currency: string; orderNumber: string; }
+
+/** Step 1: ask the backend to create a Razorpay order so Checkout can open. */
+export async function createRazorpayOrder(orderId: number): Promise<RazorpayOrder> {
+  return request(`/orders/${orderId}/payment/razorpay-order`, { method: 'POST' });
+}
+
+/** Step 2: confirm payment. Backend verifies the signature, marks PAID, then auto-creates the shipment. */
+export interface PaymentConfirmation { razorpayPaymentId: string; razorpayOrderId: string; razorpaySignature: string; }
+export async function verifyPayment(orderId: number, confirmation?: PaymentConfirmation): Promise<Order> {
+  return request(`/orders/${orderId}/payment/verify`, { method: 'POST', body: JSON.stringify(confirmation || {}) });
 }
 
 export async function getOrders(): Promise<Order[]> { return request('/orders'); }

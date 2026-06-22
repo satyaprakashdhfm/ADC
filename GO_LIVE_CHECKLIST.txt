@@ -1,0 +1,33 @@
+==================================================
+ADC — GO-LIVE CHECKLIST
+==================================================
+
+DELHIVERY
+[ ] .env: switch token + BASE_URL to PRODUCTION block
+[ ] Add wallet balance (no shipment works without it)
+[ ] Warehouse "Adough Cookie" registered on prod (done) + default in admin
+
+RAZORPAY
+[ ] Swap test keys -> LIVE keys (rzp_live_...) in .env / Railway
+[ ] Add payment.captured webhook + RAZORPAY_WEBHOOK_SECRET
+[ ] Do one ₹1 live test, then refund
+
+ENV (set on RAILWAY + locally)
+[ ] DELIVERY_API_TOKEN, DELHIVERY_BASE_URL, ORIGIN_PINCODE
+[ ] RAZORPAY_API_KEY, RAZORPAY_API_SECRET
+[ ] All keys present on Railway, not just local
+
+SUPABASE / AUTH
+[ ] Site URL + Redirect URLs = real domain (fixes Google login redirect)
+[ ] Pro tier + pool size 25 + transaction pooler (for load)
+
+DEPLOY
+[ ] Push to main -> Railway + Vercel auto-deploy
+[ ] Vercel Hobby -> Pro + add custom domain
+[ ] Test full flow on prod: order -> pay -> shipment -> label
+
+PLACEHOLDERS TO REPLACE
+[ ] Real WhatsApp/phone number (site.ts)
+[ ] Confirm store list (stores.ts)
+[ ] Licensed fonts (globals.css trial files)
+==================================================

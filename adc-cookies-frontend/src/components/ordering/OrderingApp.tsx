@@ -7,7 +7,7 @@ import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, type Product, type Address, type OrderItemInput, type DeliveryCheck } from '@/lib/api';
+import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, createRazorpayOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, type Product, type Address, type OrderItemInput, type DeliveryCheck } from '@/lib/api';
 
 /* ---- Data ---- */
 const CATEGORIES = ['Cookies', 'Gift Tins', 'Corporate Gifting'];
@@ -92,13 +92,31 @@ const FALLBACK_TINS = [
 ];
 
 
-const BANKS = ['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra', 'Yes Bank'];
-const UPI_APPS = [
-  { id: 'gpay', label: 'Google Pay', bg: '#4285F4', letter: 'G' },
-  { id: 'phonepe', label: 'PhonePe', bg: '#5F259F', letter: 'P' },
-  { id: 'paytm', label: 'Paytm', bg: '#00BAF2', letter: 'p' },
-  { id: 'other', label: 'Enter ID', bg: '#F29F05', letter: '₹' },
-];
+/* ---- Razorpay Checkout (popup) ---- */
+interface RazorpayResponse { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string; }
+interface RazorpayOptions {
+  key: string; order_id: string; amount: number; currency: string;
+  name: string; description?: string; image?: string;
+  prefill?: { name?: string; email?: string; contact?: string };
+  theme?: { color?: string };
+  handler: (resp: RazorpayResponse) => void;
+  modal?: { ondismiss?: () => void };
+}
+interface RazorpayInstance { open: () => void; on: (event: string, cb: (resp: { error?: { description?: string } }) => void) => void; }
+declare global { interface Window { Razorpay?: new (opts: RazorpayOptions) => RazorpayInstance; } }
+
+// Inject Razorpay's checkout.js once; resolves true when window.Razorpay is ready.
+function loadRazorpay(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') return resolve(false);
+    if (window.Razorpay) return resolve(true);
+    const s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
 
 /* ---- Helpers ---- */
 function useIsDesktop(bp = 920) {
@@ -264,11 +282,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [makeDefault, setMakeDefault] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectErr, setDetectErr] = useState('');
-  const [method, setMethod] = useState('upi');
-  const [upiApp, setUpiApp] = useState('gpay');
-  const [upiId, setUpiId] = useState('');
-  const [card, setCard] = useState({ num: '', exp: '', cvv: '', name: '' });
   const [placing, setPlacing] = useState(false);
+  const [payError, setPayError] = useState('');
   const [done, setDone] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [paid, setPaid] = useState(0);
@@ -393,41 +408,71 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     }
   };
 
-  const handlePlace = () => {
+  // Create the order, then open the Razorpay popup. On success the handler verifies the
+  // payment on our backend (which marks PAID + auto-creates the Delhivery shipment), then
+  // shows the success screen. The user never leaves this page.
+  const handlePlace = async () => {
+    if (!user) { setLoginOpen(true); return; }
+    setPayError('');
     setPlacing(true);
-    const doOrder = async () => {
-      let placedNumber = '';
-      try {
-        if (user) {
-          const items: OrderItemInput[] = Object.values(cart)
-            .map((e, index) => {
-              const opts: Record<string, unknown> = {};
-              if (e.addOns && e.addOns.length) opts.addOns = e.addOns;
-              if (index === 0 && gift) { opts.giftWrap = true; opts.giftMessage = giftMessage; }
-              return {
-                productId: Number(e.id),
-                quantity: e.qty,
-                selectedOptions: Object.keys(opts).length ? opts : undefined,
-                specialNotes: e.note || undefined,
-              };
-            })
-            .filter(it => Number.isFinite(it.productId) && it.quantity > 0);
-          const order = await createOrder(addr, applied ? coupon : undefined, items);
-          placedNumber = order.orderNumber;
-          // Confirm payment — this is what triggers the Delhivery shipment + label on the backend.
-          try { await verifyPayment(order.id); } catch {}
-        }
-      } catch {}
-      setPaid(grand);
-      setOrderId(placedNumber || `ADC-${20480 + Math.floor(Math.random() * 90)}`);
-      clearAll();
-      setDone(true);
-    };
-    setTimeout(doOrder, 2200);
-  };
+    try {
+      const items: OrderItemInput[] = Object.values(cart)
+        .map((e, index) => {
+          const opts: Record<string, unknown> = {};
+          if (e.addOns && e.addOns.length) opts.addOns = e.addOns;
+          if (index === 0 && gift) { opts.giftWrap = true; opts.giftMessage = giftMessage; }
+          return {
+            productId: Number(e.id),
+            quantity: e.qty,
+            selectedOptions: Object.keys(opts).length ? opts : undefined,
+            specialNotes: e.note || undefined,
+          };
+        })
+        .filter(it => Number.isFinite(it.productId) && it.quantity > 0);
 
-  const fmt4 = (v: string) => v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
-  const fmtExp = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 4); return d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d; };
+      const order = await createOrder(addr, applied ? coupon : undefined, items);
+      const rp = await createRazorpayOrder(order.id);
+
+      const ready = await loadRazorpay();
+      if (!ready || !window.Razorpay) throw new Error('Could not load the payment window. Check your connection and try again.');
+
+      const rzp = new window.Razorpay({
+        key: rp.keyId,
+        order_id: rp.orderId,
+        amount: rp.amount,
+        currency: rp.currency,
+        name: 'Adough Cookie',
+        description: `Order ${rp.orderNumber}`,
+        prefill: { name: user.name || '', email: user.email || '', contact: chosen?.phone || '' },
+        theme: { color: '#E8772E' },
+        handler: async (resp) => {
+          try {
+            await verifyPayment(order.id, {
+              razorpayPaymentId: resp.razorpay_payment_id,
+              razorpayOrderId: resp.razorpay_order_id,
+              razorpaySignature: resp.razorpay_signature,
+            });
+            setPaid(grand);
+            setOrderId(rp.orderNumber);
+            clearAll();
+            setDone(true);
+          } catch (e) {
+            setPlacing(false);
+            setPayError(e instanceof Error ? e.message : 'We could not confirm your payment. If money was deducted, contact us with your order number.');
+          }
+        },
+        modal: { ondismiss: () => setPlacing(false) },
+      });
+      rzp.on('payment.failed', (resp) => {
+        setPlacing(false);
+        setPayError(resp?.error?.description || 'Payment failed. Please try again.');
+      });
+      rzp.open();
+    } catch (e) {
+      setPlacing(false);
+      setPayError(e instanceof Error ? e.message : 'Something went wrong starting the payment. Please try again.');
+    }
+  };
 
   const card$: React.CSSProperties = { background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', padding: 20 };
   const head = (icon: React.ReactNode, label: string) => (
@@ -666,60 +711,18 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
             <div style={card$}>
               {head(<CreditCard size={18} color="var(--brand-secondary)" />, 'Payment method')}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ borderRadius: 'var(--radius-card)', border: method === 'upi' ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: method === 'upi' ? 'var(--amber-50)' : 'var(--surface-raised)', overflow: 'hidden' }}>
-                  <button onClick={() => setMethod('upi')} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 16px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                    <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: 'linear-gradient(135deg,#4285F4,#34A853)', display: 'grid', placeItems: 'center', flex: 'none' }}><span style={{ color: '#fff', fontWeight: 900, fontSize: 12 }}>UPI</span></span>
-                    <span style={{ flex: 1, fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', textAlign: 'left' }}>UPI <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', fontWeight: 600 }}>Instant · No charges</span></span>
-                    <Dot on={method === 'upi'} />
-                  </button>
-                  {method === 'upi' && (
-                    <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border-soft)' }}>
-                      <div style={{ paddingTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        {UPI_APPS.map(app => {
-                          const on = upiApp === app.id;
-                          return (
-                            <button key={app.id} onClick={() => setUpiApp(app.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 'var(--radius-sm)', border: on ? '2px solid var(--amber-400)' : '1.5px solid var(--border-default)', background: on ? '#fff' : 'var(--surface-raised)', cursor: 'pointer', minWidth: 68 }}>
-                              <span style={{ width: 36, height: 36, borderRadius: 10, background: app.bg, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 900, fontSize: 15 }}>{app.letter}</span>
-                              <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 700, color: on ? 'var(--text-strong)' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>{app.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {upiApp === 'other' && <input value={upiId} onChange={e => setUpiId(e.target.value)} placeholder="yourname@upi" style={{ marginTop: 12, width: '100%', boxSizing: 'border-box', padding: '13px 16px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', background: 'var(--surface-raised)', color: 'var(--text-strong)', outline: 'none' }} />}
-                    </div>
-                  )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                  Tap <strong style={{ color: 'var(--text-strong)' }}>Pay ₹{grand}</strong> to open the secure payment window. Pick <strong>UPI</strong> (GPay, PhonePe, Paytm), <strong>card</strong>, <strong>netbanking</strong> or <strong>wallet</strong> there — you&apos;ll come right back here once it&apos;s done.
                 </div>
-
-                <div style={{ borderRadius: 'var(--radius-card)', border: method === 'card' ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: method === 'card' ? 'var(--amber-50)' : 'var(--surface-raised)', overflow: 'hidden' }}>
-                  <button onClick={() => setMethod('card')} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 16px', border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                    <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: 'linear-gradient(135deg,#1A1AE0,#6C5CE7)', display: 'grid', placeItems: 'center', flex: 'none' }}><CreditCard size={18} color="#fff" /></span>
-                    <span style={{ flex: 1, fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', textAlign: 'left' }}>Credit / Debit Card</span>
-                    <Dot on={method === 'card'} />
-                  </button>
-                  {method === 'card' && (
-                    <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border-soft)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <div style={{ paddingTop: 14 }}>
-                        <label style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Card number</label>
-                        <input value={fmt4(card.num)} onChange={e => setCard(c => ({ ...c, num: e.target.value }))} placeholder="0000 0000 0000 0000" maxLength={19} style={{ width: '100%', boxSizing: 'border-box', padding: '13px 16px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', fontFamily: 'monospace', fontSize: 'var(--text-base)', letterSpacing: '.1em', background: 'var(--surface-raised)', color: 'var(--text-strong)', outline: 'none' }} />
-                      </div>
-                      <div style={{ display: 'flex', gap: 10 }}>
-                        <div style={{ flex: 1 }}><label style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Expiry</label><input value={card.exp} onChange={e => setCard(c => ({ ...c, exp: fmtExp(e.target.value) }))} placeholder="MM/YY" maxLength={5} style={{ width: '100%', boxSizing: 'border-box', padding: '13px 16px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', background: 'var(--surface-raised)', color: 'var(--text-strong)', outline: 'none' }} /></div>
-                        <div style={{ flex: 1 }}><label style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>CVV</label><input value={card.cvv} onChange={e => setCard(c => ({ ...c, cvv: e.target.value.slice(0, 4) }))} placeholder="•••" type="password" maxLength={4} style={{ width: '100%', boxSizing: 'border-box', padding: '13px 16px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', background: 'var(--surface-raised)', color: 'var(--text-strong)', outline: 'none' }} /></div>
-                      </div>
-                      <div><label style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Name on card</label><input value={card.name} onChange={e => setCard(c => ({ ...c, name: e.target.value }))} placeholder="Full name as on card" style={{ width: '100%', boxSizing: 'border-box', padding: '13px 16px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', background: 'var(--surface-raised)', color: 'var(--text-strong)', outline: 'none' }} /></div>
-                    </div>
-                  )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {['UPI', 'Cards', 'Netbanking', 'Wallets'].map(m => (
+                    <span key={m} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-raised)', border: '1.5px solid var(--border-default)', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)' }}>{m}</span>
+                  ))}
                 </div>
-
-                <button onClick={() => setMethod('cod')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 'var(--radius-card)', cursor: 'pointer', textAlign: 'left', border: method === 'cod' ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: method === 'cod' ? 'var(--amber-50)' : 'var(--surface-raised)' }}>
-                  <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><span style={{ color: '#fff', fontWeight: 900, fontSize: 16 }}>₹</span></span>
-                  <span style={{ flex: 1 }}>
-                    <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)' }}>Cash on Delivery</span>
-                    <span style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Pay when your order arrives</span>
-                  </span>
-                  <Dot on={method === 'cod'} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
+                  <Lock size={13} /> Secured by Razorpay · your card / UPI details never touch our servers
+                </div>
               </div>
             </div>
 
@@ -735,6 +738,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           </button>
         ) : (
           <>
+            {payError && (
+              <div style={{ maxWidth: 720, margin: '0 auto 10px', padding: '10px 14px', borderRadius: 'var(--radius-button)', background: '#FFF0F0', border: '1.5px solid var(--status-error)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', fontWeight: 700, textAlign: 'center' }}>{payError}</div>
+            )}
             <button onClick={() => user ? handlePlace() : setLoginOpen(true)} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
               {user ? <>Pay ₹{grand} <Lock size={18} /></> : <>Log in to place order <Lock size={18} /></>}
             </button>
