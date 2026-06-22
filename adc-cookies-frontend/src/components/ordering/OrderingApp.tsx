@@ -297,11 +297,13 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     else setAddresses([]);
   }, [user]);
 
-  // Auto-select the default address (if one exists) once addresses load and nothing valid is selected.
+  // Auto-select an address once they load and nothing valid is selected:
+  // prefer the default, else fall back to the first address (so users without a
+  // default still get a valid address — otherwise the order 400s with "Address not found").
   useEffect(() => {
     if (addr && addresses.some(a => a.id === addr)) return;
-    const def = addresses.find(a => a.isDefault);
-    if (def) setAddr(def.id);
+    const pick = addresses.find(a => a.isDefault) || addresses[0];
+    if (pick) setAddr(pick.id);
   }, [addresses, addr, setAddr]);
 
   // Checkout needs an account (for delivery address) — prompt login the moment they arrive signed-out.
@@ -413,6 +415,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   // shows the success screen. The user never leaves this page.
   const handlePlace = async () => {
     if (!user) { setLoginOpen(true); return; }
+    if (!addr || !addresses.some(a => a.id === addr)) { setPayError('Please select a delivery address first.'); return; }
+    if (lines.length === 0) { setPayError('Your cart is empty.'); return; }
     setPayError('');
     setPlacing(true);
     try {

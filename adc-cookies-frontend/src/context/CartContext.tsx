@@ -34,7 +34,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<Record<string, CartEntry>>({});
   const [gift, setGift] = useState(false);
   const [giftMessage, setGiftMessage] = useState('');
-  const [addrId, setAddrId] = useState(1);
+  const [addrId, setAddrId] = useState(0);   // 0 = nothing selected yet (never a real address id)
   const [coupon, setCoupon] = useState('');
   const [applied, setApplied] = useState(false);
   const [discount, setDiscount] = useState(0);
