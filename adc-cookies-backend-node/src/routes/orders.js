@@ -118,12 +118,13 @@ async function fullOrder(orderId) {
 router.post('/', async (req, res) => {
   const user = await userByEmail(req.user.email);
   const { addressId, couponCode, items: bodyItems } = req.body || {};
+  console.log(`[ORDER] create | user=${user?.id}(${req.user.email}) | addressId=${addressId} | items=${JSON.stringify((bodyItems || []).map(i => ({ p: i.productId, q: i.quantity })))}`);
 
   let lineItems;
   if (Array.isArray(bodyItems) && bodyItems.length > 0) {
     lineItems = await Promise.all(bodyItems.map(async (it) => {
       const product = await getOne('SELECT * FROM products WHERE id = $1', [it.productId]);
-      if (!product) throw new ApiError(`Product not found: ${it.productId}`);
+      if (!product) { console.log(`[ORDER] create | ✗ product_not_found=${it.productId}`); throw new ApiError(`Product not found: ${it.productId}`); }
       return { product, productName: product.name, quantity: it.quantity || 1, unitPrice: product.price,
                selectedOptions: it.selectedOptions ? JSON.stringify(it.selectedOptions) : null,
                specialNotes: it.specialNotes ?? null };
@@ -131,7 +132,7 @@ router.post('/', async (req, res) => {
   } else {
     const cart = await getCartRow(req.user.email);
     const cartItems = await getAll('SELECT * FROM cart_items WHERE cart_id = $1', [cart.id]);
-    if (cartItems.length === 0) throw new ApiError('Cart is empty');
+    if (cartItems.length === 0) { console.log(`[ORDER] create | ✗ cart_empty (no body items + empty server cart)`); throw new ApiError('Cart is empty'); }
     lineItems = await Promise.all(cartItems.map(async (ci) => {
       const product = await getOne('SELECT * FROM products WHERE id = $1', [ci.product_id]);
       return { product, productName: product ? product.name : 'Item', quantity: ci.quantity,
@@ -141,7 +142,7 @@ router.post('/', async (req, res) => {
 
   // Scope the address to the caller so an order can never reference another user's address.
   const address = await getOne('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [addressId, user.id]);
-  if (!address) throw new ApiError('Address not found');
+  if (!address) { console.log(`[ORDER] create | ✗ address_not_found | addressId=${addressId} user=${user?.id}`); throw new ApiError('Address not found'); }
 
   const subtotal = lineItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
   let discount = 0, coupon = null;
