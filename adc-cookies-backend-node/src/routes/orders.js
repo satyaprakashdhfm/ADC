@@ -255,20 +255,22 @@ router.get('/:id/delhivery-track', async (req, res) => {
 // Step 1 of payment: create a Razorpay order for this DB order so Checkout can open.
 // Returns the public key id + razorpay order id; the frontend opens the popup with these.
 router.post('/:id/payment/razorpay-order', async (req, res) => {
-  if (!razorpayConfigured()) throw new ApiError('Payments are not configured', 503);
+  if (!razorpayConfigured()) { console.log(`[PAYMENT] rzp-order | order=${req.params.id} | ✗ not_configured`); throw new ApiError('Payments are not configured', 503); }
   const user = await userByEmail(req.user.email);
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
-  if (!order) throw new ApiError('Order not found');
-  if (order.payment_status === 'PAID') throw new ApiError('Order already paid', 409);
+  if (!order) { console.log(`[PAYMENT] rzp-order | order=${req.params.id} | ✗ order_not_found`); throw new ApiError('Order not found'); }
+  if (order.payment_status === 'PAID') { console.log(`[PAYMENT] rzp-order | order=${order.order_number} | ✗ already_paid`); throw new ApiError('Order already paid', 409); }
 
   const amountPaise = Math.round(Number(order.total_amount) * 100);
+  console.log(`[PAYMENT] rzp-order | order=${order.order_number} | amount=₹${order.total_amount} (${amountPaise}p) | creating…`);
   const r = await createRazorpayOrder({
     amountPaise, receipt: order.order_number,
     notes: { orderId: String(order.id), orderNumber: order.order_number },
   });
-  if (!r.ok) return res.status(502).json({ error: r.reason });
+  if (!r.ok) { console.log(`[PAYMENT] rzp-order | order=${order.order_number} | ✗ ${r.reason}`); return res.status(502).json({ error: r.reason }); }
 
   await query('UPDATE orders SET razorpay_order_id = $1, updated_at = $2 WHERE id = $3', [r.order.id, nowIso(), order.id]);
+  console.log(`[PAYMENT] rzp-order | order=${order.order_number} | ✓ ${r.order.id}`);
   res.json({
     keyId: razorpayKeyId(),
     orderId: r.order.id,
@@ -284,18 +286,26 @@ router.post('/:id/payment/verify', async (req, res) => {
   const user = await userByEmail(req.user.email);
   // Scope to the owner so one user can never mark another's order as paid.
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
-  if (!order) throw new ApiError('Order not found');
-  if (order.payment_status === 'PAID') return res.json(await fullOrder(order.id)); // idempotent
+  if (!order) { console.log(`[PAYMENT] verify | order=${req.params.id} | ✗ order_not_found`); throw new ApiError('Order not found'); }
+  if (order.payment_status === 'PAID') { console.log(`[PAYMENT] verify | order=${order.order_number} | already_paid → ok`); return res.json(await fullOrder(order.id)); }
 
   const { razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body || {};
+  console.log(`[PAYMENT] verify | order=${order.order_number} | payment=${razorpayPaymentId || 'none'} | rzpOrder=${razorpayOrderId || 'none'} | sig=${razorpaySignature ? 'present' : 'MISSING'}`);
 
   if (razorpayConfigured()) {
-    if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature)
+    if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
+      console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ missing_fields`);
       throw new ApiError('Missing payment confirmation fields', 400);
-    if (order.razorpay_order_id && order.razorpay_order_id !== razorpayOrderId)
+    }
+    if (order.razorpay_order_id && order.razorpay_order_id !== razorpayOrderId) {
+      console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ order_mismatch | stored=${order.razorpay_order_id} got=${razorpayOrderId}`);
       throw new ApiError('Payment does not match this order', 400);
-    if (!verifyPaymentSignature({ orderId: razorpayOrderId, paymentId: razorpayPaymentId, signature: razorpaySignature }))
+    }
+    if (!verifyPaymentSignature({ orderId: razorpayOrderId, paymentId: razorpayPaymentId, signature: razorpaySignature })) {
+      console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ bad_signature`);
       throw new ApiError('Payment signature verification failed', 400);
+    }
+    console.log(`[PAYMENT] verify | order=${order.order_number} | ✓ signature_ok → marking PAID`);
   }
 
   const ts = nowIso();
