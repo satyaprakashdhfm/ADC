@@ -9,7 +9,7 @@ import {
   adminToggleCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminGetShippingCost, adminCreateShipment, adminCancelShipment,
-  adminTrackOrder, adminLabelUrl, adminCreatePickupRequest,
+  adminTrackOrder, openLabel, adminCreatePickupRequest,
   type AdminStats, type AdminUser, type AdminCoupon, type AdminMessage,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
 } from '@/lib/api';
@@ -423,7 +423,7 @@ export default function AdminDashboard() {
                             </button>
                           ) : (
                             <>
-                              <a href={adminLabelUrl(o.delhiveryWaybill!)} target="_blank" rel="noreferrer" style={{ ...iconBtn, display: 'inline-grid', textDecoration: 'none', marginRight: 4 }} title="Download label"><Download size={14} /></a>
+                              <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={{ ...iconBtn, marginRight: 4 }} title="Download label"><Download size={14} /></button>
                               <button title="Track" onClick={async () => {
                                 const r = await adminTrackOrder(o.id).catch(() => null);
                                 if (r?.ok) {
@@ -726,7 +726,7 @@ export default function AdminDashboard() {
                         </button>
                       ) : (
                         <>
-                          <a href={adminLabelUrl(o.delhiveryWaybill!)} target="_blank" rel="noreferrer" style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', textDecoration: 'none' }}><Download size={14} /> Label</a>
+                          <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)' }}><Download size={14} /> Label</button>
                           <button onClick={async () => {
                             const r = await adminTrackOrder(o.id).catch(() => null);
                             if (r?.ok) {

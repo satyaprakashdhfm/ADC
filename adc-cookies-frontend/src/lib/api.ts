@@ -300,6 +300,25 @@ export function adminLabelUrl(waybills: string): string {
   return `${base}/admin/delivery/label?waybills=${encodeURIComponent(waybills)}`;
 }
 
+/**
+ * Open the shipping-label PDF in a new tab. The label route is admin-protected, so a plain
+ * <a href> link 401s (browser navigation can't send the Bearer token). We fetch it with the
+ * auth header, then open the PDF as a blob URL.
+ */
+export async function openLabel(waybills: string): Promise<void> {
+  const token = await getToken();
+  const res = await fetch(adminLabelUrl(waybills), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.error || err?.message || `Label fetch failed (${res.status})`);
+  }
+  const blobUrl = URL.createObjectURL(await res.blob());
+  window.open(blobUrl, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 /* ---- Admin: Delivery — Pickup request ---- */
 export async function adminCreatePickupRequest(pickupDate: string, pickupTime: string, packageCount: number): Promise<{ ok: boolean; data?: unknown; reason?: string }> {
   return request('/admin/delivery/pickup-request', { method: 'POST', body: JSON.stringify({ pickupDate, pickupTime, packageCount }) });
