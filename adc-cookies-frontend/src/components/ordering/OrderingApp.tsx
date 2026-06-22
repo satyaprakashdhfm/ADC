@@ -434,6 +434,15 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         })
         .filter(it => Number.isFinite(it.productId) && it.quantity > 0);
 
+      // If the cart held fallback-menu items (added before the real products finished
+      // loading), their ids aren't real product ids and got filtered out above. Tell the
+      // user clearly instead of failing with a cryptic "cart empty".
+      if (items.length === 0) {
+        setPlacing(false);
+        setPayError('The menu was still loading when these items were added. Please refresh the page, add them to the cart again, and retry.');
+        return;
+      }
+
       const order = await createOrder(addr, applied ? coupon : undefined, items);
       const rp = await createRazorpayOrder(order.id);
 
