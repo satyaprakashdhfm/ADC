@@ -31,29 +31,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Build our app user from the backend (canonical name + role), falling back to the
-  // Supabase session metadata if the backend is briefly unreachable.
-  const fromSession = async (session: Session | null): Promise<User | null> => {
+  // Instant user straight from the Supabase session (no network) so the UI reflects login
+  // immediately. We never block the logged-in state on a backend round-trip.
+  const fromSessionMeta = (session: Session | null): User | null => {
     if (!session) return null;
-    try {
-      const me = await getMe();
-      return userFromMe(me);
-    } catch {
-      const meta = (session.user.user_metadata || {}) as Record<string, string>;
-      const email = session.user.email || '';
-      const name = meta.full_name || meta.name || email.split('@')[0] || 'You';
-      return { name, email, role: 'CUSTOMER', initials: initialsOf(name) };
-    }
+    const meta = (session.user.user_metadata || {}) as Record<string, string>;
+    const email = session.user.email || '';
+    const name = meta.full_name || meta.name || email.split('@')[0] || 'You';
+    return { name, email, role: 'CUSTOMER', initials: initialsOf(name), phone: meta.phone };
+  };
+
+  // Refine with the canonical name + role from our backend (DB) in the background.
+  // If it's slow or fails, the session-based user above stays — login never "lags".
+  const refineFromBackend = async () => {
+    try { const me = await getMe(); setUser(userFromMe(me)); } catch { /* keep session user */ }
   };
 
   useEffect(() => {
-    supabase.auth.getSession()
-      .then(({ data }) => fromSession(data.session))
-      .then(setUser)
-      .finally(() => setLoading(false));
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(fromSessionMeta(data.session));   // instant — no waiting on the backend
+      setLoading(false);
+      if (data.session) refineFromBackend();
+    });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(await fromSession(session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(fromSessionMeta(session));         // instant on login / logout / token refresh
+      if (session) refineFromBackend();
     });
     return () => sub.subscription.unsubscribe();
   }, []);
