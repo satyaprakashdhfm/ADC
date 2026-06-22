@@ -420,13 +420,22 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     setPayError('');
     setPlacing(true);
     try {
+      // Resolve cart items to REAL backend product ids. The cart may hold fallback-menu items
+      // whose ids aren't real ids (added before products finished loading) — resolve those by
+      // name (the fallback names match the DB exactly), so the order works regardless.
+      let catalog: Product[] = [];
+      try { catalog = await getProducts(); } catch {}
+      const idByName = new Map(catalog.map(p => [p.name.trim().toLowerCase(), p.id]));
+
       const items: OrderItemInput[] = Object.values(cart)
         .map((e, index) => {
           const opts: Record<string, unknown> = {};
           if (e.addOns && e.addOns.length) opts.addOns = e.addOns;
           if (index === 0 && gift) { opts.giftWrap = true; opts.giftMessage = giftMessage; }
+          const numericId = Number(e.id);
+          const productId = Number.isFinite(numericId) ? numericId : idByName.get(e.name.trim().toLowerCase());
           return {
-            productId: Number(e.id),
+            productId: productId as number,
             quantity: e.qty,
             selectedOptions: Object.keys(opts).length ? opts : undefined,
             specialNotes: e.note || undefined,
@@ -434,12 +443,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         })
         .filter(it => Number.isFinite(it.productId) && it.quantity > 0);
 
-      // If the cart held fallback-menu items (added before the real products finished
-      // loading), their ids aren't real product ids and got filtered out above. Tell the
-      // user clearly instead of failing with a cryptic "cart empty".
       if (items.length === 0) {
         setPlacing(false);
-        setPayError('The menu was still loading when these items were added. Please refresh the page, add them to the cart again, and retry.');
+        setPayError('Could not match your cart items to the menu. Please refresh the page, add them again, and retry.');
         return;
       }
 
