@@ -205,15 +205,16 @@ router.get('/analytics', async (_req, res) => {
        FROM orders WHERE LEFT(created_at,10) >= $1 GROUP BY day ORDER BY day`, [since]
   )).map(r => ({ day: r.day, orders: Number(r.orders), revenue: Number(r.revenue), paid: Number(r.paid) }));
 
+  // INITCAP(LOWER(city)) merges case variants of legacy rows ("bengaluru"/"BENGALURU" -> "Bengaluru").
   const ordersByArea = (await getAll(
-    `SELECT COALESCE(NULLIF(a.city,''),'Unknown') AS city, COUNT(o.id) AS orders,
+    `SELECT COALESCE(INITCAP(LOWER(NULLIF(a.city,''))),'Unknown') AS city, COUNT(o.id) AS orders,
             COALESCE(SUM(o.total_amount),0) AS revenue
        FROM orders o LEFT JOIN addresses a ON a.id = o.address_id
       GROUP BY 1 ORDER BY orders DESC LIMIT 8`
   )).map(r => ({ city: r.city, orders: Number(r.orders), revenue: Number(r.revenue) }));
 
   const usersByCity = (await getAll(
-    `SELECT COALESCE(NULLIF(a.city,''),'Unknown') AS city, COUNT(DISTINCT a.user_id) AS users
+    `SELECT COALESCE(INITCAP(LOWER(NULLIF(a.city,''))),'Unknown') AS city, COUNT(DISTINCT a.user_id) AS users
        FROM addresses a JOIN users u ON u.id = a.user_id AND u.role='CUSTOMER'
       GROUP BY 1 ORDER BY users DESC LIMIT 8`
   )).map(r => ({ city: r.city, users: Number(r.users) }));

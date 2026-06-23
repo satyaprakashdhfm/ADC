@@ -6,6 +6,18 @@ import { serializeAddress } from '../serializers.js';
 const router = Router();
 router.use(requireAuth);
 
+// Normalize city/state to a consistent Title Case so analytics group cleanly
+// ("bengaluru", "BENGALURU", "Bengaluru" all become "Bengaluru"). Comes from typed
+// input or the detect-location reverse geocode, so normalize at the single write point.
+export const titleCase = (s) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+// Map common alternate city names to the canonical one (matches what reverse-geocode returns).
+export const CITY_ALIASES = {
+  Bangalore: 'Bengaluru', Bombay: 'Mumbai', Calcutta: 'Kolkata', Madras: 'Chennai',
+  Gurgaon: 'Gurugram', Trivandrum: 'Thiruvananthapuram', Pondicherry: 'Puducherry', Vizag: 'Visakhapatnam',
+};
+export const canonicalCity = (s) => { const t = titleCase(s); return CITY_ALIASES[t] || t; };
+
 async function userByEmail(email) {
   const user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
   if (!user) throw new ApiError('User not found');
@@ -31,7 +43,7 @@ router.post('/', async (req, res) => {
        (user_id, full_name, phone, address_line1, address_line2, city, state, pincode, latitude, longitude, is_default, label)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [user.id, b.fullName, b.phone, b.addressLine1, b.addressLine2 ?? null,
-     b.city, b.state ?? '', b.pincode, b.latitude ?? null, b.longitude ?? null, !!b.isDefault, b.label || 'Home']
+     canonicalCity(b.city), titleCase(b.state), b.pincode, b.latitude ?? null, b.longitude ?? null, !!b.isDefault, b.label || 'Home']
   );
   res.json(serializeAddress(row));
 });
@@ -52,7 +64,7 @@ router.put('/:id', async (req, res) => {
        city=$5, state=$6, pincode=$7, is_default=$8, label=$9
      WHERE id=$10 AND user_id=$11 RETURNING *`,
     [b.fullName, b.phone, b.addressLine1, b.addressLine2 ?? null,
-     b.city, b.state ?? '', b.pincode, !!b.isDefault, b.label || 'Home',
+     canonicalCity(b.city), titleCase(b.state), b.pincode, !!b.isDefault, b.label || 'Home',
      req.params.id, user.id]
   );
   res.json(serializeAddress(row));
