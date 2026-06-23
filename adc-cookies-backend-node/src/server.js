@@ -18,6 +18,7 @@ import couponRoutes from './routes/coupons.js';
 import adminRoutes from './routes/admin.js';
 import contactRoutes from './routes/contact.js';
 import deliveryRoutes from './routes/delivery.js';
+import { paymentWebhook } from './routes/paymentsWebhook.js';
 
 const PORT = Number(process.env.PORT || 8080);
 
@@ -50,6 +51,10 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Authorization', 'Content-Type'],
 }));
+
+// Razorpay webhook needs the RAW body for signature verification, so mount it with a raw
+// parser BEFORE the JSON parser (and before parseAuth — it's authenticated by signature).
+app.post('/api/payments/webhook', express.raw({ type: '*/*' }), paymentWebhook);
 
 app.use(express.json({ limit: '64kb' }));
 

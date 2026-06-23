@@ -88,6 +88,32 @@ async function autoCreateShipment(orderId, addressArg) {
   return { ok: true, waybill: result.waybill };
 }
 
+// Mark a PAID order: record the payment, log tracking, and auto-create the Delhivery shipment.
+// Idempotent — safe to call from BOTH the verify route and the webhook (whichever lands first).
+export async function finalizePaidOrder(orderId, razorpayPaymentId) {
+  const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
+  if (!order) return { ok: false, reason: 'order_not_found' };
+  if (order.payment_status === 'PAID') return { ok: true, alreadyPaid: true };
+
+  const ts = nowIso();
+  await query(`UPDATE orders SET payment_status='PAID', order_status='CONFIRMED', updated_at=$1 WHERE id=$2`, [ts, orderId]);
+  await query(
+    `INSERT INTO payments (order_id, provider, transaction_id, amount, status, paid_at, created_at)
+     VALUES ($1,'RAZORPAY',$2,$3,'PAID',$4,$5)`,
+    [orderId, razorpayPaymentId ?? null, order.total_amount, ts, ts]
+  );
+  await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+    [orderId, 'CONFIRMED', 'Payment received via Razorpay', ts]);
+
+  // Create the Delhivery shipment + label. Never throws — a carrier hiccup can't fail payment.
+  const ship = await autoCreateShipment(orderId);
+  if (ship.ok && ship.waybill) {
+    await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+      [orderId, 'SHIPMENT_CREATED', `Delhivery waybill ${ship.waybill}`, nowIso()]);
+  }
+  return { ok: true, shipment: ship };
+}
+
 async function userByEmail(email) {
   const user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
   if (!user) throw new ApiError('User not found');
@@ -311,28 +337,7 @@ router.post('/:id/payment/verify', async (req, res) => {
     console.log(`[PAYMENT] verify | order=${order.order_number} | ✓ signature_ok → marking PAID`);
   }
 
-  const ts = nowIso();
-  await query(`UPDATE orders SET payment_status='PAID', order_status='CONFIRMED', updated_at=$1 WHERE id=$2`, [ts, order.id]);
-  await query(
-    `INSERT INTO payments (order_id, provider, transaction_id, amount, status, paid_at, created_at)
-     VALUES ($1,'RAZORPAY',$2,$3,'PAID',$4,$5)`,
-    [order.id, razorpayPaymentId ?? null, order.total_amount, ts, ts]
-  );
-  await query(
-    'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-    [order.id, 'CONFIRMED', 'Payment received via Razorpay', ts]
-  );
-
-  // Now that the order is PAID, create the Delhivery shipment + label. Never throws,
-  // so a Delhivery hiccup can't fail the payment confirmation — admin can retry from the panel.
-  const ship = await autoCreateShipment(order.id);
-  if (ship.ok && ship.waybill) {
-    await query(
-      'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-      [order.id, 'SHIPMENT_CREATED', `Delhivery waybill ${ship.waybill}`, nowIso()]
-    );
-  }
-
+  await finalizePaidOrder(order.id, razorpayPaymentId);
   res.json(await fullOrder(order.id));
 });
 

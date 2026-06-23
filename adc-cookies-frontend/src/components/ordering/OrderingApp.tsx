@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil } from 'lucide-react';
+import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, PackageCheck } from 'lucide-react';
 import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
@@ -498,7 +498,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>{icon}<span style={{ font: 'var(--weight-bold) var(--text-base)/1 var(--font-body)', color: 'var(--text-strong)' }}>{label}</span></div>
   );
 
-  if (done) return <OrderSuccessPage show total={paid} orderId={orderId} onBackToMenu={() => router.push('/order')} />;
+  if (done) return <OrderSuccessPage show total={paid} orderId={orderId} onBackToMenu={() => router.push('/order')} onViewOrder={() => router.push('/account')} />;
 
   if (placing) return (
     <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32, textAlign: 'center' }}>
@@ -775,7 +775,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 }
 
 /* ---- Order Success Page ---- */
-function OrderSuccessPage({ show, total, orderId, onBackToMenu }: { show: boolean; total: number; orderId: string; onBackToMenu: () => void }) {
+function OrderSuccessPage({ show, total, orderId, onBackToMenu, onViewOrder }: { show: boolean; total: number; orderId: string; onBackToMenu: () => void; onViewOrder: () => void }) {
   const steps = [
     { icon: <Check size={18} />, label: 'Placed', done: true },
     { icon: <span style={{ fontSize: 14 }}>🧑‍🍳</span>, label: 'Baking', done: false },
@@ -812,6 +812,7 @@ function OrderSuccessPage({ show, total, orderId, onBackToMenu }: { show: boolea
         </div>
       </div>
       <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--surface-card)', borderTop: '1px solid var(--border-soft)' }}>
+        <button onClick={onViewOrder} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><PackageCheck size={18} /> See your order &amp; status</button>
         <button onClick={onBackToMenu} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Order more cookies</button>
       </div>
     </div>
