@@ -225,7 +225,17 @@ export interface ProductInput {
   menuGroup?: string; tag?: string; featured?: boolean;
 }
 
+export interface AdminAnalytics {
+  salesByDay: { day: string; orders: number; revenue: number; paid: number }[];
+  ordersByArea: { city: string; orders: number; revenue: number }[];
+  usersByCity: { city: string; users: number }[];
+  paymentBreakdown: { status: string; count: number; amount: number }[];
+  shipmentByStatus: { status: string; count: number }[];
+  topProducts: { name: string; qty: number; revenue: number }[];
+}
+
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
+export async function adminAnalytics(): Promise<AdminAnalytics> { return request('/admin/analytics'); }
 
 export async function adminGetOrders(): Promise<Order[]> { return request('/admin/orders'); }
 export async function adminUpdateOrderStatus(id: number, status: string, remarks?: string): Promise<Order> {

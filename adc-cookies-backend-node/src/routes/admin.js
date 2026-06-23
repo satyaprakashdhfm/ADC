@@ -193,6 +193,49 @@ router.get('/dashboard', async (_req, res) => {
   });
 });
 
+/* ---------- Analytics (charts) ---------- */
+router.get('/analytics', async (_req, res) => {
+  // created_at is stored as an ISO text string, so compare/group on its date prefix (LEFT 10).
+  const since = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10);
+
+  const salesByDay = (await getAll(
+    `SELECT LEFT(created_at,10) AS day, COUNT(*) AS orders,
+            COALESCE(SUM(total_amount),0) AS revenue,
+            COALESCE(SUM(CASE WHEN payment_status='PAID' THEN total_amount ELSE 0 END),0) AS paid
+       FROM orders WHERE LEFT(created_at,10) >= $1 GROUP BY day ORDER BY day`, [since]
+  )).map(r => ({ day: r.day, orders: Number(r.orders), revenue: Number(r.revenue), paid: Number(r.paid) }));
+
+  const ordersByArea = (await getAll(
+    `SELECT COALESCE(NULLIF(a.city,''),'Unknown') AS city, COUNT(o.id) AS orders,
+            COALESCE(SUM(o.total_amount),0) AS revenue
+       FROM orders o LEFT JOIN addresses a ON a.id = o.address_id
+      GROUP BY 1 ORDER BY orders DESC LIMIT 8`
+  )).map(r => ({ city: r.city, orders: Number(r.orders), revenue: Number(r.revenue) }));
+
+  const usersByCity = (await getAll(
+    `SELECT COALESCE(NULLIF(a.city,''),'Unknown') AS city, COUNT(DISTINCT a.user_id) AS users
+       FROM addresses a JOIN users u ON u.id = a.user_id AND u.role='CUSTOMER'
+      GROUP BY 1 ORDER BY users DESC LIMIT 8`
+  )).map(r => ({ city: r.city, users: Number(r.users) }));
+
+  const paymentBreakdown = (await getAll(
+    `SELECT payment_status AS status, COUNT(*) AS count, COALESCE(SUM(total_amount),0) AS amount
+       FROM orders GROUP BY payment_status`
+  )).map(r => ({ status: r.status, count: Number(r.count), amount: Number(r.amount) }));
+
+  const shipmentByStatus = (await getAll(
+    `SELECT COALESCE(NULLIF(shipment_status,''),'NOT_CREATED') AS status, COUNT(*) AS count
+       FROM orders GROUP BY 1 ORDER BY count DESC`
+  )).map(r => ({ status: r.status, count: Number(r.count) }));
+
+  const topProducts = (await getAll(
+    `SELECT product_name AS name, SUM(quantity) AS qty, COALESCE(SUM(total_price),0) AS revenue
+       FROM order_items GROUP BY product_name ORDER BY revenue DESC LIMIT 8`
+  )).map(r => ({ name: r.name, qty: Number(r.qty), revenue: Number(r.revenue) }));
+
+  res.json({ salesByDay, ordersByArea, usersByCity, paymentBreakdown, shipmentByStatus, topProducts });
+});
+
 /* ======================================================================
    Delivery — Warehouses
    ====================================================================== */

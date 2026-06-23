@@ -4,13 +4,13 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import {
-  adminDashboard, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
+  adminDashboard, adminAnalytics, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
   adminToggleCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminGetShippingCost, adminCreateShipment, adminCancelShipment,
   adminTrackOrder, openLabel, adminCreatePickupRequest,
-  type AdminStats, type AdminUser, type AdminCoupon, type AdminMessage,
+  type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type AdminMessage,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
 } from '@/lib/api';
 import {
@@ -45,6 +45,7 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState<TabId>('overview');
 
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
   const [coupons, setCoupons] = useState<AdminCoupon[] | null>(null);
@@ -78,7 +79,7 @@ export default function AdminDashboard() {
 
   const isAdmin = !!user && user.role === 'ADMIN';
 
-  useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
+  useEffect(() => { if (isAdmin) { adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); adminAnalytics().then(setAnalytics).catch(() => {}); } }, [isAdmin]);
 
   // Lazy-load each tab's data the first time it's opened.
   useEffect(() => {
@@ -221,6 +222,37 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 ) : <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>No sales yet.</p>}
+              </div>
+            </div>
+
+            {/* Sales — last 30 days */}
+            <div style={{ ...card, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, gap: 12, flexWrap: 'wrap' }}>
+                <h3 style={{ fontSize: 'var(--text-h4)' }}>Sales · last 30 days</h3>
+                {analytics && <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', fontWeight: 700 }}>{money(analytics.salesByDay.reduce((s, d) => s + d.revenue, 0))} · {analytics.salesByDay.reduce((s, d) => s + d.orders, 0)} orders</span>}
+              </div>
+              {analytics ? <SalesChart data={fillDays(analytics.salesByDay)} /> : <div style={{ height: 200, display: 'grid', placeItems: 'center', color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>Loading…</div>}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
+              <div style={{ ...card, padding: 20 }}>
+                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Orders by area</h3>
+                {analytics?.ordersByArea.length ? <BarRows items={analytics.ordersByArea.map(a => ({ label: a.city, value: a.orders, sub: `${a.orders} · ${money(a.revenue)}` }))} /> : <Empty text="No area data yet." />}
+              </div>
+              <div style={{ ...card, padding: 20 }}>
+                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Customers by city</h3>
+                {analytics?.usersByCity.length ? <BarRows items={analytics.usersByCity.map(c => ({ label: c.city, value: c.users, sub: `${c.users} customer${c.users === 1 ? '' : 's'}` }))} color="#1F8A5B" /> : <Empty text="No customer locations yet." />}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
+              <div style={{ ...card, padding: 20 }}>
+                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Payments</h3>
+                {analytics?.paymentBreakdown.length ? <Donut segments={analytics.paymentBreakdown.map((p, i) => ({ label: p.status, value: p.count, color: PIE[i % PIE.length] }))} center={`${analytics.paymentBreakdown.reduce((s, p) => s + p.count, 0)}`} centerSub="orders" /> : <Empty text="No payments yet." />}
+              </div>
+              <div style={{ ...card, padding: 20 }}>
+                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Shipments</h3>
+                {analytics?.shipmentByStatus.length ? <Donut segments={analytics.shipmentByStatus.map((s, i) => ({ label: s.status, value: s.count, color: PIE[i % PIE.length] }))} center={`${analytics.shipmentByStatus.reduce((s, x) => s + x.count, 0)}`} centerSub="shipments" /> : <Empty text="No shipments yet." />}
               </div>
             </div>
           </div>
@@ -796,6 +828,107 @@ export default function AdminDashboard() {
 const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
 const addBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' };
 const iconBtn: React.CSSProperties = { width: 34, height: 34, borderRadius: 9, border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'inline-grid', placeItems: 'center', color: 'var(--text-body)', marginRight: 6 };
+
+/* ---------- Charts (lightweight inline SVG/CSS — no external deps) ---------- */
+const PIE = ['#E8772E', '#1F8A5B', '#4285F4', '#9333EA', '#C2410C', '#6B7280'];
+
+// Fill the last 30 calendar days so the line chart has no gaps.
+function fillDays(rows: { day: string; revenue: number; orders: number; paid: number }[]) {
+  const byDay = new Map(rows.map(r => [r.day, r]));
+  const out: { day: string; revenue: number; orders: number; paid: number }[] = [];
+  const today = new Date();
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today); d.setDate(today.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const r = byDay.get(key);
+    out.push({ day: key, revenue: r?.revenue ?? 0, orders: r?.orders ?? 0, paid: r?.paid ?? 0 });
+  }
+  return out;
+}
+
+function SalesChart({ data }: { data: { day: string; revenue: number; paid: number }[] }) {
+  const W = 760, H = 200, pl = 6, pr = 6, pt = 14, pb = 22;
+  const n = data.length;
+  const max = Math.max(1, ...data.map(d => d.revenue));
+  const x = (i: number) => pl + (n <= 1 ? (W - pl - pr) / 2 : (i * (W - pl - pr)) / (n - 1));
+  const y = (v: number) => pt + (1 - v / max) * (H - pt - pb);
+  const line = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(d.revenue).toFixed(1)}`).join(' ');
+  const area = `${line} L ${x(n - 1).toFixed(1)} ${(H - pb).toFixed(1)} L ${x(0).toFixed(1)} ${(H - pb).toFixed(1)} Z`;
+  const peakI = data.reduce((bi, d, i) => (d.revenue > data[bi].revenue ? i : bi), 0);
+  const fmtDay = (s: string) => new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return (
+    <div style={{ width: '100%', overflow: 'hidden' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" style={{ display: 'block', height: 200 }}>
+        <defs>
+          <linearGradient id="salesfill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#E8772E" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#E8772E" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map(g => <line key={g} x1={pl} x2={W - pr} y1={pt + g * (H - pt - pb)} y2={pt + g * (H - pt - pb)} stroke="var(--border-soft)" strokeWidth="1" />)}
+        <path d={area} fill="url(#salesfill)" />
+        <path d={line} fill="none" stroke="#E8772E" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {max > 1 && <circle cx={x(peakI)} cy={y(data[peakI].revenue)} r="4" fill="#E8772E" stroke="#fff" strokeWidth="2" />}
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 2 }}>
+        <span>{fmtDay(data[0].day)}</span>
+        <span>Peak {money(data[peakI].revenue)} · {fmtDay(data[peakI].day)}</span>
+        <span>{fmtDay(data[n - 1].day)}</span>
+      </div>
+    </div>
+  );
+}
+
+function BarRows({ items, color = '#E8772E' }: { items: { label: string; value: number; sub?: string }[]; color?: string }) {
+  const max = Math.max(1, ...items.map(i => i.value));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+      {items.map(it => (
+        <div key={it.label}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', marginBottom: 4, gap: 8 }}>
+            <span style={{ fontWeight: 700, color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.label}</span>
+            <span style={{ color: 'var(--text-muted)', flex: 'none' }}>{it.sub ?? it.value}</span>
+          </div>
+          <div style={{ height: 8, borderRadius: 99, background: 'var(--surface-sunken)', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.max(3, (it.value / max) * 100)}%`, height: '100%', background: color, borderRadius: 99 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Donut({ segments, center, centerSub }: { segments: { label: string; value: number; color: string }[]; center?: string; centerSub?: string }) {
+  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
+  const r = 52, sw = 18, c = 2 * Math.PI * r;
+  let offset = 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+      <div style={{ position: 'relative', width: 130, height: 130, flex: 'none' }}>
+        <svg viewBox="0 0 130 130" width="130" height="130" style={{ transform: 'rotate(-90deg)' }}>
+          <circle cx="65" cy="65" r={r} fill="none" stroke="var(--surface-sunken)" strokeWidth={sw} />
+          {segments.map(s => {
+            const frac = s.value / total;
+            const dash = frac * c;
+            const el = <circle key={s.label} cx="65" cy="65" r={r} fill="none" stroke={s.color} strokeWidth={sw} strokeDasharray={`${dash} ${c - dash}`} strokeDashoffset={-offset} />;
+            offset += dash;
+            return el;
+          })}
+        </svg>
+        {center && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center' }}><div><div style={{ fontWeight: 900, fontSize: 'var(--text-h4)', color: 'var(--text-strong)' }}>{center}</div>{centerSub && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)' }}>{centerSub}</div>}</div></div>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7, flex: 1, minWidth: 120 }}>
+        {segments.map(s => (
+          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)' }}>
+            <span style={{ width: 11, height: 11, borderRadius: 3, background: s.color, flex: 'none' }} />
+            <span style={{ flex: 1, color: 'var(--text-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
+            <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>{s.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function StatCard({ icon, label, value, sub, accent }: { icon: React.ReactNode; label: string; value: string; sub?: string; accent?: boolean }) {
   return (
