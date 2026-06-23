@@ -50,13 +50,15 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState('');
   const [resendIn, setResendIn] = useState(0); // seconds until "Resend OTP" re-enables
-  const { login, register, loginWithGoogle, sendOtp, verifyOtp, updateProfile } = useAuth();
+  const [resetSent, setResetSent] = useState(false);
+  const { login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (open) {
       setError(''); setEmail(''); setPassword(''); setName(''); setPhone(''); setLoading(false); setGoogleLoading(false);
       setOtpStep('phone'); setOtpPhone(''); setProfileName(''); setVerificationId(''); setCode(''); setOtpLoading(false); setOtpError(''); setResendIn(0);
+      setResetSent(false);
     }
   }, [open]);
 
@@ -78,6 +80,19 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
       if (role === 'ADMIN') router.push('/admin');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgot = async () => {
+    if (!email.trim()) { setError('Enter your email above, then tap “Forgot password?”'); return; }
+    setError(''); setLoading(true);
+    try {
+      await resetPassword(email);
+      setResetSent(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send the reset email.');
     } finally {
       setLoading(false);
     }
@@ -282,6 +297,13 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
           )}
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email" style={inputStyle} />
           <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" style={inputStyle} />
+
+          {/* Reset is only relevant to the email/password login path (Google & OTP users never set one). */}
+          {mode === 'login' && (
+            resetSent
+              ? <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-success)', fontWeight: 700, margin: '0 2px 12px' }}>Reset link sent — check your email to set a new password.</p>
+              : <button onClick={handleForgot} disabled={loading} style={{ ...linkBtn, display: 'block', margin: '0 2px 12px', fontSize: 'var(--text-xs)' }}>Forgot password?</button>
+          )}
 
           {error && (
             <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', marginBottom: 12 }}>{error}</div>

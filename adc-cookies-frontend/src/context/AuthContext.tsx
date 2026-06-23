@@ -12,6 +12,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<string>;            // returns role
   register: (name: string, email: string, phone: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;                          // emails a reset link
   sendOtp: (phone: string) => Promise<{ verificationId: string; timeout: number }>;
   verifyOtp: (phone: string, verificationId: string, code: string) => Promise<{ role: string; needsName: boolean }>;
   updateProfile: (patch: { name?: string; phone?: string }) => Promise<void>; // persists to the backend
@@ -89,6 +90,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Browser redirects to Google and back; onAuthStateChange picks up the session on return.
   };
 
+  // Email a password-reset link (Supabase native). The link returns to /reset-password,
+  // where detectSessionInUrl establishes a recovery session and the user sets a new password.
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined,
+    });
+    if (error) throw new Error(error.message);
+  };
+
   // Phone OTP: our backend texts the code (Message Central). Verifying returns Supabase
   // session tokens, which we install so the rest of the app behaves like any other login.
   const sendOtp = (phone: string) => apiSendOtp(phone);
@@ -124,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
