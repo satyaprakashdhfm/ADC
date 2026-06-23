@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../db.js';
 import { requireAdmin, ApiError } from '../middleware.js';
-import { serializeProduct, serializeOrder, serializeOrderItem, serializeAddress, serializeCoupon, serializeUser, serializeWarehouse } from '../serializers.js';
+import { serializeProduct, serializeOrder, serializeOrderItem, serializeAddress, serializeCoupon, serializeUser, serializeWarehouse, PAYMENT_SELECT } from '../serializers.js';
 import {
   delhiveryConfigured,
   fetchWaybill,
@@ -83,7 +83,8 @@ router.get('/orders', async (req, res) => {
   const serialized = await Promise.all(rows.map(async (o) => {
     const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [o.id]);
     const address = o.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [o.address_id]) : null;
-    return serializeOrder(o, items, address);
+    const payment = await getOne(PAYMENT_SELECT, [o.id]);
+    return serializeOrder(o, items, address, payment);
   }));
   res.json(serialized);
 });
@@ -93,7 +94,8 @@ router.get('/orders/:id', async (req, res) => {
   if (!order) throw new ApiError('Order not found');
   const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order.id]);
   const address = order.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null;
-  res.json(serializeOrder(order, items, address));
+  const payment = await getOne(PAYMENT_SELECT, [order.id]);
+  res.json(serializeOrder(order, items, address, payment));
 });
 
 router.patch('/orders/:id/status', async (req, res) => {

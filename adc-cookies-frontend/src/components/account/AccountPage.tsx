@@ -8,7 +8,7 @@ import { getOrders, getAddresses, addAddress, trackOrderShipment, type Delhivery
 import {
   ChevronLeft, Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
   Info, LifeBuoy, ChevronRight, LogOut, ShoppingBag, MapPin, Gift,
-  MessageSquare, ReceiptText, PackageCheck, Truck,
+  MessageSquare, ReceiptText, PackageCheck, Truck, CreditCard,
 } from 'lucide-react';
 
 const card: React.CSSProperties = {
@@ -275,6 +275,16 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
               </div>
             ))}
             {order.couponCode && <p style={{ color: 'var(--status-success)', fontWeight: 800, marginTop: 8 }}>Coupon applied: {order.couponCode}</p>}
+            {order.payment && (
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-soft)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: 4 }}><CreditCard size={13} /> Payment</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  {order.payment.provider === 'RAZORPAY' ? 'Razorpay' : order.payment.provider} · {order.payment.status}
+                  {order.payment.transactionId && <><br /><span style={{ fontFamily: 'monospace', color: 'var(--text-body)' }}>{order.payment.transactionId}</span></>}
+                  {order.payment.paidAt && <><br />Paid on {formatDate(order.payment.paidAt)}</>}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

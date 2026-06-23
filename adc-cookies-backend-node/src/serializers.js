@@ -73,8 +73,8 @@ export function serializeOrderItem(oi) {
   };
 }
 
-// items and address are pre-loaded by the caller
-export function serializeOrder(order, items = [], address = null) {
+// items, address and payment are pre-loaded by the caller
+export function serializeOrder(order, items = [], address = null, payment = null) {
   if (!order) return null;
   return {
     id: order.id, orderNumber: order.order_number,
@@ -84,10 +84,16 @@ export function serializeOrder(order, items = [], address = null) {
     delhiveryWaybill: order.delhivery_waybill, delhiveryShipmentId: order.delhivery_shipment_id,
     trackingUrl: order.tracking_url, shipmentStatus: order.shipment_status,
     labelGenerated: !!order.label_generated,
+    payment: payment
+      ? { provider: payment.provider, transactionId: payment.transaction_id, status: payment.status, paidAt: payment.paid_at }
+      : null,
     address: serializeAddress(address), items: items.map(serializeOrderItem),
     createdAt: order.created_at, updatedAt: order.updated_at,
   };
 }
+
+// Latest payment row for an order (most recent first). Returns null if none.
+export const PAYMENT_SELECT = 'SELECT provider, transaction_id, status, paid_at FROM payments WHERE order_id = $1 ORDER BY id DESC LIMIT 1';
 
 export function serializeTracking(t) {
   if (!t) return null;

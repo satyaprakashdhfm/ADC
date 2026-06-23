@@ -777,6 +777,13 @@ export default function AdminDashboard() {
                 {!!o.taxAmount && row('Tax / GST', money(o.taxAmount))}
                 <div style={{ height: 1, background: 'var(--border-default)', margin: '2px 0' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--text-base)', color: 'var(--text-strong)' }}><span>Total</span><span>{money(o.totalAmount)}</span></div>
+                {o.payment && (
+                  <div style={{ marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border-default)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                    <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>Payment:</span> {o.payment.provider === 'RAZORPAY' ? 'Razorpay' : o.payment.provider} · {o.payment.status}
+                    {o.payment.transactionId && <><br /><span style={{ fontFamily: 'monospace', color: 'var(--text-body)' }}>{o.payment.transactionId}</span></>}
+                    {o.payment.paidAt && <><br />Paid {fmtDate(o.payment.paidAt)}</>}
+                  </div>
+                )}
               </div>
             </div>
           </div>

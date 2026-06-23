@@ -143,12 +143,15 @@ export async function validateCoupon(code: string, orderAmount: number): Promise
 }
 
 /* ---- Orders ---- */
+export interface OrderPayment { provider: string; transactionId: string | null; status: string; paidAt: string | null; }
+
 export interface Order {
   id: number; orderNumber: string; totalAmount: number;
   orderStatus: string; paymentStatus: string; createdAt: string;
   subtotal?: number; discountAmount?: number; deliveryFee?: number; taxAmount?: number;
   couponCode?: string | null; shipmentStatus?: string; trackingUrl?: string | null;
   delhiveryWaybill?: string | null; delhiveryShipmentId?: string | null; labelGenerated?: boolean;
+  payment?: OrderPayment | null;
   address?: Address | null; items?: OrderItem[];
 }
 

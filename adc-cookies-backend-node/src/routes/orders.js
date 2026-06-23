@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getOne, getAll, query, withTransaction, nowIso } from '../db.js';
 import { requireAuth, ApiError } from '../middleware.js';
-import { serializeOrder, serializeOrderItem, serializeTracking, serializeAddress } from '../serializers.js';
+import { serializeOrder, serializeOrderItem, serializeTracking, serializeAddress, PAYMENT_SELECT } from '../serializers.js';
 import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
@@ -112,7 +112,8 @@ async function fullOrder(orderId) {
   const address = order.address_id
     ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id])
     : null;
-  return serializeOrder(order, items, address);
+  const payment = await getOne(PAYMENT_SELECT, [orderId]);
+  return serializeOrder(order, items, address, payment);
 }
 
 router.post('/', async (req, res) => {
@@ -213,7 +214,8 @@ router.get('/', async (req, res) => {
   const serialized = await Promise.all(rows.map(async (o) => {
     const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [o.id]);
     const address = o.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [o.address_id]) : null;
-    return serializeOrder(o, items, address);
+    const payment = await getOne(PAYMENT_SELECT, [o.id]);
+    return serializeOrder(o, items, address, payment);
   }));
   res.json(serialized);
 });
