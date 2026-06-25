@@ -16,7 +16,7 @@ import {
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
   IndianRupee, AlertTriangle, Plus, Pencil, Trash2, Check, X, LogOut, Gift,
-  Truck, Warehouse as WarehouseIcon, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download, Search, Filter,
+  Truck, Warehouse as WarehouseIcon, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download, Search, Filter, CalendarRange,
 } from 'lucide-react';
 
 const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
@@ -33,6 +33,8 @@ type TabId = typeof TABS[number]['id'];
 
 const card: React.CSSProperties = { background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)' };
 const money = (v: number) => `₹${Number(v ?? 0).toLocaleString('en-IN')}`;
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const daysAgoStr = (n: number) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
 const fmtDate = (s: string) => { const d = new Date(s); return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); };
 const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text-muted)', fontWeight: 800, borderBottom: '1px solid var(--border-default)' };
 const td: React.CSSProperties = { padding: '12px', fontSize: 'var(--text-sm)', color: 'var(--text-body)', borderBottom: '1px solid var(--border-soft)', verticalAlign: 'middle' };
@@ -46,6 +48,7 @@ export default function AdminDashboard() {
 
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+  const [range, setRange] = useState(() => ({ from: daysAgoStr(29), to: todayStr() }));
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
   const [coupons, setCoupons] = useState<AdminCoupon[] | null>(null);
@@ -79,7 +82,8 @@ export default function AdminDashboard() {
 
   const isAdmin = !!user && user.role === 'ADMIN';
 
-  useEffect(() => { if (isAdmin) { adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); adminAnalytics().then(setAnalytics).catch(() => {}); } }, [isAdmin]);
+  useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
+  useEffect(() => { if (isAdmin) adminAnalytics(range.from, range.to).then(setAnalytics).catch(() => {}); }, [isAdmin, range.from, range.to]);
 
   // Lazy-load each tab's data the first time it's opened.
   useEffect(() => {
@@ -182,6 +186,25 @@ export default function AdminDashboard() {
         {/* ===== Overview ===== */}
         {tab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Date-range filter — scopes the analytics charts below */}
+            <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}><CalendarRange size={16} /> Period</span>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {([['7 days', 7], ['30 days', 30], ['90 days', 90], ['1 year', 365]] as const).map(([lbl, d]) => {
+                  const active = range.from === daysAgoStr(d - 1) && range.to === todayStr();
+                  return (
+                    <button key={lbl} onClick={() => setRange({ from: daysAgoStr(d - 1), to: todayStr() })}
+                      style={{ padding: '6px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-xs)', border: active ? 'none' : '1.5px solid var(--border-default)', background: active ? 'var(--gradient-warm)' : 'var(--surface-card)', color: active ? '#fff' : 'var(--text-body)' }}>{lbl}</button>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                <input type="date" value={range.from} max={range.to} onChange={e => e.target.value && setRange(r => ({ ...r, from: e.target.value }))} style={{ ...inp, width: 'auto', padding: '7px 10px', cursor: 'pointer' }} />
+                <span style={{ color: 'var(--text-muted)' }}>→</span>
+                <input type="date" value={range.to} min={range.from} max={todayStr()} onChange={e => e.target.value && setRange(r => ({ ...r, to: e.target.value }))} style={{ ...inp, width: 'auto', padding: '7px 10px', cursor: 'pointer' }} />
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
               <StatCard icon={<Users size={20} />} label="Customers" value={stats ? String(stats.totalUsers) : '—'} />
               <StatCard icon={<ShoppingBag size={20} />} label="Total orders" value={stats ? String(stats.totalOrders) : '—'} />
@@ -228,10 +251,10 @@ export default function AdminDashboard() {
             {/* Sales — last 30 days */}
             <div style={{ ...card, padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, gap: 12, flexWrap: 'wrap' }}>
-                <h3 style={{ fontSize: 'var(--text-h4)' }}>Sales · last 30 days</h3>
+                <h3 style={{ fontSize: 'var(--text-h4)' }}>Sales over time</h3>
                 {analytics && <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', fontWeight: 700 }}>{money(analytics.salesByDay.reduce((s, d) => s + d.revenue, 0))} · {analytics.salesByDay.reduce((s, d) => s + d.orders, 0)} orders</span>}
               </div>
-              {analytics ? <SalesChart data={fillDays(analytics.salesByDay)} /> : <div style={{ height: 200, display: 'grid', placeItems: 'center', color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>Loading…</div>}
+              {analytics ? <SalesChart data={fillDays(analytics.salesByDay, analytics.from || range.from, analytics.to || range.to)} /> : <div style={{ height: 200, display: 'grid', placeItems: 'center', color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>Loading…</div>}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
@@ -832,13 +855,17 @@ const iconBtn: React.CSSProperties = { width: 34, height: 34, borderRadius: 9, b
 /* ---------- Charts (lightweight inline SVG/CSS — no external deps) ---------- */
 const PIE = ['#E8772E', '#1F8A5B', '#4285F4', '#9333EA', '#C2410C', '#6B7280'];
 
-// Fill the last 30 calendar days so the line chart has no gaps.
-function fillDays(rows: { day: string; revenue: number; orders: number; paid: number }[]) {
+// Fill every calendar day in [from, to] so the line chart has no gaps. Capped at 370 points
+// (for very long ranges the start is clamped) to keep the SVG light.
+function fillDays(rows: { day: string; revenue: number; orders: number; paid: number }[], from: string, to: string) {
   const byDay = new Map(rows.map(r => [r.day, r]));
   const out: { day: string; revenue: number; orders: number; paid: number }[] = [];
-  const today = new Date();
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(today); d.setDate(today.getDate() - i);
+  const end = new Date(`${to}T00:00:00Z`);
+  let start = new Date(`${from}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return rows;
+  const maxStart = new Date(end); maxStart.setUTCDate(end.getUTCDate() - 369);
+  if (start < maxStart) start = maxStart;
+  for (const d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
     const key = d.toISOString().slice(0, 10);
     const r = byDay.get(key);
     out.push({ day: key, revenue: r?.revenue ?? 0, orders: r?.orders ?? 0, paid: r?.paid ?? 0 });

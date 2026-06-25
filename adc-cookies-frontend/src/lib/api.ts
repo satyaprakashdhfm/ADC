@@ -226,6 +226,7 @@ export interface ProductInput {
 }
 
 export interface AdminAnalytics {
+  from?: string; to?: string;
   salesByDay: { day: string; orders: number; revenue: number; paid: number }[];
   ordersByArea: { city: string; orders: number; revenue: number }[];
   usersByCity: { city: string; users: number }[];
@@ -235,7 +236,10 @@ export interface AdminAnalytics {
 }
 
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
-export async function adminAnalytics(): Promise<AdminAnalytics> { return request('/admin/analytics'); }
+export async function adminAnalytics(from?: string, to?: string): Promise<AdminAnalytics> {
+  const qs = from && to ? `?from=${from}&to=${to}` : '';
+  return request(`/admin/analytics${qs}`);
+}
 
 export async function adminGetOrders(): Promise<Order[]> { return request('/admin/orders'); }
 export async function adminUpdateOrderStatus(id: number, status: string, remarks?: string): Promise<Order> {

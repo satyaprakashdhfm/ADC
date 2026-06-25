@@ -1,9 +1,17 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { getOne } from '../db.js';
-import { ApiError } from '../middleware.js';
+import { requireAuth, ApiError } from '../middleware.js';
 import { serializeCoupon } from '../serializers.js';
 
 const router = Router();
+
+// Generous enough that a real shopper (who tries a handful of codes at checkout) never hits it,
+// tight enough to blunt anonymous brute-force code-guessing. Combined with requireAuth below.
+const couponLimiter = rateLimit({
+  windowMs: 10 * 60_000, max: 40, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Too many attempts', message: 'Too many coupon attempts — please try again in a few minutes.' },
+});
 
 export async function validateCoupon(code, orderAmount) {
   const coupon = await getOne('SELECT * FROM coupons WHERE code = $1 AND is_active = TRUE', [String(code).toUpperCase()]);
@@ -32,7 +40,9 @@ export function calculateDiscount(coupon, subtotal) {
   return discount;
 }
 
-router.get('/validate', async (req, res) => {
+// Auth-gated + rate-limited: only logged-in shoppers can test a code, so anonymous
+// brute-force guessing of unadvertised coupons is blocked (and any abuse is traceable).
+router.get('/validate', requireAuth, couponLimiter, async (req, res) => {
   const { code, orderAmount } = req.query;
   const coupon = await validateCoupon(String(code || ''), orderAmount ?? 0);
   res.json({ ...serializeCoupon(coupon), valid: true });
