@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 
 /*
  * Server-side Supabase clients for the phone-OTP bridge.
@@ -19,14 +20,17 @@ export const supabaseConfigured = () => !!(URL && SERVICE_ROLE_KEY && ANON_KEY);
 let _admin = null;
 let _anon = null;
 
+const serverClientOptions = {
+  auth: { autoRefreshToken: false, persistSession: false },
+  realtime: { transport: ws },
+};
+
 export function adminClient() {
   if (!URL || !SERVICE_ROLE_KEY) {
     throw new Error('Supabase admin is not configured (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).');
   }
   if (!_admin) {
-    _admin = createClient(URL, SERVICE_ROLE_KEY, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    _admin = createClient(URL, SERVICE_ROLE_KEY, serverClientOptions);
   }
   return _admin;
 }
@@ -36,9 +40,7 @@ export function anonClient() {
     throw new Error('Supabase is not configured (set SUPABASE_URL and ANON_KEY).');
   }
   if (!_anon) {
-    _anon = createClient(URL, ANON_KEY, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    _anon = createClient(URL, ANON_KEY, serverClientOptions);
   }
   return _anon;
 }
