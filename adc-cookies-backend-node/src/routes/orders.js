@@ -309,8 +309,8 @@ router.post('/:id/payment/razorpay-order', async (req, res) => {
   });
 });
 
-// Step 2: verify the Checkout result and mark PAID. When Razorpay is configured the
-// signature MUST verify server-side — the frontend's word alone is never trusted.
+// Step 2: verify the Checkout result and mark PAID. Razorpay must be configured and
+// the signature MUST verify server-side — the frontend's word alone is never trusted.
 router.post('/:id/payment/verify', async (req, res) => {
   const user = await userByEmail(req.user.email);
   // Scope to the owner so one user can never mark another's order as paid.
@@ -321,21 +321,23 @@ router.post('/:id/payment/verify', async (req, res) => {
   const { razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body || {};
   console.log(`[PAYMENT] verify | order=${order.order_number} | payment=${razorpayPaymentId || 'none'} | rzpOrder=${razorpayOrderId || 'none'} | sig=${razorpaySignature ? 'present' : 'MISSING'}`);
 
-  if (razorpayConfigured()) {
-    if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
-      console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ missing_fields`);
-      throw new ApiError('Missing payment confirmation fields', 400);
-    }
-    if (order.razorpay_order_id && order.razorpay_order_id !== razorpayOrderId) {
-      console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ order_mismatch | stored=${order.razorpay_order_id} got=${razorpayOrderId}`);
-      throw new ApiError('Payment does not match this order', 400);
-    }
-    if (!verifyPaymentSignature({ orderId: razorpayOrderId, paymentId: razorpayPaymentId, signature: razorpaySignature })) {
-      console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ bad_signature`);
-      throw new ApiError('Payment signature verification failed', 400);
-    }
-    console.log(`[PAYMENT] verify | order=${order.order_number} | ✓ signature_ok → marking PAID`);
+  if (!razorpayConfigured()) {
+    console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ razorpay_not_configured`);
+    throw new ApiError('Payments are temporarily unavailable. Please try again later.', 503);
   }
+  if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
+    console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ missing_fields`);
+    throw new ApiError('Missing payment confirmation fields', 400);
+  }
+  if (order.razorpay_order_id && order.razorpay_order_id !== razorpayOrderId) {
+    console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ order_mismatch | stored=${order.razorpay_order_id} got=${razorpayOrderId}`);
+    throw new ApiError('Payment does not match this order', 400);
+  }
+  if (!verifyPaymentSignature({ orderId: razorpayOrderId, paymentId: razorpayPaymentId, signature: razorpaySignature })) {
+    console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ bad_signature`);
+    throw new ApiError('Payment signature verification failed', 400);
+  }
+  console.log(`[PAYMENT] verify | order=${order.order_number} | ✓ signature_ok → marking PAID`);
 
   await finalizePaidOrder(order.id, razorpayPaymentId);
   res.json(await fullOrder(order.id));
