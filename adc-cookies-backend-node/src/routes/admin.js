@@ -80,12 +80,26 @@ router.get('/orders', async (req, res) => {
   if (where.length) sql += ' WHERE ' + where.join(' AND ');
   sql += ' ORDER BY o.created_at DESC, o.id DESC';
   const rows = await getAll(sql, params);
-  const serialized = await Promise.all(rows.map(async (o) => {
-    const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [o.id]);
-    const address = o.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [o.address_id]) : null;
-    const payment = await getOne(PAYMENT_SELECT, [o.id]);
-    return serializeOrder(o, items, address, payment);
-  }));
+  // Set-based fetch instead of one query per order: 3 queries total, not 3*N. The old
+  // per-order Promise.all fired ~3*N simultaneous queries and exhausted the Supabase
+  // session pooler (~15 client cap) -> EMAXCONNSESSION -> 500 (empty admin shipments table).
+  const orderIds = rows.map((o) => o.id);
+  const addrIds = [...new Set(rows.map((o) => o.address_id).filter(Boolean))];
+  const [items, payments, addresses] = await Promise.all([
+    orderIds.length ? getAll('SELECT * FROM order_items WHERE order_id = ANY($1) ORDER BY id', [orderIds]) : [],
+    orderIds.length ? getAll('SELECT DISTINCT ON (order_id) order_id, provider, transaction_id, status, paid_at FROM payments WHERE order_id = ANY($1) ORDER BY order_id, id DESC', [orderIds]) : [],
+    addrIds.length ? getAll('SELECT * FROM addresses WHERE id = ANY($1)', [addrIds]) : [],
+  ]);
+  const itemsByOrder = new Map();
+  for (const it of items) {
+    if (!itemsByOrder.has(it.order_id)) itemsByOrder.set(it.order_id, []);
+    itemsByOrder.get(it.order_id).push(it);
+  }
+  const payByOrder = new Map(payments.map((p) => [p.order_id, p]));
+  const addrById = new Map(addresses.map((a) => [a.id, a]));
+  const serialized = rows.map((o) =>
+    serializeOrder(o, itemsByOrder.get(o.id) || [], o.address_id ? addrById.get(o.address_id) || null : null, payByOrder.get(o.id) || null)
+  );
   res.json(serialized);
 });
 

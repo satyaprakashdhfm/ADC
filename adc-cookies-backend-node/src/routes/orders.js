@@ -105,13 +105,20 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId) {
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [orderId, 'CONFIRMED', 'Payment received via Razorpay', ts]);
 
-  // Create the Delhivery shipment + label. Never throws — a carrier hiccup can't fail payment.
-  const ship = await autoCreateShipment(orderId);
-  if (ship.ok && ship.waybill) {
-    await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-      [orderId, 'SHIPMENT_CREATED', `Delhivery waybill ${ship.waybill}`, nowIso()]);
-  }
-  return { ok: true, shipment: ship };
+  // Create the Delhivery shipment + label in the BACKGROUND so payment confirmation returns
+  // to the shopper immediately (the carrier round-trip used to block the response ~5s).
+  // A carrier hiccup can neither fail nor delay payment; the Razorpay webhook is a backstop
+  // and the admin can also create the shipment manually from the Delivery tab.
+  autoCreateShipment(orderId)
+    .then((ship) => {
+      if (ship?.ok && ship.waybill) {
+        return query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+          [orderId, 'SHIPMENT_CREATED', `Delhivery waybill ${ship.waybill}`, nowIso()]);
+      }
+    })
+    .catch((err) => console.error(`[SHIPMENT] background create failed | order=${orderId} | ${err?.message || err}`));
+
+  return { ok: true };
 }
 
 async function userByEmail(email) {
@@ -219,13 +226,14 @@ router.post('/', async (req, res) => {
   const cart = await getOne('SELECT * FROM cart WHERE user_id = $1', [user.id]);
   if (cart) await query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
 
-  // Confirmation email to the customer + a copy to the business (best-effort; never throws).
-  await sendOrderEmails({
+  // Confirmation email to the customer + a copy to the business — fire-and-forget so order
+  // placement returns immediately (two SMTP sends used to block the response). Best-effort.
+  sendOrderEmails({
     orderNumber, subtotal, discount, deliveryFee, total,
     customerName: user.name, customerEmail: user.email,
     items: lineItems.map((li) => ({ name: li.productName, qty: li.quantity, total: li.unitPrice * li.quantity })),
     address,
-  });
+  }).catch((err) => console.error(`[ORDER] email send failed | order=${orderNumber} | ${err?.message || err}`));
 
   // NOTE: the Delhivery shipment is created on payment success (see /:id/payment/verify),
   // not here — we only ship orders that are actually paid.

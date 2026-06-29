@@ -18,14 +18,15 @@ Estimates from architecture review, not load-tested.
   Action: bigger instance or add replicas (stateless = easy).
 
 [3] SUPABASE  (Postgres DB + Auth)
-  DB pool: max 30 connections (db.js). Safe — free tier allows
-           ~60 direct, so 30 = 2x headroom for one instance.
-  Key: 30 conns != 30 users. Each query frees its connection
-       in ~10ms, so 30 serves HUNDREDS of users.
-  Pooler: Supavisor session mode (5432). For more, use the
-          transaction pooler (6543) and raise max further.
+  DB pool: max 10 connections (db.js). We connect via the SESSION
+           pooler, which caps THIS backend at ~15 clients; 10 is safe.
+  Real cap: ~15 client conns in session mode (NOT the ~60 direct
+            limit — that only applies to direct, non-pooled connections).
+  Key: conns != users. Each query frees its connection in ~10ms,
+       so 10 pooled connections still serve hundreds of users.
+  Scale path: switch DATABASE_URL to the TRANSACTION pooler (6543),
+              which multiplexes and lifts the 15-client cap; then raise max.
   Auth: logins/sessions effectively unlimited (JWT).
-  Capacity: no longer the tight limit (Railway is).
 
 [4] DELHIVERY  (shipping)
   Auth: API token (Authorization: Token ...). Working.
@@ -41,11 +42,12 @@ Estimates from architecture review, not load-tested.
   Action: wire real Razorpay keys + signature verification.
 
 ----------------------------------------------------------
-OVERALL (with DB pool = 30)
+OVERALL (DB pool = 10, session pooler)
   Logged-in & idle ...... unlimited (thousands+)
-  Active shoppers ....... ~500-800 comfortable, ~1500 burst
+  Active shoppers ....... ~300-500 comfortable, ~1000 burst
   Requests/sec .......... ~100-200 sustained (Railway, 1 instance)
-  Simultaneous checkouts  ~40-60
-  Ceiling is now Railway's single instance, NOT the DB.
-  Next fix: bigger Railway instance / replicas -> ~2000-3000+.
+  Simultaneous checkouts  ~25-40
+  Ceilings: session-pooler client cap (~15) + Railway 1 instance.
+  Scale path: transaction pooler (6543) + raise pool max + Railway
+              replicas -> ~2000-3000+.
 ==========================================================

@@ -5,13 +5,14 @@ const { Pool } = pg;
 // If DATABASE_URL is set (and non-empty) it wins; otherwise node-postgres reads
 // PGHOST / PGDATABASE / PGUSER / PGPASSWORD / PGPORT from the environment (.env).
 // Remote hosts (e.g. Supabase) require SSL; local Unix-socket auth does not.
-// max:30 — Supabase free tier allows ~60 direct Postgres connections, so 30 gives
-// one backend instance 2x headroom. (node-postgres would otherwise default to 10.)
-// For more scale, point DATABASE_URL at the transaction pooler (port 6543) and raise this.
+// max:10 — we connect through the Supabase SESSION pooler, which caps THIS backend at
+// ~15 client connections (exceeding it returns EMAXCONNSESSION). 10 stays safely under that.
+// To raise it, switch DATABASE_URL to the TRANSACTION pooler (port 6543), which multiplexes
+// connections and removes the per-client session cap.
 export const pool = new Pool(
   process.env.DATABASE_URL
-    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, max: 30 }
-    : { max: 30 }
+    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, max: 10 }
+    : { max: 10 }
 );
 
 export const query  = (sql, p = []) => pool.query(sql, p);

@@ -1,0 +1,170 @@
+==========================================================================
+ADC — SYSTEM OVERVIEW  (frontend · backend · database · payments · shipping)
+One-page mental model: how a request flows, and which IDs link everything.
+==========================================================================
+
+------------------------------------------------------------------
+1. THE STACK
+------------------------------------------------------------------
+  FRONTEND   Next.js (App Router) on VERCEL
+             adc-frontend-three.vercel.app
+             Talks to backend via NEXT_PUBLIC_API_URL.
+
+  BACKEND    Node + Express on RAILWAY
+             adc-backend-production.up.railway.app/api
+             Single instance. Plain `pg` (no ORM).
+
+  DATABASE   Supabase Postgres (Mumbai / ap-south)
+             Reached through the Supabase POOLER (not direct).
+
+  AUTH       Supabase Auth (Google login, Email/OTP, Email+Password).
+             Frontend holds the session; backend verifies the JWT.
+
+  PAYMENTS   Razorpay (Orders API + Standard Checkout).
+  SHIPPING   Delhivery B2C (waybill + shipment + label PDF).
+  EMAIL      Order/contact emails (best-effort).
+
+
+------------------------------------------------------------------
+2. AUTH FLOW  (happens on EVERY authenticated request)
+------------------------------------------------------------------
+  Browser  --Authorization: Bearer <supabase JWT>-->  Backend
+                                                        |
+   parseAuth  -> verifySupabaseToken (JWT signature)    |
+   -> syncUser: find/create the `users` row by EMAIL    v
+                                              req.user = { email, ... }
+
+  => The EMAIL in the JWT is the anchor. It maps to exactly one
+     `users.id`. Everything below is scoped to that user.
+
+
+------------------------------------------------------------------
+3. DATA MODEL  (key tables + the IDs that matter)
+------------------------------------------------------------------
+  users        id (PK)  ·  email (unique)  ·  role (CUSTOMER/ADMIN)
+
+  cart         id (PK)  ·  user_id  -> ONE cart per user
+  cart_items   id (PK)  ·  cart_id  ·  product_id  ·  quantity
+
+  products     id (PK)  ·  name  ·  price  ·  stock_quantity ...
+
+  orders       id (PK)              <- internal API id  (/orders/:id)
+               order_number         <- business id "ADC<timestamp>"
+               razorpay_order_id    <- Razorpay's order id
+               delhivery_waybill    <- Delhivery AWB (tracking)
+               delhivery_shipment_id, shipment_status, tracking_url,
+               label_generated, payment_status, order_status,
+               total_amount, address_id, user_id, created_at ...
+  order_items  id (PK)  ·  order_id  ·  product_id  ·  qty  ·  price
+  payments     id (PK)  ·  order_id  ·  provider  ·  transaction_id
+                                       (= razorpay_payment_id) ...
+  addresses    id (PK)  ·  user_id  ·  full_name ·  pincode ...
+
+
+------------------------------------------------------------------
+4. THE ORDER JOURNEY  (cart -> order -> payment -> shipment)
+   ...and exactly which ID is used at each step.
+------------------------------------------------------------------
+
+  STEP A — ADD TO CART            POST /cart/items
+  ----------------------------------------------------------------
+    There is ONE cart per user (cart.id), created on first add.
+    Items are stored as cart_items (cart_id + product_id + qty).
+    >> CART ID = cart.id  (per USER, NOT per order/item).
+
+  STEP B — PLACE ORDER            POST /orders
+  ----------------------------------------------------------------
+    Cart contents are SNAPSHOTTED into a new order:
+      - orders.id           -> auto serial (internal id)
+      - orders.order_number -> "ADC" + YYYYMMDDHHMMSS   (genOrderNumber)
+    order_items are copied from the cart, then THE CART IS CLEARED.
+    >> From here on, the order is tracked by orders.id (in URLs)
+       and shown to humans as order_number.
+
+  STEP C — CREATE RAZORPAY ORDER  POST /orders/:id/payment/razorpay-order
+  ----------------------------------------------------------------
+    Backend calls Razorpay createOrder with:
+        amount  = total_amount * 100  (paise)
+        receipt = orders.order_number          <-- our business id
+        notes   = { orderId, orderNumber }
+    Razorpay returns its OWN id -> saved as orders.razorpay_order_id.
+    Frontend Checkout opens with { keyId, razorpay_order_id, amount }.
+    >> PUSHED TO RAZORPAY: order_number (as receipt) + amount.
+       STORED BACK: razorpay_order_id.
+
+  STEP D — VERIFY PAYMENT         POST /orders/:id/payment/verify
+  ----------------------------------------------------------------
+    Checkout returns { razorpay_payment_id, razorpay_order_id,
+                       razorpay_signature }.
+    Backend checks (server-side, never trusts the browser):
+      1. order belongs to this user
+      2. stored razorpay_order_id == returned razorpay_order_id
+      3. signature == HMAC_SHA256(razorpay_order_id|razorpay_payment_id,
+                                  RAZORPAY_API_SECRET)
+    On success -> finalizePaidOrder():
+      - payments row (transaction_id = razorpay_payment_id)
+      - orders.payment_status = PAID, order_status = CONFIRMED
+      - autoCreateShipment()   (see Step E)
+
+  STEP E — CREATE SHIPMENT        (inside finalizePaidOrder)
+  ----------------------------------------------------------------
+    autoCreateShipment(orders.id):
+      - fetchWaybill(1) from Delhivery        -> waybill (AWB)
+      - createShipment(...) where the carrier sees:
+            order      = orders.order_number   <-- our business id
+            seller_inv = orders.order_number
+            pin/name/address = the order's delivery address
+      - saves orders.delhivery_waybill, shipment_status=CREATED,
+        tracking_url, label_generated=TRUE
+    >> USED IN SHIPMENT: order_number (carrier reference) + waybill.
+    Webhook (Razorpay payment.captured) is a BACKSTOP that calls the
+    same finalizePaidOrder if the verify call is ever missed.
+
+
+------------------------------------------------------------------
+5. ID CHEAT-SHEET   (the short answer)
+------------------------------------------------------------------
+  One ORDER row carries FOUR linked identifiers — all on the same row:
+
+    orders.id            internal id   -> used in every API URL
+    orders.order_number  "ADC……"       -> shown to user,
+                                           sent to Razorpay (receipt)
+                                           AND to Delhivery (order ref)
+    orders.razorpay_order_id  "order_…" -> Razorpay's id (for signature)
+    orders.delhivery_waybill  AWB       -> Delhivery tracking + label
+
+  Cart is separate:
+    cart.id              one cart PER USER; emptied once the order
+                         is placed (its items become order_items).
+
+  So the "consistent order id" through the whole flow is the SAME
+  orders row: internally orders.id, externally orders.order_number.
+  Razorpay and Delhivery each add their own id, both stored on that row.
+
+
+------------------------------------------------------------------
+6. EXTERNAL SERVICES (auth + where the secret lives)
+------------------------------------------------------------------
+  Supabase   JWT verified with project keys (HS256 / ES256-JWKS).
+  Razorpay   key id (public) + secret (backend only). Test keys now.
+  Delhivery  "Authorization: Token <token>". Staging now.
+  All secrets in backend .env / Railway env — never in the repo.
+
+
+------------------------------------------------------------------
+7. KNOWN ISSUES (being addressed — see chat)
+------------------------------------------------------------------
+  [BUG 1] Payment feels slow: /payment/verify waits for Delhivery
+          (fetch waybill + create shipment) BEFORE replying. Fix =
+          reply immediately, create the shipment in the background.
+
+  [BUG 2] Admin > Delivery "Order shipments" is empty: /admin/orders
+          fires ~99 simultaneous DB queries (33 orders x 3, Promise.all)
+          and the Supabase SESSION pooler caps clients at 15 ->
+          error EMAXCONNSESSION -> HTTP 500 -> empty table.
+          Fix = fetch items/addresses/payments in a few set-based
+          queries instead of per-order (also makes it fast).
+          NOTE: session-pooler client cap is ~15, so the Postgres
+          connection pool max must stay BELOW that unless we move to
+          the TRANSACTION pooler (port 6543).
+==========================================================================
