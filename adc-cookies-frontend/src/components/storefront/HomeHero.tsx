@@ -118,7 +118,7 @@ function CategoryCard({ c, onGo, priority }: { c: Category; onGo: (href: string)
       className="home-cat-card"
       style={{
         textAlign: 'left', border: '1px solid var(--border-default)', cursor: 'pointer', padding: 0,
-        background: '#FFAF66', borderRadius: 'var(--radius-card)', overflow: 'hidden',
+        background: '#FFF4DE', borderRadius: 'var(--radius-card)', overflow: 'hidden',
         boxShadow: 'var(--shadow-sm)', transition: 'transform .25s var(--ease-out), box-shadow .25s var(--ease-out)',
         display: 'flex', flexDirection: 'column',
       }}
