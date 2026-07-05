@@ -10,9 +10,9 @@ import {
   adminToggleCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminGetShippingCost, adminCreateShipment, adminCancelShipment,
-  adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
+  adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument, adminFetchShadowfaxDoc,
   type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type AdminMessage,
-  type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
+  type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput, type ShadowfaxDocResult,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
@@ -80,6 +80,8 @@ export default function AdminDashboard() {
   const [shipmentBusy, setShipmentBusy] = useState<number | null>(null);
   const [trackResult, setTrackResult] = useState<Record<number, unknown>>({});
   const [shipmentWeights, setShipmentWeights] = useState<Record<number, string>>({});
+  const [delivSub, setDelivSub] = useState<'main' | 'shadowfax'>('main');
+  const [sfxDoc, setSfxDoc] = useState<Record<number, ShadowfaxDocResult | { error: string }>>({});
 
   const EMPTY_WH: WarehouseInput = { name: '', registeredName: '', pickupLocation: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', returnPincode: '', phone: '', email: '', isDefault: false, skipDelhivery: false };
 
@@ -374,6 +376,15 @@ export default function AdminDashboard() {
         {tab === 'delivery' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
+            {/* Sub-nav: Delhivery shipments/warehouses vs Shadowfax intracity */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {([['main', 'Shipments & Warehouses'], ['shadowfax', 'Shadowfax · Intracity']] as const).map(([id, label]) => {
+                const on = delivSub === id;
+                return <button key={id} onClick={() => setDelivSub(id)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: on ? 'none' : '1.5px solid var(--border-default)', background: on ? 'var(--gradient-warm)' : 'var(--surface-card)', color: on ? '#fff' : 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{label}</button>;
+              })}
+            </div>
+
+            {delivSub === 'main' && (<>
             {/* Warehouses */}
             <Panel title="Warehouses" loading={warehouses === null}
               action={<button onClick={() => setWhForm({ data: { ...EMPTY_WH } })} style={addBtn}><Plus size={16} /> Add warehouse</button>}>
@@ -557,6 +568,77 @@ export default function AdminDashboard() {
               {orders !== null && !orders.length && <Empty text="No orders yet." />}
               {orders === null && <button onClick={() => adminGetOrders().then(setOrders).catch(() => setOrders([]))} style={addBtn}>Load orders</button>}
             </Panel>
+            </>)}
+
+            {delivSub === 'shadowfax' && (
+              <Panel title="Shadowfax — intracity orders" loading={orders === null}
+                action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+                {orders && (() => {
+                  const sfx = orders.filter(o => o.carrier === 'SHADOWFAX');
+                  if (!sfx.length) return <Empty text="No intracity (Shadowfax) orders yet." />;
+                  return (
+                    <>
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>Same-city orders shipped by Shadowfax. There is no printable shipping label (the rider collects from the store) — the available documents are the live tracking link and the proof-of-delivery signature (after delivery).</p>
+                      <Table head={['Order', 'Customer', 'AWB', 'Status', 'Documents']}>
+                        {sfx.map(o => {
+                          const trackData = trackResult[o.id] as { status?: string; scans?: { time: string; event: string }[] } | undefined;
+                          const doc = sfxDoc[o.id];
+                          return (
+                            <tr key={o.id}>
+                              <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{o.orderStatus}</span></td>
+                              <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city} · {o.address?.pincode}</span></td>
+                              <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill || '—'}</span></td>
+                              <td style={td}><Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'DELIVERED'} /></td>
+                              <td style={{ ...td, whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                                {o.delhiveryWaybill ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <button title="Track" onClick={async () => {
+                                      const r = await adminTrackOrder(o.id).catch(() => null);
+                                      if (r?.ok) setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', scans: r.scans || [] } }));
+                                      else setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${r?.reason || 'unknown'}` } }));
+                                    }} style={iconBtn}><ExternalLink size={14} /></button>
+                                    <button title="Fetch documents (tracking link + POD)" onClick={async () => {
+                                      setErr('');
+                                      const r = await adminFetchShadowfaxDoc(o.id).catch(() => null);
+                                      setSfxDoc(p => ({ ...p, [o.id]: r || { error: 'Could not fetch documents' } }));
+                                    }} style={iconBtn}><FileText size={14} /></button>
+                                  </div>
+                                ) : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>No shipment</span>}
+                                {trackData && (
+                                  <div style={{ marginTop: 6, background: 'var(--surface-sunken)', borderRadius: 8, padding: '8px 12px', maxWidth: 340, whiteSpace: 'normal' }}>
+                                    <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-xs)', marginBottom: trackData.scans?.length ? 6 : 0 }}>{trackData.status}</div>
+                                    {(trackData.scans || []).slice(0, 5).map((s, i) => (
+                                      <div key={i} style={{ display: 'flex', gap: 8, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)' }}>
+                                        <span style={{ flex: 'none', color: 'var(--text-subtle)', minWidth: 110 }}>{s.time ? new Date(s.time).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                                        <span>{s.event}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {doc && (
+                                  <div style={{ marginTop: 6, fontSize: 'var(--text-2xs)', whiteSpace: 'normal', maxWidth: 340 }}>
+                                    {'error' in doc ? (
+                                      <span style={{ color: 'var(--status-error)', fontWeight: 700 }}>{doc.error}</span>
+                                    ) : (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                        {doc.trackUrl && <a href={doc.trackUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--text-link)', fontWeight: 700 }}>↗ Live tracking link</a>}
+                                        {doc.pod?.urls?.length ? doc.pod.urls.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ color: 'var(--text-link)', fontWeight: 700 }}>↗ Proof of delivery (PDF)</a>) : <span style={{ color: 'var(--text-muted)' }}>POD available after delivery.</span>}
+                                        {doc.pod?.recipient && <span style={{ color: 'var(--text-muted)' }}>Received by {doc.pod.recipient}</span>}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Table>
+                    </>
+                  );
+                })()}
+                {orders === null && <button onClick={() => adminGetOrders().then(setOrders).catch(() => setOrders([]))} style={addBtn}>Load orders</button>}
+              </Panel>
+            )}
           </div>
         )}
 

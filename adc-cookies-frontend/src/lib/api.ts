@@ -200,6 +200,9 @@ export async function getOrder(id: number): Promise<Order> { return request(`/or
 
 export interface DelhiveryTrackResult {
   tracked: boolean; waybill?: string; reason?: string;
+  // Normalized fields returned for BOTH carriers (Delhivery + Shadowfax).
+  carrier?: string; status?: string | null; trackUrl?: string | null;
+  scans?: { time: string; event: string }[];
   data?: { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
 }
 export async function trackOrderShipment(orderId: number): Promise<DelhiveryTrackResult> {
@@ -348,6 +351,12 @@ export interface OrderDocumentResult { ok: boolean; docType?: string; waybill?: 
 /** Fetch a Delhivery document (proof of delivery, signature, return image) for a shipped order. */
 export async function adminFetchOrderDocument(orderId: number, docType: DelhiveryDocType): Promise<OrderDocumentResult> {
   return request(`/admin/orders/${orderId}/document?type=${encodeURIComponent(docType)}`);
+}
+
+/** Shadowfax (intracity) documents: proof-of-delivery signature + shareable customer tracking link. */
+export interface ShadowfaxDocResult { ok: boolean; awb?: string; status?: string | null; trackUrl?: string | null; pod?: { recipient?: string | null; urls: string[] } | null; reason?: string; }
+export async function adminFetchShadowfaxDoc(orderId: number): Promise<ShadowfaxDocResult> {
+  return request(`/admin/orders/${orderId}/shadowfax-doc`);
 }
 
 /**

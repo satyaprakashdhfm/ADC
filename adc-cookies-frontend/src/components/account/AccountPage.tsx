@@ -144,16 +144,13 @@ function ShipmentTracker({ order }: { order: Order }) {
     setTracking(false);
   };
 
-  const shipment = trackResult?.data?.ShipmentData?.[0]?.Shipment;
-  const scans = shipment?.Scans ?? [];
-  const latestStatus = shipment?.Status?.Status;
-  const latestNote = shipment?.Status?.Instructions;
-  // Delhivery repeats scan text and echoes the current status, so the raw list reads as
-  // "Manifested · Manifest uploaded · Manifested". The pill already shows the current status —
-  // drop scans equal to it and collapse duplicates so the timeline shows real progress only.
+  // Backend normalizes BOTH carriers (Delhivery + Shadowfax) into { status, scans:[{time,event}] }.
+  const latestStatus = trackResult?.status || trackResult?.data?.ShipmentData?.[0]?.Shipment?.Status?.Status || null;
+  const rawScans = trackResult?.scans ?? [];
+  // Drop scans equal to the current status and collapse duplicates so the timeline shows real progress only.
   const seenScan = new Set<string>();
-  const timelineScans = scans.filter(s => {
-    const t = s?.ScanDetail?.Scan || s?.ScanDetail?.Instructions || '';
+  const timelineScans = rawScans.filter(s => {
+    const t = s?.event || '';
     if (!t || t === latestStatus || seenScan.has(t)) return false;
     seenScan.add(t);
     return true;
@@ -182,23 +179,20 @@ function ShipmentTracker({ order }: { order: Order }) {
       {trackResult && trackResult.tracked && (
         <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 14, padding: 14 }}>
           {latestStatus && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: timelineScans.length ? 10 : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: timelineScans.length ? 10 : 0, flexWrap: 'wrap' }}>
               <span style={{ padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: latestStatus.toLowerCase().includes('deliver') ? 'var(--status-success-bg)' : 'var(--amber-100)', color: latestStatus.toLowerCase().includes('deliver') ? 'var(--status-success)' : 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 900 }}>{latestStatus}</span>
-              {latestNote && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{latestNote}</span>}
+              {trackResult?.trackUrl && <a href={trackResult.trackUrl} target="_blank" rel="noreferrer" style={{ fontSize: 'var(--text-xs)', color: 'var(--text-link)', fontWeight: 700 }}>Track live →</a>}
             </div>
           )}
-          {timelineScans.slice(0, 4).map((s, i) => {
-            const sd = s?.ScanDetail;
-            return sd ? (
-              <div key={i} style={{ display: 'flex', gap: 10, paddingTop: 8, marginTop: 8, borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--brand-secondary)', marginTop: 5, flex: 'none' }} />
-                <div>
-                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{sd.Scan || sd.Instructions}</div>
-                  {sd.ScanDateTime && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{sd.ScanDateTime}</div>}
-                </div>
+          {timelineScans.slice(0, 4).map((s, i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, paddingTop: 8, marginTop: 8, borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)' }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--brand-secondary)', marginTop: 5, flex: 'none' }} />
+              <div>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{s.event}</div>
+                {s.time && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{s.time}</div>}
               </div>
-            ) : null;
-          })}
+            </div>
+          ))}
           {!timelineScans.length && !latestStatus && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No tracking events yet.</p>}
         </div>
       )}

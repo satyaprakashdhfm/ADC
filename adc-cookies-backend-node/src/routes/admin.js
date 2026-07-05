@@ -16,7 +16,7 @@ import {
   fetchDocument,
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
-import { shadowfaxConfigured, trackShadowfax } from '../shadowfax.js';
+import { shadowfaxConfigured, trackShadowfax, getShadowfaxPod } from '../shadowfax.js';
 
 const router = Router();
 router.use(requireAdmin);
@@ -507,6 +507,26 @@ function firstUrl(v) {
   if (typeof v === 'object') { for (const x of Object.values(v)) { const u = firstUrl(x); if (u) return u; } return null; }
   return null;
 }
+
+// GET /api/admin/orders/:id/shadowfax-doc — Shadowfax documents for an intracity order:
+// proof-of-delivery signature (after delivery) + the shareable customer tracking link.
+router.get('/orders/:id/shadowfax-doc', async (req, res) => {
+  const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  if (!order) throw new ApiError('Order not found', 404);
+  if (order.carrier !== 'SHADOWFAX') return res.json({ ok: false, reason: 'not_shadowfax' });
+  if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
+  if (!shadowfaxConfigured()) throw new ApiError('Shadowfax not configured', 503);
+
+  const awb = order.delhivery_waybill;
+  const [pod, track] = await Promise.all([getShadowfaxPod(awb), trackShadowfax(awb)]);
+  res.json({
+    ok: true,
+    awb,
+    status: track.ok ? (track.status || null) : null,
+    trackUrl: track.ok ? (track.trackUrl || null) : null,
+    pod: pod.ok ? { recipient: pod.recipient, urls: pod.urls } : null,
+  });
+});
 
 // GET /api/admin/orders/:id/document?type=EPOD — fetch a B2C document (proof of delivery,
 // signature, return-QC image) for a Delhivery order. Only after the shipment exists.

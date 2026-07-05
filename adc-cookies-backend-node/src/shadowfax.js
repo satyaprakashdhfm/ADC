@@ -152,7 +152,7 @@ export async function createShadowfaxOrder({ order, address, items = [], pickup 
   return { ok: false, reason: String(reason).slice(0, 200), detail: r.data };
 }
 
-// Live tracking for an AWB. Returns { ok, status?, data }.
+// Live tracking for an AWB. Returns { ok, status?, trackUrl?, data }.
 export async function trackShadowfax(awb) {
   if (!shadowfaxConfigured()) return { ok: false, reason: 'not_configured' };
   const r = await sfxRequest(`/v4/clients/orders/${encodeURIComponent(awb)}/track/`);
@@ -160,5 +160,23 @@ export async function trackShadowfax(awb) {
     log('track', `awb=${awb} | FAILED status=${r.status}`);
     return { ok: false, reason: `status_${r.status}`, data: r.data };
   }
-  return { ok: true, status: r.data?.order_details?.status, data: r.data };
+  return { ok: true, status: r.data?.order_details?.status, trackUrl: r.data?.order_details?.customer_track_url || null, data: r.data };
+}
+
+// Proof of Delivery — recipient's signature sheet (S3 PDF) + name. Only after the shipment is
+// `delivered` / `rts_d`. Shadowfax has no printable shipping label (the rider collects from the
+// store), so POD + the customer tracking URL are the documents we can surface. Returns
+// { ok, recipient?, urls: string[], data }.
+export async function getShadowfaxPod(awb) {
+  if (!shadowfaxConfigured()) return { ok: false, reason: 'not_configured' };
+  const r = await sfxRequest('/v1/clients/pod_details/', { method: 'POST', body: { awb_numbers: [awb] } });
+  if (!r.ok || r.data?.message !== 'Success') {
+    log('pod', `awb=${awb} | FAILED status=${r.status}`);
+    return { ok: false, reason: `status_${r.status}`, data: r.data };
+  }
+  const row = r.data?.pod_details?.[awb] || null;
+  // recipient_signature arrives as a Python-style stringified list: "['https://…report.pdf']".
+  const urls = String(row?.recipient_signature || '').match(/https?:\/\/[^'"\]\s]+/g) || [];
+  log('pod', `awb=${awb} | ✓ ${urls.length} doc(s)`);
+  return { ok: true, recipient: row?.recipient_name || row?.recipient || null, urls, data: row };
 }

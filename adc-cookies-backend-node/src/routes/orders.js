@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { shadowfaxConfigured, createShadowfaxOrder, zoneStores } from '../shadowfax.js';
+import { shadowfaxConfigured, createShadowfaxOrder, zoneStores, trackShadowfax } from '../shadowfax.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from '../razorpay.js';
 
 const router = Router();
@@ -316,15 +316,32 @@ router.get('/:id/delhivery-track', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) throw new ApiError('Order not found');
   if (!order.delhivery_waybill) return res.json({ tracked: false, reason: 'no_waybill' });
+
+  // Intracity orders ship via Shadowfax — track them there, NOT Delhivery (the AWB lives in the
+  // delhivery_waybill column for both carriers, so branch on `carrier`).
+  if (order.carrier === 'SHADOWFAX') {
+    if (!shadowfaxConfigured()) return res.json({ tracked: false, reason: 'shadowfax_not_configured' });
+    const result = await trackShadowfax(order.delhivery_waybill);
+    if (!result.ok) return res.json({ tracked: false, reason: result.reason });
+    if (result.status) await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [result.status, nowIso(), order.id]);
+    const scans = (result.data?.tracking_details || [])
+      .map(t => ({ time: t.created, event: [t.status, t.remarks].filter(Boolean).join(' — ') }))
+      .reverse();
+    return res.json({ tracked: true, carrier: 'SHADOWFAX', waybill: order.delhivery_waybill, status: result.status || null, trackUrl: result.trackUrl || null, scans });
+  }
+
+  // Pan-India orders ship via Delhivery.
   const result = await trackShipment(order.delhivery_waybill);
   if (!result.ok) return res.json({ tracked: false, reason: result.reason });
-  // Pull the latest status string from the Delhivery response for the status update
   const pkg = Array.isArray(result.data?.ShipmentData) ? result.data.ShipmentData[0]?.Shipment : null;
   const latestStatus = pkg?.Status?.Status || null;
   if (latestStatus) {
     await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [latestStatus, nowIso(), order.id]);
   }
-  return res.json({ tracked: true, waybill: order.delhivery_waybill, data: result.data });
+  const scans = (pkg?.Scans || [])
+    .map(s => ({ time: s.ScanDetail?.ScanDateTime || '', event: [s.ScanDetail?.Scan, s.ScanDetail?.Instructions].filter(Boolean).join(' — ') }))
+    .reverse();
+  return res.json({ tracked: true, carrier: 'DELHIVERY', waybill: order.delhivery_waybill, status: latestStatus, scans, data: result.data });
 });
 
 // Step 1 of payment: create a Razorpay order for this DB order so Checkout can open.
