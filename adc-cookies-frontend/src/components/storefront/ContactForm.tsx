@@ -7,7 +7,7 @@ const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
 const inputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box', padding: '13px 16px', borderRadius: 'var(--radius-input)',
-  border: '1.5px solid var(--border-default)', background: 'var(--cream-100)',
+  border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)',
   fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)',
 };
 const labelStyle: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 };
