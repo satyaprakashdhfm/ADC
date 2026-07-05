@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Dough Cookie — Home (colour playground)</title>
+<style>
+/* ============================================================================
+   A DOUGH COOKIE — HOME PAGE  ·  COLOUR PLAYGROUND
+   ----------------------------------------------------------------------------
+   This is a faithful, self-contained copy of the live home page layout.
+   EVERY colour on the page comes from ONE of the variables in :root below.
+   → Change a hex value here and the whole page (and every matching section on
+     the real site) recolours. Edit, refresh the browser, then send me the file
+     and I'll apply the exact hexes to the real site.
+   ============================================================================ */
+:root{
+
+  /* ---- PAGE & FULL-WIDTH BANDS (top → bottom of the page) ---- */
+  --page-bg:          #F2E1BE;   /* base page background, behind everything      */
+  --ribbon-bg:        #FFF4DE;   /* very top announcement ribbon (Pure Veg/offer)*/
+  --header-bg:        #FFFFFF;   /* sticky header / nav bar band                 */
+  --hero-bg:          #FFF8EE;   /* FIRST section: hero + Cookies/Tins/Corporate */
+  --band-about:       #FBE1CE;   /* "About Us" band (salmon)                     */
+  --band-ingredients: #FBE7C1;   /* "The Finest Ingredients" band (apricot)      */
+  --band-stores:      #FFFCF8;   /* "Our Stores" band (cream)                    */
+  --band-contact:     #FBE1CE;   /* "Get in Touch" band (salmon)                 */
+  --band-reviews:     #FFF8F1;   /* "Customer Love" reviews band                 */
+  --footer-bg:        #2B1D12;   /* footer (dark brown)                          */
+
+  /* ---- CARDS & SMALL SURFACES ---- */
+  --card-bg:          #FBEACB;   /* product/ingredient/store cards (light apricot)*/
+  --pill-bg:          #FFFFFF;   /* search pill + white form card                */
+  --surface-raised:   #F6E0B8;   /* inputs / chips inside cards                  */
+  --corporate-bg:     #201509;   /* dark corporate banner card                   */
+
+  /* ---- BRAND (buttons, accents, links) ---- */
+  --brand-amber:      #F29F05;
+  --brand-orange:     #EF7507;
+  --brand-gradient:   linear-gradient(135deg,#F29F05 0%,#EF7507 100%);
+  --brand-soft:       #FEF6E6;   /* pale amber chip behind icons                 */
+
+  /* ---- TEXT ---- */
+  --text-strong:      #2B1D12;   /* headings                                     */
+  --text-body:        #4A3525;   /* body paragraphs                              */
+  --text-muted:       #7A6353;   /* secondary / captions                         */
+  --text-on-brand:    #FFFFFF;   /* text on orange buttons                       */
+  --text-on-footer:   #FFF1DE;   /* footer text                                  */
+
+  /* ---- LINES & MISC ---- */
+  --border:           rgba(43,29,18,.12);
+  --whatsapp:         #25D366;
+  --star:             #F29F05;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Trebuchet MS','Segoe UI',system-ui,-apple-system,sans-serif;background:var(--page-bg);color:var(--text-body);line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{color:var(--text-strong);line-height:1.12;letter-spacing:-.02em;font-weight:800}
+a{text-decoration:none;color:inherit}
+img{display:block;max-width:100%}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+.eyebrow{font-size:.78rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-orange);margin-bottom:8px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:11px 20px;border:none;border-radius:999px;background:var(--brand-gradient);color:var(--text-on-brand);font-weight:800;font-size:.95rem;cursor:pointer;box-shadow:0 12px 30px rgba(242,159,5,.30)}
+.pill{background:var(--card-bg);border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:.75rem;font-weight:700;color:var(--brand-orange)}
+
+/* ---- Placeholder "photos" so you can judge colour in context ---- */
+.photo{background:radial-gradient(120% 120% at 35% 28%,#F8C24D,#EF7507);position:relative;overflow:hidden}
+.photo::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.35),transparent 45%)}
+.photo.cool{background:radial-gradient(120% 120% at 40% 25%,#FBD98A,#D9890A)}
+.photo.dark{background:radial-gradient(120% 120% at 40% 30%,#6E4410,#2B1D12)}
+
+/* ============================ RIBBON ============================ */
+.ribbon{background:var(--ribbon-bg);color:var(--text-strong);text-align:center;padding:6px 40px;font-size:.8rem;font-weight:700;border-bottom:1px solid var(--border)}
+
+/* ============================ HEADER ============================ */
+.header{position:sticky;top:0;z-index:50;background:var(--header-bg);border-bottom:1px solid var(--border)}
+.header .row1{display:flex;align-items:center;gap:28px;padding:6px 24px;max-width:1200px;margin:0 auto}
+.logo{font-weight:900;letter-spacing:-.03em;line-height:.92;flex:none}
+.logo .a{font-size:1.1rem;color:var(--brand-amber)}
+.logo .c{font-size:2.6rem;color:var(--brand-orange)}
+.logo small{display:block;font-size:.55rem;letter-spacing:.32em;color:var(--brand-amber);font-weight:700}
+.search{flex:1;max-width:640px;margin:0 auto;display:flex;align-items:center;gap:8px;background:var(--pill-bg);border:1.5px solid var(--border);border-radius:999px;padding:6px 6px 6px 18px}
+.search input{flex:1;border:none;outline:none;background:transparent;font-size:1rem;color:var(--text-strong);font-family:inherit}
+.search .ico{color:var(--text-muted);font-size:1.1rem}
+.circle{width:46px;height:46px;border-radius:50%;border:1.5px solid var(--border);background:var(--card-bg);display:grid;place-items:center;flex:none;color:var(--text-strong)}
+.header .nav{display:flex;justify-content:center;gap:34px;padding:8px 24px 12px;flex-wrap:wrap;border-top:1px solid var(--border)}
+.header .nav a{font-weight:700;color:var(--text-strong);font-size:1rem}
+
+/* ============================ HERO (first section) ============================ */
+.hero{background:var(--hero-bg)}
+.hero .head{text-align:center;padding:22px 24px 14px;max-width:1200px;margin:0 auto}
+.hero h1{font-size:clamp(1.7rem,1.2rem + 2.4vw,2.9rem);margin-bottom:10px}
+.hero .head p{max-width:520px;margin:0 auto;color:var(--text-body);font-weight:500}
+.cats{max-width:1200px;margin:0 auto;padding:6px 24px 22px;display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.cat{background:var(--card-bg);border:1px solid var(--border);border-radius:28px;overflow:hidden;box-shadow:0 2px 8px rgba(58,37,26,.06);display:flex;flex-direction:column}
+.cat .photo{height:180px}
+.cat .body{padding:18px;display:flex;flex-direction:column;gap:10px}
+.cat .body .t{display:flex;align-items:center;gap:9px}
+.cat .icon{width:34px;height:34px;border-radius:10px;background:var(--brand-soft);color:var(--brand-orange);display:grid;place-items:center;flex:none;font-weight:900}
+.cat h3{font-size:1.4rem}
+.cat p{color:var(--text-body);font-size:.95rem}
+.corp{max-width:1200px;margin:0 auto;padding:0 24px 56px}
+.corp .card{position:relative;border-radius:28px;overflow:hidden;min-height:180px;background:var(--corporate-bg);color:#fff;padding:32px;display:flex;flex-direction:column;justify-content:center;gap:12px}
+.corp h2{color:#fff;font-size:1.8rem}
+.corp p{color:rgba(255,245,230,.85);max-width:480px}
+
+/* ============================ FULL-WIDTH BANDS ============================ */
+.band{padding:clamp(36px,5vw,72px) 0}
+.split{display:flex;flex-wrap:wrap;gap:48px;align-items:center}
+.col{flex:1 1 320px;min-width:0}
+.imgbox{width:100%;aspect-ratio:4/3;border-radius:28px;overflow:hidden;box-shadow:0 8px 24px rgba(58,37,26,.10)}
+.band h2{font-size:clamp(1.5rem,1.1rem + 1.7vw,2.25rem);margin-bottom:12px}
+.band h3{font-size:clamp(1.3rem,1rem + 1.3vw,1.85rem);margin-bottom:10px}
+.band p{color:var(--text-body);max-width:600px;margin-bottom:16px}
+.linkmore{color:var(--brand-orange);font-weight:800;font-size:.9rem}
+
+.about{background:var(--band-about);border-top:1px solid var(--border)}
+.ingredients{background:var(--band-ingredients)}
+.stores{background:var(--band-stores)}
+.contact{background:var(--band-contact);border-bottom:1px solid var(--border)}
+.reviews{background:var(--band-reviews);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+
+/* Ingredients cards */
+.ing-head{text-align:center;max-width:720px;margin:0 auto 32px}
+.ing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.ing{background:var(--card-bg);border:1px solid var(--border);border-radius:28px;box-shadow:0 2px 8px rgba(58,37,26,.06);padding:24px}
+.ing .n{font-size:2rem;font-weight:900;color:var(--brand-orange);margin-bottom:8px}
+.ing h4{font-size:1.15rem;margin-bottom:8px}
+.ing p{font-size:.92rem;color:var(--text-body);margin:0}
+
+/* Stores list */
+.storelist{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.storecard{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:22px;background:var(--card-bg);box-shadow:0 2px 8px rgba(58,37,26,.05)}
+.storecard .city{font-size:.68rem;font-weight:900;color:var(--brand-orange);text-transform:uppercase;letter-spacing:.08em}
+.storecard h4{font-size:.95rem}
+.storecard .addr{font-size:.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orderbtn{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:999px;background:var(--brand-gradient);color:#fff;font-weight:800;font-size:.68rem}
+
+/* Contact form + chips */
+.chips{display:flex;flex-direction:column;gap:12px}
+.chip{display:inline-flex;align-items:center;gap:12px;font-weight:700;font-size:.9rem;color:var(--text-strong)}
+.chip .ic{width:38px;height:38px;border-radius:11px;background:var(--pill-bg);border:1px solid var(--border);color:var(--brand-orange);display:grid;place-items:center;flex:none}
+.chip .ic.wa{background:var(--whatsapp);color:#fff;border:none}
+.form{background:var(--pill-bg);border:1px solid var(--border);border-radius:26px;padding:24px;box-shadow:0 8px 24px rgba(58,37,26,.08);display:flex;flex-direction:column;gap:14px}
+.form label{font-size:.9rem;font-weight:700;color:var(--text-muted);display:block;margin-bottom:6px}
+.form input,.form textarea{width:100%;padding:13px 16px;border-radius:16px;border:1.5px solid var(--border);background:var(--surface-raised);font-family:inherit;font-size:1rem;color:var(--text-strong)}
+
+/* Reviews */
+.rev-head{text-align:center;margin-bottom:18px}
+.rev-row{display:flex;gap:16px;overflow-x:auto;padding-bottom:6px}
+.rev{flex:none;width:300px;background:var(--card-bg);border:1px solid var(--border);border-radius:28px;box-shadow:0 2px 8px rgba(58,37,26,.06);padding:22px 18px;text-align:center;display:flex;flex-direction:column;gap:7px;align-items:center}
+.rev .stars{color:var(--star);letter-spacing:2px}
+.rev .name{font-weight:700;font-size:.8rem;color:var(--text-strong)}
+.rev .verified{background:#160D06;color:#fff;font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:5px}
+.rev h4{font-size:.95rem}
+.rev p{font-size:.82rem;color:var(--text-muted);margin:0}
+
+/* Footer */
+.footer{background:var(--footer-bg);color:var(--text-on-footer);padding:48px 0 28px}
+.footer .grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:28px}
+.footer h5{color:#fff;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px}
+.footer a{display:block;color:rgba(255,241,222,.75);font-size:.9rem;margin-bottom:8px}
+.footer .brand{font-weight:900;color:var(--brand-amber);font-size:1.4rem;margin-bottom:10px}
+.footer .copy{border-top:1px solid rgba(255,255,255,.12);margin-top:28px;padding-top:16px;font-size:.8rem;color:rgba(255,241,222,.6)}
+
+@media(max-width:760px){
+  .cats{grid-template-columns:1fr}
+  .header .row1{flex-wrap:wrap}
+  .footer .grid{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+  <!-- ===================== TOP RIBBON ===================== -->
+  <div class="ribbon">🌱 100% Pure Veg · All our cookies are eggless</div>
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="header">
+    <div class="row1">
+      <div class="logo"><span class="a">a dough</span><br><span class="c">cookie</span><small>Aroma of Freshness</small></div>
+      <div class="search"><span class="ico">🔍</span><input placeholder="Search cookies, gift tins…"><button class="btn">Search</button></div>
+      <div style="display:flex;gap:12px">
+        <span class="circle">🛍️</span>
+        <span class="circle">👤</span>
+      </div>
+    </div>
+    <nav class="nav">
+      <a>Home</a><a>Buy Cookies ▾</a><a>Cookie Tins ▾</a><a>Locations ▾</a><a>Partner with us ▾</a><a>About Us</a><a>Gallery</a><a>Contact</a>
+    </nav>
+  </header>
+
+  <!-- ===================== HERO + PRODUCT LINKS (first section) ===================== -->
+  <section class="hero">
+    <div class="head">
+      <h1>Fresh-baked cookies, delivered warm.</h1>
+      <p>Pick what you're craving — cookies, gift tins or bulk gifting — and order in a tap.</p>
+    </div>
+    <div class="cats">
+      <div class="cat">
+        <div class="photo"></div>
+        <div class="body">
+          <div class="t"><span class="icon">🍪</span><h3>Cookies</h3></div>
+          <p>Soft-centre, fresh-baked cookies in every flavour — Choc Chip to molten Biscoff & Nutella filled.</p>
+          <span class="btn" style="align-self:flex-start;margin-top:auto">Order Cookies →</span>
+        </div>
+      </div>
+      <div class="cat">
+        <div class="photo cool"></div>
+        <div class="body">
+          <div class="t"><span class="icon">🎁</span><h3>Cookie Tins</h3></div>
+          <p>Premium keepsake tins of filled cookies — ribbon-wrapped and ready to gift.</p>
+          <span class="btn" style="align-self:flex-start;margin-top:auto">Shop Cookie Tins →</span>
+        </div>
+      </div>
+    </div>
+    <div class="corp">
+      <div class="card">
+        <h2>💼 Corporate & Bulk Gifting</h2>
+        <p>Cookies for teams, clients and celebrations — branded boxes, bulk pricing and delivery, all coordinated for you.</p>
+        <span class="btn" style="align-self:flex-start">Enquire / Order in bulk →</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== ABOUT US (salmon band) ===================== -->
+  <section class="band about">
+    <div class="wrap split">
+      <div class="col">
+        <p class="eyebrow">About Us</p>
+        <h2>A Dough Cookie — baked fresh, served warm.</h2>
+        <p>Warm, soft-centre cookies with premium fillings and gift-ready packaging — baked in small batches so every centre stays soft and every bite smells like the oven.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+          <span class="pill">Baked fresh daily</span><span class="pill">Premium fillings</span><span class="pill">Gift-ready tins</span><span class="pill">Bulk & corporate</span>
+        </div>
+        <a class="linkmore">Read our full story →</a>
+      </div>
+      <div class="col"><div class="imgbox photo"></div></div>
+    </div>
+  </section>
+
+  <!-- ===================== FINEST INGREDIENTS (apricot band) ===================== -->
+  <section class="band ingredients">
+    <div class="wrap">
+      <div class="ing-head">
+        <p class="eyebrow">Freshly Baked</p>
+        <h3>The Finest Ingredients</h3>
+        <p style="max-width:100%;margin:0">Crafted from the best — because extraordinary cookies deserve nothing less.</p>
+      </div>
+      <div class="ing-grid">
+        <div class="ing"><div class="n">01</div><h4>Président Butter</h4><p>A premium French butter with a higher fat content that gives our cookies their signature gooey centre and soft, melt-in-your-mouth texture.</p></div>
+        <div class="ing"><div class="n">02</div><h4>Couverture Chocolate</h4><p>Imported chocolate with high cocoa content and a silky finish — intense cocoa flavour in every bite, elevating each cookie to gourmet status.</p></div>
+        <div class="ing"><div class="n">03</div><h4>Artisanal Flour Blend</h4><p>A curated blend of artisanal flours for the perfect structure and a nuanced, complex flavour only premium flour can deliver.</p></div>
+        <div class="ing"><div class="n">04</div><h4>Premium Fillings</h4><p>100% real Nutella, Lotus Biscoff, Reese's Cups and homemade peanut butter — never substitutes, always the real deal.</p></div>
+        <div class="ing"><div class="n">05</div><h4>Handcrafted in Small Batches</h4><p>Every cookie is handmade in small batches and baked fresh through the day, so each one reaches you warm and never mass-produced.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== OUR STORES (cream band) ===================== -->
+  <section class="band stores">
+    <div class="wrap split">
+      <div class="col"><div class="imgbox photo cool"></div></div>
+      <div class="col">
+        <p class="eyebrow">Our Stores</p>
+        <h3>Find A Dough Cookie across India</h3>
+        <p style="margin-bottom:14px">Walk in for warm cookies, or order online for delivery from your nearest store.</p>
+        <div class="storelist">
+          <div class="storecard"><div style="flex:1;min-width:0"><div class="city">Bengaluru</div><h4>A Dough Cookie — Jayanagar</h4><div class="addr">Jayanagar 9th Block, Bengaluru 560041</div></div><span class="orderbtn">🛍️ Order</span></div>
+          <div class="storecard"><div style="flex:1;min-width:0"><div class="city">Bengaluru</div><h4>A Dough Cookie — S.G. Palya</h4><div class="addr">Venkateshwara Layout, S.G. Palya 560029</div></div><span class="orderbtn">🛍️ Order</span></div>
+          <div class="storecard"><div style="flex:1;min-width:0"><div class="city">Bengaluru</div><h4>A Dough Cookie — Electronic City</h4><div class="addr">Neeladri Rd, Electronic City Phase I 560100</div></div><span class="orderbtn">🛍️ Order</span></div>
+          <div class="storecard"><div style="flex:1;min-width:0"><div class="city">Chennai</div><h4>A Dough Cookie — Besant Nagar</h4><div class="addr">6th Avenue, Besant Nagar 600090</div></div><span class="orderbtn">🛍️ Order</span></div>
+        </div>
+        <a class="linkmore">View all locations →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== GET IN TOUCH (salmon band) ===================== -->
+  <section class="band contact">
+    <div class="wrap split">
+      <div class="col">
+        <p class="eyebrow">Get in Touch</p>
+        <h3>Bulk orders, gifting or a question?</h3>
+        <p style="margin-bottom:18px">Drop your details and our team will get back to you — fast. Or reach us directly:</p>
+        <div class="chips">
+          <div class="chip"><span class="ic wa">💬</span> WhatsApp us</div>
+          <div class="chip"><span class="ic">📞</span> +91 90000 00000</div>
+          <div class="chip"><span class="ic">✉️</span> hello@adoughcookie.com</div>
+        </div>
+      </div>
+      <div class="col">
+        <form class="form" onsubmit="return false">
+          <div><label>Your name *</label><input placeholder="e.g. Satya Reddy"></div>
+          <div style="display:flex;gap:14px"><div style="flex:1"><label>Email *</label><input placeholder="you@email.com"></div><div style="flex:1"><label>Phone</label><input placeholder="+91 …"></div></div>
+          <div><label>How can we help? *</label><textarea rows="4" placeholder="Tell us about your order, gifting, or bulk request…"></textarea></div>
+          <button class="btn" style="justify-content:center;padding:15px">Send message</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CUSTOMER LOVE (reviews band) ===================== -->
+  <section class="band reviews">
+    <div class="wrap">
+      <div class="rev-head"><p class="eyebrow">Customer Love</p><h2>People can't stop</h2></div>
+      <div class="rev-row">
+        <div class="rev"><div class="stars">★★★★★</div><div style="display:flex;gap:6px;align-items:center"><span class="name">Ananya R.</span><span class="verified">Verified</span></div><h4>Gooey and unreal</h4><p>The Biscoff filled is unreal — gooey, warm, perfect. My weekly ritual now.</p></div>
+        <div class="rev"><div class="stars">★★★★★</div><div style="display:flex;gap:6px;align-items:center"><span class="name">Karthik M.</span><span class="verified">Verified</span></div><h4>Best in the city</h4><p>Arrived warm and smelled incredible — the signature cookie is the best in town.</p></div>
+        <div class="rev"><div class="stars">★★★★★</div><div style="display:flex;gap:6px;align-items:center"><span class="name">Sneha P.</span><span class="verified">Verified</span></div><h4>Gifting done right</h4><p>Beautiful packaging — gifted a Nutella tin and it was a total hit.</p></div>
+        <div class="rev"><div class="stars">★★★★★</div><div style="display:flex;gap:6px;align-items:center"><span class="name">Farah K.</span><span class="verified">Verified</span></div><h4>Soft centres every time</h4><p>Every batch has that soft molten centre. The peanut butter one is my favourite.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== FOOTER ===================== -->
+  <footer class="footer">
+    <div class="wrap">
+      <div class="grid">
+        <div>
+          <div class="brand">a dough cookie</div>
+          <p style="color:rgba(255,241,222,.7);max-width:320px">Warm, soft-centre cookies baked fresh daily — order online for delivery or gifting.</p>
+        </div>
+        <div><h5>Shop</h5><a>Cookies</a><a>Cookie Tins</a><a>Corporate</a></div>
+        <div><h5>Company</h5><a>About Us</a><a>Locations</a><a>Gallery</a></div>
+        <div><h5>Help</h5><a>Contact</a><a>Track order</a><a>FAQ</a></div>
+      </div>
+      <div class="copy">© A Dough Cookie · All rights reserved.</div>
+    </div>
+  </footer>
+
+</body>
+</html>
