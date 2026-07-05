@@ -213,8 +213,9 @@ body::before {
   z-index: 1;
 }
 
-/* Order / checkout / account pages — cards use the hero gold so they read as warm cards. */
-.order-cards { --surface-card: #FFCD90; }
+/* Order / checkout / account pages — mirror the "Finest Ingredients" look: gold page
+   background (#FFCD90) with lighter vanilla cards (#FFF4DE) on top. */
+.order-cards { background: #FFCD90; --surface-card: #FFF4DE; }
 
 /* Animations */
 @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-18px)} }
