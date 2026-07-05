@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import {
   adminDashboard, adminAnalytics, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
+  adminGetSettings, adminSetPromoProduct,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
   adminToggleCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
@@ -15,7 +16,7 @@ import {
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
-  IndianRupee, AlertTriangle, Plus, Pencil, Trash2, Check, X, LogOut, Gift,
+  IndianRupee, Plus, Pencil, Trash2, Check, X, LogOut, Gift,
   Truck, Warehouse as WarehouseIcon, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download, Search, Filter, CalendarRange,
 } from 'lucide-react';
 
@@ -51,6 +52,7 @@ export default function AdminDashboard() {
   const [range, setRange] = useState(() => ({ from: daysAgoStr(29), to: todayStr() }));
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
+  const [promoProductId, setPromoProductId] = useState<number | null>(null);
   const [coupons, setCoupons] = useState<AdminCoupon[] | null>(null);
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [messages, setMessages] = useState<AdminMessage[] | null>(null);
@@ -83,6 +85,7 @@ export default function AdminDashboard() {
   const isAdmin = !!user && user.role === 'ADMIN';
 
   useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
+  useEffect(() => { if (isAdmin) adminGetSettings().then(s => setPromoProductId(s.promoProductId)).catch(() => {}); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminAnalytics(range.from, range.to).then(setAnalytics).catch(() => {}); }, [isAdmin, range.from, range.to]);
 
   // Lazy-load each tab's data the first time it's opened.
@@ -206,12 +209,11 @@ export default function AdminDashboard() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
-              <StatCard icon={<Users size={20} />} label="Customers" value={stats ? String(stats.totalUsers) : '—'} />
+              <StatCard icon={<Users size={20} />} label="Customers" value={stats ? String(stats.totalUsers) : '—'} onClick={() => setTab('users')} />
               <StatCard icon={<ShoppingBag size={20} />} label="Total orders" value={stats ? String(stats.totalOrders) : '—'} />
               <StatCard icon={<IndianRupee size={20} />} label="Revenue" value={stats ? money(stats.totalRevenue) : '—'} sub={stats ? `${money(stats.paidRevenue)} paid` : ''} />
               <StatCard icon={<Package size={20} />} label="Products" value={stats ? String(stats.totalProducts) : '—'} />
               <StatCard icon={<MessageSquare size={20} />} label="New messages" value={stats ? String(stats.newMessages) : '—'} accent={!!stats?.newMessages} />
-              <StatCard icon={<AlertTriangle size={20} />} label="Low stock (≤10)" value={stats ? String(stats.lowStock) : '—'} accent={!!stats?.lowStock} />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
@@ -259,12 +261,8 @@ export default function AdminDashboard() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
               <div style={{ ...card, padding: 20 }}>
-                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Orders by area</h3>
-                {analytics?.ordersByArea.length ? <BarRows items={analytics.ordersByArea.map(a => ({ label: a.city, value: a.orders, sub: `${a.orders} · ${money(a.revenue)}` }))} /> : <Empty text="No area data yet." />}
-              </div>
-              <div style={{ ...card, padding: 20 }}>
-                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Customers by city</h3>
-                {analytics?.usersByCity.length ? <BarRows items={analytics.usersByCity.map(c => ({ label: c.city, value: c.users, sub: `${c.users} customer${c.users === 1 ? '' : 's'}` }))} color="#1F8A5B" /> : <Empty text="No customer locations yet." />}
+                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Orders by city</h3>
+                {analytics?.ordersByArea.length ? <BarRows items={analytics.ordersByArea.map(a => ({ label: a.city, value: a.orders, sub: `${a.orders} order${a.orders === 1 ? '' : 's'} · ${money(a.revenue)}` }))} /> : <Empty text="No orders yet." />}
               </div>
             </div>
 
@@ -334,6 +332,22 @@ export default function AdminDashboard() {
 
         {/* ===== Products ===== */}
         {tab === 'products' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <Panel title="Homepage promo popup">
+            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>Pick the product featured in the popup shown to new visitors — its photo, name and description are used, and the button opens that product. Leave as Default for the generic offer.</p>
+            <select
+              value={promoProductId ?? ''}
+              onChange={async e => {
+                const val = e.target.value ? Number(e.target.value) : null;
+                setPromoProductId(val);
+                await adminSetPromoProduct(val).catch(err => setErr(String(err.message || err)));
+              }}
+              style={{ ...inp, width: 'auto', minWidth: 260, cursor: 'pointer' }}
+            >
+              <option value="">Default (no specific product)</option>
+              {(products || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </Panel>
           <Panel title="Products" loading={products === null} action={<button onClick={() => setEditing({ data: { ...EMPTY_PRODUCT } })} style={addBtn}><Plus size={16} /> Add product</button>}>
             <Table head={['Name', 'Category', 'Price', 'Stock', 'Tag', '']}>
               {(products || []).map(p => (
@@ -352,6 +366,7 @@ export default function AdminDashboard() {
             </Table>
             {products && !products.length && <Empty text="No products." />}
           </Panel>
+          </div>
         )}
 
         {/* ===== Delivery ===== */}
@@ -445,51 +460,57 @@ export default function AdminDashboard() {
             <Panel title="Order shipments" loading={orders === null}
               action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
               {orders && (
-                <Table head={['Order', 'Customer', 'Waybill', 'Shipment', 'Weight (kg)', 'Actions']}>
+                <Table head={['Order', 'Customer', 'Service', 'Waybill', 'Status', 'Actions']}>
                   {(orders || []).map(o => {
                     const w = shipmentWeights[o.id] ?? '0.5';
                     const trackData = trackResult[o.id] as { status?: string; note?: string; scans?: { time: string; event: string }[] } | undefined;
+                    const service = o.carrier === 'SHADOWFAX' ? { kind: 'Intracity', name: 'Shadowfax' }
+                      : o.carrier === 'DELHIVERY' ? { kind: 'Intercity', name: 'Delhivery' } : null;
                     return (
                       <tr key={o.id}>
                         <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{o.orderStatus}</span></td>
                         <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.pincode || ''}</span></td>
                         <td style={td}>
+                          {service
+                            ? <><span style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-xs)' }}>{service.kind}</span><br /><span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-2xs)' }}>({service.name})</span></>
+                            : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>—</span>}
+                        </td>
+                        <td style={td}>
                           {o.delhiveryWaybill
-                            ? <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill}</span>
+                            ? <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill}</span>
                             : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>—</span>}
                         </td>
                         <td style={td}><Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} /></td>
-                        <td style={td} onClick={e => e.stopPropagation()}>
-                          {!o.delhiveryWaybill && (
-                            <input type="number" value={w} min="0.1" step="0.1"
-                              onChange={e => setShipmentWeights(p => ({ ...p, [o.id]: e.target.value }))}
-                              style={{ ...inp, width: 80, padding: '6px 8px' }} />
-                          )}
-                        </td>
-                        <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                        <td style={{ ...td, whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
                           {!o.delhiveryWaybill ? (
-                            <button disabled={shipmentBusy === o.id} onClick={async () => {
-                              setShipmentBusy(o.id); setErr('');
-                              const r = await adminCreateShipment(o.id, Number(w) || 0.5).catch(e => { setErr(String(e.message || e)); return null; });
-                              if (r) setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, delhiveryWaybill: r.delhiveryWaybill, shipmentStatus: r.shipmentStatus } : x));
-                              setShipmentBusy(null);
-                            }} style={{ ...addBtn, padding: '7px 12px', fontSize: 'var(--text-xs)', marginRight: 6 }}>
-                              {shipmentBusy === o.id ? '…' : <><Truck size={13} /> Create</>}
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input type="number" value={w} min="0.1" step="0.1" title="Weight (kg)"
+                                onChange={e => setShipmentWeights(p => ({ ...p, [o.id]: e.target.value }))}
+                                style={{ ...inp, width: 62, padding: '6px 8px' }} />
+                              <button disabled={shipmentBusy === o.id} onClick={async () => {
+                                setShipmentBusy(o.id); setErr('');
+                                const r = await adminCreateShipment(o.id, Number(w) || 0.5).catch(e => { setErr(String(e.message || e)); return null; });
+                                if (r) setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, delhiveryWaybill: r.delhiveryWaybill, shipmentStatus: r.shipmentStatus, carrier: 'DELHIVERY' } : x));
+                                setShipmentBusy(null);
+                              }} style={{ ...addBtn, padding: '7px 12px', fontSize: 'var(--text-xs)' }}>
+                                {shipmentBusy === o.id ? '…' : <><Truck size={13} /> Create</>}
+                              </button>
+                            </div>
                           ) : (
-                            <>
-                              <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={{ ...iconBtn, marginRight: 4 }} title="Download label"><Download size={14} /></button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {o.carrier !== 'SHADOWFAX' && <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={iconBtn} title="Download label"><Download size={14} /></button>}
                               <button title="Track" onClick={async () => {
                                 const r = await adminTrackOrder(o.id).catch(() => null);
-                                if (r?.ok) {
+                                if (!r?.ok) { if (r) setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${r.reason || 'unknown'}` } })); return; }
+                                if (r.carrier === 'SHADOWFAX') {
+                                  setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', note: '', scans: r.scans || [] } }));
+                                } else {
                                   type ShipmentData = { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
                                   const shipment = (r.data as ShipmentData)?.ShipmentData?.[0]?.Shipment;
                                   const scans = (shipment?.Scans || []).map(s => ({ time: s.ScanDetail?.ScanDateTime || '', event: [s.ScanDetail?.Scan, s.ScanDetail?.Instructions].filter(Boolean).join(' — ') })).reverse();
                                   setTrackResult(p => ({ ...p, [o.id]: { status: shipment?.Status?.Status || 'No status', note: shipment?.Status?.Instructions || '', scans } }));
-                                } else if (r) {
-                                  setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${(r as { reason?: string }).reason || 'unknown'}` } }));
                                 }
-                              }} style={{ ...iconBtn, marginRight: 4 }}><ExternalLink size={14} /></button>
+                              }} style={iconBtn}><ExternalLink size={14} /></button>
                               {o.shipmentStatus !== 'CANCELLED' && (
                                 <button disabled={shipmentBusy === o.id} onClick={async () => {
                                   if (!confirm(`Cancel shipment ${o.delhiveryWaybill}?`)) return;
@@ -497,9 +518,9 @@ export default function AdminDashboard() {
                                   await adminCancelShipment(o.id).catch(e => { setErr(String(e.message || e)); });
                                   setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
                                   setShipmentBusy(null);
-                                }} style={{ ...iconBtn, color: 'var(--status-error)', marginRight: 0 }} title="Cancel shipment"><X size={14} /></button>
+                                }} style={{ ...iconBtn, color: 'var(--status-error)' }} title="Cancel shipment"><X size={14} /></button>
                               )}
-                            </>
+                            </div>
                           )}
                           {trackData && (
                             <div style={{ marginTop: 6, background: 'var(--surface-sunken)', borderRadius: 8, padding: '8px 12px', maxWidth: 340, whiteSpace: 'normal' }}>
@@ -748,64 +769,36 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {/* Shipment info */}
+              {/* Shipment — read-only summary; create/cancel/label live in the Delivery tab (no duplication) */}
               {(() => {
-                const modalW = shipmentWeights[o.id] ?? '0.5';
                 const modalTrack = trackResult[o.id] as { status?: string; note?: string; scans?: { time: string; event: string }[] } | undefined;
+                const service = o.carrier === 'SHADOWFAX' ? 'Intracity (Shadowfax)' : o.carrier === 'DELHIVERY' ? 'Intercity (Delhivery)' : null;
                 return (
                   <div style={{ ...card, padding: 14, marginBottom: 14 }}>
                     <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Shipment</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} />
+                      {service && <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)' }}>{service}</span>}
                       {o.delhiveryWaybill && <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill}</span>}
                     </div>
-                    {!o.delhiveryWaybill && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                        <Field label="Weight (kg)">
-                          <input type="number" value={modalW} min="0.1" step="0.1" onChange={e => setShipmentWeights(p => ({ ...p, [o.id]: e.target.value }))} style={{ ...inp, width: 90 }} />
-                        </Field>
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                      {!o.delhiveryWaybill ? (
-                        <button disabled={shipmentBusy === o.id} onClick={async () => {
-                          setShipmentBusy(o.id); setErr('');
-                          const r = await adminCreateShipment(o.id, Number(modalW) || 0.5).catch(e => { setErr(String(e.message || e)); return null; });
-                          if (r) {
-                            setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, delhiveryWaybill: r.delhiveryWaybill, shipmentStatus: r.shipmentStatus } : x));
-                            setViewOrder(prev => prev ? { ...prev, delhiveryWaybill: r.delhiveryWaybill, shipmentStatus: r.shipmentStatus } : prev);
+                    {o.delhiveryWaybill ? (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                        <button onClick={async () => {
+                          const r = await adminTrackOrder(o.id).catch(() => null);
+                          if (!r?.ok) return;
+                          if (r.carrier === 'SHADOWFAX') {
+                            setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', note: '', scans: r.scans || [] } }));
+                          } else {
+                            type ShipmentData = { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
+                            const shipment = (r.data as ShipmentData)?.ShipmentData?.[0]?.Shipment;
+                            const scans = (shipment?.Scans || []).map(s => ({ time: s.ScanDetail?.ScanDateTime || '', event: [s.ScanDetail?.Scan, s.ScanDetail?.Instructions].filter(Boolean).join(' — ') })).reverse();
+                            setTrackResult(p => ({ ...p, [o.id]: { status: shipment?.Status?.Status || 'No status', note: shipment?.Status?.Instructions || '', scans } }));
                           }
-                          setShipmentBusy(null);
-                        }} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)' }}>
-                          <Truck size={14} /> {shipmentBusy === o.id ? 'Creating…' : 'Create shipment'}
-                        </button>
-                      ) : (
-                        <>
-                          <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)' }}><Download size={14} /> Label</button>
-                          <button onClick={async () => {
-                            const r = await adminTrackOrder(o.id).catch(() => null);
-                            if (r?.ok) {
-                              type ShipmentData = { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
-                              const shipment = (r.data as ShipmentData)?.ShipmentData?.[0]?.Shipment;
-                              const scans = (shipment?.Scans || []).map(s => ({ time: s.ScanDetail?.ScanDateTime || '', event: [s.ScanDetail?.Scan, s.ScanDetail?.Instructions].filter(Boolean).join(' — ') })).reverse();
-                              setTrackResult(p => ({ ...p, [o.id]: { status: shipment?.Status?.Status || 'No status', note: shipment?.Status?.Instructions || '', scans } }));
-                            }
-                          }} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', background: 'var(--surface-raised)', color: 'var(--text-strong)', border: '1.5px solid var(--border-default)' }}><ExternalLink size={14} /> Track</button>
-                          {o.shipmentStatus !== 'CANCELLED' && (
-                            <button disabled={shipmentBusy === o.id} onClick={async () => {
-                              if (!confirm(`Cancel shipment ${o.delhiveryWaybill}?`)) return;
-                              setShipmentBusy(o.id); setErr('');
-                              await adminCancelShipment(o.id).catch(e => { setErr(String(e.message || e)); });
-                              setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
-                              setViewOrder(prev => prev ? { ...prev, shipmentStatus: 'CANCELLED' } : prev);
-                              setShipmentBusy(null);
-                            }} style={{ padding: '8px 14px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--status-error)', background: 'transparent', color: 'var(--status-error)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <X size={14} /> Cancel shipment
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
+                        }} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', background: 'var(--surface-raised)', color: 'var(--text-strong)', border: '1.5px solid var(--border-default)' }}><ExternalLink size={14} /> Track</button>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '10px 0 0' }}>Not shipped yet — create, cancel or download the label from the <strong>Delivery</strong> tab.</p>
+                    )}
                     {modalTrack && (
                       <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 8, padding: 12 }}>
                         <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>{modalTrack.status}{modalTrack.note ? ` — ${modalTrack.note}` : ''}</div>
@@ -957,9 +950,11 @@ function Donut({ segments, center, centerSub }: { segments: { label: string; val
   );
 }
 
-function StatCard({ icon, label, value, sub, accent }: { icon: React.ReactNode; label: string; value: string; sub?: string; accent?: boolean }) {
+function StatCard({ icon, label, value, sub, accent, onClick }: { icon: React.ReactNode; label: string; value: string; sub?: string; accent?: boolean; onClick?: () => void }) {
   return (
-    <div style={{ ...card, padding: 18 }}>
+    <div onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} style={{ ...card, padding: 18, cursor: onClick ? 'pointer' : 'default' }}
+      onMouseEnter={onClick ? (e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)'; }) : undefined}
+      onMouseLeave={onClick ? (e => { e.currentTarget.style.boxShadow = ''; e.currentTarget.style.transform = ''; }) : undefined}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <span style={{ width: 38, height: 38, borderRadius: 11, background: accent ? 'var(--brand-secondary)' : 'var(--amber-50)', color: accent ? '#fff' : 'var(--brand-secondary)', display: 'grid', placeItems: 'center', flex: 'none' }}>{icon}</span>
         <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', fontWeight: 700 }}>{label}</span>

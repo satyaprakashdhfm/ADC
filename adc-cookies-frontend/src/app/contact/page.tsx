@@ -31,7 +31,7 @@ export default function ContactPage() {
         <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr minmax(320px,460px)', gap: 28, alignItems: 'start' }} className="contact-layout">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 18 }} className="store-grid">
             {STORES.map((store) => (
-              <article key={store.city} style={{ background: 'rgba(244,234,214,.86)', border: '1px solid var(--border-default)', borderRadius: 24, padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+              <article key={store.name} style={{ background: 'rgba(244,234,214,.86)', border: '1px solid var(--border-default)', borderRadius: 24, padding: 24, boxShadow: 'var(--shadow-sm)' }}>
                 <p style={{ fontSize: 'var(--text-sm)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>{store.city}</p>
                 <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 10 }}>{store.name}</h2>
                 <p style={{ color: 'var(--text-body)', lineHeight: 1.65, marginBottom: 16 }}>{store.address}</p>
@@ -66,7 +66,7 @@ export default function ContactPage() {
             </div>
             <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
               {STORES.map((store) => (
-                <Link key={store.city} href={store.map} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-strong)', fontWeight: 800 }}>
+                <Link key={store.name} href={store.map} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-strong)', fontWeight: 800 }}>
                   <Navigation size={16} color="var(--brand-secondary)" /> Directions to {store.city}
                 </Link>
               ))}

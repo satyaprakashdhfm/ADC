@@ -14,6 +14,7 @@ import {
   shippingLabelUrl,
   trackShipment,
 } from '../delhivery.js';
+import { shadowfaxConfigured, trackShadowfax } from '../shadowfax.js';
 
 const router = Router();
 router.use(requireAdmin);
@@ -171,6 +172,26 @@ router.patch('/contact/:id/handled', async (req, res) => {
   const row = await getOne('UPDATE contact_messages SET handled = TRUE WHERE id = $1 RETURNING *', [req.params.id]);
   if (!row) throw new ApiError('Message not found');
   res.json({ id: row.id, handled: !!row.handled });
+});
+
+/* ---------- Site settings (homepage promo popup target) ---------- */
+router.get('/settings', async (_req, res) => {
+  const row = await getOne("SELECT value FROM site_settings WHERE key = 'promo_product_id'");
+  res.json({ promoProductId: row?.value ? Number(row.value) : null });
+});
+router.put('/settings', async (req, res) => {
+  const raw = req.body?.promoProductId;
+  const val = raw == null || raw === '' ? null : String(Number(raw));
+  if (val === null || Number.isNaN(Number(val))) {
+    await query("DELETE FROM site_settings WHERE key = 'promo_product_id'");
+    return res.json({ promoProductId: null });
+  }
+  await query(
+    `INSERT INTO site_settings (key, value) VALUES ('promo_product_id', $1)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [val]
+  );
+  res.json({ promoProductId: Number(val) });
 });
 
 /* ---------- Dashboard ---------- */
@@ -413,7 +434,7 @@ router.post('/orders/:id/shipment', async (req, res) => {
   }
 
   await query(
-    `UPDATE orders SET delhivery_waybill=$1, shipment_status='CREATED', tracking_url=$2, label_generated=TRUE, updated_at=$3 WHERE id=$4`,
+    `UPDATE orders SET delhivery_waybill=$1, carrier='DELHIVERY', shipment_status='CREATED', tracking_url=$2, label_generated=TRUE, updated_at=$3 WHERE id=$4`,
     [result.waybill, `https://www.delhivery.com/track/package/${result.waybill}`, nowIso(), order.id]
   );
   console.log(`[ADMIN-SHIPMENT] create OK | order=${order.order_number} | waybill=${result.waybill} | label=ready`);
@@ -443,23 +464,36 @@ router.delete('/orders/:id/shipment', async (req, res) => {
   res.json({ ok: true, waybill: order.delhivery_waybill });
 });
 
-// GET /api/admin/orders/:id/track — pull fresh tracking from Delhivery
+// GET /api/admin/orders/:id/track — pull fresh tracking from whichever carrier created the shipment.
 router.get('/orders/:id/track', async (req, res) => {
-  if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
   if (!order) throw new ApiError('Order not found', 404);
   if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
 
+  // Shadowfax (intracity) — normalize into { ok, carrier, status, scans } for the admin UI.
+  if (order.carrier === 'SHADOWFAX') {
+    if (!shadowfaxConfigured()) throw new ApiError('Shadowfax not configured', 503);
+    const result = await trackShadowfax(order.delhivery_waybill);
+    if (result.ok && result.status) {
+      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [result.status, nowIso(), order.id]);
+    }
+    const scans = (result.data?.tracking_details || [])
+      .map(t => ({ time: t.created, event: [t.status, t.remarks].filter(Boolean).join(' — ') }))
+      .reverse();
+    return res.json({ ok: result.ok, carrier: 'SHADOWFAX', status: result.status || null, scans });
+  }
+
+  // Delhivery (outstation)
+  if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
   const result = await trackShipment(order.delhivery_waybill);
   if (result.ok && result.data) {
-    // Update our local shipment_status from tracking data
     const pkg = Array.isArray(result.data?.ShipmentData) ? result.data.ShipmentData[0]?.Shipment : null;
     if (pkg?.Status?.Status) {
       await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3',
         [pkg.Status.Status, nowIso(), order.id]);
     }
   }
-  res.json(result);
+  res.json({ ...result, carrier: 'DELHIVERY' });
 });
 
 // GET /api/admin/delivery/label?waybills=X,Y — proxy the Delhivery shipping label PDF.

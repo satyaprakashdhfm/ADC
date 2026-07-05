@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { productPath } from '@/lib/products';
+import FooterCookies from './FooterCookies';
 
 export default function Footer() {
   return (
@@ -21,13 +21,8 @@ export default function Footer() {
             ))}
           </div>
         </div>
+        <FooterCookies />
         {([
-          ['Shop', [
-            ['ADC Special', productPath('ADC Special')],
-            ['Biscoff Filled', productPath('Biscoff Filled')],
-            ['Nutella Tin', productPath('Nutella Tin')],
-            ['All Products', '/#menu'],
-          ]],
           ['Company', [
             ['Our Story', '/about'],
             ['Gallery', '/gallery'],

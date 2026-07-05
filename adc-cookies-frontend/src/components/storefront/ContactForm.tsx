@@ -7,7 +7,7 @@ const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
 const inputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box', padding: '13px 16px', borderRadius: 'var(--radius-input)',
-  border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)',
+  border: '1.5px solid var(--border-default)', background: 'var(--cream-100)',
   fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)',
 };
 const labelStyle: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 };
@@ -36,7 +36,7 @@ export default function ContactForm() {
 
   if (status === 'done') {
     return (
-      <div style={{ background: 'rgba(244,234,214,.9)', border: '1px solid var(--border-default)', borderRadius: 26, padding: '40px 28px', textAlign: 'center', boxShadow: 'var(--shadow-md)' }}>
+      <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 26, padding: '40px 28px', textAlign: 'center', boxShadow: 'var(--shadow-md)' }}>
         <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', margin: '0 auto 18px' }}><Check size={32} color="#fff" strokeWidth={3} /></div>
         <h3 style={{ fontSize: 'var(--text-h3)', marginBottom: 8 }}>Thanks — we&apos;ve got it!</h3>
         <p style={{ color: 'var(--text-body)', lineHeight: 1.7, marginBottom: 20 }}>Our team will reach out to you shortly at the details you shared.</p>
@@ -46,7 +46,7 @@ export default function ContactForm() {
   }
 
   return (
-    <form onSubmit={submit} style={{ background: 'rgba(244,234,214,.9)', border: '1px solid var(--border-default)', borderRadius: 26, padding: 24, boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <form onSubmit={submit} style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 26, padding: 24, boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
         <label style={labelStyle} htmlFor="cf-name">Your name *</label>
         <input id="cf-name" style={inputStyle} placeholder="e.g. Satya Reddy" value={form.name} onChange={set('name')} />

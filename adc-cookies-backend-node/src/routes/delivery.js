@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getOne } from '../db.js';
 import { ApiError } from '../middleware.js';
 import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhivery.js';
+import { nearestStore } from '../shadowfax.js';
 
 const router = Router();
 
@@ -34,7 +35,17 @@ router.get('/tat', async (req, res) => {
 // Combined serviceability + TAT — used by checkout to show delivery info in one call.
 router.get('/check', async (req, res) => {
   const pin = String(req.query.pincode || '').replace(/\D/g, '');
+  console.log(`[DELIVERY] HIT /api/delivery/check | pincode=${pin || req.query.pincode || 'MISSING'}`);
   if (!/^\d{6}$/.test(pin)) return res.json({ serviceable: false, reason: 'invalid_pincode' });
+
+  // Intracity first: if the pincode is in a city where we have a store, it ships same-day from the
+  // nearest store via Shadowfax. We surface that here based on the store zone (robust + instant);
+  // the real Shadowfax serviceability is verified at order time, falling back to Delhivery if needed.
+  const pickup = nearestStore(pin);
+  if (pickup) {
+    console.log(`[DELIVERY] check | pin=${pin} | intracity zone → same-day from ${pickup.name}`);
+    return res.json({ serviceable: true, intracity: true, carrier: 'SHADOWFAX', store: pickup.name, city: pickup.city, sameDay: true, tat: null, expectedDeliveryDate: null, pincode: pin });
+  }
 
   if (!delhiveryConfigured()) {
     console.log(`[DELIVERY] check | pin=${pin} | delhivery=unconfigured → returning serviceable=true`);

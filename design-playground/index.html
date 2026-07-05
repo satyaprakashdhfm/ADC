@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADC — Palette Playground</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#FFF8F1;color:#2B1D12;line-height:1.5;padding:40px 24px}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:34px;margin:0 0 6px;font-weight:900}
+  .sub{color:#6B5844;margin:0 0 32px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+  .cardlink{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid #EAD9C2;border-radius:18px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.06);transition:transform .15s}
+  .cardlink:hover{transform:translateY(-4px)}
+  .swatches{display:flex;height:90px}
+  .swatches span{flex:1}
+  .meta{padding:16px 18px}
+  .meta h2{margin:0 0 4px;font-size:19px}
+  .meta p{margin:0;color:#6B5844;font-size:13px}
+  .hexes{margin-top:10px;font-size:11px;color:#8a7358;font-family:monospace}
+  footer{margin-top:32px;color:#8a7358;font-size:13px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎨 ADC — Palette Playground</h1>
+    <p class="sub">Four homepage mockups — colours <b>blended</b> (gradient washes, glows &amp; multi-colour buttons), not flat separate blocks. Open each, compare, then tell me which you like — I'll apply it to the real site.</p>
+    <div class="grid">
+      <a class="cardlink" href="01-warm-sand.html">
+        <div class="swatches" style="background:linear-gradient(120deg,#FBEBD3,#F7B733,#F29F05,#EF7507)"></div>
+        <div class="meta"><h2>01 · Warm Sand</h2><p>Cream→sand wash, colours blended in a gold→orange gradient.</p><div class="hexes">#F7B733 → #F29F05 → #EF7507</div></div>
+      </a>
+      <a class="cardlink" href="02-apricot-gold.html">
+        <div class="swatches" style="background:linear-gradient(120deg,#FDECC4,#F7B733,#F29F05,#E39000)"></div>
+        <div class="meta"><h2>02 · Apricot &amp; Gold</h2><p>Warmer golden feel — apricot wash blended into gold &amp; deep amber.</p><div class="hexes">#F7B733 → #F29F05 → #E39000</div></div>
+      </a>
+      <a class="cardlink" href="03-peach-orange.html">
+        <div class="swatches" style="background:linear-gradient(120deg,#FFE7D4,#FFB06B,#EF7507,#CD6303)"></div>
+        <div class="meta"><h2>03 · Peach &amp; Orange</h2><p>Punchier — peach wash blended into orange, salmon &amp; sienna.</p><div class="hexes">#FFB06B → #EF7507 → #CD6303</div></div>
+      </a>
+      <a class="cardlink" href="04-teal-pop.html">
+        <div class="swatches" style="background:linear-gradient(120deg,#F6E8CF,#F29F05,#EF7507,#06B1BB,#04959E)"></div>
+        <div class="meta"><h2>04 · Warm + Teal</h2><p>Warm cookie tones blended into a fresh teal — a true two-family mix.</p><div class="hexes">#F29F05 → #EF7507 → #06B1BB → #04959E</div></div>
+      </a>
+    </div>
+    <footer>Tip: open <b>index.html</b> in your browser, then click into each palette. Images are placeholders — focus on the colours.</footer>
+  </div>
+</body>
+</html>

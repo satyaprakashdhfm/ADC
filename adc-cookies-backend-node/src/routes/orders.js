@@ -6,23 +6,62 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
+import { shadowfaxConfigured, createShadowfaxOrder, zoneStores } from '../shadowfax.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from '../razorpay.js';
 
 const router = Router();
 router.use(requireAuth);
 
-// Auto-create a Delhivery shipment once an order is PAID.
-// Never throws — returns { ok, reason?, waybill? } so the caller (payment verify) stays safe.
-// Idempotent: if the order already has a waybill, it does nothing.
-async function autoCreateShipment(orderId, addressArg) {
-  if (!delhiveryConfigured()) { console.log(`[SHIPMENT] auto | order=${orderId} | skip=delhivery_not_configured`); return { ok: false, reason: 'not_configured' }; }
+// SFX_STORES + nearestStore (intracity pickup routing) live in ../shadowfax.js — shared with the
+// checkout /delivery/check so both use the same store-zone logic.
 
+// Auto-create a shipment once an order is PAID. Routes by DESTINATION PINCODE:
+//   • pincode in a city where we have a store (Bengaluru 560xxx / Chennai 600xxx) → Shadowfax (intracity)
+//   • anywhere else → Delhivery (out-of-city)
+// If Shadowfax isn't configured/serviceable or the call fails, it falls back to Delhivery.
+// Never throws — returns { ok, reason?, waybill?, carrier? }. Idempotent (skips if a waybill exists).
+async function autoCreateShipment(orderId, addressArg) {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
   if (!order) { console.log(`[SHIPMENT] auto | order=${orderId} | skip=order_not_found`); return { ok: false, reason: 'order_not_found' }; }
   if (order.delhivery_waybill) { console.log(`[SHIPMENT] auto | order=${order.order_number} | skip=already_created (waybill=${order.delhivery_waybill})`); return { ok: true, waybill: order.delhivery_waybill }; }
 
   const address = addressArg || (order.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null);
   if (!address) { console.log(`[SHIPMENT] auto | order=${order.order_number} | skip=no_address`); return { ok: false, reason: 'no_address' }; }
+
+  const items = await getAll('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+  const destPin = String(address.pincode || '').replace(/\D/g, '');
+  const stores = zoneStores(destPin);
+
+  // Routing decision — always logged so it's unambiguous in the terminal whether this order is
+  // even eligible for Shadowfax, and if not, exactly why (no store in that pincode zone vs
+  // Shadowfax not configured at all).
+  console.log(`[SHIPMENT] routing | order=${order.order_number} | dest_pin=${destPin} | zone_stores=${stores.length} | shadowfax_configured=${shadowfaxConfigured()}`);
+  if (!stores.length) console.log(`[SHIPMENT] routing | order=${order.order_number} | no ADC store in pincode zone ${destPin.slice(0, 3)}xx → Delhivery only`);
+  else if (!shadowfaxConfigured()) console.log(`[SHIPMENT] routing | order=${order.order_number} | SHADOWFAX_URL/SHADOWFAX_API missing → Delhivery only`);
+
+  // ---- Intracity → Shadowfax ----
+  // The pickup/return store's pincode must ALSO be serviceable (not just the destination), so we
+  // try each in-zone store nearest-first until Shadowfax accepts one. Only if none works do we
+  // fall back to Delhivery.
+  if (stores.length && shadowfaxConfigured()) {
+    console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | trying Shadowfax pickups: ${stores.map(s => `${s.name}(${s.pincode})`).join(', ')}`);
+    for (const pk of stores) {
+      const r = await createShadowfaxOrder({ order, address, items, pickup: pk });
+      if (r.ok) {
+        await query(
+          `UPDATE orders SET delhivery_waybill=$1, carrier='SHADOWFAX', shipment_status='CREATED', tracking_url=$2, label_generated=FALSE, updated_at=$3 WHERE id=$4`,
+          [r.awb, `https://track.shadowfax.in/#/track/${r.awb}`, nowIso(), orderId]
+        );
+        console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=SHADOWFAX | pickup=${pk.name} | awb=${r.awb} | ok=true`);
+        return { ok: true, waybill: r.awb, carrier: 'SHADOWFAX' };
+      }
+      console.log(`[SHIPMENT] auto | order=${order.order_number} | shadowfax pickup=${pk.name}(${pk.pincode}) failed=${r.reason}`);
+    }
+    console.log(`[SHIPMENT] auto | order=${order.order_number} | all Shadowfax pickups failed → Delhivery`);
+  }
+
+  // ---- Out-of-city (or Shadowfax unavailable) → Delhivery ----
+  if (!delhiveryConfigured()) { console.log(`[SHIPMENT] auto | order=${order.order_number} | skip=delhivery_not_configured`); return { ok: false, reason: 'not_configured' }; }
 
   const defaultWh = await getOne('SELECT * FROM warehouses WHERE is_active = TRUE ORDER BY is_default DESC, id ASC LIMIT 1');
   if (!defaultWh) { console.log(`[SHIPMENT] auto | order=${order.order_number} | skip=no_active_warehouse`); return { ok: false, reason: 'no_warehouse' }; }
@@ -34,7 +73,6 @@ async function autoCreateShipment(orderId, addressArg) {
   }
   const waybill = String(waybillRes.waybills[0]);
 
-  const items = await getAll('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
   const productsDesc = items.map(i => `${i.product_name} x${i.quantity}`).join(', ') || 'Cookies';
   const quantity = String(items.reduce((s, i) => s + i.quantity, 0) || 1);
 
@@ -81,11 +119,11 @@ async function autoCreateShipment(orderId, addressArg) {
   }
 
   await query(
-    `UPDATE orders SET delhivery_waybill=$1, shipment_status='CREATED', tracking_url=$2, label_generated=TRUE, updated_at=$3 WHERE id=$4`,
+    `UPDATE orders SET delhivery_waybill=$1, carrier='DELHIVERY', shipment_status='CREATED', tracking_url=$2, label_generated=TRUE, updated_at=$3 WHERE id=$4`,
     [result.waybill, `https://www.delhivery.com/track/package/${result.waybill}`, nowIso(), orderId]
   );
-  console.log(`[SHIPMENT] auto | order=${order.order_number} | waybill=${result.waybill} | ok=true | label=ready`);
-  return { ok: true, waybill: result.waybill };
+  console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=DELHIVERY | waybill=${result.waybill} | ok=true | label=ready`);
+  return { ok: true, waybill: result.waybill, carrier: 'DELHIVERY' };
 }
 
 // Mark a PAID order: record the payment, log tracking, and auto-create the Delhivery shipment.

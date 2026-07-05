@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { addToCart, updateCartItem, removeCartItem, clearCart } from '@/lib/api';
 
 export interface CartEntry { id: string; name: string; price: number; qty: number; img?: string; addOns?: string[]; note?: string; }
@@ -38,6 +38,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [coupon, setCoupon] = useState('');
   const [applied, setApplied] = useState(false);
   const [discount, setDiscount] = useState(0);
+
+  // Persist the cart across sessions so a returning visitor still sees their items on reopen.
+  // Hydrate once on mount (client-only), then save on every change. Cleared when clearAll runs.
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      try { const saved = localStorage.getItem('adc_cart'); if (saved) setCart(JSON.parse(saved)); } catch { /* ignore corrupt / unavailable storage */ }
+      return;
+    }
+    try { localStorage.setItem('adc_cart', JSON.stringify(cart)); } catch { /* quota / private mode */ }
+  }, [cart]);
 
   const setQty = useCallback((id: string, qty: number, name?: string, price?: number, img?: string, addOns?: string[], note?: string) => {
     setCart(prev => {

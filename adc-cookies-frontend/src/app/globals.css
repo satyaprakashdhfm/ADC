@@ -43,6 +43,7 @@
   --teal-600: #08929B; --teal-700: #0C747B; --teal-800: #0F5A60; --teal-900: #114950;
   --cream-50: #FFFCF8; --cream-100: #FFF8F1; --cream-200: #F7ECE0;
   --cream-300: #ECDBC9; --cream-400: #DBC6AE;
+  --band-sand: #F5E9D5; /* muted warm oatmeal — subtle accent band for alternating home sections */
   --ink-300: #C2B2A3; --ink-400: #9C8676; --ink-500: #7A6353;
   --ink-600: #5C4636; --ink-700: #4A3525; --ink-800: #36251A; --ink-900: #2B1D12;
   --white: #FFFFFF;
@@ -110,7 +111,7 @@
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 40px;
   --space-9: 48px; --space-10: 64px; --space-11: 80px; --space-12: 96px;
-  --gutter: clamp(20px,5vw,64px);
+  --gutter: clamp(18px,4vw,40px); /* side page padding — capped ~1cm so desktop fills the screen */
   --section-y: clamp(64px,9vw,128px);
   --control-h-sm: 36px; --control-h-md: 44px; --control-h-lg: 54px; --control-h-xl: 62px;
   --container-max: 1200px;
@@ -169,15 +170,16 @@ img { display: block; max-width: 100%; }
 .hide-sb::-webkit-scrollbar { display: none; }
 .hide-sb { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Global floral background */
+/* Global background — pattern removed per request; solid cream backdrop for now.
+   (To restore the floral motif, re-add: url('/assets/floral-pattern-only.png') repeat
+    with background-size:620px auto and opacity:0.4 on both this and .adc-pattern-page::before.) */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: #EFE1CC url('/assets/floral-pattern-only.png') repeat;
-  background-size: 620px auto;
-  opacity: 0.4;
+  background: #EFE1CC;
+  opacity: 1;
   pointer-events: none;
 }
 
@@ -199,10 +201,7 @@ body::before {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background-image: url('/assets/floral-pattern-only.png');
-  background-size: 620px auto;
-  background-repeat: repeat;
-  opacity: 0.4;
+  background-image: none; /* floral pattern removed per request — solid cream shows through */
   pointer-events: none;
 }
 
@@ -260,6 +259,8 @@ body::before {
 @media (min-width: 900px) {
   .home-topbar--mobile { display: none !important; }
   .home-nav--desktop { display: block !important; }
+  /* Desktop search lives in the top nav row, so hide the in-hero (mobile) search */
+  .home-hero-search { display: none !important; }
 }
 
 /* Homepage category cards — two-up on desktop/tablet, stacked on phones */

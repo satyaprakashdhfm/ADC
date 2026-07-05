@@ -139,6 +139,16 @@ function ShipmentTracker({ order }: { order: Order }) {
   const scans = shipment?.Scans ?? [];
   const latestStatus = shipment?.Status?.Status;
   const latestNote = shipment?.Status?.Instructions;
+  // Delhivery repeats scan text and echoes the current status, so the raw list reads as
+  // "Manifested · Manifest uploaded · Manifested". The pill already shows the current status —
+  // drop scans equal to it and collapse duplicates so the timeline shows real progress only.
+  const seenScan = new Set<string>();
+  const timelineScans = scans.filter(s => {
+    const t = s?.ScanDetail?.Scan || s?.ScanDetail?.Instructions || '';
+    if (!t || t === latestStatus || seenScan.has(t)) return false;
+    seenScan.add(t);
+    return true;
+  });
 
   return (
     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
@@ -163,12 +173,12 @@ function ShipmentTracker({ order }: { order: Order }) {
       {trackResult && trackResult.tracked && (
         <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 14, padding: 14 }}>
           {latestStatus && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: scans.length ? 10 : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: timelineScans.length ? 10 : 0 }}>
               <span style={{ padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: latestStatus.toLowerCase().includes('deliver') ? 'var(--status-success-bg)' : 'var(--amber-100)', color: latestStatus.toLowerCase().includes('deliver') ? 'var(--status-success)' : 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 900 }}>{latestStatus}</span>
               {latestNote && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{latestNote}</span>}
             </div>
           )}
-          {scans.slice(0, 4).map((s, i) => {
+          {timelineScans.slice(0, 4).map((s, i) => {
             const sd = s?.ScanDetail;
             return sd ? (
               <div key={i} style={{ display: 'flex', gap: 10, paddingTop: 8, marginTop: 8, borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)' }}>
@@ -180,7 +190,7 @@ function ShipmentTracker({ order }: { order: Order }) {
               </div>
             ) : null;
           })}
-          {!scans.length && !latestStatus && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No tracking events yet.</p>}
+          {!timelineScans.length && !latestStatus && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No tracking events yet.</p>}
         </div>
       )}
       {trackResult && !trackResult.tracked && (
@@ -253,7 +263,14 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
       {expanded && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }} className="account-order-detail-grid">
           <div style={{ padding: 14, borderRadius: 18, background: 'var(--surface-sunken)' }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-base)', marginBottom: 9 }}><Truck size={17} /> Delivery details</h3>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-base)', marginBottom: 9, flexWrap: 'wrap' }}>
+              <Truck size={17} /> Delivery details
+              {order.carrier && (
+                <span style={{ padding: '2px 9px', borderRadius: 'var(--radius-pill)', background: order.carrier === 'SHADOWFAX' ? 'var(--amber-100)' : 'var(--surface-card)', border: order.carrier === 'SHADOWFAX' ? 'none' : '1px solid var(--border-default)', color: order.carrier === 'SHADOWFAX' ? 'var(--amber-800)' : 'var(--text-muted)', fontSize: 'var(--text-2xs)', fontWeight: 900 }}>
+                  {order.carrier === 'SHADOWFAX' ? 'Intracity · Shadowfax' : 'Pan-India · Delhivery'}
+                </span>
+              )}
+            </h3>
             {address ? (
               <p style={{ color: 'var(--text-body)', lineHeight: 1.6, fontSize: 'var(--text-sm)' }}>{address.fullName} · {address.phone}<br />{[address.addressLine1, address.addressLine2, address.city, address.state, address.pincode].filter(Boolean).join(', ')}</p>
             ) : (

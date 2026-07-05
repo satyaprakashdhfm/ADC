@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { X, ArrowRight } from 'lucide-react';
+import { getPromoProduct, firstImage, type Product } from '@/lib/api';
 
 /**
  * Home-page promo popup for visitors (e.g. arriving from an Instagram/social link).
@@ -20,11 +21,13 @@ const PROMO = {
 
 export default function PromoPopup() {
   const [show, setShow] = useState(false);
+  const [product, setProduct] = useState<Product | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try { if (sessionStorage.getItem('adc_promo_seen')) return; } catch {}
+    getPromoProduct().then(setProduct).catch(() => {});
     const t = setTimeout(() => setShow(true), 700);
     return () => clearTimeout(t);
   }, []);
@@ -33,6 +36,11 @@ export default function PromoPopup() {
     setShow(false);
     try { sessionStorage.setItem('adc_promo_seen', '1'); } catch {}
   };
+
+  // Use the admin-selected product when set; otherwise the default promo content.
+  const view = product
+    ? { badge: PROMO.badge, title: product.name, subtitle: product.description || PROMO.subtitle, image: firstImage(product.images), ctaLabel: PROMO.ctaLabel, ctaHref: `/order?q=${encodeURIComponent(product.name)}` }
+    : PROMO;
 
   if (!show) return null;
 
@@ -47,7 +55,7 @@ export default function PromoPopup() {
         style={{ position: 'relative', borderRadius: 'var(--radius-modal)', overflow: 'hidden', boxShadow: '0 40px 90px rgba(0,0,0,.5)', animation: 'riseIn .35s var(--ease-spring) both' }}
       >
         {/* Full-bleed cookie photo */}
-        <Image src={PROMO.image} alt="" fill priority sizes="(max-width:900px) 92vw, 640px" style={{ objectFit: 'cover' }} />
+        <Image src={view.image} alt="" fill priority sizes="(max-width:900px) 92vw, 640px" style={{ objectFit: 'cover' }} />
 
         {/* Warm-dark gradient so the text reads, image still shines at the top */}
         <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(20,12,4,.95) 4%, rgba(20,12,4,.62) 38%, rgba(20,12,4,.10) 70%, rgba(20,12,4,.30) 100%)' }} />
@@ -58,14 +66,14 @@ export default function PromoPopup() {
 
         {/* Offer content, anchored to the bottom */}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 'clamp(22px,3.5vw,36px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 'clamp(9px,1.2vw,15px)' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>🔥 {PROMO.badge}</span>
-          <h2 style={{ font: '900 clamp(1.7rem,1.2rem + 2.4vw,2.9rem)/1.02 var(--font-display)', color: '#fff', margin: 0, letterSpacing: '-.02em', textShadow: '0 2px 16px rgba(0,0,0,.5)' }}>{PROMO.title}</h2>
-          <p style={{ fontSize: 'clamp(0.95rem,0.6rem + 0.9vw,1.2rem)', color: 'rgba(255,245,230,.92)', lineHeight: 1.5, margin: 0, maxWidth: 540, textShadow: '0 1px 10px rgba(0,0,0,.5)' }}>{PROMO.subtitle}</p>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>🔥 {view.badge}</span>
+          <h2 style={{ font: '900 clamp(1.7rem,1.2rem + 2.4vw,2.9rem)/1.02 var(--font-display)', color: '#fff', margin: 0, letterSpacing: '-.02em', textShadow: '0 2px 16px rgba(0,0,0,.5)' }}>{view.title}</h2>
+          <p style={{ fontSize: 'clamp(0.95rem,0.6rem + 0.9vw,1.2rem)', color: 'rgba(255,245,230,.92)', lineHeight: 1.5, margin: 0, maxWidth: 540, textShadow: '0 1px 10px rgba(0,0,0,.5)' }}>{view.subtitle}</p>
           <button
-            onClick={() => { close(); router.push(PROMO.ctaHref); }}
+            onClick={() => { close(); router.push(view.ctaHref); }}
             style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, padding: 'clamp(12px,1.3vw,16px) clamp(24px,2.2vw,36px)', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' }}
           >
-            {PROMO.ctaLabel} <ArrowRight size={18} />
+            {view.ctaLabel} <ArrowRight size={18} />
           </button>
         </div>
       </div>

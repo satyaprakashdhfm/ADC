@@ -18,9 +18,9 @@ export default function AnnouncementBar() {
   return (
     <div
       style={{
-        background: 'var(--amber-100)', color: 'var(--ink-700)',
+        background: 'linear-gradient(100deg, #FBDA8E 0%, #F8BF83 50%, #EBC59D 100%)', color: 'var(--ink-800)',
         textAlign: 'center', padding: '5px 40px', overflow: 'hidden',
-        borderBottom: '1px solid rgba(43,29,18,.06)',
+        borderBottom: '1px solid rgba(43,29,18,.08)',
       }}
     >
       {/* key forces a remount so the slide-in animation replays on each message */}

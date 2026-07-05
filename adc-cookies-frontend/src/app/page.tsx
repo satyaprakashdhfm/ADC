@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import AnnouncementBar from '@/components/storefront/AnnouncementBar';
 import HomeHero from '@/components/storefront/HomeHero';
-import GetInTouch from '@/components/storefront/GetInTouch';
 import StoresAbout from '@/components/storefront/StoresAbout';
 import Reviews from '@/components/storefront/Reviews';
 import Footer from '@/components/storefront/Footer';
@@ -16,13 +15,12 @@ export default function Home() {
   const [loginOpen, setLoginOpen] = useState(false);
 
   return (
-    <main className="adc-pattern-page" style={{ minHeight: '100vh', overflowX: 'hidden' }}>
+    <main className="adc-pattern-page" style={{ minHeight: '100vh' }}>
       <MenuDrawer open={menuOpen} onClose={() => setMenuOpen(false)} onLoginOpen={() => setLoginOpen(true)} />
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
 
       <AnnouncementBar />
       <HomeHero onMenuOpen={() => setMenuOpen(true)} onLoginOpen={() => setLoginOpen(true)} />
-      <GetInTouch />
       <StoresAbout />
       <Reviews />
       <Footer />

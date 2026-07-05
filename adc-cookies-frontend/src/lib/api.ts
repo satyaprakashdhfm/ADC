@@ -84,6 +84,9 @@ export async function getProducts(params?: { category?: string; search?: string 
   return request(`/products${q ? '?' + q : ''}`);
 }
 
+/** The product the admin chose for the homepage promo popup (or null if none set). */
+export async function getPromoProduct(): Promise<Product | null> { return request('/products/promo'); }
+
 /* ---- Cart ---- */
 export interface CartItem {
   id: number; productId: number; productName: string;
@@ -151,6 +154,7 @@ export interface Order {
   subtotal?: number; discountAmount?: number; deliveryFee?: number; taxAmount?: number;
   couponCode?: string | null; shipmentStatus?: string; trackingUrl?: string | null;
   delhiveryWaybill?: string | null; delhiveryShipmentId?: string | null; labelGenerated?: boolean;
+  carrier?: string | null; // 'SHADOWFAX' (intracity) | 'DELHIVERY' (outstation)
   payment?: OrderPayment | null;
   address?: Address | null; items?: OrderItem[];
 }
@@ -196,16 +200,24 @@ export async function trackOrderShipment(orderId: number): Promise<DelhiveryTrac
 export interface DeliveryCheck {
   serviceable: boolean;
   embargo?: boolean;
-  reason: string;
+  reason?: string;
   cod?: boolean;
   pincode?: string;
   tat?: number | null;
   expectedDeliveryDate?: string | null;
+  intracity?: boolean;          // near one of our stores → ships same-day via Shadowfax
+  carrier?: string;             // 'SHADOWFAX' when intracity
+  store?: string;               // nearest store name (intracity)
+  city?: string;
+  sameDay?: boolean;
 }
 
 /** Combined serviceability + TAT check — used at checkout when an address is selected. */
 export async function checkDeliveryPin(pincode: string): Promise<DeliveryCheck> {
-  return request(`/delivery/check?pincode=${encodeURIComponent(pincode)}`);
+  console.log(`[delivery] checking pincode ${pincode} …`);
+  const r = await request<DeliveryCheck>(`/delivery/check?pincode=${encodeURIComponent(pincode)}`);
+  console.log(`[delivery] pincode ${pincode} →`, r.intracity ? `SHADOWFAX (intracity, ${r.store})` : r.serviceable ? 'DELHIVERY (pan-India)' : 'not serviceable', r);
+  return r;
 }
 
 /* ---- Admin ---- */
@@ -236,6 +248,10 @@ export interface AdminAnalytics {
 }
 
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
+export async function adminGetSettings(): Promise<{ promoProductId: number | null }> { return request('/admin/settings'); }
+export async function adminSetPromoProduct(promoProductId: number | null): Promise<{ promoProductId: number | null }> {
+  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ promoProductId }) });
+}
 export async function adminAnalytics(from?: string, to?: string): Promise<AdminAnalytics> {
   const qs = from && to ? `?from=${from}&to=${to}` : '';
   return request(`/admin/analytics${qs}`);
@@ -309,7 +325,7 @@ export async function adminCreateShipment(orderId: number, weight = 0.5): Promis
 export async function adminCancelShipment(orderId: number): Promise<{ ok: boolean; waybill: string }> {
   return request(`/admin/orders/${orderId}/shipment`, { method: 'DELETE' });
 }
-export async function adminTrackOrder(orderId: number): Promise<{ ok: boolean; data?: unknown; reason?: string }> {
+export async function adminTrackOrder(orderId: number): Promise<{ ok: boolean; data?: unknown; reason?: string; carrier?: string; status?: string | null; scans?: { time: string; event: string }[] }> {
   return request(`/admin/orders/${orderId}/track`);
 }
 export function adminLabelUrl(waybills: string): string {

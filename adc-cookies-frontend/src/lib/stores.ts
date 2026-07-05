@@ -1,3 +1,5 @@
+import { SITE_PHONE, SITE_EMAIL } from './site';
+
 export interface Store {
   city: string;
   name: string;
@@ -5,40 +7,50 @@ export interface Store {
   phone: string;
   email: string;
   map: string;
+  lat: number;
+  lng: number;
 }
 
-/** ADC store locations — shared by the homepage About/Stores section and the Contact page. */
+/** ADC store locations — shared by the homepage About/Stores, /locations store finder and Contact. */
 export const STORES: Store[] = [
   {
     city: 'Bengaluru',
-    name: 'ADC Indiranagar',
-    address: '12, 100 Feet Road, Indiranagar, Bengaluru, Karnataka 560038',
-    phone: '+91 98765 43210',
-    email: 'bengaluru@adccookies.com',
-    map: 'https://www.google.com/maps/search/?api=1&query=Indiranagar+Bengaluru+Karnataka',
+    name: 'ADC — Jayanagar',
+    address: 'Jain University, 1314, 24th Main Rd, opposite Gate 1, Kottapalya, Jayanagar 9th Block, Jayanagar, Bengaluru, Karnataka 560041',
+    phone: SITE_PHONE,
+    email: SITE_EMAIL,
+    map: 'https://www.google.com/maps/search/?api=1&query=ADC+A+Dough+Cookie+Jayanagar+9th+Block+Bengaluru+560041',
+    lat: 12.9166,
+    lng: 77.5906,
   },
   {
-    city: 'Mumbai',
-    name: 'ADC Bandra',
-    address: 'Linking Road, Bandra West, Mumbai, Maharashtra 400050',
-    phone: '+91 98765 43211',
-    email: 'mumbai@adccookies.com',
-    map: 'https://www.google.com/maps/search/?api=1&query=Bandra+West+Mumbai+Maharashtra',
+    city: 'Bengaluru',
+    name: 'ADC — S.G. Palya',
+    address: 'No 10, 1st Main Rd, Venkateshwara Layout, S.G. Palya, Bengaluru, Karnataka 560029',
+    phone: SITE_PHONE,
+    email: SITE_EMAIL,
+    map: 'https://www.google.com/maps/search/?api=1&query=ADC+A+Dough+Cookie+SG+Palya+Bengaluru+560029',
+    lat: 12.9357,
+    lng: 77.6068,
   },
   {
-    city: 'Delhi',
-    name: 'ADC Connaught Place',
-    address: 'Connaught Place, New Delhi, Delhi 110001',
-    phone: '+91 98765 43212',
-    email: 'delhi@adccookies.com',
-    map: 'https://www.google.com/maps/search/?api=1&query=Connaught+Place+New+Delhi',
+    city: 'Bengaluru',
+    name: 'ADC — Electronic City',
+    address: 'F3 Alley, GF, 1st Cross, Neeladri Rd, Electronic City Phase I, Bengaluru, Karnataka 560100',
+    phone: SITE_PHONE,
+    email: SITE_EMAIL,
+    map: 'https://www.google.com/maps/search/?api=1&query=ADC+A+Dough+Cookie+Electronic+City+Phase+1+Bengaluru+560100',
+    lat: 12.8452,
+    lng: 77.6602,
   },
   {
-    city: 'Hyderabad',
-    name: 'ADC Jubilee Hills',
-    address: 'Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
-    phone: '+91 98765 43213',
-    email: 'hyderabad@adccookies.com',
-    map: 'https://www.google.com/maps/search/?api=1&query=Jubilee+Hills+Hyderabad+Telangana',
+    city: 'Chennai',
+    name: 'ADC — Besant Nagar',
+    address: '63, 6th Avenue, Besant Nagar, Chennai, Tamil Nadu 600090',
+    phone: SITE_PHONE,
+    email: SITE_EMAIL,
+    map: 'https://www.google.com/maps/search/?api=1&query=ADC+A+Dough+Cookie+Besant+Nagar+Chennai+600090',
+    lat: 13.0002,
+    lng: 80.2668,
   },
 ];

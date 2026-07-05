@@ -1,8 +1,12 @@
 'use client';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Menu, User, Cookie, Gift, Briefcase, ArrowRight } from 'lucide-react';
+import { Menu, User, Cookie, Gift, Briefcase, ArrowRight, ShoppingBag, Search, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useCart } from '@/context/CartContext';
+import { getProducts, type Product } from '@/lib/api';
+import { STORES } from '@/lib/stores';
 
 interface HomeHeroProps {
   onMenuOpen: () => void;
@@ -35,9 +39,9 @@ const CATEGORIES: Category[] = [
   },
   {
     key: 'tins',
-    label: 'Gift Tins',
+    label: 'Cookie Tins',
     desc: 'Premium keepsake tins of filled cookies — ribbon-wrapped and ready to gift.',
-    cta: 'Shop Gift Tins',
+    cta: 'Shop Cookie Tins',
     href: '/order?cat=tins',
     img: '/assets/products/m-and-m.jpg',
     icon: <Gift size={18} />,
@@ -57,12 +61,44 @@ const CORPORATE: Category = {
 };
 
 // Desktop-only top-nav links (the mobile bar keeps the logo + hamburger, untouched).
-const NAV_DESKTOP = [
+interface NavLink { label: string; href: string; menuKey?: 'cookies' | 'tins' | 'locations' | 'partner' }
+const NAV_DESKTOP: NavLink[] = [
+  { label: 'Home', href: '/' },
+  { label: 'Buy Cookies', href: '/order?cat=cookies', menuKey: 'cookies' },
+  { label: 'Cookie Tins', href: '/order?cat=tins', menuKey: 'tins' },
+  { label: 'Locations', href: '/locations', menuKey: 'locations' },
+  { label: 'Partner with us', href: '/franchise', menuKey: 'partner' },
   { label: 'About Us', href: '/about' },
   { label: 'Gallery', href: '/gallery' },
-  { label: 'Blog', href: '/blogs' },
   { label: 'Contact', href: '/contact' },
 ];
+
+// A desktop nav link that reveals a dropdown on hover when it has menu items.
+function NavItem({ item, menu }: { item: NavLink; menu?: { label: string; href: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const hasMenu = !!menu && menu.length > 0;
+  return (
+    <div onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} style={{ position: 'relative' }}>
+      <a href={item.href} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--text-strong)', textDecoration: 'none', whiteSpace: 'nowrap', transition: 'color .18s' }}
+        onMouseEnter={e => (e.currentTarget.style.color = 'var(--brand-secondary)')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-strong)')}>
+        {item.label}{hasMenu && <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />}
+      </a>
+      {hasMenu && open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, paddingTop: 8, minWidth: 220, zIndex: 60 }}>
+          <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-lg)', padding: 8, maxHeight: 360, overflowY: 'auto' }}>
+            {menu!.map(m => (
+              <a key={m.label} href={m.href} style={{ display: 'block', padding: '8px 12px', borderRadius: 8, fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-body)', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--amber-50)'; e.currentTarget.style.color = 'var(--brand-secondary)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-body)'; }}
+              >{m.label}</a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const ctaBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 18px', border: 'none', cursor: 'pointer',
@@ -107,39 +143,70 @@ function CategoryCard({ c, onGo, priority }: { c: Category; onGo: (href: string)
 export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const { count } = useCart();
   const go = (href: string) => router.push(href);
+  // Nav dropdown data: cookie/tin products (fetched) and store locations.
+  const [products, setProducts] = useState<Product[]>([]);
+  useEffect(() => { getProducts().then(ps => setProducts(ps || [])).catch(() => {}); }, []);
+  const toMenu = (cat: 'COOKIES' | 'TINS') => products.filter(p => p.category === cat && p.isAvailable).map(p => ({ label: p.name, href: `/order?q=${encodeURIComponent(p.name)}` }));
+  const menuFor = (key?: NavLink['menuKey']) =>
+    key === 'cookies' ? toMenu('COOKIES')
+      : key === 'tins' ? toMenu('TINS')
+        : key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/order?store=${encodeURIComponent(s.city.toLowerCase())}` }))
+          : key === 'partner' ? [{ label: 'Corporate & Bulk Order', href: '/order?cat=corporate' }, { label: 'Franchise Enquiry', href: '/franchise' }]
+            : undefined;
   // Account icon → straight to the centered login modal (or account page if already signed in).
   const accountClick = () => { if (user) router.push(user.role === 'ADMIN' ? '/admin' : '/account'); else onLoginOpen(); };
+  // Home search → the order page, filtered (OrderingApp reads ?q= and maps category words).
+  const onSearch = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const q = String(new FormData(e.currentTarget).get('q') || '').trim();
+    router.push(q ? `/order?q=${encodeURIComponent(q)}` : '/order');
+  };
+  // Cart bag with live count — same ShoppingBag icon the ordering app uses, for consistency.
+  const cartButton = (
+    <button onClick={() => router.push('/checkout')} aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', flex: 'none' }}>
+      <ShoppingBag size={21} />
+      {count > 0 && (
+        <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--gradient-warm)', color: '#fff', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>
+      )}
+    </button>
+  );
 
   return (
-    <header style={{ position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        {/* Desktop top nav — fuller menu bar; hidden on mobile via CSS (mobile keeps the bar below) */}
+    <>
+      {/* Sticky header — logo · search · cart · account + nav links; stays pinned while scrolling.
+          The announcement/promo bar above it scrolls away (it's rendered separately, above). */}
+      <div className="home-sticky-header" style={{ position: 'sticky', top: 0, zIndex: 50, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)' }}>
+        {/* Desktop header — Row 1: logo · search · cart · account. Row 2: nav links.
+            Hidden on mobile via CSS (mobile keeps the compact bar below). */}
         <nav className="home-nav--desktop" style={{ borderBottom: '1px solid var(--border-default)' }}>
-          <div style={{ maxWidth: 1180, margin: '0 auto', padding: '14px var(--gutter)', display: 'flex', alignItems: 'center', gap: 24 }}>
+          <div style={{ maxWidth: 1680, margin: '0 auto', padding: '6px var(--gutter)', display: 'flex', alignItems: 'center', gap: 'clamp(16px,2vw,32px)' }}>
             <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
-              <Image src="/assets/adc-logo.png" width={232} height={168} alt="a dough cookie" priority style={{ height: 140, width: 'auto', objectFit: 'contain', display: 'block' }} />
+              <Image src="/assets/adc-logo.png" width={232} height={168} alt="a dough cookie" priority style={{ height: 128, width: 'auto', objectFit: 'contain', display: 'block' }} />
             </a>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(20px,2.6vw,40px)', margin: '0 auto' }}>
-              {NAV_DESKTOP.map(n => (
-                <a
-                  key={n.label}
-                  href={n.href}
-                  style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--text-strong)', textDecoration: 'none', whiteSpace: 'nowrap', transition: 'color .18s' }}
-                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--brand-secondary)')}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-strong)')}
-                >{n.label}</a>
-              ))}
-            </div>
+            <form onSubmit={onSearch} role="search" style={{ flex: 1, maxWidth: 640, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface-card)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '6px 6px 6px 18px', boxShadow: 'var(--shadow-xs)' }}>
+              <Search size={18} color="var(--text-muted)" style={{ flex: 'none' }} />
+              <input name="q" placeholder="Search cookies, gift tins…" aria-label="Search products" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)' }} />
+              <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: '9px 18px' }}>Search</button>
+            </form>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
+              {cartButton}
               <button onClick={accountClick} aria-label={user ? 'My account' : 'Log in'} style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}><User size={21} /></button>
+            </div>
+          </div>
+          <div>
+            <div style={{ maxWidth: 1680, margin: '0 auto', padding: '2px var(--gutter) 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(16px,2.4vw,40px)', flexWrap: 'wrap' }}>
+              {NAV_DESKTOP.map(n => (
+                <NavItem key={n.label} item={n} menu={menuFor(n.menuKey)} />
+              ))}
             </div>
           </div>
         </nav>
 
         {/* Top bar (mobile) — big logo (left) · single menu button (right; opens drawer with nav + login) */}
         <div className="home-topbar home-topbar--mobile" style={{
-          maxWidth: 1180, margin: '0 auto', padding: 'clamp(10px,1.4vw,18px) var(--gutter)',
+          maxWidth: 1680, margin: '0 auto', padding: 'clamp(10px,1.4vw,18px) var(--gutter)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         }}>
           <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center' }}>
@@ -153,34 +220,46 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
             />
           </a>
 
-          <button
-            onClick={onMenuOpen}
-            aria-label="Open menu"
-            style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 22px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-xs)' }}
-          >
-            <Menu size={22} /> <span className="home-topbar-menu-label">Menu</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {cartButton}
+            <button
+              onClick={onMenuOpen}
+              aria-label="Open menu"
+              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 22px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-xs)' }}
+            >
+              <Menu size={22} /> <span className="home-topbar-menu-label">Menu</span>
+            </button>
+          </div>
         </div>
+      </div>
 
+      {/* Hero content (below the sticky header; overflow-hidden keeps decorations clipped) */}
+      <header style={{ position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Compact hero band */}
-        <section style={{ maxWidth: 1000, margin: '0 auto', padding: 'clamp(8px,1.6vw,20px) var(--gutter) clamp(14px,2vw,22px)', textAlign: 'center' }}>
+        <section style={{ maxWidth: 1680, margin: '0 auto', padding: 'clamp(8px,1.6vw,20px) var(--gutter) clamp(14px,2vw,22px)', textAlign: 'center' }}>
           <h1 style={{ font: '900 clamp(1.6rem,1.2rem + 2.4vw,2.9rem)/1 var(--font-display)', letterSpacing: '-.03em', color: 'var(--text-strong)', margin: '0 0 10px', textWrap: 'balance' }}>
             Fresh-baked cookies, delivered warm.
           </h1>
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-body)', lineHeight: 1.5, maxWidth: 520, margin: '0 auto', fontWeight: 500 }}>
             Pick what you&apos;re craving — cookies, gift tins or bulk gifting — and order in a tap.
           </p>
+          <form onSubmit={onSearch} role="search" className="home-hero-search" style={{ margin: '16px auto 0', maxWidth: 520, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface-card)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '6px 6px 6px 16px', boxShadow: 'var(--shadow-xs)' }}>
+            <Search size={18} color="var(--text-muted)" style={{ flex: 'none' }} />
+            <input name="q" placeholder="Search cookies, gift tins…" aria-label="Search products" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)' }} />
+            <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: '10px 18px' }}>Search</button>
+          </form>
         </section>
 
         {/* Category entry points — Cookies & Tins first… */}
-        <section style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter) clamp(14px,1.8vw,22px)' }}>
+        <section style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter) clamp(14px,1.8vw,22px)' }}>
           <div className="home-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 'clamp(14px,1.8vw,22px)' }}>
             {CATEGORIES.map((c, i) => <CategoryCard key={c.key} c={c} onGo={go} priority={i === 0} />)}
           </div>
         </section>
 
         {/* …then Corporate / bulk gifting just below */}
-        <section style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter) clamp(36px,5vw,64px)' }}>
+        <section style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter) clamp(36px,5vw,64px)' }}>
           <button
             onClick={() => go(CORPORATE.href)}
             className="home-corp"
@@ -202,7 +281,8 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
             </div>
           </button>
         </section>
-      </div>
-    </header>
+        </div>
+      </header>
+    </>
   );
 }

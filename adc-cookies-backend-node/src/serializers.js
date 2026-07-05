@@ -83,6 +83,7 @@ export function serializeOrder(order, items = [], address = null, payment = null
     couponCode: order.coupon_code, paymentStatus: order.payment_status, orderStatus: order.order_status,
     delhiveryWaybill: order.delhivery_waybill, delhiveryShipmentId: order.delhivery_shipment_id,
     trackingUrl: order.tracking_url, shipmentStatus: order.shipment_status,
+    carrier: order.carrier ?? null,
     labelGenerated: !!order.label_generated,
     payment: payment
       ? { provider: payment.provider, transactionId: payment.transaction_id, status: payment.status, paidAt: payment.paid_at }

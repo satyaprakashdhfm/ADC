@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, PackageCheck } from 'lucide-react';
+import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, ChevronDown, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, PackageCheck } from 'lucide-react';
+import { STORES } from '@/lib/stores';
 import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
@@ -10,11 +11,11 @@ import MascotLoader from '@/components/MascotLoader';
 import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, createRazorpayOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, type Product, type Address, type OrderItemInput, type DeliveryCheck } from '@/lib/api';
 
 /* ---- Data ---- */
-const CATEGORIES = ['Cookies', 'Gift Tins', 'Corporate Gifting'];
+const CATEGORIES = ['Cookies', 'Cookie Tins', 'Corporate Gifting'];
 
 const CATEGORY_META = {
   Cookies: { icon: Cookie },
-  'Gift Tins': { icon: Gift },
+  'Cookie Tins': { icon: Gift },
   'Corporate Gifting': { icon: Briefcase },
 } as const;
 
@@ -212,6 +213,78 @@ function MobileProductCard({ item, qty, onQtyChange }: { item: typeof FALLBACK_M
   );
 }
 
+/* ---- Roomier DESKTOP product card — bigger image, full description, ADD/stepper (desktop only) ---- */
+function DeskProductCard({ item, qty, onQtyChange, badge }: { item: typeof FALLBACK_MENU[0]; qty: number; onQtyChange: (n: number) => void; badge?: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', overflow: 'hidden', transition: 'transform .2s, box-shadow .2s' }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}>
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3' }}>
+        <Image src={item.img} alt={item.name} fill sizes="(max-width:1280px) 40vw, 440px" style={{ objectFit: 'cover' }} />
+        {(badge || (item as { best?: boolean }).best) && <span style={{ position: 'absolute', top: 10, left: 10, padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>{badge || 'Bestseller'}</span>}
+      </div>
+      <div style={{ padding: '16px 18px 18px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          {item.veg && <span style={{ width: 14, height: 14, border: '2px solid var(--mark-veg)', borderRadius: 2, display: 'grid', placeItems: 'center', flex: 'none' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--mark-veg)', display: 'block' }} /></span>}
+          <h3 style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>{item.name}</h3>
+        </div>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.55 }}>{item.desc}</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 'auto', paddingTop: 10 }}>
+          <span style={{ fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}>₹{item.price}</span>
+          {qty === 0
+            ? <button onClick={() => onQtyChange(1)} style={{ padding: '9px 26px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>ADD</button>
+            : <QStepper value={qty} onChange={onQtyChange} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Loading skeleton (static, no animation) — shown until real products arrive so old images never flash ---- */
+function SkeletonCard() {
+  const bar = (w: string, h: number, mb = 0): React.CSSProperties => ({ width: w, height: h, borderRadius: 6, background: 'var(--surface-raised)', marginBottom: mb });
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)', overflow: 'hidden' }}>
+      <div style={{ width: '100%', aspectRatio: '4 / 3', background: 'var(--surface-raised)' }} />
+      <div style={{ padding: '16px 18px 18px' }}>
+        <div style={bar('62%', 16, 10)} />
+        <div style={bar('100%', 10, 6)} />
+        <div style={bar('84%', 10, 14)} />
+        <div style={bar('40%', 18)} />
+      </div>
+    </div>
+  );
+}
+
+/* ---- Desktop nav item with hover dropdown (same look as the home page header) ---- */
+type NavMenuItem = { label: string; href?: string; onClick?: () => void };
+function OrderNavItem({ label, href, menu }: { label: string; href: string; menu?: NavMenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  const hasMenu = !!menu && menu.length > 0;
+  const itemStyle: React.CSSProperties = { display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8, fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-body)', textDecoration: 'none', whiteSpace: 'nowrap', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-body)' };
+  const hoverIn = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'var(--amber-50)'; e.currentTarget.style.color = 'var(--brand-secondary)'; };
+  const hoverOut = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-body)'; };
+  return (
+    <div onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} style={{ position: 'relative' }}>
+      <a href={href} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--text-strong)', textDecoration: 'none', whiteSpace: 'nowrap', transition: 'color .18s' }}
+        onMouseEnter={e => (e.currentTarget.style.color = 'var(--brand-secondary)')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-strong)')}>
+        {label}{hasMenu && <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />}
+      </a>
+      {hasMenu && open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, paddingTop: 8, minWidth: 220, zIndex: 60 }}>
+          <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-lg)', padding: 8, maxHeight: 360, overflowY: 'auto' }}>
+            {menu!.map(m => m.onClick
+              ? <button key={m.label} onClick={() => { m.onClick!(); setOpen(false); }} style={itemStyle} onMouseEnter={hoverIn} onMouseLeave={hoverOut}>{m.label}</button>
+              : <a key={m.label} href={m.href} style={itemStyle} onMouseEnter={hoverIn} onMouseLeave={hoverOut}>{m.label}</a>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---- Tin Modal (full page) ---- */
 function TinModal({ tin, onClose, onAdd }: { tin: typeof FALLBACK_TINS[0] | null; onClose: () => void; onAdd: (tin: typeof FALLBACK_TINS[0], qty: number) => void }) {
   const [qty, setQty] = useState(1);
@@ -306,8 +379,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     if (pick) setAddr(pick.id);
   }, [addresses, addr, setAddr]);
 
-  // Checkout needs an account (for delivery address) — prompt login the moment they arrive signed-out.
-  useEffect(() => { if (!user) setLoginOpen(true); }, [user]);
+  // The cart is client-only (localStorage), so hold cart-derived UI until after mount to avoid a
+  // hydration mismatch on first render. Guests are prompted to log in inline / on Pay — no auto-popup.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => { setHydrated(true); }, []);
 
   // Real serviceability + TAT from Delhivery when the selected address pincode changes.
   const chosen = addresses.find(a => a.id === addr);
@@ -493,7 +568,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     }
   };
 
-  const card$: React.CSSProperties = { background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', padding: 20 };
+  const card$: React.CSSProperties = { background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', padding: 24 };
   const head = (icon: React.ReactNode, label: string) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>{icon}<span style={{ font: 'var(--weight-bold) var(--text-base)/1 var(--font-body)', color: 'var(--text-strong)' }}>{label}</span></div>
   );
@@ -513,7 +588,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {lines.map((l, i) => (
           <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < lines.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
-            {l.img ? <div style={{ width: 52, height: 52, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none' }}><Image src={l.img} alt={l.name} width={52} height={52} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div> : <Thumb size={52} seed={i} />}
+            {l.img ? <div style={{ width: 62, height: 62, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none' }}><Image src={l.img} alt={l.name} width={62} height={62} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div> : <Thumb size={62} seed={i} />}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</div>
               {l.addOns && l.addOns.length > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 600 }}>+ {l.addOns.join(', ')}</div>}
@@ -532,10 +607,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     <div style={card$}>
       {head(<Receipt size={18} color="var(--brand-secondary)" />, 'Bill details')}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--text-base)', color: 'var(--text-strong)' }}><span>Price</span><span>₹{total}</span></div>
-        <div style={{ marginLeft: 2, paddingLeft: 12, borderLeft: '2px solid var(--border-default)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-subtle)' }}>Break-up</span>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>GST (5%)</span><span>₹{gstIncl}</span></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, fontWeight: 800, fontSize: 'var(--text-base)', color: 'var(--text-strong)' }}>
+          <span>Price <span style={{ fontWeight: 600, fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>(incl. 5% GST · ₹{gstIncl})</span></span>
+          <span>₹{total}</span>
         </div>
         {gift && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>Gift wrap</span><span>₹{giftFee}</span></div>}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>Delivery fee</span><span>₹{delivery}</span></div>
@@ -548,18 +622,27 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
   return (
     <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', flex: 'none' }}>
-        <button onClick={() => router.push(step === 'pay' ? '/checkout' : '/order')} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><ChevronLeft size={20} /></button>
-        <div>
-          <div style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>{step === 'pay' ? 'Payment' : 'Checkout'}</div>
-          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{step === 'pay' ? 'Choose how to pay' : `${lines.length} item${lines.length !== 1 ? 's' : ''} · ready to order`}</div>
+      <div style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', flex: 'none' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '12px var(--gutter)' }}>
+          <button onClick={() => router.push(step === 'pay' ? '/checkout' : '/order')} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronLeft size={20} /></button>
+          <div>
+            <div style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>{step === 'pay' ? 'Payment' : 'Checkout'}</div>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{step === 'pay' ? 'Choose how to pay' : `${lines.length} item${lines.length !== 1 ? 's' : ''} · ready to order`}</div>
+          </div>
+          <a href="/" aria-label="a dough cookie home" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flex: 'none' }}>
+            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={{ height: 96, width: 'auto', objectFit: 'contain', display: 'block' }} />
+          </a>
         </div>
       </div>
 
       <div className="hide-sb" style={{ flex: 1, overflowY: 'auto', padding: '24px var(--gutter) 120px' }}>
         {step === 'review' ? (
-          <div style={{ maxWidth: 1040, margin: '0 auto', display: 'flex', gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 380px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 340px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {orderSummary}
+            </div>
+
+            <div style={{ flex: '1.4 1 440px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
               <div style={card$}>
                 {head(<MapPin size={18} color="var(--brand-secondary)" />, 'Delivery address')}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -652,10 +735,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
                       <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} color="#fff" /></span>
                       <div>
-                        {delivCheck.tat != null
-                          ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Expected delivery in {delivCheck.tat} day{delivCheck.tat !== 1 ? 's' : ''}{delivCheck.expectedDeliveryDate ? ` (by ${delivCheck.expectedDeliveryDate})` : ''}</div>
-                          : <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Delivery available{delivCheck.embargo ? ' — minor delays possible' : ''}</div>}
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>Pincode {chosen?.pincode}</div>
+                        {delivCheck.intracity
+                          ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Same-day local delivery</div>
+                          : delivCheck.tat != null
+                            ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Expected delivery in {delivCheck.tat} day{delivCheck.tat !== 1 ? 's' : ''}{delivCheck.expectedDeliveryDate ? ` (by ${delivCheck.expectedDeliveryDate})` : ''}</div>
+                            : <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Delivery available{delivCheck.embargo ? ' — minor delays possible' : ''}</div>}
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.intracity && delivCheck.store ? `Ordering from ${delivCheck.store} · Pincode ${chosen?.pincode}` : `Standard delivery (all India) · Pincode ${chosen?.pincode}`}</div>
                       </div>
                     </div>
                   ) : (
@@ -669,10 +754,6 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   )
                 )}
               </div>
-            </div>
-
-            <div style={{ flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {orderSummary}
 
               <div style={card$}>
                 <button onClick={() => setGift(!gift)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
@@ -752,7 +833,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
       <div style={{ padding: '14px var(--gutter)', borderTop: '1px solid var(--border-soft)', background: 'var(--surface-card)', flex: 'none' }}>
         {step === 'review' ? (
-          <button onClick={() => router.push('/payment')} disabled={lines.length === 0} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: lines.length ? 'var(--gradient-warm)' : 'var(--border-default)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: lines.length ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!hydrated || lines.length === 0} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: hydrated && lines.length ? 'var(--gradient-warm)' : 'var(--border-default)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: hydrated && lines.length ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             Proceed to Pay · ₹{grand} <ArrowRight size={18} />
           </button>
         ) : (
@@ -963,8 +1044,9 @@ export default function OrderingApp() {
   const { cart, count, total, setQty } = useCart();
   const { user } = useAuth();
 
-  const [menu, setMenu] = useState(FALLBACK_MENU);
-  const [tins, setTins] = useState(FALLBACK_TINS);
+  const [menu, setMenu] = useState<typeof FALLBACK_MENU>([]);
+  const [tins, setTins] = useState<typeof FALLBACK_TINS>([]);
+  const [loading, setLoading] = useState(true);
   const [active, setActive] = useState('Cookies');
   const [drawer, setDrawer] = useState(false);
   const [search, setSearch] = useState('');
@@ -976,7 +1058,7 @@ export default function OrderingApp() {
   // Load products from backend — faithful mapping (real images, groups, tags, stable ratings)
   useEffect(() => {
     getProducts().then(products => {
-      if (!products?.length) return;
+      if (!products?.length) { setMenu(FALLBACK_MENU); setTins(FALLBACK_TINS); return; }
       const cookies = products.filter(p => p.category === 'COOKIES');
       const tinProds = products.filter(p => p.category === 'TINS');
 
@@ -1005,14 +1087,25 @@ export default function OrderingApp() {
           img: firstImage(p.images), desc: p.description || '',
         })) as any);
       }
-    }).catch(() => {}); // use fallback data on error
+    }).catch(() => { setMenu(FALLBACK_MENU); setTins(FALLBACK_TINS); }) // fallback only if the fetch fails
+      .finally(() => setLoading(false));
   }, []);
 
-  // Deep-link the category from the home page cards: /order?cat=cookies|tins|corporate
+  // Deep-link from the home page: category cards (/order?cat=cookies|tins|corporate) and the
+  // home search bar (/order?q=<term>). Category words jump to that tab; any other term filters
+  // the Cookies tab by name.
   useEffect(() => {
-    const cat = new URLSearchParams(window.location.search).get('cat');
-    const map: Record<string, string> = { cookies: 'Cookies', tins: 'Gift Tins', corporate: 'Corporate Gifting' };
+    const params = new URLSearchParams(window.location.search);
+    const cat = params.get('cat');
+    const map: Record<string, string> = { cookies: 'Cookies', tins: 'Cookie Tins', corporate: 'Corporate Gifting' };
     if (cat && map[cat]) setActive(map[cat]);
+    const q = params.get('q');
+    if (q) {
+      const ql = q.trim().toLowerCase();
+      if (/tin|gift/.test(ql)) setActive('Cookie Tins');
+      else if (/cookie/.test(ql)) setActive('Cookies');
+      else { setActive('Cookies'); setSearch(q); }
+    }
   }, []);
 
   const addTin = (t: typeof FALLBACK_TINS[0], qty: number) => {
@@ -1020,7 +1113,13 @@ export default function OrderingApp() {
     setTin(null);
   };
 
-  const filtered = active === 'Gift Tins' ? [] : menu.filter(m => !search || m.name.toLowerCase().includes(search.toLowerCase()));
+  // Search floats matches to the TOP but keeps every other cookie visible below it (cross-sell —
+  // e.g. searching "ADC Special" shows it first, then the rest of the menu). Never hides the menu.
+  const _q = search.trim().toLowerCase();
+  const filtered = active === 'Cookie Tins'
+    ? []
+    : (!_q ? menu : [...menu].sort((a, b) => (a.name.toLowerCase().includes(_q) ? 0 : 1) - (b.name.toLowerCase().includes(_q) ? 0 : 1)));
+  const cartLines = Object.values(cart);
 
   // Checkout and payment are their own routes; render the combined flow on those URLs.
   if (pathname === '/checkout') return <CheckoutFlow step="review" />;
@@ -1031,39 +1130,51 @@ export default function OrderingApp() {
     return (
       <>
         <div className="adc-pattern-page" style={{ minHeight: '100vh' }}>
-          {/* Desktop header */}
+          {/* Header — same two-row style as the home page: logo · search · location · cart · account, then nav links */}
           <header style={{ position: 'sticky', top: 0, zIndex: 30, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-default)' }}>
-            <div style={{ maxWidth: 1240, margin: '0 auto', padding: '14px var(--gutter)', display: 'flex', alignItems: 'center', gap: 22 }}>
+            <div style={{ maxWidth: 1680, margin: '0 auto', padding: '8px var(--gutter)', display: 'flex', alignItems: 'center', gap: 'clamp(14px,2vw,28px)' }}>
               <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flex: 'none' }}>
-                <Image src="/assets/adc-logo.png" height={66} width={112} alt="a dough cookie" style={{ objectFit: 'contain' }} />
+                <Image src="/assets/adc-logo.png" height={104} width={174} alt="a dough cookie" style={{ height: 104, width: 'auto', objectFit: 'contain' }} />
               </a>
-              <div style={{ flex: 1, maxWidth: 460 }}>
-                <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-raised)', borderRadius: 'var(--radius-input)', padding: '11px 16px', gap: 10, border: '1.5px solid var(--border-default)' }}>
-                  <Search size={18} color="var(--text-subtle)" />
-                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search Cookies…" style={{ flex: 1, border: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', outline: 'none' }} />
-                </div>
+              <div style={{ flex: 1, maxWidth: 620, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-card)', borderRadius: 'var(--radius-pill)', padding: '9px 16px', border: '1.5px solid var(--border-default)' }}>
+                <Search size={18} color="var(--text-subtle)" />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search cookies…" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', outline: 'none' }} />
               </div>
-              <div style={{ flex: 1 }} />
-              <button onClick={() => setLocationOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-body)', fontWeight: 700, fontSize: 'var(--text-sm)', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
-                <MapPin size={18} color="var(--brand-secondary)" /> {location} <ChevronRight size={15} color="var(--text-subtle)" style={{ transform: 'rotate(90deg)' }} />
+              <button onClick={() => setLocationOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-body)', fontWeight: 700, fontSize: 'var(--text-sm)', border: 'none', background: 'transparent', cursor: 'pointer', flex: 'none' }}>
+                <MapPin size={18} color="var(--brand-secondary)" /> {location}
+              </button>
+              <button onClick={() => router.push('/checkout')} aria-label={`View cart, ${count} items`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', flex: 'none' }}>
+                <ShoppingBag size={20} />
+                {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--gradient-warm)', color: '#fff', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>}
               </button>
               {user ? (
-                <button onClick={() => router.push(user.role === 'ADMIN' ? '/admin' : '/account')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px 8px 10px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
+                <button onClick={() => router.push(user.role === 'ADMIN' ? '/admin' : '/account')} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px 8px 10px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
                   <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: '#fff', flex: 'none' }}><User size={17} /></span>
                   {user.name.split(' ')[0]}
                 </button>
               ) : (
-                <button onClick={() => setLoginOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
+                <button onClick={() => setLoginOpen(true)} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
                   <User size={18} /> Login
                 </button>
               )}
             </div>
+            <div style={{ borderTop: '1px solid var(--border-default)' }}>
+              <div style={{ maxWidth: 1680, margin: '0 auto', padding: '8px var(--gutter)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(16px,2.4vw,40px)', flexWrap: 'wrap' }}>
+                <OrderNavItem label="Home" href="/" />
+                <OrderNavItem label="Buy Cookies" href="/order?cat=cookies" menu={menu.map(m => ({ label: m.name, onClick: () => { setActive('Cookies'); setSearch(m.name); } }))} />
+                <OrderNavItem label="Cookie Tins" href="/order?cat=tins" menu={tins.map(t => ({ label: t.name, onClick: () => { setActive('Cookie Tins'); setSearch(''); } }))} />
+                <OrderNavItem label="Locations" href="/locations" menu={STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/order?store=${encodeURIComponent(s.city.toLowerCase())}` }))} />
+                <OrderNavItem label="Partner with us" href="/franchise" menu={[{ label: 'Corporate & Bulk Order', onClick: () => setActive('Corporate Gifting') }, { label: 'Franchise Enquiry', href: '/franchise' }]} />
+                <OrderNavItem label="About Us" href="/about" />
+                <OrderNavItem label="Contact" href="/contact" />
+              </div>
+            </div>
           </header>
 
-          {/* 3-col layout */}
-          <div style={{ maxWidth: 1060, margin: '0 auto', padding: '26px var(--gutter) 96px max(14px,calc(var(--gutter) - 18px))', display: 'grid', gridTemplateColumns: '225px minmax(0,1fr)', gap: 28, alignItems: 'start' }}>
+          {/* 3-col layout: category rail · product grid · live cart panel */}
+          <div style={{ maxWidth: 1680, margin: '0 auto', padding: '24px var(--gutter) 60px', display: 'grid', gridTemplateColumns: '210px minmax(0,1fr) 400px', gap: 28, alignItems: 'start' }}>
             {/* Category rail */}
-            <aside style={{ position: 'sticky', top: 92, alignSelf: 'start' }}>
+            <aside style={{ position: 'sticky', top: 150, alignSelf: 'start' }}>
               <div style={{ fontSize: 'var(--text-2xs)', letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--brand-secondary)', fontWeight: 800, margin: '4px 8px 14px' }}>Categories</div>
               <div style={{ display: 'grid', gap: 10 }}>
               {CATEGORIES.map(c => {
@@ -1079,58 +1190,70 @@ export default function OrderingApp() {
             <main style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 20 }}>
                 <span style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>{active}</span>
-                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-subtle)', fontWeight: 600 }}>{active === 'Corporate Gifting' ? '' : active === 'Gift Tins' ? tins.length : filtered.length}</span>
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-subtle)', fontWeight: 600 }}>{loading || active === 'Corporate Gifting' ? '' : active === 'Cookie Tins' ? tins.length : filtered.length}</span>
               </div>
               {active === 'Corporate Gifting' ? (
                 <CorporatePanel />
-              ) : active === 'Gift Tins' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 18 }}>
-                  {tins.map(t => (
-                    <div key={t.id} onClick={() => setTin(t as any)} style={{ display: 'flex', flexDirection: 'column', background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', overflow: 'hidden', cursor: 'pointer', transition: 'transform .2s,box-shadow .2s' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}>
-                      <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3' }}>
-                        <Image src={t.img} alt={t.name} fill sizes="50vw" style={{ objectFit: 'cover' }} />
-                        <span style={{ position: 'absolute', top: 10, left: 10, padding: '3px 10px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Gift Tin · {t.count} cookies</span>
-                      </div>
-                      <div style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                        <h3 style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>{t.name}</h3>
-                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>{t.desc}</p>
-                        <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}>₹{t.price}</span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>Choose <ChevronRight size={15} /></span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+              ) : active === 'Cookie Tins' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 20 }}>
+                  {loading
+                    ? Array.from({ length: 2 }).map((_, i) => <SkeletonCard key={i} />)
+                    : tins.map(t => (
+                        <DeskProductCard key={t.id} item={t as unknown as typeof FALLBACK_MENU[0]} qty={cart[t.id]?.qty || 0} onQtyChange={n => setQty(t.id, n, t.name, t.price, t.img)} badge={`Tin · ${t.count} cookies`} />
+                      ))}
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 18 }}>
-                  {filtered.map((m) => (
-                    <MobileProductCard key={m.id} item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} />
-                  ))}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 20 }}>
+                  {loading
+                    ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
+                    : filtered.map((m) => (
+                        <DeskProductCard key={m.id} item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} />
+                      ))}
                 </div>
               )}
             </main>
 
-            {/* Cart side-panel removed per request — the cart now lives on its own order page,
-                and the delivery fee is shown only on the payment page. Uncomment to restore.
-            <aside style={{ position: 'sticky', top: 92, alignSelf: 'start', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', padding: '18px 20px', boxShadow: 'var(--shadow-md)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            {/* Live cart panel — always visible so you see what you've added while browsing */}
+            <aside style={{ position: 'sticky', top: 150, alignSelf: 'start' }}>
+              <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 172px)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 18px', borderBottom: '1px solid var(--border-soft)' }}>
                   <ShoppingBag size={18} color="var(--brand-secondary)" />
-                  <span style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>Your Cart</span>
+                  <span style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>Your cart</span>
+                  {count > 0 && <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--text-muted)' }}>{count} item{count !== 1 ? 's' : ''}</span>}
                 </div>
-                ...item list, bill (item total + delivery + to pay) and Proceed button...
+                {cartLines.length === 0 ? (
+                  <div style={{ padding: '34px 20px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 34, marginBottom: 8 }}>🍪</div>
+                    <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 4 }}>Your cart is empty</div>
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>Add some warm cookies to get started — they&apos;ll show up right here.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="hide-sb" style={{ overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {cartLines.map(l => (
+                        <div key={l.id} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                          <div style={{ position: 'relative', width: 54, height: 54, borderRadius: 12, overflow: 'hidden', flex: 'none', background: 'var(--surface-raised)' }}>
+                            {l.img && <Image src={l.img} alt={l.name} fill sizes="54px" style={{ objectFit: 'cover' }} />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</div>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>₹{l.price} × {l.qty}</div>
+                          </div>
+                          <QStepper value={l.qty} onChange={n => setQty(l.id, n, l.name, l.price, l.img)} size="sm" />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--border-soft)', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}><span>Subtotal</span><span>₹{total}</span></div>
+                      <button onClick={() => router.push('/checkout')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-button)', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' }}>Checkout · ₹{total} <ArrowRight size={18} /></button>
+                      <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', textAlign: 'center', margin: 0, lineHeight: 1.4 }}>Taxes included. Shipping and discount codes calculated at checkout.</p>
+                    </div>
+                  </>
+                )}
               </div>
             </aside>
-            */}
           </div>
 
-          {count > 0 && (
-            <button onClick={() => router.push('/checkout')} style={{ position: 'fixed', right: 28, bottom: 28, zIndex: 40, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 24px', background: 'var(--gradient-warm)', color: '#fff', borderRadius: 'var(--radius-pill)', boxShadow: 'var(--shadow-brand)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)' }}>
-              <ShoppingBag size={20} /> View cart · {count} item{count !== 1 ? 's' : ''} · ₹{total} <ArrowRight size={18} />
-            </button>
-          )}
-        <TinModal tin={tin} onClose={() => setTin(null)} onAdd={addTin} />
         <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
         <LocationSheet open={locationOpen} onClose={() => setLocationOpen(false)} onPick={a => setLocation(a.city)} />
         </div>
@@ -1180,23 +1303,27 @@ export default function OrderingApp() {
           </div>
           {active === 'Corporate Gifting' ? (
             <div style={{ paddingBottom: 24 }}><CorporatePanel /></div>
-          ) : active === 'Gift Tins' ? (
-            tins.map(t => (
-              <div key={t.id} onClick={() => setTin(t as any)} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 14, background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', marginBottom: 14, cursor: 'pointer' }}>
-                <Thumb size={92} img={t.img} seed={2} />
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>{t.name}</h3>
-                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 8px' }}>{t.desc}</p>
-                  <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>₹{t.price}</span>
-                </div>
-                <ChevronRight size={20} color="var(--text-subtle)" />
-              </div>
-            ))
+          ) : active === 'Cookie Tins' ? (
+            loading
+              ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>{Array.from({ length: 2 }).map((_, i) => <SkeletonCard key={i} />)}</div>
+              : tins.map(t => (
+                  <div key={t.id} onClick={() => setTin(t as any)} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 14, background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', marginBottom: 14, cursor: 'pointer' }}>
+                    <Thumb size={92} img={t.img} seed={2} />
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>{t.name}</h3>
+                      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 8px' }}>{t.desc}</p>
+                      <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>₹{t.price}</span>
+                    </div>
+                    <ChevronRight size={20} color="var(--text-subtle)" />
+                  </div>
+                ))
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
-              {filtered.map((m) => (
-                <MobileProductCard key={m.id} item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} />
-              ))}
+              {loading
+                ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+                : filtered.map((m) => (
+                    <MobileProductCard key={m.id} item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} />
+                  ))}
             </div>
           )}
         </div>
@@ -1229,7 +1356,7 @@ export default function OrderingApp() {
             <div style={{ padding: '8px 12px 5px', fontSize: 'var(--text-2xs)', letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,248,241,.5)', fontWeight: 800 }}>Menu</div>
             {CATEGORIES.map(c => {
               const on = c === active;
-              const cnt = c === 'Gift Tins' ? tins.length : c === 'Cookies' ? menu.length : null;
+              const cnt = c === 'Cookie Tins' ? tins.length : c === 'Cookies' ? menu.length : null;
               return (
                 <button key={c} onClick={() => { setActive(c); setDrawer(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid rgba(255,248,241,.08)', textAlign: 'left' }}>
                   <span style={{ fontFamily: 'var(--font-body)', fontWeight: on ? 800 : 600, fontSize: 'var(--text-sm)', color: on ? 'var(--amber-400)' : 'var(--cream-100)' }}>{c}</span>
