@@ -181,7 +181,7 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: #F2E1BE;
+  background: #FFFAF0;
   opacity: 1;
   pointer-events: none;
 }
@@ -189,14 +189,14 @@ body::before {
 .adc-pattern-page {
   position: relative;
   isolation: isolate;
-  background: #F2E1BE;
+  background: #FFFAF0;
 
   /* Warm, non-white surfaces for every page that uses this wrapper (i.e. everything
      except the home page). Cards/inputs become warm ivory, headers a soft amber wash,
      and the page itself (#EFE1CC) sits a touch darker behind the products. */
-  --surface-card: #FBEACB;
-  --surface-raised: #F6E0B8;
-  --surface-glass: #FFFFFF; /* header/nav band color per request */
+  --surface-card: #F6E8C8;   /* cards — a notch darker than the section creams, for gentle separation */
+  --surface-raised: #EFE1BE; /* inputs/chips inside cards */
+  --surface-glass: #FFFFFF;  /* header/nav band — white */
 }
 
 .adc-pattern-page::before {
