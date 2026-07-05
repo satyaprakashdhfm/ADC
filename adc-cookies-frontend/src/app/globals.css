@@ -194,7 +194,7 @@ body::before {
   /* Warm, non-white surfaces for every page that uses this wrapper (i.e. everything
      except the home page). Cards/inputs become warm ivory, headers a soft amber wash,
      and the page itself (#EFE1CC) sits a touch darker behind the products. */
-  --surface-card: #FFC999;   /* cards — soft peach (product/ingredient/store/form cards) */
+  --surface-card: #FFF4DE;   /* cards — vanilla cream (product/ingredient/store/form cards) */
   --surface-raised: #FFF4DF; /* inputs/chips inside cards — light for readability */
   --surface-glass: #FFF4DF;  /* header/nav band — very light warm (not pure white) */
 }
