@@ -20,7 +20,7 @@ export default function AnnouncementBar() {
     <div
       style={{
         background: '#FFB06B', color: 'var(--ink-800)',
-        textAlign: 'center', padding: '5px 40px', overflow: 'hidden',
+        textAlign: 'center', padding: '3px 40px', overflow: 'hidden',
         borderBottom: '1px solid rgba(43,29,18,.08)',
       }}
     >
