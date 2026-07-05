@@ -48,6 +48,34 @@ function log(label, extra = '') {
   console.log(`[SHADOWFAX] ${label}${extra ? ' | ' + extra : ''}`);
 }
 
+// Shadowfax's raw status codes → short, customer-friendly labels for our UI.
+const SFX_STATUS_LABELS = {
+  new: 'Order placed',
+  assigned_for_seller_pickup: 'Pickup assigned',
+  ofp: 'Out for pickup',
+  seller_pickup_done: 'Picked up from store',
+  pickup_done: 'Picked up from store',
+  item_manifested: 'Packed',
+  bag_in_transit: 'In transit',
+  bag_received: 'At delivery hub',
+  recd_at_rev_hub: 'At hub',
+  ofd: 'Out for delivery',
+  delivered: 'Delivered',
+  rts_nd: 'Delivery attempted',
+  rts: 'Returning to store',
+  rts_d: 'Returned to store',
+  rto: 'Returned to store',
+  cancelled: 'Cancelled',
+  cancelled_by_customer: 'Cancelled',
+  lost: 'Lost in transit',
+  on_hold: 'On hold',
+};
+export function sfxStatusLabel(status) {
+  const key = String(status || '').toLowerCase().trim();
+  if (!key) return null;
+  return SFX_STATUS_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 async function sfxRequest(path, { method = 'GET', query, body, timeoutMs = 15_000 } = {}) {
   const url = new URL(BASE_URL + path);
   if (query) for (const [k, v] of Object.entries(query)) if (v != null && v !== '') url.searchParams.set(k, String(v));

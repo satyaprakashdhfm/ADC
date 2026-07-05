@@ -189,7 +189,7 @@ function ShipmentTracker({ order }: { order: Order }) {
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--brand-secondary)', marginTop: 5, flex: 'none' }} />
               <div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{s.event}</div>
-                {s.time && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{s.time}</div>}
+                {s.time && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{(() => { const d = new Date(s.time); return isNaN(d.getTime()) ? s.time : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); })()}</div>}
               </div>
             </div>
           ))}

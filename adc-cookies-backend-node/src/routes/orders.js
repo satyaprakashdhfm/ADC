@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { shadowfaxConfigured, createShadowfaxOrder, zoneStores, trackShadowfax } from '../shadowfax.js';
+import { shadowfaxConfigured, createShadowfaxOrder, zoneStores, trackShadowfax, sfxStatusLabel } from '../shadowfax.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from '../razorpay.js';
 
 const router = Router();
@@ -325,9 +325,9 @@ router.get('/:id/delhivery-track', async (req, res) => {
     if (!result.ok) return res.json({ tracked: false, reason: result.reason });
     if (result.status) await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [result.status, nowIso(), order.id]);
     const scans = (result.data?.tracking_details || [])
-      .map(t => ({ time: t.created, event: [t.status, t.remarks].filter(Boolean).join(' — ') }))
+      .map(t => ({ time: t.created, event: sfxStatusLabel(t.status_id) || t.status || t.remarks }))
       .reverse();
-    return res.json({ tracked: true, carrier: 'SHADOWFAX', waybill: order.delhivery_waybill, status: result.status || null, trackUrl: result.trackUrl || null, scans });
+    return res.json({ tracked: true, carrier: 'SHADOWFAX', waybill: order.delhivery_waybill, status: sfxStatusLabel(result.status) || result.status || null, trackUrl: result.trackUrl || null, scans });
   }
 
   // Pan-India orders ship via Delhivery.

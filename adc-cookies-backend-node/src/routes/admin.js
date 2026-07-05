@@ -16,7 +16,7 @@ import {
   fetchDocument,
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
-import { shadowfaxConfigured, trackShadowfax, getShadowfaxPod } from '../shadowfax.js';
+import { shadowfaxConfigured, trackShadowfax, getShadowfaxPod, sfxStatusLabel } from '../shadowfax.js';
 
 const router = Router();
 router.use(requireAdmin);
@@ -480,9 +480,9 @@ router.get('/orders/:id/track', async (req, res) => {
       await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [result.status, nowIso(), order.id]);
     }
     const scans = (result.data?.tracking_details || [])
-      .map(t => ({ time: t.created, event: [t.status, t.remarks].filter(Boolean).join(' — ') }))
+      .map(t => ({ time: t.created, event: sfxStatusLabel(t.status_id) || t.status || t.remarks }))
       .reverse();
-    return res.json({ ok: result.ok, carrier: 'SHADOWFAX', status: result.status || null, scans });
+    return res.json({ ok: result.ok, carrier: 'SHADOWFAX', status: sfxStatusLabel(result.status) || result.status || null, scans });
   }
 
   // Delhivery (outstation)
