@@ -161,7 +161,7 @@ export default function AdminDashboard() {
         <div style={{ maxWidth: 1180, margin: '0 auto', padding: '14px var(--gutter)', display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: '#fff', flex: 'none' }}><LayoutDashboard size={20} /></div>
           <div style={{ flex: 1 }}>
-            <div style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>ADC Admin</div>
+            <div style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>A Dough Cookie Admin</div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{user.name} · {user.email}</div>
           </div>
           <button onClick={() => { logout(); router.push('/'); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}><LogOut size={16} /> Log out</button>
@@ -624,7 +624,7 @@ export default function AdminDashboard() {
                 <Field label="Registered name"><input style={inp} value={whForm.data.registeredName || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, registeredName: e.target.value } })} /></Field>
               </div>
               <Field label="Pickup location * (must EXACTLY match the pickup name in your Delhivery panel)">
-                <input style={inp} value={whForm.data.pickupLocation} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, pickupLocation: e.target.value } })} placeholder="e.g. ADC Cookies" />
+                <input style={inp} value={whForm.data.pickupLocation} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, pickupLocation: e.target.value } })} placeholder="e.g. A Dough Cookie" />
               </Field>
               <Field label="Address line 1"><input style={inp} value={whForm.data.addressLine1 || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, addressLine1: e.target.value } })} /></Field>
               <Field label="Address line 2 / Area"><input style={inp} value={whForm.data.addressLine2 || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, addressLine2: e.target.value } })} /></Field>

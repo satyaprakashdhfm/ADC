@@ -21,10 +21,10 @@ console.log(`[SHADOWFAX] config | base=${BASE_URL || 'MISSING'} | token=${TOKEN 
 // Our stores that act as intracity Shadowfax pickup points. When a city has more than one store
 // (Bengaluru), the order ships from the store whose pincode is NEAREST the delivery pincode.
 export const SFX_STORES = [
-  { name: 'ADC — Jayanagar', contact: '9381502998', address_line_1: 'Jain University, 1314, 24th Main Rd, Jayanagar 9th Block', city: 'Bengaluru', state: 'Karnataka', pincode: 560041 },
-  { name: 'ADC — S.G. Palya', contact: '9381502998', address_line_1: 'No 10, 1st Main Rd, Venkateshwara Layout, S.G. Palya', city: 'Bengaluru', state: 'Karnataka', pincode: 560029 },
-  { name: 'ADC — Electronic City', contact: '9381502998', address_line_1: 'F3 Alley, GF, 1st Cross, Neeladri Rd, Electronic City Phase I', city: 'Bengaluru', state: 'Karnataka', pincode: 560100 },
-  { name: 'ADC — Besant Nagar', contact: '9381502998', address_line_1: '63, 6th Avenue, Besant Nagar', city: 'Chennai', state: 'Tamil Nadu', pincode: 600090 },
+  { name: 'A Dough Cookie — Jayanagar', contact: '9381502998', address_line_1: 'Jain University, 1314, 24th Main Rd, Jayanagar 9th Block', city: 'Bengaluru', state: 'Karnataka', pincode: 560041 },
+  { name: 'A Dough Cookie — S.G. Palya', contact: '9381502998', address_line_1: 'No 10, 1st Main Rd, Venkateshwara Layout, S.G. Palya', city: 'Bengaluru', state: 'Karnataka', pincode: 560029 },
+  { name: 'A Dough Cookie — Electronic City', contact: '9381502998', address_line_1: 'F3 Alley, GF, 1st Cross, Neeladri Rd, Electronic City Phase I', city: 'Bengaluru', state: 'Karnataka', pincode: 560100 },
+  { name: 'A Dough Cookie — Besant Nagar', contact: '9381502998', address_line_1: '63, 6th Avenue, Besant Nagar', city: 'Chennai', state: 'Tamil Nadu', pincode: 600090 },
 ];
 
 // All our stores in the destination's city zone (pincode's first 3 digits), NEAREST FIRST.

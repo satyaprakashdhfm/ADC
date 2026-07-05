@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-// Slim top ribbon — rotates between the offer and the login/track-order nudge.
+// Slim top ribbon — rotates between the veg promise, the offer and the login/track-order nudge.
 const MESSAGES = [
+  '🌱 100% Pure Veg · All our cookies are eggless',
   'Get 20% off your first order — use code FRESH20',
   'Log in to save favourites & track your orders',
 ];

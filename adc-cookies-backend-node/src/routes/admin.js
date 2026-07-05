@@ -422,7 +422,7 @@ router.post('/orders/:id/shipment', async (req, res) => {
     shipment_type: 0,
     origin_scan: 1,
     weight: String(req.body?.weight || 0.5),
-    shipping_mode: 'Surface',
+    shipping_mode: 'Express',
     address_type: 'home',
     seller_gst_tin: '',
   };

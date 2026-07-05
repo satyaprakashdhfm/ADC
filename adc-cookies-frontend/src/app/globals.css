@@ -43,7 +43,10 @@
   --teal-600: #08929B; --teal-700: #0C747B; --teal-800: #0F5A60; --teal-900: #114950;
   --cream-50: #FFFCF8; --cream-100: #FFF8F1; --cream-200: #F7ECE0;
   --cream-300: #ECDBC9; --cream-400: #DBC6AE;
-  --band-sand: #F5E9D5; /* muted warm oatmeal — subtle accent band for alternating home sections */
+  --band-salmon: #FBE1CE; /* soft salmon wash — About Us accent bands, distinct from the cream hero */
+  --band-apricot: #FBE7C1; /* light apricot wash — warm section bands */
+  --apricot: #FAD282;      /* palette "light apricot" — accents / warm fills */
+  --font-hand: 'Segoe Script', 'Bradley Hand', 'Snell Roundhand', cursive; /* handwritten note look */
   --ink-300: #C2B2A3; --ink-400: #9C8676; --ink-500: #7A6353;
   --ink-600: #5C4636; --ink-700: #4A3525; --ink-800: #36251A; --ink-900: #2B1D12;
   --white: #FFFFFF;
@@ -54,7 +57,7 @@
 
   /* Semantic surfaces */
   --surface-page: var(--cream-100);
-  --surface-card: var(--white);
+  --surface-card: #FFF7E6; /* warm ivory — never stark white (root-level modals/drawers) */
   --surface-raised: var(--cream-50);
   --surface-sunken: var(--cream-200);
   --surface-inverse: var(--ink-900);
@@ -178,7 +181,7 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: #EFE1CC;
+  background: #F2E1BE;
   opacity: 1;
   pointer-events: none;
 }
@@ -186,14 +189,14 @@ body::before {
 .adc-pattern-page {
   position: relative;
   isolation: isolate;
-  background: #EFE1CC;
+  background: #F2E1BE;
 
   /* Warm, non-white surfaces for every page that uses this wrapper (i.e. everything
      except the home page). Cards/inputs become warm ivory, headers a soft amber wash,
      and the page itself (#EFE1CC) sits a touch darker behind the products. */
-  --surface-card: #F4EAD6;
-  --surface-raised: #EEE0C8;
-  --surface-glass: rgba(250,242,226,.92);
+  --surface-card: #FBEACB;
+  --surface-raised: #F6E0B8;
+  --surface-glass: rgba(251,234,203,.86);
 }
 
 .adc-pattern-page::before {
@@ -267,6 +270,17 @@ body::before {
 @media (max-width:680px) {
   .home-cat-grid { grid-template-columns: 1fr !important; }
   .home-corp-body { max-width: 100% !important; }
+}
+
+/* Customer Love (Reviews) — compact cards on mobile, noticeably larger on desktop */
+.review-card { flex: none; width: min(80vw, 300px); }
+@media (min-width: 900px) {
+  .review-card { width: 380px; }
+  .review-card .rv-inner { padding: 28px 26px !important; gap: 10px !important; }
+  .review-card .rv-stars { font-size: 18px !important; }
+  .review-card .rv-name { font-size: var(--text-sm) !important; }
+  .review-card .rv-title { font-size: var(--text-lg) !important; }
+  .review-card .rv-body { font-size: var(--text-base) !important; -webkit-line-clamp: 3 !important; line-height: 1.55 !important; }
 }
 
 /* Homepage top bar — drop the menu/account text on small phones, keep icons only */

@@ -6,7 +6,7 @@ interface Review { title: string; body: string; name: string; verified: boolean;
 
 const REVIEWS: Review[] = [
   { title: 'Gooey and unreal', body: 'The Biscoff filled is unreal — gooey, warm, perfect. My weekly ritual now.', name: 'Ananya R.', verified: true, city: 'Bengaluru', img: '/assets/products/adc-special.jpg' },
-  { title: 'Best in the city', body: 'Arrived warm and smelled incredible — the ADC Special is the best cookie in town.', name: 'Karthik M.', verified: true, city: 'Hyderabad', img: '/assets/products/triple-choc.jpg' },
+  { title: 'Best in the city', body: 'Arrived warm and smelled incredible — the signature cookie is the best in town.', name: 'Karthik M.', verified: true, city: 'Hyderabad', img: '/assets/products/triple-choc.jpg' },
   { title: 'Gifting done right', body: 'Beautiful packaging — gifted a Nutella tin and it was a total hit.', name: 'Sneha P.', verified: true, city: 'Mumbai', img: '/assets/products/caramel-cashew.jpg' },
   { title: 'Ordered 10 at once', body: 'Ordered 10 cookies all at once. Definitely better than expected — tasted too good. 😊', name: 'Vedant', verified: true, city: 'Delhi', img: '/assets/products/m-and-m.jpg' },
   { title: 'Soft centres every time', body: 'Every batch has that soft molten centre. The peanut butter one is my favourite.', name: 'Farah K.', verified: true, city: 'Bengaluru', img: '/assets/products/peanut-butter.jpg' },
@@ -76,8 +76,8 @@ export default function Reviews() {
     <section style={{ padding: 'clamp(20px,3vw,40px) 0', background: 'var(--cream-100)', borderTop: '1px solid var(--border-default)', borderBottom: '1px solid var(--border-default)' }}>
       <div style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter)' }}>
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <p style={{ fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 4px' }}>Customer Love</p>
-          <h2 style={{ font: 'var(--weight-extra) clamp(1.3rem,1rem + 1.2vw,1.9rem)/1.05 var(--font-display)', color: 'var(--text-strong)', margin: 0, letterSpacing: '-.02em' }}>People can&apos;t stop</h2>
+          <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 4px' }}>Customer Love</p>
+          <h2 style={{ font: 'var(--weight-extra) clamp(1.4rem,1rem + 1.8vw,2.4rem)/1.05 var(--font-display)', color: 'var(--text-strong)', margin: 0, letterSpacing: '-.02em' }}>People can&apos;t stop</h2>
         </div>
 
         <div style={{ position: 'relative' }}>
@@ -85,15 +85,15 @@ export default function Reviews() {
 
           <div ref={track} className="hide-sb" style={{ display: 'flex', gap: 16, overflowX: 'auto', scrollBehavior: 'auto' }}>
             {cards.map((rv, i) => (
-              <article key={i} style={{ flex: 'none', width: 'min(80vw, 300px)', background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '20px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 7 }}>
-                  <div aria-hidden style={{ color: 'var(--amber-500)', fontSize: 14, letterSpacing: 2 }}>★★★★★</div>
+              <article key={i} className="review-card" style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column' }}>
+                <div className="rv-inner" style={{ padding: '20px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 7 }}>
+                  <div aria-hidden className="rv-stars" style={{ color: 'var(--amber-500)', fontSize: 14, letterSpacing: 2 }}>★★★★★</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-xs)' }}>{rv.name}</span>
+                    <span className="rv-name" style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-xs)' }}>{rv.name}</span>
                     {rv.verified && <span style={verifiedPill}>Verified</span>}
                   </div>
-                  <h3 style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '1px 0 0' }}>{rv.title}</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', lineHeight: 1.45, margin: 0, ...clamp2 }}>{rv.body}</p>
+                  <h3 className="rv-title" style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '1px 0 0' }}>{rv.title}</h3>
+                  <p className="rv-body" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', lineHeight: 1.45, margin: 0, ...clamp2 }}>{rv.body}</p>
                 </div>
               </article>
             ))}

@@ -81,7 +81,7 @@ const FALLBACK_MENU = [
   { id: 'double', name: 'Double Choc Chip', price: 65, cat: 'Cookies', best: true, rating: 4.7, rc: '1.2k', veg: true, img: '/assets/products/triple-choc.jpg', desc: 'Rich cocoa dough loaded with dark chocolate chunks.' },
   { id: 'raagi', name: 'Raagi (Gluten Free)', price: 60, cat: 'Cookies', rating: 4.4, rc: '820', veg: true, img: '/assets/products/oatmeal-raisin.jpg', desc: 'Wholesome finger-millet cookie, naturally gluten free.' },
   { id: 'matcha', name: 'Matcha', price: 90, cat: 'Cookies', rec: true, rating: 4.5, rc: '640', veg: true, img: '/assets/products/matcha.jpg', desc: 'Stone-ground matcha folded into buttery white-chocolate dough.' },
-  { id: 'special', name: 'ADC Special', price: 90, cat: 'Cookies', best: true, rating: 4.8, rc: '2.1k', veg: true, img: '/assets/products/adc-special.jpg', desc: 'Our signature — browned butter, sea salt, three chocolates.' },
+  { id: 'special', name: 'A Dough Cookie Special', price: 90, cat: 'Cookies', best: true, rating: 4.8, rc: '2.1k', veg: true, img: '/assets/products/adc-special.jpg', desc: 'Our signature — browned butter, sea salt, three chocolates.' },
   { id: 'redvelvet', name: 'Red Velvet With Cheese', price: 90, cat: 'Cookies', rating: 4.6, rc: '910', veg: true, img: '/assets/products/red-velvet.jpg', desc: 'Cocoa-red velvet cookie with a cream-cheese filled core.' },
   { id: 'biscoff', name: 'Biscoff Filled', price: 110, cat: 'Cookies', best: true, rating: 4.9, rc: '4.0k', veg: true, img: '/assets/products/peanut-butter.jpg', desc: 'Molten Biscoff spread inside a caramelised cookie shell.' },
   { id: 'nutella', name: 'Nutella Filled', price: 90, cat: 'Cookies', rec: true, rating: 4.7, rc: '2.6k', veg: true, img: '/assets/products/caramel-cashew.jpg', desc: 'Gooey Nutella centre in a soft chocolate cookie.' },
@@ -131,6 +131,20 @@ function useIsDesktop(bp = 920) {
   return d;
 }
 
+/* ---- Date helpers — customers want an actual date, not a raw "N days" ---- */
+const _WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const _MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtDay = (d: Date) => `${_WD[d.getDay()]}, ${d.getDate()} ${_MO[d.getMonth()]}`;
+function parseServerDate(s?: string | null): Date | null {
+  if (!s) return null;
+  const d = new Date(String(s).replace(' ', 'T'));
+  return isNaN(d.getTime()) ? null : d;
+}
+function addDays(n: number): Date { const d = new Date(); d.setDate(d.getDate() + n); return d; }
+
+/* ---- Gift occasions — a short, friendly tag on the gift note ---- */
+const GIFT_OCCASIONS = ['Birthday', 'Anniversary', 'Wedding', 'Love', 'Thank you', 'Congrats', 'Other'];
+
 function Dot({ on }: { on: boolean }) {
   return <span style={{ width: 22, height: 22, borderRadius: '50%', border: on ? '6px solid var(--brand-secondary)' : '2px solid var(--border-strong)', flex: 'none', transition: 'border .15s' }} />;
 }
@@ -178,7 +192,7 @@ const SHORT_DESC: Record<string, string> = {
   'Double Choc Chip': 'Cocoa dough loaded with dark chocolate chunks.',
   'Raagi (Gluten Free)': 'Wholesome finger-millet cookie, naturally gluten-free.',
   'Matcha': 'Stone-ground matcha with white-chocolate chips.',
-  'ADC Special': 'Browned butter, sea salt, three chocolates.',
+  'A Dough Cookie Special': 'Browned butter, sea salt, three chocolates.',
   'Red Velvet With Cheese': 'Cocoa-red velvet with a cream-cheese centre.',
   'Biscoff Filled': 'Molten Biscoff inside a caramelised shell.',
   'Nutella Filled': 'Gooey Nutella centre in a soft chocolate cookie.',
@@ -345,7 +359,7 @@ function TinModal({ tin, onClose, onAdd }: { tin: typeof FALLBACK_TINS[0] | null
 /* ---- Checkout flow — one page, two steps: 'review' (address + order) then 'pay' (payment) ---- */
 function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const router = useRouter();
-  const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, clearAll } = useCart();
+  const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, clearAll } = useCart();
   const { user } = useAuth();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [couponErr, setCouponErr] = useState('');
@@ -402,10 +416,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const giftFee = gift ? GIFT_FEE : 0;
   const grand = total + delivery + giftFee - discount;               // GST included in `total`, not added on top
   const selected = chosen || addresses[0];                           // fallback only for the pay-step display
+  // Pan-India arrival date: prefer the carrier's own date, else today + TAT days.
+  const deliverBy = delivCheck && delivCheck.serviceable && !delivCheck.intracity
+    ? (parseServerDate(delivCheck.expectedDeliveryDate) || (delivCheck.tat != null ? addDays(delivCheck.tat) : null))
+    : null;
 
   const aset = (k: keyof typeof aform) => (e: React.ChangeEvent<HTMLInputElement>) => setAform({ ...aform, [k]: e.target.value });
   const aValid = aform.fullName && aform.addressLine1 && aform.city && aform.pincode;
   const EMPTY_AFORM = { fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' };
+  // New address starts pre-filled with the signed-in user's name & phone (they can edit it, e.g. gifting to someone else).
+  const prefillAform = () => ({ ...EMPTY_AFORM, fullName: user?.name || '', phone: user?.phone || '' });
   const closeAddrForm = () => { setAdding(false); setEditId(null); setMakeDefault(false); setDetectErr(''); setAform(EMPTY_AFORM); };
 
   // Open the form pre-filled to edit an existing saved address.
@@ -506,7 +526,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         .map((e, index) => {
           const opts: Record<string, unknown> = {};
           if (e.addOns && e.addOns.length) opts.addOns = e.addOns;
-          if (index === 0 && gift) { opts.giftWrap = true; opts.giftMessage = giftMessage; }
+          if (index === 0 && gift) { opts.giftWrap = true; opts.giftMessage = giftMessage; if (giftOccasion) opts.giftOccasion = giftOccasion; }
           const numericId = Number(e.id);
           const productId = Number.isFinite(numericId) ? numericId : idByName.get(e.name.trim().toLowerCase());
           return {
@@ -535,7 +555,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         order_id: rp.orderId,
         amount: rp.amount,
         currency: rp.currency,
-        name: 'Adough Cookie',
+        name: 'A Dough Cookie',
         description: `Order ${rp.orderNumber}`,
         prefill: { name: user.name || '', email: user.email || '', contact: chosen?.phone || '' },
         theme: { color: '#E8772E' },
@@ -600,6 +620,19 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         ))}
         {lines.length === 0 && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', padding: '8px 0' }}>Your cart is empty.</div>}
       </div>
+      {/* Delivery promise — EXPRESS badge + a real date, like the big marketplaces */}
+      {lines.length > 0 && delivCheck && delivCheck.serviceable && (delivCheck.intracity || deliverBy) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-soft)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontWeight: 800, fontSize: 'var(--text-2xs)', letterSpacing: '.05em', flex: 'none' }}>
+            <Truck size={13} /> {delivCheck.intracity ? 'SAME-DAY' : 'EXPRESS'}
+          </span>
+          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>
+            {delivCheck.intracity
+              ? `Delivery today, ${fmtDay(new Date())}`
+              : `Delivery ${delivCheck.tat != null ? `in ${delivCheck.tat} day${delivCheck.tat !== 1 ? 's' : ''}, ` : 'by '}${_WD[deliverBy!.getDay()]}`}
+          </span>
+        </div>
+      )}
     </div>
   );
 
@@ -717,7 +750,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => { setEditId(null); setMakeDefault(false); setAform(EMPTY_AFORM); setDetectErr(''); setAdding(true); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
+                    <button onClick={() => { setEditId(null); setMakeDefault(false); setAform(prefillAform()); setDetectErr(''); setAdding(true); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
                       <Plus size={16} color="var(--brand-secondary)" />
                       <span style={{ fontWeight: 700, color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Add new address</span>
                     </button>
@@ -736,11 +769,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} color="#fff" /></span>
                       <div>
                         {delivCheck.intracity
-                          ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Same-day local delivery</div>
-                          : delivCheck.tat != null
-                            ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Expected delivery in {delivCheck.tat} day{delivCheck.tat !== 1 ? 's' : ''}{delivCheck.expectedDeliveryDate ? ` (by ${delivCheck.expectedDeliveryDate})` : ''}</div>
+                          ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Same-day delivery — arrives today, {fmtDay(new Date())}</div>
+                          : deliverBy
+                            ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Arrives {fmtDay(deliverBy)}{delivCheck.tat != null ? ` · in ${delivCheck.tat} day${delivCheck.tat !== 1 ? 's' : ''}` : ''}</div>
                             : <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Delivery available{delivCheck.embargo ? ' — minor delays possible' : ''}</div>}
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.intracity && delivCheck.store ? `Ordering from ${delivCheck.store} · Pincode ${chosen?.pincode}` : `Standard delivery (all India) · Pincode ${chosen?.pincode}`}</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.intracity && delivCheck.store ? `Ordering from ${delivCheck.store} · Pincode ${chosen?.pincode}` : `Express delivery (all India) · Pincode ${chosen?.pincode}`}</div>
                       </div>
                     </div>
                   ) : (
@@ -760,11 +793,30 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   <span style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Gift size={19} color="#fff" /></span>
                   <span style={{ flex: 1 }}>
                     <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Add this as a gift · +₹{GIFT_FEE}</span>
-                    <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Premium gift wrap with a printed message card.</span>
+                    <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Premium gift wrap with a handwritten message card.</span>
                   </span>
                   <span style={{ width: 26, height: 26, borderRadius: 9, display: 'grid', placeItems: 'center', border: gift ? 'none' : '2px solid var(--border-strong)', background: gift ? 'var(--gradient-warm)' : 'transparent', color: '#fff', flex: 'none' }}>{gift && <Check size={15} strokeWidth={3} />}</span>
                 </button>
-                {gift && <textarea value={giftMessage} onChange={e => setGiftMessage(e.target.value)} placeholder="Write your gift message (optional)…" rows={2} maxLength={140} style={{ width: '100%', boxSizing: 'border-box', resize: 'none', marginTop: 12, padding: '12px 14px', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none', background: 'var(--surface-raised)' }} />}
+                {gift && (
+                  <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>What&apos;s the occasion?</div>
+                      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                        {GIFT_OCCASIONS.map(o => {
+                          const on = giftOccasion === o;
+                          return (
+                            <button key={o} onClick={() => setGiftOccasion(on ? '' : o)} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-card)', color: on ? 'var(--orange-800)' : 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)' }}>{o}</button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      {/* Handwritten-style note card so it reads like a real gift message */}
+                      <textarea value={giftMessage} onChange={e => setGiftMessage(e.target.value.slice(0, 200))} placeholder="Write your gift message…" rows={3} maxLength={200} style={{ width: '100%', boxSizing: 'border-box', resize: 'none', padding: '14px 16px', border: '1.5px solid var(--amber-300)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-hand)', fontSize: '1.2rem', lineHeight: 1.5, color: 'var(--ink-800)', outline: 'none', background: 'var(--amber-50)' }} />
+                      <div style={{ textAlign: 'right', fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 4 }}>{giftMessage.length}/200</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div style={card$}>
@@ -958,7 +1010,7 @@ function LocationSheet({ open, onClose, onPick }: { open: boolean; onClose: () =
                   <ChevronRight size={18} color="var(--text-subtle)" />
                 </button>
               ))}
-              <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
+              <button onClick={() => { setF(ff => ({ ...ff, fullName: ff.fullName || user?.name || '', phone: ff.phone || user?.phone || '' })); setAdding(true); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
                 <Plus size={17} color="var(--brand-secondary)" /><span style={{ fontWeight: 700, color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Add new address</span>
               </button>
             </div>

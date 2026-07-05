@@ -17,7 +17,7 @@ const GALLERY = [
 
 export const metadata = {
   title: 'Gallery - a dough cookie',
-  description: 'A gallery of ADC cookie images and packaging moments.',
+  description: 'A gallery of A Dough Cookie images and packaging moments.',
 };
 
 export default function GalleryPage() {
@@ -28,7 +28,7 @@ export default function GalleryPage() {
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Gallery</p>
           <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 22 }}>Cookies, boxes, and fresh-baked moments.</h1>
-          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>A closer look at ADC cookies, boxes, and fresh-baked moments. The gallery should help customers see the product texture, packaging style, gifting quality, and the kind of care that goes into every order.</p>
+          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>A closer look at our cookies, boxes, and fresh-baked moments. The gallery should help customers see the product texture, packaging style, gifting quality, and the kind of care that goes into every order.</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginTop: 26 }} className="store-grid">
             {[
               ['Fresh bakes', 'Soft centers and golden edges.'],
@@ -49,7 +49,7 @@ export default function GalleryPage() {
         <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18 }} className="gallery-grid">
           {GALLERY.map((src, index) => (
             <div key={src} style={{ position: 'relative', aspectRatio: index % 4 === 0 ? '4 / 5' : '1 / 1', borderRadius: 22, overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: 'var(--surface-sunken)' }}>
-              <Image src={src} alt={`ADC gallery image ${index + 1}`} width={720} height={900} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <Image src={src} alt={`A Dough Cookie gallery image ${index + 1}`} width={720} height={900} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
           ))}
         </div>

@@ -107,6 +107,15 @@ function formatDate(value: string) {
   return isNaN(d.getTime()) ? value : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+const _WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const _MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function friendlyDate(s?: string | null): string | null {
+  if (!s) return null;
+  const d = new Date(String(s).replace(' ', 'T'));
+  if (isNaN(d.getTime())) return String(s);
+  return `${_WD[d.getDay()]}, ${d.getDate()} ${_MO[d.getMonth()]}`;
+}
+
 // Stored canonically as 91XXXXXXXXXX — show it as "+91 XXXXXXXXXX".
 function formatPhone(value?: string | null) {
   const p = String(value ?? '');
@@ -276,6 +285,9 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
             ) : (
               <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Delivery address will appear here once the order is synced.</p>
             )}
+            {order.estimatedDelivery && (
+              <p style={{ marginTop: 8, fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--brand-secondary)' }}>Expected by {friendlyDate(order.estimatedDelivery)}</p>
+            )}
             <ShipmentTracker order={order} />
           </div>
           <div style={{ padding: 14, borderRadius: 18, background: 'var(--surface-sunken)' }}>
@@ -420,7 +432,7 @@ export default function AccountPage() {
               {[
                 { icon: <MapPin size={18} />, label: 'Order cookies', href: '/order' },
                 { icon: <LifeBuoy size={18} />, label: 'Help & support', href: '/contact' },
-                { icon: <Info size={18} />, label: 'About ADC', href: '/about' },
+                { icon: <Info size={18} />, label: 'About A Dough Cookie', href: '/about' },
               ].map(row => (
                 <Link key={row.label} href={row.href} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', textDecoration: 'none' }}>
                   <span style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', display: 'grid', placeItems: 'center', background: 'var(--amber-50)', flex: 'none', color: 'var(--brand-secondary)' }}>{row.icon}</span>

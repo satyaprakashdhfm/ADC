@@ -6,12 +6,12 @@ import SiteHeader from '@/components/storefront/SiteHeader';
 
 const POSTS = [
   {
-    title: 'How ADC Gets That Soft-Center Cookie Bite',
+    title: 'How A Dough Cookie Gets That Soft-Center Bite',
     date: 'June 13, 2026',
     read: '4 min read',
     image: '/assets/products/adc-special.jpg',
     excerpt: 'A look at dough resting, browned butter, chocolate selection, and the bake timing that keeps the middle tender.',
-    body: 'Every ADC cookie starts with a dough that is rested before baking. That rest helps the flour hydrate, deepens the butter flavor, and gives the cookie enough structure to hold a soft center. We bake in small batches, pull the tray while the middle is still tender, and let the cookie finish gently as it cools. The result is a crisp edge, a warm aroma, and a center that still feels fresh when it reaches the box.',
+    body: 'Every A Dough Cookie starts with a dough that is rested before baking. That rest helps the flour hydrate, deepens the butter flavor, and gives the cookie enough structure to hold a soft center. We bake in small batches, pull the tray while the middle is still tender, and let the cookie finish gently as it cools. The result is a crisp edge, a warm aroma, and a center that still feels fresh when it reaches the box.',
   },
   {
     title: 'Choosing the Right Cookie Tin for Gifting',
@@ -19,7 +19,7 @@ const POSTS = [
     read: '3 min read',
     image: '/assets/products/m-and-m.jpg',
     excerpt: 'Nutella tins, Biscoff tins, handwritten notes, and the details that make a cookie box feel personal.',
-    body: 'Gift tins work best when the flavor has a clear personality. Nutella is creamy and familiar, while Biscoff brings a caramel-spiced hit. At ADC, tins are built for birthdays, team treats, festive tables, and last-minute surprises. Add a short note, choose the tin size based on how many people will share it, and keep the packaging neat enough that the box feels like a real present before it is even opened.',
+    body: 'Gift tins work best when the flavor has a clear personality. Nutella is creamy and familiar, while Biscoff brings a caramel-spiced hit. At A Dough Cookie, tins are built for birthdays, team treats, festive tables, and last-minute surprises. Add a short note, choose the tin size based on how many people will share it, and keep the packaging neat enough that the box feels like a real present before it is even opened.',
   },
 ];
 

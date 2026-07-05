@@ -2,7 +2,16 @@
 // (localhost or your LAN IP on a phone), and Next.js rewrites it to the backend server-side.
 import { supabase } from './supabase';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+// Where the browser sends API calls. In the browser we ALWAYS use the same-origin `/api` path so
+// Next.js rewrites it to the backend (see next.config.ts). This keeps `next dev` hitting your LOCAL
+// backend (and works for phones on the LAN) and avoids CORS — regardless of NEXT_PUBLIC_API_URL.
+// Server-side rendering has no origin, so it needs an absolute URL (local in dev, configured in prod).
+const API_BASE =
+  typeof window !== 'undefined'
+    ? '/api'
+    : process.env.NODE_ENV === 'production'
+      ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api')
+      : 'http://localhost:8080/api';
 
 // The bearer token is the current Supabase session access token (auto-refreshed by the client).
 async function getToken(): Promise<string | null> {
@@ -155,6 +164,7 @@ export interface Order {
   couponCode?: string | null; shipmentStatus?: string; trackingUrl?: string | null;
   delhiveryWaybill?: string | null; delhiveryShipmentId?: string | null; labelGenerated?: boolean;
   carrier?: string | null; // 'SHADOWFAX' (intracity) | 'DELHIVERY' (outstation)
+  estimatedDelivery?: string | null; // Shadowfax promised date from webhook (YYYY-MM-DD HH:MM:SS)
   payment?: OrderPayment | null;
   address?: Address | null; items?: OrderItem[];
 }
@@ -329,8 +339,7 @@ export async function adminTrackOrder(orderId: number): Promise<{ ok: boolean; d
   return request(`/admin/orders/${orderId}/track`);
 }
 export function adminLabelUrl(waybills: string): string {
-  const base = process.env.NEXT_PUBLIC_API_URL || '/api';
-  return `${base}/admin/delivery/label?waybills=${encodeURIComponent(waybills)}`;
+  return `${API_BASE}/admin/delivery/label?waybills=${encodeURIComponent(waybills)}`;
 }
 
 /**

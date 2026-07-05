@@ -33,7 +33,7 @@ const CATEGORIES: Category[] = [
     desc: 'Soft-centre, fresh-baked cookies in every flavour — Choc Chip to molten Biscoff & Nutella filled.',
     cta: 'Order Cookies',
     href: '/order?cat=cookies',
-    img: '/assets/products/adc-special.jpg',
+    img: '/assets/home-cookies.png',
     icon: <Cookie size={18} />,
     tint: 'linear-gradient(135deg,#FDEBC2,#FAD98A)',
   },
@@ -43,7 +43,7 @@ const CATEGORIES: Category[] = [
     desc: 'Premium keepsake tins of filled cookies — ribbon-wrapped and ready to gift.',
     cta: 'Shop Cookie Tins',
     href: '/order?cat=tins',
-    img: '/assets/products/m-and-m.jpg',
+    img: '/assets/home-tins.png',
     icon: <Gift size={18} />,
     tint: 'linear-gradient(135deg,#FDDCC2,#FAB988)',
   },
@@ -204,32 +204,41 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
           </div>
         </nav>
 
-        {/* Top bar (mobile) — big logo (left) · single menu button (right; opens drawer with nav + login) */}
+        {/* Top bar (mobile) — compact logo + menu row, with the search bar in the header below it */}
         <div className="home-topbar home-topbar--mobile" style={{
-          maxWidth: 1680, margin: '0 auto', padding: 'clamp(10px,1.4vw,18px) var(--gutter)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          maxWidth: 1680, margin: '0 auto', padding: 'clamp(8px,1.6vw,12px) var(--gutter) 10px',
+          display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center' }}>
-            <Image
-              src="/assets/adc-logo.png"
-              width={232}
-              height={168}
-              alt="a dough cookie"
-              priority
-              style={{ height: 'clamp(124px,20vw,290px)', width: 'auto', objectFit: 'contain', display: 'block' }}
-            />
-          </a>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center' }}>
+              <Image
+                src="/assets/adc-logo.png"
+                width={232}
+                height={168}
+                alt="a dough cookie"
+                priority
+                style={{ height: 'clamp(52px,13vw,80px)', width: 'auto', objectFit: 'contain', display: 'block' }}
+              />
+            </a>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {cartButton}
-            <button
-              onClick={onMenuOpen}
-              aria-label="Open menu"
-              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 22px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-xs)' }}
-            >
-              <Menu size={22} /> <span className="home-topbar-menu-label">Menu</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {cartButton}
+              <button
+                onClick={onMenuOpen}
+                aria-label="Open menu"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-xs)' }}
+              >
+                <Menu size={20} /> <span className="home-topbar-menu-label">Menu</span>
+              </button>
+            </div>
           </div>
+
+          {/* Search — in the header on mobile (was previously in the hero body) */}
+          <form onSubmit={onSearch} role="search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface-card)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '5px 5px 5px 14px', boxShadow: 'var(--shadow-xs)' }}>
+            <Search size={17} color="var(--text-muted)" style={{ flex: 'none' }} />
+            <input name="q" placeholder="Search cookies, gift tins…" aria-label="Search products" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }} />
+            <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: '8px 14px' }}>Search</button>
+          </form>
         </div>
       </div>
 
@@ -244,11 +253,6 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-body)', lineHeight: 1.5, maxWidth: 520, margin: '0 auto', fontWeight: 500 }}>
             Pick what you&apos;re craving — cookies, gift tins or bulk gifting — and order in a tap.
           </p>
-          <form onSubmit={onSearch} role="search" className="home-hero-search" style={{ margin: '16px auto 0', maxWidth: 520, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface-card)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '6px 6px 6px 16px', boxShadow: 'var(--shadow-xs)' }}>
-            <Search size={18} color="var(--text-muted)" style={{ flex: 'none' }} />
-            <input name="q" placeholder="Search cookies, gift tins…" aria-label="Search products" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)' }} />
-            <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: '10px 18px' }}>Search</button>
-          </form>
         </section>
 
         {/* Category entry points — Cookies & Tins first… */}

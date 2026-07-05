@@ -115,7 +115,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       <section style={{ padding: '0 var(--gutter) 96px' }}>
         <div style={{ maxWidth: 980, margin: '0 auto', textAlign: 'center', padding: '42px 28px', borderRadius: 28, background: 'var(--surface-inverse)', color: 'var(--cream-100)' }}>
           <h2 style={{ color: '#fff', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Ready for {product.name}?</h2>
-          <p style={{ color: 'rgba(255,248,241,.68)', marginBottom: 26 }}>Order it fresh from ADC and enjoy the texture, aroma, and packaging exactly the way this cookie is meant to be served.</p>
+          <p style={{ color: 'rgba(255,248,241,.68)', marginBottom: 26 }}>Order it fresh from A Dough Cookie and enjoy the texture, aroma, and packaging exactly the way this cookie is meant to be served.</p>
           <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
             <ShoppingBag size={19} /> Order Now
           </Link>

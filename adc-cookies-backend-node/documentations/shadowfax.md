@@ -861,15 +861,39 @@ account_name: SF_ACC_STAGING
 
 ### Optional Payload Attributes (Available on Request):
 
-* `shipmenttype`: Identifies the tracking direction lane (`F` matches Forward leg, `R` matches Reverse tracking leg).
+These extra fields can be enabled per-client on the webhook config (they are NOT sent by default):
+
+* `updated_date` — event updated date, format `YYYY-MM-DD` (e.g. `2023-05-18`).
+* `updated_time` — event updated time, format `HHMM` (e.g. `1622`).
+* `created_date` — order created date, format `YYYY-MM-DD`.
+* `created_time` — order created time, format `HHMM`.
+* `total_amount` — total amount (inclusive of GST) passed at order placement.
+* `destinationPincode` — delivery pincode.
+* `destinationCity` — drop city name (default: `null`).
+* `originCity` — origin city name.
+* `shipmenttype` — tracking direction lane (`F` = Forward leg, `R` = Reverse leg). NOTE: not the same as the `type` field.
+* `payMode` — payment format identifier (`C` = COD, `P` = Prepaid).
+* `codAmount` — COD amount.
+* **`estimatedDeliveryDate`** — the **promised delivery date/time**, format `YYYY-MM-DD HH:MM:SS`. This is the only delivery-time value Shadowfax exposes, and it only arrives AFTER the order is created.
+* `attempt_number` — delivery re-attempt index integer (default: `0`).
 
 
-* `payMode`: Payment format identifier (`C` for COD operations, `P` for Prepaid transactions).
 
+---
 
-* `attempt_number`: Explicit delivery re-attempt index integer count.
+## 5a. Delivery Time / ETA — What Shadowfax Does and Doesn't Provide
 
+**There is NO pre-order time-check / TAT endpoint** (unlike Delhivery, which returns "expected delivery in N days" *before* you place the order). Shadowfax is intracity / hyperlocal and same-day by design, so:
 
+* **Serviceability** (`GET /v1/clients/serviceability/`) returns only *which* services exist at a pincode (`Regular` / `Large` / `Surface`) — **no time, ETA, or SLA field**. Verified live: `[{ "code": 560007, "services": ["Large","Regular","Surface"] }]`.
+* A **promised date** only exists AFTER the order is created, surfaced two ways:
+  * the webhook's optional **`estimatedDeliveryDate`** field (`YYYY-MM-DD HH:MM:SS`), and
+  * the Escalation API "Delayed Delivery" category (raised when an order isn't delivered past its Estimated Delivery Date).
+* Otherwise live status/time comes from the **tracking** endpoint (`/v4/clients/orders/{awb}/track/`) after creation.
+
+**Our app's handling:** intracity (Shadowfax) → fixed **"Same-day local delivery"** label at checkout (no number to query); pan-India (Delhivery) → **"Expected delivery in N days"** from Delhivery's TAT. To show a concrete date for Shadowfax orders later, capture `estimatedDeliveryDate` from the webhook after creation.
+
+> **Staging pickup/return gotcha:** the sandbox only services pincodes **`110009`, `560077`, `560007`** for pickup / delivery / return. Our real store pincodes (560029 / 560041 / 560100) are NOT onboarded on staging, so order creation fails there with "Return/Pickup Pincode not serviceable" and falls back to Delhivery. Use `SHADOWFAX_TEST_PICKUP_PIN=560007` on the backend to test intracity end-to-end on staging; leave it unset in production.
 
 ---
 

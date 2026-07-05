@@ -7,7 +7,7 @@ import { SITE_EMAIL, SITE_PHONE } from '@/lib/site';
 
 export const metadata = {
   title: 'Partner With Us — Franchise & Bulk Orders | a dough cookie',
-  description: 'Open an ADC franchise or place a corporate / bulk order — start your enquiry with a dough cookie.',
+  description: 'Open an A Dough Cookie franchise or place a corporate / bulk order — start your enquiry with a dough cookie.',
 };
 
 const WHY = [
@@ -38,7 +38,7 @@ export default function FranchisePage() {
           <p style={eyebrow}>Partner with us</p>
           <h1 style={{ font: '900 clamp(1.9rem,1.3rem + 3vw,3.2rem)/1 var(--font-display)', letterSpacing: '-.02em', margin: '0 0 12px' }}>Bring a dough cookie to your city.</h1>
           <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.6, color: 'var(--text-body)', margin: 0 }}>
-            Join a growing network of fresh-baked cookie stores. Whether you want to open an ADC franchise or place a large corporate / bulk order, we&apos;d love to hear from you.
+            Join a growing network of fresh-baked cookie stores. Whether you want to open an A Dough Cookie franchise or place a large corporate / bulk order, we&apos;d love to hear from you.
           </p>
         </div>
       </section>
@@ -48,7 +48,7 @@ export default function FranchisePage() {
         <div style={{ maxWidth: 1120, margin: '0 auto', padding: '0 var(--gutter)' }}>
           <div style={{ textAlign: 'center', marginBottom: 'clamp(20px,3vw,32px)' }}>
             <p style={eyebrow}>Why partner</p>
-            <h2 style={h2}>Why choose ADC</h2>
+            <h2 style={h2}>Why choose A Dough Cookie</h2>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 'clamp(14px,2vw,22px)' }}>
             {WHY.map(w => (

@@ -103,7 +103,7 @@ export async function checkServiceability(pincode) {
 /* 4 — TAT (Expected Delivery)                                          */
 /* GET /api/dc/expected_tat                                            */
 /* ------------------------------------------------------------------ */
-export async function expectedTat({ originPin, destinationPin, mot = 'S', pdt = 'B2C', pickupDate } = {}) {
+export async function expectedTat({ originPin, destinationPin, mot = 'E', pdt = 'B2C', pickupDate } = {}) {
   const o = String(originPin || '').replace(/\D/g, '');
   const d = String(destinationPin || '').replace(/\D/g, '');
   if (!/^\d{6}$/.test(o) || !/^\d{6}$/.test(d)) {

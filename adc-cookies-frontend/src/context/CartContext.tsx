@@ -16,6 +16,8 @@ interface CartContextType {
   setGift: (v: boolean) => void;
   giftMessage: string;
   setGiftMessage: (v: string) => void;
+  giftOccasion: string;
+  setGiftOccasion: (v: string) => void;
   // Checkout selections that must survive navigation between /checkout and /payment.
   addrId: number;
   setAddrId: (v: number) => void;
@@ -34,6 +36,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<Record<string, CartEntry>>({});
   const [gift, setGift] = useState(false);
   const [giftMessage, setGiftMessage] = useState('');
+  const [giftOccasion, setGiftOccasion] = useState('');
   const [addrId, setAddrId] = useState(0);   // 0 = nothing selected yet (never a real address id)
   const [coupon, setCoupon] = useState('');
   const [applied, setApplied] = useState(false);
@@ -71,13 +74,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const clearAll = useCallback(() => { setCart({}); setGift(false); setGiftMessage(''); setCoupon(''); setApplied(false); setDiscount(0); }, []);
+  const clearAll = useCallback(() => { setCart({}); setGift(false); setGiftMessage(''); setGiftOccasion(''); setCoupon(''); setApplied(false); setDiscount(0); }, []);
 
   const count = Object.values(cart).reduce((s, e) => s + e.qty, 0);
   const total = Object.values(cart).reduce((s, e) => s + e.price * e.qty, 0);
 
   return (
-    <CartContext.Provider value={{ cart, count, total, setQty, gift, setGift, giftMessage, setGiftMessage, addrId, setAddrId, coupon, setCoupon, applied, setApplied, discount, setDiscount, clearAll }}>
+    <CartContext.Provider value={{ cart, count, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId, setAddrId, coupon, setCoupon, applied, setApplied, discount, setDiscount, clearAll }}>
       {children}
     </CartContext.Provider>
   );

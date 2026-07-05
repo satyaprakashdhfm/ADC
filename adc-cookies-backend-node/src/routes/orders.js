@@ -107,7 +107,7 @@ async function autoCreateShipment(orderId, addressArg) {
     shipment_height: 10,
     weight: 0.5,
     seller_gst_tin: '',
-    shipping_mode: 'Surface',
+    shipping_mode: 'Express',
     address_type: 'home',
   };
 

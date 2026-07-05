@@ -7,7 +7,7 @@ import { STORES } from '@/lib/stores';
 
 export const metadata = {
   title: 'Contact Us - a dough cookie',
-  description: 'Contact ADC Cookies and find our four store locations in India.',
+  description: 'Contact A Dough Cookie and find our four store locations in India.',
 };
 
 export default function ContactPage() {
@@ -17,8 +17,8 @@ export default function ContactPage() {
       <section style={{ padding: '36px var(--gutter) 48px' }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Contact Us</p>
-          <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 22 }}>Four ADC stores across India.</h1>
-          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>Visit ADC for warm cookies, premium tins, gifting orders, and quick dessert pick-ups. Each store is positioned around busy neighborhoods so customers can order online, collect in person, or coordinate bulk boxes for events and celebrations.</p>
+          <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 22 }}>Four A Dough Cookie stores across India.</h1>
+          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>Visit A Dough Cookie for warm cookies, premium tins, gifting orders, and quick dessert pick-ups. Each store is positioned around busy neighborhoods so customers can order online, collect in person, or coordinate bulk boxes for events and celebrations.</p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
             {['Store pickup', 'Bulk gifting', 'Fresh delivery', 'Custom notes'].map((item) => (
               <span key={item} style={{ padding: '10px 16px', borderRadius: 'var(--radius-pill)', background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', color: 'var(--text-strong)', fontWeight: 800 }}>{item}</span>
@@ -52,10 +52,10 @@ export default function ContactPage() {
           </div>
 
           <aside style={{ position: 'sticky', top: 24, background: 'rgba(244,234,214,.9)', border: '1px solid var(--border-default)', borderRadius: 26, padding: 22, boxShadow: 'var(--shadow-md)' }}>
-            <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 14 }}>Find ADC on the map</h2>
+            <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 14 }}>Find A Dough Cookie on the map</h2>
             <div style={{ borderRadius: 22, overflow: 'hidden', border: '1px solid var(--border-default)', background: 'var(--surface-sunken)', boxShadow: 'var(--shadow-sm)' }}>
               <iframe
-                title="ADC store locations map"
+                title="A Dough Cookie store locations map"
                 src="https://www.google.com/maps?q=Indiranagar%20Bengaluru%20Bandra%20Mumbai%20Connaught%20Place%20Delhi%20Jubilee%20Hills%20Hyderabad&output=embed"
                 width="100%"
                 height="430"
@@ -93,7 +93,7 @@ export default function ContactPage() {
       <section style={{ padding: '0 var(--gutter) 96px' }}>
         <div style={{ maxWidth: 980, margin: '0 auto', textAlign: 'center', padding: '42px 28px', borderRadius: 28, background: 'var(--surface-inverse)', color: 'var(--cream-100)' }}>
           <h2 style={{ color: '#fff', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Need cookies delivered?</h2>
-          <p style={{ color: 'rgba(255,248,241,.68)', marginBottom: 26 }}>Order online or contact the nearest ADC store for bulk and gifting requests.</p>
+          <p style={{ color: 'rgba(255,248,241,.68)', marginBottom: 26 }}>Order online or contact the nearest A Dough Cookie store for bulk and gifting requests.</p>
           <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
             <ShoppingBag size={19} /> Order Now
           </Link>

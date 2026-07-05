@@ -26,7 +26,7 @@ export default function AboutPage() {
             </div>
           </div>
           <div style={{ borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-xl)', aspectRatio: '4 / 5' }}>
-            <Image src="/assets/gallery/ADC1.jpeg" alt="ADC cookies box" width={720} height={900} priority style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <Image src="/assets/gallery/ADC1.jpeg" alt="A Dough Cookie box" width={720} height={900} priority style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
         </div>
       </section>
@@ -36,7 +36,7 @@ export default function AboutPage() {
           {[
             ['Baked fresh', 'Cookies are prepared in controlled batches through the day, so the flavor stays consistent and the texture feels freshly made.'],
             ['Premium fillings', 'Nutella, Biscoff, cream cheese, matcha, chocolate chunks, and signature mixes give every cookie a clear flavor identity.'],
-            ['Gift ready', 'Cookie tins, ribbons, notes, and neat packaging make ADC useful for birthdays, office gifting, festive boxes, and thank-you treats.'],
+            ['Gift ready', 'Cookie tins, ribbons, notes, and neat packaging make A Dough Cookie useful for birthdays, office gifting, festive boxes, and thank-you treats.'],
           ].map(([title, body]) => (
             <article key={title} style={{ background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', borderRadius: 24, padding: 26 }}>
               <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 10 }}>{title}</h2>

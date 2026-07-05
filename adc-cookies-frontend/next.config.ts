@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:8080';
+// In development, always proxy /api to the LOCAL backend so `next dev` (and phones on the LAN)
+// hit your running server — never the deployed one — no matter what NEXT_PUBLIC_API_URL is set to.
+// In production, /api rewrites to the configured backend (Railway).
+const BACKEND =
+  process.env.NODE_ENV === 'production'
+    ? (process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:8080')
+    : 'http://localhost:8080';
 
 const nextConfig: NextConfig = {
   // Hide the floating Next.js dev indicator ("N" badge) — dev-only UI, never shipped to prod.
