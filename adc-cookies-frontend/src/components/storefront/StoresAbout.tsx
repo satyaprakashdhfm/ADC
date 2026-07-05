@@ -88,6 +88,12 @@ export default function StoresAbout() {
                 <p style={body}>
                   Warm, soft-centre cookies with premium fillings and gift-ready packaging — baked small in small batches so every centre stays soft and every bite smells like the oven.
                 </p>
+                <p style={body}>
+                  From our first kitchen to stores across Bengaluru and Chennai, the idea hasn&apos;t changed — real ingredients, no shortcuts. We bake with Président butter, couverture chocolate and 100% real fillings like Nutella and Lotus Biscoff, in small batches through the day, so what reaches you is warm, soft-centred and never mass-produced.
+                </p>
+                <p style={body}>
+                  Whether it&apos;s a treat for yourself, a gift box for someone you love, or a bulk order for your team, we bake it fresh and deliver it with care.
+                </p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
                   {['Baked fresh daily', 'Premium fillings', 'Gift-ready tins', 'Bulk & corporate'].map(t => (
                     <span key={t} style={{ padding: '6px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-card)', border: '1px solid var(--border-default)', color: 'var(--orange-800)', fontWeight: 700, fontSize: 'var(--text-xs)' }}>{t}</span>

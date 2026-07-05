@@ -689,7 +689,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{step === 'pay' ? 'Choose how to pay' : `${lines.length} item${lines.length !== 1 ? 's' : ''} · ready to order`}</div>
           </div>
           <a href="/" aria-label="a dough cookie home" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flex: 'none' }}>
-            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={{ height: 90, width: 'auto', objectFit: 'contain', display: 'block' }} />
+            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={{ height: 140, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -50 }} />
           </a>
         </div>
         <CheckoutStepper current={step} />
@@ -1208,12 +1208,12 @@ export default function OrderingApp() {
   if (desktop) {
     return (
       <>
-        <div className="adc-pattern-page" style={{ minHeight: '100vh' }}>
+        <div className="adc-pattern-page order-cards" style={{ minHeight: '100vh' }}>
           {/* Header — same two-row style as the home page: logo · search · location · cart · account, then nav links */}
           <header style={{ position: 'sticky', top: 0, zIndex: 30, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-default)' }}>
             <div style={{ maxWidth: 1680, margin: '0 auto', padding: '8px var(--gutter)', display: 'flex', alignItems: 'center', gap: 'clamp(14px,2vw,28px)' }}>
               <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flex: 'none' }}>
-                <Image src="/assets/adc-logo.png" height={104} width={174} alt="a dough cookie" style={{ height: 90, width: 'auto', objectFit: 'contain' }} />
+                <Image src="/assets/adc-logo.png" height={104} width={174} alt="a dough cookie" style={{ height: 140, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -50 }} />
               </a>
               <div style={{ flex: 1, maxWidth: 620, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-card)', borderRadius: 'var(--radius-pill)', padding: '9px 16px', border: '1.5px solid var(--border-default)' }}>
                 <Search size={18} color="var(--text-subtle)" />
@@ -1237,7 +1237,7 @@ export default function OrderingApp() {
                 </button>
               )}
             </div>
-            <div style={{ borderTop: '1px solid var(--border-default)' }}>
+            <div>
               <div style={{ maxWidth: 1680, margin: '0 auto', padding: '8px var(--gutter)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(16px,2.4vw,40px)', flexWrap: 'wrap' }}>
                 <OrderNavItem label="Home" href="/" />
                 <OrderNavItem label="Buy Cookies" href="/order?cat=cookies" menu={menu.map(m => ({ label: m.name, onClick: () => { setActive('Cookies'); setSearch(m.name); } }))} />
@@ -1294,7 +1294,7 @@ export default function OrderingApp() {
 
             {/* Live cart panel — always visible so you see what you've added while browsing */}
             <aside style={{ position: 'sticky', top: 150, alignSelf: 'start' }}>
-              <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 172px)' }}>
+              <div style={{ background: '#FFFBF2', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 172px)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 18px', borderBottom: '1px solid var(--border-soft)' }}>
                   <ShoppingBag size={18} color="var(--brand-secondary)" />
                   <span style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>Your cart</span>
@@ -1343,7 +1343,7 @@ export default function OrderingApp() {
   /* Mobile layout */
   return (
     <>
-      <div className="adc-pattern-page" style={{ minHeight: '100vh' }}>
+      <div className="adc-pattern-page order-cards" style={{ minHeight: '100vh' }}>
         {/* Mobile top nav */}
         <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-default)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 10px' }}>

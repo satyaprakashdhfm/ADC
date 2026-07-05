@@ -183,7 +183,7 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
         <nav className="home-nav--desktop" style={{ borderBottom: '1px solid var(--border-default)' }}>
           <div style={{ maxWidth: 1680, margin: '0 auto', padding: '6px var(--gutter)', display: 'flex', alignItems: 'center', gap: 'clamp(16px,2vw,32px)' }}>
             <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
-              <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 90, width: 'auto', objectFit: 'contain', display: 'block' }} />
+              <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 140, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -50 }} />
             </a>
             <form onSubmit={onSearch} role="search" style={{ flex: 1, maxWidth: 640, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 8, background: '#FFF4DF', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '6px 6px 6px 18px', boxShadow: 'var(--shadow-xs)' }}>
               <Search size={18} color="var(--text-muted)" style={{ flex: 'none' }} />
