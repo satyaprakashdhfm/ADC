@@ -145,6 +145,32 @@ function addDays(n: number): Date { const d = new Date(); d.setDate(d.getDate() 
 /* ---- Gift occasions — a short, friendly tag on the gift note ---- */
 const GIFT_OCCASIONS = ['Birthday', 'Anniversary', 'Wedding', 'Love', 'Thank you', 'Congrats', 'Other'];
 
+/* ---- Checkout progress — Cart › Checkout › Payment, so the page tells you where you are ---- */
+function CheckoutStepper({ current }: { current: 'review' | 'pay' }) {
+  const steps = ['Cart', 'Checkout', 'Payment'];
+  const activeIndex = current === 'pay' ? 2 : 1; // by the time we're here, the cart step is behind us
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '0 var(--gutter) 12px' }}>
+      {steps.map((label, i) => {
+        const done = i < activeIndex;
+        const isCurrent = i === activeIndex;
+        const on = done || isCurrent;
+        return (
+          <div key={label} style={{ display: 'flex', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 'clamp(76px,22vw,104px)' }}>
+              <span style={{ width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800, flex: 'none', background: on ? 'var(--gradient-warm)' : 'transparent', color: on ? '#fff' : 'var(--text-subtle)', border: on ? 'none' : '2px solid var(--border-strong)', boxShadow: isCurrent ? 'var(--shadow-brand)' : 'none' }}>
+                {done ? <Check size={15} strokeWidth={3} /> : i + 1}
+              </span>
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: isCurrent ? 800 : 600, color: isCurrent ? 'var(--text-strong)' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>{label}</span>
+            </div>
+            {i < steps.length - 1 && <div style={{ width: 'clamp(24px,8vw,56px)', height: 2, marginTop: 13, borderRadius: 2, flexShrink: 0, background: i < activeIndex ? 'var(--gradient-warm)' : 'var(--border-strong)' }} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Dot({ on }: { on: boolean }) {
   return <span style={{ width: 22, height: 22, borderRadius: '50%', border: on ? '6px solid var(--brand-secondary)' : '2px solid var(--border-strong)', flex: 'none', transition: 'border .15s' }} />;
 }
@@ -666,6 +692,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={{ height: 96, width: 'auto', objectFit: 'contain', display: 'block' }} />
           </a>
         </div>
+        <CheckoutStepper current={step} />
       </div>
 
       <div className="hide-sb" style={{ flex: 1, overflowY: 'auto', padding: '24px var(--gutter) 120px' }}>
