@@ -243,7 +243,7 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
       </div>
 
       {/* Hero content (below the sticky header; overflow-hidden keeps decorations clipped) */}
-      <header style={{ position: 'relative', overflow: 'hidden', background: '#FCFAF5' }}>
+      <header style={{ position: 'relative', overflow: 'hidden', background: '#FFF8EE' }}>
         <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Compact hero band */}
         <section style={{ maxWidth: 1680, margin: '0 auto', padding: 'clamp(8px,1.6vw,20px) var(--gutter) clamp(14px,2vw,22px)', textAlign: 'center' }}>
