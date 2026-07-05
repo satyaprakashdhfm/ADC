@@ -13,6 +13,8 @@ import {
   createPickupRequest,
   shippingLabelUrl,
   trackShipment,
+  fetchDocument,
+  DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
 import { shadowfaxConfigured, trackShadowfax } from '../shadowfax.js';
 
@@ -494,6 +496,35 @@ router.get('/orders/:id/track', async (req, res) => {
     }
   }
   res.json({ ...result, carrier: 'DELHIVERY' });
+});
+
+// Recursively find the first http(s) URL anywhere in a Delhivery response (the document API's
+// shape varies by doc type), so the UI can open it directly.
+function firstUrl(v) {
+  if (!v) return null;
+  if (typeof v === 'string') return /^https?:\/\//i.test(v.trim()) ? v.trim() : null;
+  if (Array.isArray(v)) { for (const x of v) { const u = firstUrl(x); if (u) return u; } return null; }
+  if (typeof v === 'object') { for (const x of Object.values(v)) { const u = firstUrl(x); if (u) return u; } return null; }
+  return null;
+}
+
+// GET /api/admin/orders/:id/document?type=EPOD — fetch a B2C document (proof of delivery,
+// signature, return-QC image) for a Delhivery order. Only after the shipment exists.
+router.get('/orders/:id/document', async (req, res) => {
+  const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  if (!order) throw new ApiError('Order not found', 404);
+  if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
+  if (order.carrier !== 'DELHIVERY') return res.json({ ok: false, reason: 'not_delhivery' });
+  if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
+
+  const docType = String(req.query.type || '').toUpperCase();
+  if (!DELHIVERY_DOC_TYPES.includes(docType)) {
+    throw new ApiError(`Invalid document type. Allowed: ${DELHIVERY_DOC_TYPES.join(', ')}`, 400);
+  }
+
+  const result = await fetchDocument({ docType, waybill: order.delhivery_waybill });
+  if (!result.ok) return res.status(502).json({ ok: false, reason: result.reason, detail: result.detail });
+  res.json({ ok: true, docType, waybill: order.delhivery_waybill, url: firstUrl(result.data), data: result.data });
 });
 
 // GET /api/admin/delivery/label?waybills=X,Y — proxy the Delhivery shipping label PDF.

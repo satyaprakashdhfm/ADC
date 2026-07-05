@@ -10,7 +10,7 @@ import {
   adminToggleCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminGetShippingCost, adminCreateShipment, adminCancelShipment,
-  adminTrackOrder, openLabel, adminCreatePickupRequest,
+  adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
   type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type AdminMessage,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
 } from '@/lib/api';
@@ -18,6 +18,7 @@ import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
   IndianRupee, Plus, Pencil, Trash2, Check, X, LogOut, Gift,
   Truck, Warehouse as WarehouseIcon, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download, Search, Filter, CalendarRange,
+  FileText,
 } from 'lucide-react';
 
 const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
@@ -499,6 +500,16 @@ export default function AdminDashboard() {
                           ) : (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                               {o.carrier !== 'SHADOWFAX' && <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={iconBtn} title="Download label"><Download size={14} /></button>}
+                              {o.carrier !== 'SHADOWFAX' && (
+                                <button title="Proof of delivery / signature" onClick={async () => {
+                                  setErr('');
+                                  for (const t of ['EPOD', 'SIGNATURE_URL'] as const) {
+                                    const r = await adminFetchOrderDocument(o.id, t).catch(() => null);
+                                    if (r?.ok && r.url) { window.open(r.url, '_blank', 'noopener'); return; }
+                                  }
+                                  setErr('No proof-of-delivery document available yet — Delhivery provides it after delivery.');
+                                }} style={iconBtn}><FileText size={14} /></button>
+                              )}
                               <button title="Track" onClick={async () => {
                                 const r = await adminTrackOrder(o.id).catch(() => null);
                                 if (!r?.ok) { if (r) setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${r.reason || 'unknown'}` } })); return; }

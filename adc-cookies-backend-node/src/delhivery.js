@@ -395,3 +395,30 @@ export async function trackShipment(waybill) {
     return { ok: false, reason: 'network_error' };
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* 11 — Download Document (B2C)                                         */
+/* GET /api/rest/fetch/pkg/document/?doc_type=<type>&waybill=<wbn>      */
+/* For documents NOT archived in Delhivery — proof of delivery, the    */
+/* recipient's signature, return QC / seller-return images.            */
+/* ------------------------------------------------------------------ */
+export const DELHIVERY_DOC_TYPES = ['SIGNATURE_URL', 'RVP_QC_IMAGE', 'EPOD', 'SELLER_RETURN_IMAGE'];
+
+export async function fetchDocument({ docType, waybill } = {}) {
+  const type = String(docType || '').toUpperCase();
+  const wbn = String(waybill || '').replace(/\s/g, '');
+  if (!DELHIVERY_DOC_TYPES.includes(type)) return { ok: false, reason: 'invalid_doc_type' };
+  if (!wbn) return { ok: false, reason: 'missing_waybill' };
+  try {
+    const { ok, status, data } = await dhRequest('/api/rest/fetch/pkg/document/', { query: { doc_type: type, waybill: wbn } });
+    if (!ok) {
+      log('document', `waybill=${wbn} | type=${type} | ✗ api_error_${status}`);
+      return { ok: false, reason: `api_error_${status}`, detail: data };
+    }
+    log('document', `waybill=${wbn} | type=${type} | ✓`);
+    return { ok: true, data };
+  } catch (err) {
+    log('document', `waybill=${wbn} | type=${type} | ✗ network_error: ${err.message}`);
+    return { ok: false, reason: 'network_error' };
+  }
+}

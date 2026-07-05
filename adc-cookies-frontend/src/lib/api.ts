@@ -342,6 +342,14 @@ export function adminLabelUrl(waybills: string): string {
   return `${API_BASE}/admin/delivery/label?waybills=${encodeURIComponent(waybills)}`;
 }
 
+/** Delhivery B2C documents that can be fetched for an order (only after it ships). */
+export type DelhiveryDocType = 'SIGNATURE_URL' | 'RVP_QC_IMAGE' | 'EPOD' | 'SELLER_RETURN_IMAGE';
+export interface OrderDocumentResult { ok: boolean; docType?: string; waybill?: string; url?: string | null; data?: unknown; reason?: string; }
+/** Fetch a Delhivery document (proof of delivery, signature, return image) for a shipped order. */
+export async function adminFetchOrderDocument(orderId: number, docType: DelhiveryDocType): Promise<OrderDocumentResult> {
+  return request(`/admin/orders/${orderId}/document?type=${encodeURIComponent(docType)}`);
+}
+
 /**
  * Open the shipping-label PDF in a new tab. The label route is admin-protected, so a plain
  * <a href> link 401s (browser navigation can't send the Bearer token). We fetch it with the
