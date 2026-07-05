@@ -73,7 +73,7 @@ export default function Reviews() {
   const cards = [...REVIEWS, ...REVIEWS];
 
   return (
-    <section style={{ padding: 'clamp(20px,3vw,40px) 0', background: '#FFFDF4', borderTop: '1px solid var(--border-default)', borderBottom: '1px solid var(--border-default)' }}>
+    <section style={{ padding: 'clamp(20px,3vw,40px) 0', background: '#FFB76B', borderTop: '1px solid var(--border-default)', borderBottom: '1px solid var(--border-default)' }}>
       <div style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter)' }}>
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 4px' }}>Customer Love</p>

@@ -118,7 +118,7 @@ function CategoryCard({ c, onGo, priority }: { c: Category; onGo: (href: string)
       className="home-cat-card"
       style={{
         textAlign: 'left', border: '1px solid var(--border-default)', cursor: 'pointer', padding: 0,
-        background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', overflow: 'hidden',
+        background: '#FFAF66', borderRadius: 'var(--radius-card)', overflow: 'hidden',
         boxShadow: 'var(--shadow-sm)', transition: 'transform .25s var(--ease-out), box-shadow .25s var(--ease-out)',
         display: 'flex', flexDirection: 'column',
       }}
@@ -243,7 +243,7 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
       </div>
 
       {/* Hero content (below the sticky header; overflow-hidden keeps decorations clipped) */}
-      <header style={{ position: 'relative', overflow: 'hidden', background: '#FFFDF4' }}>
+      <header style={{ position: 'relative', overflow: 'hidden', background: '#FFCD90' }}>
         <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Compact hero band */}
         <section style={{ maxWidth: 1680, margin: '0 auto', padding: 'clamp(8px,1.6vw,20px) var(--gutter) clamp(14px,2vw,22px)', textAlign: 'center' }}>

@@ -67,7 +67,7 @@ export default function StoresAbout() {
   return (
     <>
       {/* ── About us — salmon band ── */}
-      <section id="about" style={band('#FFF8E8', { borderTop: '1px solid var(--border-default)' })}>
+      <section id="about" style={band('#FFB76B', { borderTop: '1px solid var(--border-default)' })}>
         <div style={inner}>
           {isMobile ? (
             /* Mobile: compact — heading, a small image, a short line, and a link to the full story */
@@ -106,7 +106,7 @@ export default function StoresAbout() {
       </section>
 
       {/* ── Freshly Baked — the finest ingredients (apricot band) ── */}
-      <section id="ingredients" style={band('#FFF0D7')}>
+      <section id="ingredients" style={band('#FFF4DF')}>
         <div style={inner}>
           <div style={{ textAlign: 'center', maxWidth: 720, margin: '0 auto clamp(22px,3vw,40px)' }}>
             <p style={eyebrow}>Freshly Baked</p>
@@ -132,7 +132,7 @@ export default function StoresAbout() {
       </section>
 
       {/* ── Our stores — cream band · image left, details right ── */}
-      <section id="stores" style={band('#FFFAF0')}>
+      <section id="stores" style={band('#FFB76B')}>
         <div style={inner}>
           <div style={split}>
             <div style={col}>
@@ -163,7 +163,7 @@ export default function StoresAbout() {
       </section>
 
       {/* ── Get in touch — salmon band · full split on desktop, dropdown on mobile ── */}
-      <section id="get-in-touch" style={band('#FFF0CF', { borderBottom: '1px solid var(--border-default)' })}>
+      <section id="get-in-touch" style={band('#FFF4DF', { borderBottom: '1px solid var(--border-default)' })}>
         <div style={inner}>
           {isMobile ? (
             <div>
