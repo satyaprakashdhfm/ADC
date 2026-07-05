@@ -196,7 +196,7 @@ body::before {
      and the page itself (#EFE1CC) sits a touch darker behind the products. */
   --surface-card: #FBEACB;
   --surface-raised: #F6E0B8;
-  --surface-glass: #F8E6C3; /* header/nav band color per request */
+  --surface-glass: #FFFFFF; /* header/nav band color per request */
 }
 
 .adc-pattern-page::before {
