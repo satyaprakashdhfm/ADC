@@ -163,7 +163,7 @@ export default function StoresAbout() {
       </section>
 
       {/* ── Get in touch — salmon band · full split on desktop, dropdown on mobile ── */}
-      <section id="get-in-touch" style={band('#FFF4DF', { borderBottom: '1px solid var(--border-default)' })}>
+      <section id="get-in-touch" style={band('#FFCD90', { borderBottom: '1px solid var(--border-default)' })}>
         <div style={inner}>
           {isMobile ? (
             <div>
