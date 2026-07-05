@@ -128,10 +128,32 @@ const national10 = (value?: string | null) => {
   return /^91\d{10}$/.test(p) ? p.slice(2) : p;
 };
 
+// Fixed delivery milestones, and which one a carrier status has reached (0..3).
+const SHIP_STAGES = ['Order placed', 'Shipped', 'Out for delivery', 'Delivered'];
+function shipStage(s?: string | null): number {
+  const t = (s || '').toLowerCase();
+  if (!t) return -1;
+  if ((t.includes('deliver') && !t.includes('out for') && !t.includes('attempt') && !t.includes('undeliver')) || t.includes('rts_d')) return 3;
+  if (t.includes('out for') || t === 'ofd' || t.includes('out_for') || t.includes('dispatch')) return 2;
+  if (t.includes('transit') || t.includes('shipped') || t.includes('picked') || t.includes('packed') || t.includes('manifest') || t.includes('bag') || t.includes('hub')) return 1;
+  return 0; // placed / confirmed / new / preparing / pending
+}
+const isCancelledStatus = (s?: string | null) => /cancel|\brto\b|returned|lost/i.test(s || '');
+function whenLabel(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const time = d.toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString()
+    ? `Today, ${time}`
+    : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
 function ShipmentTracker({ order }: { order: Order }) {
   const [trackResult, setTrackResult] = useState<DelhiveryTrackResult | null>(null);
   const [tracking, setTracking] = useState(false);
   const [err, setErr] = useState('');
+  const [showAll, setShowAll] = useState(false);
 
   const doTrack = async () => {
     setTracking(true); setErr('');
@@ -176,26 +198,63 @@ function ShipmentTracker({ order }: { order: Order }) {
         </a>
       </div>
       {err && <p style={{ color: 'var(--status-error)', fontSize: 'var(--text-sm)', marginTop: 8, fontWeight: 700 }}>{err}</p>}
-      {trackResult && trackResult.tracked && (
-        <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 14, padding: 14 }}>
-          {latestStatus && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: timelineScans.length ? 10 : 0, flexWrap: 'wrap' }}>
-              <span style={{ padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: latestStatus.toLowerCase().includes('deliver') ? 'var(--status-success-bg)' : 'var(--amber-100)', color: latestStatus.toLowerCase().includes('deliver') ? 'var(--status-success)' : 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 900 }}>{latestStatus}</span>
-              {trackResult?.trackUrl && <a href={trackResult.trackUrl} target="_blank" rel="noreferrer" style={{ fontSize: 'var(--text-xs)', color: 'var(--text-link)', fontWeight: 700 }}>Track live →</a>}
-            </div>
-          )}
-          {timelineScans.slice(0, 4).map((s, i) => (
-            <div key={i} style={{ display: 'flex', gap: 10, paddingTop: 8, marginTop: 8, borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)' }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--brand-secondary)', marginTop: 5, flex: 'none' }} />
-              <div>
-                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{s.event}</div>
-                {s.time && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{(() => { const d = new Date(s.time); return isNaN(d.getTime()) ? s.time : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); })()}</div>}
-              </div>
-            </div>
-          ))}
-          {!timelineScans.length && !latestStatus && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No tracking events yet.</p>}
-        </div>
-      )}
+      {trackResult && trackResult.tracked && (() => {
+        const cancelled = isCancelledStatus(latestStatus) || order.orderStatus === 'CANCELLED';
+        const reached = cancelled ? -1 : Math.max(shipStage(latestStatus), shipStage(order.orderStatus), 0);
+        const latestScan = timelineScans[0] || null; // newest first
+        const expectedDate = order.estimatedDelivery ? friendlyDate(order.estimatedDelivery) : null;
+        return (
+          <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 14, padding: '16px 16px 14px' }}>
+            {cancelled ? (
+              <span style={{ padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-xs)', fontWeight: 900 }}>{latestStatus || 'Cancelled'}</span>
+            ) : (
+              <>
+                {SHIP_STAGES.map((label, i) => {
+                  const done = i <= reached;
+                  const current = i === reached;
+                  const isLast = i === SHIP_STAGES.length - 1;
+                  const sub = current && latestScan?.time ? whenLabel(latestScan.time)
+                    : isLast && !done && expectedDate ? `Expected by ${expectedDate}`
+                    : '';
+                  return (
+                    <div key={label} style={{ display: 'flex', gap: 12 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none' }}>
+                        <span style={{ width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', flex: 'none', background: done ? 'var(--status-success)' : 'var(--surface-card)', border: done ? 'none' : '2px solid var(--border-strong)', color: '#fff' }}>
+                          {done && <Check size={13} strokeWidth={3} />}
+                        </span>
+                        {!isLast && <span style={{ width: 2, flex: 1, minHeight: 22, background: i < reached ? 'var(--status-success)' : 'var(--border-strong)' }} />}
+                      </div>
+                      <div style={{ paddingBottom: isLast ? 0 : 12 }}>
+                        <div style={{ fontWeight: 800, fontSize: 'var(--text-sm)', color: done ? 'var(--text-strong)' : 'var(--text-muted)' }}>{label}</div>
+                        {sub && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+                {timelineScans.length > 0 && (
+                  <button onClick={() => setShowAll(v => !v)} style={{ marginTop: 4, border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)' }}>
+                    {showAll ? 'Hide updates' : 'See all updates ›'}
+                  </button>
+                )}
+                {showAll && (
+                  <div style={{ marginTop: 8, borderTop: '1px solid var(--border-soft)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {timelineScans.map((s, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 10 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--brand-secondary)', marginTop: 5, flex: 'none' }} />
+                        <div>
+                          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{s.event}</div>
+                          {s.time && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{whenLabel(s.time)}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {trackResult?.trackUrl && <a href={trackResult.trackUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 8, fontSize: 'var(--text-xs)', color: 'var(--text-link)', fontWeight: 700 }}>Track live on Shadowfax →</a>}
+              </>
+            )}
+          </div>
+        );
+      })()}
       {trackResult && !trackResult.tracked && (
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 8 }}>Tracking not available yet. Try again in a few minutes.</p>
       )}
