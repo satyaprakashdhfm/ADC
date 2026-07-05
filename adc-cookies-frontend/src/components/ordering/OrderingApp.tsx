@@ -385,6 +385,7 @@ function TinModal({ tin, onClose, onAdd }: { tin: typeof FALLBACK_TINS[0] | null
 /* ---- Checkout flow — one page, two steps: 'review' (address + order) then 'pay' (payment) ---- */
 function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const router = useRouter();
+  const desktop = useIsDesktop(920);
   const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, clearAll } = useCart();
   const { user } = useAuth();
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -689,7 +690,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{step === 'pay' ? 'Choose how to pay' : `${lines.length} item${lines.length !== 1 ? 's' : ''} · ready to order`}</div>
           </div>
           <a href="/" aria-label="a dough cookie home" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flex: 'none' }}>
-            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={{ height: 140, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -50 }} />
+            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={desktop ? { height: 140, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -50 } : { height: 54, width: 'auto', objectFit: 'contain', display: 'block' }} />
           </a>
         </div>
         <CheckoutStepper current={step} />

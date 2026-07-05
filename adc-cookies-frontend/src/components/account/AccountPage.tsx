@@ -8,7 +8,7 @@ import { getOrders, getAddresses, addAddress, trackOrderShipment, type Delhivery
 import {
   ChevronLeft, Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
   Info, LifeBuoy, ChevronRight, LogOut, ShoppingBag, MapPin, Gift,
-  MessageSquare, ReceiptText, PackageCheck, Truck, CreditCard,
+  MessageSquare, ReceiptText, PackageCheck, Truck, CreditCard, ExternalLink,
 } from 'lucide-react';
 
 const card: React.CSSProperties = {
@@ -169,6 +169,9 @@ function ShipmentTracker({ order }: { order: Order }) {
   // Backend normalizes BOTH carriers (Delhivery + Shadowfax) into { status, scans:[{time,event}] }.
   const latestStatus = trackResult?.status || trackResult?.data?.ShipmentData?.[0]?.Shipment?.Status?.Status || null;
   const rawScans = trackResult?.scans ?? [];
+  const isShadowfax = order.carrier === 'SHADOWFAX';
+  const delivered = order.orderStatus === 'DELIVERED' || shipStage(latestStatus || order.shipmentStatus) >= 3;
+  const shadowfaxLiveUrl = order.delhiveryWaybill ? (trackResult?.trackUrl || `https://track.shadowfax.in/#/track/${order.delhiveryWaybill}`) : null;
   // Drop scans equal to the current status and collapse duplicates so the timeline shows real progress only.
   const seenScan = new Set<string>();
   const timelineScans = rawScans.filter(s => {
@@ -186,9 +189,14 @@ function ShipmentTracker({ order }: { order: Order }) {
             Waybill: <span style={{ fontFamily: 'monospace', color: 'var(--text-strong)' }}>{order.delhiveryWaybill}</span>
           </span>
         )}
+        {order.delhiveryWaybill && isShadowfax && !delivered && shadowfaxLiveUrl && (
+          <a href={shadowfaxLiveUrl} target="_blank" rel="noreferrer" style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'var(--brand-secondary)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+            <ExternalLink size={14} /> Live tracking
+          </a>
+        )}
         {order.delhiveryWaybill ? (
           <button onClick={doTrack} disabled={tracking} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: tracking ? 'default' : 'pointer', fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Truck size={14} /> {tracking ? 'Tracking…' : 'Track shipment'}
+            <Truck size={14} /> {tracking ? 'Tracking…' : isShadowfax ? 'Refresh status' : 'Track shipment'}
           </button>
         ) : (
           <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Shipment being prepared…</span>
@@ -249,7 +257,7 @@ function ShipmentTracker({ order }: { order: Order }) {
                     ))}
                   </div>
                 )}
-                {trackResult?.trackUrl && <a href={trackResult.trackUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 8, fontSize: 'var(--text-xs)', color: 'var(--text-link)', fontWeight: 700 }}>Track live on Shadowfax →</a>}
+                {isShadowfax && !delivered && shadowfaxLiveUrl && <a href={shadowfaxLiveUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, fontSize: 'var(--text-xs)', color: 'var(--text-link)', fontWeight: 800, textDecoration: 'none' }}><ExternalLink size={12} /> Track live on Shadowfax</a>}
               </>
             )}
           </div>
