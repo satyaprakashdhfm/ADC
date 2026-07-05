@@ -682,14 +682,14 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   return (
     <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column' }}>
       <div style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', flex: 'none' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '12px var(--gutter)' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '8px var(--gutter)' }}>
           <button onClick={() => router.push(step === 'pay' ? '/checkout' : '/order')} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronLeft size={20} /></button>
           <div>
             <div style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>{step === 'pay' ? 'Payment' : 'Checkout'}</div>
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{step === 'pay' ? 'Choose how to pay' : `${lines.length} item${lines.length !== 1 ? 's' : ''} · ready to order`}</div>
           </div>
           <a href="/" aria-label="a dough cookie home" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flex: 'none' }}>
-            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={{ height: 96, width: 'auto', objectFit: 'contain', display: 'block' }} />
+            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={{ height: 90, width: 'auto', objectFit: 'contain', display: 'block' }} />
           </a>
         </div>
         <CheckoutStepper current={step} />
@@ -1213,7 +1213,7 @@ export default function OrderingApp() {
           <header style={{ position: 'sticky', top: 0, zIndex: 30, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-default)' }}>
             <div style={{ maxWidth: 1680, margin: '0 auto', padding: '8px var(--gutter)', display: 'flex', alignItems: 'center', gap: 'clamp(14px,2vw,28px)' }}>
               <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flex: 'none' }}>
-                <Image src="/assets/adc-logo.png" height={104} width={174} alt="a dough cookie" style={{ height: 104, width: 'auto', objectFit: 'contain' }} />
+                <Image src="/assets/adc-logo.png" height={104} width={174} alt="a dough cookie" style={{ height: 90, width: 'auto', objectFit: 'contain' }} />
               </a>
               <div style={{ flex: 1, maxWidth: 620, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-card)', borderRadius: 'var(--radius-pill)', padding: '9px 16px', border: '1.5px solid var(--border-default)' }}>
                 <Search size={18} color="var(--text-subtle)" />
