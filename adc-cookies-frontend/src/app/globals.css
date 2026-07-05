@@ -196,7 +196,7 @@ body::before {
      and the page itself (#EFE1CC) sits a touch darker behind the products. */
   --surface-card: #F6E8C8;   /* cards — a notch darker than the section creams, for gentle separation */
   --surface-raised: #EFE1BE; /* inputs/chips inside cards */
-  --surface-glass: #FFFFFF;  /* header/nav band — white */
+  --surface-glass: #FFF4DF;  /* header/nav band — very light warm (not pure white) */
 }
 
 .adc-pattern-page::before {
