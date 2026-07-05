@@ -438,7 +438,7 @@ export default function AccountPage() {
   const makeDefault = (id: number) => setAddresses(prev => normalizeDefault(prev, id));
 
   return (
-    <main className="adc-pattern-page" style={{ minHeight: '100vh' }}>
+    <main className="adc-pattern-page order-cards" style={{ minHeight: '100vh' }}>
       <header style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-soft)' }}>
         <div style={{ maxWidth: 1180, margin: '0 auto', padding: '12px var(--gutter)', display: 'flex', alignItems: 'center', gap: 14 }}>
           <button onClick={() => router.push('/')} aria-label="Back to home" style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronLeft size={20} /></button>

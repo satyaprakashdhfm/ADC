@@ -680,7 +680,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   );
 
   return (
-    <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column' }}>
+    <div className="adc-pattern-page order-cards" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column' }}>
       <div style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', flex: 'none' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '8px var(--gutter)' }}>
           <button onClick={() => router.push(step === 'pay' ? '/checkout' : '/order')} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronLeft size={20} /></button>

@@ -213,8 +213,8 @@ body::before {
   z-index: 1;
 }
 
-/* Order (menu) page — product & panel cards use a slightly deeper cream so they read as cards. */
-.order-cards { --surface-card: #F8E6C3; }
+/* Order / checkout / account pages — cards use the hero gold so they read as warm cards. */
+.order-cards { --surface-card: #FFCD90; }
 
 /* Animations */
 @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-18px)} }
