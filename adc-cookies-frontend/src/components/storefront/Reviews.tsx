@@ -23,7 +23,7 @@ const arrowBtn: React.CSSProperties = {
 };
 const verifiedPill: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', padding: '1px 7px', borderRadius: 5,
-  background: '#160D06', color: '#fff', fontSize: 'var(--text-2xs)', fontWeight: 700, letterSpacing: '.02em',
+  background: 'var(--ink-950)', color: 'var(--white)', fontSize: 'var(--text-2xs)', fontWeight: 700, letterSpacing: '.02em',
 };
 const clamp2: React.CSSProperties = { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' };
 
@@ -73,7 +73,7 @@ export default function Reviews() {
   const cards = [...REVIEWS, ...REVIEWS];
 
   return (
-    <section style={{ padding: 'clamp(20px,3vw,40px) 0', background: '#FFF8E8', borderTop: '1px solid var(--border-default)', borderBottom: '1px solid var(--border-default)' }}>
+    <section style={{ padding: 'clamp(20px,3vw,40px) 0', background: 'var(--band-ivory)', borderTop: '1px solid var(--border-default)', borderBottom: '1px solid var(--border-default)' }}>
       <div style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter)' }}>
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 4px' }}>Customer Love</p>
@@ -103,7 +103,7 @@ export default function Reviews() {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
-          <a href={REVIEWS_URL} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 22px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', boxShadow: 'var(--shadow-brand)' }}>Read more reviews</a>
+          <a href={REVIEWS_URL} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 22px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', boxShadow: 'var(--shadow-brand)' }}>Read more reviews</a>
         </div>
       </div>
     </section>

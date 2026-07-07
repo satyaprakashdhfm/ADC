@@ -35,7 +35,7 @@ export default function ResetPasswordPage() {
   };
 
   const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '13px 15px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', background: 'var(--surface-raised)', outline: 'none', marginBottom: 12 };
-  const btn: React.CSSProperties = { width: '100%', padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer' };
+  const btn: React.CSSProperties = { width: '100%', padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer' };
 
   return (
     <main className="adc-pattern-page" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 20 }}>

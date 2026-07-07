@@ -45,7 +45,7 @@ export default function ProfileGate() {
   };
 
   return (
-    <div onClick={skip} style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(20,12,4,.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+    <div onClick={skip} style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'var(--espresso-50)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 'min(420px,94vw)', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '26px 24px', animation: 'riseIn .3s var(--ease-spring) both' }}>
         <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--amber-50)', display: 'grid', placeItems: 'center', color: 'var(--brand-secondary)', marginBottom: 14 }}>
           <Phone size={24} />
@@ -67,7 +67,7 @@ export default function ProfileGate() {
         {err && <div style={{ marginBottom: 10, fontSize: 'var(--text-sm)', color: 'var(--status-error)' }}>{err}</div>}
 
         <button onClick={save} disabled={saving || phone.length !== 10}
-          style={{ width: '100%', padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: (saving || phone.length !== 10) ? 'var(--border-default)' : 'var(--gradient-warm)', color: (saving || phone.length !== 10) ? 'var(--text-subtle)' : '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: (saving || phone.length !== 10) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          style={{ width: '100%', padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: (saving || phone.length !== 10) ? 'var(--border-default)' : 'var(--gradient-warm)', color: (saving || phone.length !== 10) ? 'var(--text-subtle)' : 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: (saving || phone.length !== 10) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           {saving ? 'Saving…' : 'Save number'}{!saving && phone.length === 10 && <ArrowRight size={18} />}
         </button>
         <button onClick={skip} style={{ width: '100%', marginTop: 10, background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>

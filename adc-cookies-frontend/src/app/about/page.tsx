@@ -38,7 +38,7 @@ export default function AboutPage() {
             ['Premium fillings', 'Nutella, Biscoff, cream cheese, matcha, chocolate chunks, and signature mixes give every cookie a clear flavor identity.'],
             ['Gift ready', 'Cookie tins, ribbons, notes, and neat packaging make A Dough Cookie useful for birthdays, office gifting, festive boxes, and thank-you treats.'],
           ].map(([title, body]) => (
-            <article key={title} style={{ background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', borderRadius: 24, padding: 26 }}>
+            <article key={title} style={{ background: 'var(--panel-82)', border: '1px solid var(--border-default)', borderRadius: 24, padding: 26 }}>
               <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 10 }}>{title}</h2>
               <p style={{ color: 'var(--text-body)', lineHeight: 1.75 }}>{body}</p>
             </article>
@@ -47,7 +47,7 @@ export default function AboutPage() {
       </section>
 
       <section style={{ padding: '0 var(--gutter) 86px' }}>
-        <div style={{ maxWidth: 1080, margin: '0 auto', background: 'rgba(244,234,214,.86)', border: '1px solid var(--border-default)', borderRadius: 28, padding: '32px clamp(22px,4vw,44px)', boxShadow: 'var(--shadow-sm)' }}>
+        <div style={{ maxWidth: 1080, margin: '0 auto', background: 'var(--panel-86)', border: '1px solid var(--border-default)', borderRadius: 28, padding: '32px clamp(22px,4vw,44px)', boxShadow: 'var(--shadow-sm)' }}>
           <h2 style={{ fontSize: 'var(--text-h2)', marginBottom: 14 }}>What customers should feel</h2>
           <p style={{ color: 'var(--text-body)', lineHeight: 1.8, marginBottom: 18 }}>The website and store experience should feel warm, premium, and easy. Customers should immediately understand the menu, trust the product quality, see the gifting possibilities, and move quickly from browsing to ordering.</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }} className="store-grid">
@@ -60,9 +60,9 @@ export default function AboutPage() {
 
       <section style={{ padding: '0 var(--gutter) 96px' }}>
         <div style={{ maxWidth: 980, margin: '0 auto', textAlign: 'center', padding: '42px 28px', borderRadius: 28, background: 'var(--surface-inverse)', color: 'var(--cream-100)' }}>
-          <h2 style={{ color: '#fff', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Taste the fresh batch.</h2>
-          <p style={{ color: 'rgba(255,248,241,.68)', marginBottom: 26 }}>Explore the menu, pick your favorite flavor, and order cookies baked for the moment.</p>
-          <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
+          <h2 style={{ color: 'var(--white)', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Taste the fresh batch.</h2>
+          <p style={{ color: 'var(--cream-100-68)', marginBottom: 26 }}>Explore the menu, pick your favorite flavor, and order cookies baked for the moment.</p>
+          <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
             <ShoppingBag size={19} /> Order Now
           </Link>
         </div>

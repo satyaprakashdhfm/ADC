@@ -5,6 +5,10 @@ import 'leaflet/dist/leaflet.css';
 import { STORES } from '@/lib/stores';
 
 // Brand-orange teardrop pin as an inline SVG (avoids Leaflet's default-icon bundler issues).
+// NOTE: this SVG is serialised to a string and handed to Leaflet as a map-marker icon,
+// so it renders OUTSIDE the document's CSS cascade — CSS var() would not resolve here.
+// These two hex values are therefore the one unavoidable exception; they mirror the
+// theme tokens --orange-500 (#EF7507) and --white (#fff). Keep them in sync if those change.
 const PIN_SVG =
   '<svg width="30" height="40" viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">' +
   '<path d="M12 0C5.37 0 0 5.37 0 12c0 8.4 12 20 12 20s12-11.6 12-20C24 5.37 18.63 0 12 0z" fill="#EF7507"/>' +

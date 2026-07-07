@@ -50,7 +50,7 @@ export default function StoresAbout() {
   const contactLinks = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={chip}>
-        <span style={{ ...chipIcon, background: 'var(--whatsapp-green)', color: '#fff', border: 'none' }}><MessageCircle size={17} /></span>
+        <span style={{ ...chipIcon, background: 'var(--whatsapp-green)', color: 'var(--white)', border: 'none' }}><MessageCircle size={17} /></span>
         WhatsApp us
       </a>
       <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={chip}>
@@ -67,7 +67,7 @@ export default function StoresAbout() {
   return (
     <>
       {/* ── About us — salmon band ── */}
-      <section id="about" style={band('#FFF8E8', { borderTop: '1px solid var(--border-default)' })}>
+      <section id="about" style={band('var(--band-ivory)', { borderTop: '1px solid var(--border-default)' })}>
         <div style={inner}>
           {isMobile ? (
             /* Mobile: compact — heading, a small image, a short line, and a link to the full story */
@@ -112,7 +112,7 @@ export default function StoresAbout() {
       </section>
 
       {/* ── Freshly Baked — the finest ingredients (apricot band) ── */}
-      <section id="ingredients" style={band('#FFCD90')}>
+      <section id="ingredients" style={band('var(--gold)')}>
         <div style={inner}>
           <div style={{ textAlign: 'center', maxWidth: 720, margin: '0 auto clamp(22px,3vw,40px)' }}>
             <p style={eyebrow}>Freshly Baked</p>
@@ -138,7 +138,7 @@ export default function StoresAbout() {
       </section>
 
       {/* ── Our stores — cream band · image left, details right ── */}
-      <section id="stores" style={band('#FFF8E8')}>
+      <section id="stores" style={band('var(--band-ivory)')}>
         <div style={inner}>
           <div style={split}>
             <div style={col}>
@@ -158,7 +158,7 @@ export default function StoresAbout() {
                       <h4 style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 2px' }}>{s.name}</h4>
                       <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.address}</p>
                     </div>
-                    <Link href={`/order?store=${encodeURIComponent(s.city.toLowerCase())}`} aria-label={`Order from ${s.name}`} style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontWeight: 800, fontSize: 'var(--text-2xs)' }}><ShoppingBag size={12} /> Order</Link>
+                    <Link href={`/order?store=${encodeURIComponent(s.city.toLowerCase())}`} aria-label={`Order from ${s.name}`} style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 800, fontSize: 'var(--text-2xs)' }}><ShoppingBag size={12} /> Order</Link>
                   </div>
                 ))}
               </div>
@@ -169,7 +169,7 @@ export default function StoresAbout() {
       </section>
 
       {/* ── Get in touch — salmon band · full split on desktop, dropdown on mobile ── */}
-      <section id="get-in-touch" style={band('#FFCD90', { borderBottom: '1px solid var(--border-default)' })}>
+      <section id="get-in-touch" style={band('var(--gold)', { borderBottom: '1px solid var(--border-default)' })}>
         <div style={inner}>
           {isMobile ? (
             <div>

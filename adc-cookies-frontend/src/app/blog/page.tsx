@@ -39,7 +39,7 @@ export default function BlogPage() {
           <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>Baking notes, gifting ideas, flavor stories, and behind-the-counter updates from a dough cookie. This is where customers can learn how our cookies are made, what makes each batch special, and how to choose the right box for any moment.</p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
             {['Small-batch baking', 'Fresh delivery', 'Gift tins', 'Flavor launches'].map((item) => (
-              <span key={item} style={{ padding: '10px 16px', borderRadius: 'var(--radius-pill)', background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', color: 'var(--text-strong)', fontWeight: 800 }}>{item}</span>
+              <span key={item} style={{ padding: '10px 16px', borderRadius: 'var(--radius-pill)', background: 'var(--panel-82)', border: '1px solid var(--border-default)', color: 'var(--text-strong)', fontWeight: 800 }}>{item}</span>
             ))}
           </div>
         </div>
@@ -48,7 +48,7 @@ export default function BlogPage() {
       <section style={{ padding: '0 var(--gutter) 96px' }}>
         <div style={{ maxWidth: 1120, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 26 }} className="blog-grid">
           {POSTS.map((post) => (
-            <article key={post.title} style={{ overflow: 'hidden', borderRadius: 26, background: 'rgba(244,234,214,.86)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)' }}>
+            <article key={post.title} style={{ overflow: 'hidden', borderRadius: 26, background: 'var(--panel-86)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)' }}>
               <div style={{ aspectRatio: '16 / 10', overflow: 'hidden', background: 'var(--surface-sunken)' }}>
                 <Image src={post.image} alt={post.title} width={900} height={560} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
@@ -68,9 +68,9 @@ export default function BlogPage() {
 
       <section style={{ padding: '0 var(--gutter) 96px' }}>
         <div style={{ maxWidth: 980, margin: '0 auto', textAlign: 'center', padding: '42px 28px', borderRadius: 28, background: 'var(--surface-inverse)', color: 'var(--cream-100)' }}>
-          <h2 style={{ color: '#fff', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Reading made you hungry?</h2>
-          <p style={{ color: 'rgba(255,248,241,.68)', marginBottom: 26 }}>Order a fresh batch while the next blog post is still baking.</p>
-          <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
+          <h2 style={{ color: 'var(--white)', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Reading made you hungry?</h2>
+          <p style={{ color: 'var(--cream-100-68)', marginBottom: 26 }}>Order a fresh batch while the next blog post is still baking.</p>
+          <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
             <ShoppingBag size={19} /> Order Now
           </Link>
         </div>

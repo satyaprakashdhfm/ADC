@@ -21,7 +21,7 @@ export default function ContactPage() {
           <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>Visit A Dough Cookie for warm cookies, premium tins, gifting orders, and quick dessert pick-ups. Each store is positioned around busy neighborhoods so customers can order online, collect in person, or coordinate bulk boxes for events and celebrations.</p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
             {['Store pickup', 'Bulk gifting', 'Fresh delivery', 'Custom notes'].map((item) => (
-              <span key={item} style={{ padding: '10px 16px', borderRadius: 'var(--radius-pill)', background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', color: 'var(--text-strong)', fontWeight: 800 }}>{item}</span>
+              <span key={item} style={{ padding: '10px 16px', borderRadius: 'var(--radius-pill)', background: 'var(--panel-82)', border: '1px solid var(--border-default)', color: 'var(--text-strong)', fontWeight: 800 }}>{item}</span>
             ))}
           </div>
         </div>
@@ -31,7 +31,7 @@ export default function ContactPage() {
         <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr minmax(320px,460px)', gap: 28, alignItems: 'start' }} className="contact-layout">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 18 }} className="store-grid">
             {STORES.map((store) => (
-              <article key={store.name} style={{ background: 'rgba(244,234,214,.86)', border: '1px solid var(--border-default)', borderRadius: 24, padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+              <article key={store.name} style={{ background: 'var(--panel-86)', border: '1px solid var(--border-default)', borderRadius: 24, padding: 24, boxShadow: 'var(--shadow-sm)' }}>
                 <p style={{ fontSize: 'var(--text-sm)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>{store.city}</p>
                 <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 10 }}>{store.name}</h2>
                 <p style={{ color: 'var(--text-body)', lineHeight: 1.65, marginBottom: 16 }}>{store.address}</p>
@@ -51,7 +51,7 @@ export default function ContactPage() {
             ))}
           </div>
 
-          <aside style={{ position: 'sticky', top: 24, background: 'rgba(244,234,214,.9)', border: '1px solid var(--border-default)', borderRadius: 26, padding: 22, boxShadow: 'var(--shadow-md)' }}>
+          <aside style={{ position: 'sticky', top: 24, background: 'var(--panel-90)', border: '1px solid var(--border-default)', borderRadius: 26, padding: 22, boxShadow: 'var(--shadow-md)' }}>
             <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 14 }}>Find A Dough Cookie on the map</h2>
             <div style={{ borderRadius: 22, overflow: 'hidden', border: '1px solid var(--border-default)', background: 'var(--surface-sunken)', boxShadow: 'var(--shadow-sm)' }}>
               <iframe
@@ -92,9 +92,9 @@ export default function ContactPage() {
 
       <section style={{ padding: '0 var(--gutter) 96px' }}>
         <div style={{ maxWidth: 980, margin: '0 auto', textAlign: 'center', padding: '42px 28px', borderRadius: 28, background: 'var(--surface-inverse)', color: 'var(--cream-100)' }}>
-          <h2 style={{ color: '#fff', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Need cookies delivered?</h2>
-          <p style={{ color: 'rgba(255,248,241,.68)', marginBottom: 26 }}>Order online or contact the nearest A Dough Cookie store for bulk and gifting requests.</p>
-          <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
+          <h2 style={{ color: 'var(--white)', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Need cookies delivered?</h2>
+          <p style={{ color: 'var(--cream-100-68)', marginBottom: 26 }}>Order online or contact the nearest A Dough Cookie store for bulk and gifting requests.</p>
+          <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
             <ShoppingBag size={19} /> Order Now
           </Link>
         </div>

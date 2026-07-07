@@ -1,0 +1,189 @@
+/* ============================================================
+   ADC COOKIES — THEME  (single source of truth for ALL colors)
+   ------------------------------------------------------------
+   EVERY color in the app lives here. Components must reference
+   these via var(--token) and must NEVER hardcode a hex / rgb /
+   rgba value in a style. To recolour the brand, edit it here
+   once and it updates everywhere.
+
+   Layers, top to bottom:
+     1. Raw palette        — the actual paint (amber/orange/teal/cream/ink…)
+     2. Named colors       — one-off brand colors that used to be hardcoded
+     3. Semantic tokens    — "what a color is FOR" (surface/text/brand/border/status)
+     4. Alpha / overlay    — translucent scrims, overlays, glows
+     5. Shadows            — colour-bearing elevation recipes
+   Prefer a semantic token (--text-strong) over a raw one (--ink-900)
+   in new code; reach for a raw/named color only when no semantic fits.
+   ============================================================ */
+
+:root {
+  /* ---------- 1. RAW PALETTE ---------- */
+  --amber-50: #FEF6E6; --amber-100: #FDEBC2; --amber-200: #FBD98A;
+  --amber-300: #F8C24D; --amber-400: #F5AE21; --amber-500: #F29F05;
+  --amber-600: #D9890A; --amber-700: #B06D0C; --amber-800: #8A5510; --amber-900: #6E4410;
+  --orange-50: #FEF0E6; --orange-100: #FDDCC2; --orange-200: #FAB988;
+  --orange-300: #F69A4D; --orange-400: #F38525; --orange-500: #EF7507;
+  --orange-600: #D2620A; --orange-700: #A94E0E; --orange-800: #843E10; --orange-900: #6B3210;
+  --teal-50: #E3F8F9; --teal-100: #BCEEF1; --teal-200: #82E0E6;
+  --teal-300: #45CDD6; --teal-400: #14BDC8; --teal-500: #06B1BB;
+  --teal-600: #08929B; --teal-700: #0C747B; --teal-800: #0F5A60; --teal-900: #114950;
+  --cream-50: #FFFCF8; --cream-100: #FFF8F1; --cream-200: #F7ECE0;
+  --cream-300: #ECDBC9; --cream-400: #DBC6AE;
+  --band-salmon: #FBE1CE; /* soft salmon wash — About Us accent bands, distinct from the cream hero */
+  --band-apricot: #FBE7C1; /* light apricot wash — warm section bands */
+  --apricot: #FAD282;      /* palette "light apricot" — accents / warm fills */
+  --ink-300: #C2B2A3; --ink-400: #9C8676; --ink-500: #7A6353;
+  --ink-600: #5C4636; --ink-700: #4A3525; --ink-800: #36251A; --ink-900: #2B1D12;
+  --ink-950: #160D06;  /* deepest warm near-black — dark footer / badge fills */
+  --ink-975: #1C140C;  /* near-black warm — modal chrome */
+  --white: #FFFFFF;
+  --green-50: #E7F6EE; --green-500: #2E9E5B; --green-600: #1F8A4C;
+  --whatsapp-green: #25D366;
+  --red-50: #FCEAE8; --red-500: #E2483D; --red-600: #C7372D;
+  --yellow-50: #FEF6DE; --yellow-500: #F2B705;
+
+  /* ---------- 2. NAMED COLORS (were hardcoded — comment says WHERE each is used) ---------- */
+
+  /* -- Warm page surfaces & section bands -- */
+  --gold: #f7c886;            /* Home HERO HEADER · Home "Finest Ingredients" + "Get in Touch" bands · Order/Checkout/Account page background (.order-cards) */
+  --band-ivory: #f7e3be;      /* Home "About Us" + "Our Stores" bands · "Customer Love" reviews strip — the pale band that alternates with --gold */
+  --cream-bg: #f7e6d2;        /* STICKY HEADER / nav band on home + inner pages (via --surface-glass) · fixed backdrop behind EVERY page · home search-bar fill */
+  --vanilla: #fdf1d8;         /* Cards on inner pages (product/store/form) · Order/Checkout/Account cards · home category cards */
+  --vanilla-raised: #F5E7C6;  /* Inputs & chips sitting INSIDE vanilla cards (a notch darker so fields stand out) */
+  --ivory-card: #f9efda;      /* Default card/drawer/modal surface app-wide (feeds --surface-card; never stark white) */
+  --cream-lightest: #f5ebd5;  /* Checkout order-summary box fill (OrderingApp) */
+
+  /* -- Warm accents -- */
+  --orange-cta: #eca87b;      /* Admin dashboard charts (sales line/area, bar rows, pie series 1) · Razorpay checkout theme colour */
+  --orange-light: #dc9556;    /* Announcement bar background (the top promo strip) */
+  --orange-dark: #C2410C;     /* Admin dashboard chart series (pie / legend) */
+  --orange-brown: #B4561F;    /* Login modal text-button / link colour */
+  --amber-soft: #FAD98A;      /* Home category-card tint gradient (Cookies card) */
+  --amber-wash: #FDE8C4;      /* Menu drawer highlight-panel gradient */
+
+  /* -- Status washes & accents -- */
+  --green-success: #1F8A5B;   /* "Coupon applied" + "Payment successful" text/icons (OrderingApp) · admin chart series */
+  --green-wash: #EDF7F0;      /* Background pill behind the coupon-applied / payment-success text (OrderingApp) */
+  --green-veg: #30A65C;       /* Veg-mark green — BASE only; used translucent as --green-veg-14 */
+  --red-danger: #D24B36;      /* Destructive actions — "Log out" + delete-address (Account page) */
+  --red-wash: #FFF0F0;        /* Background for error / out-of-stock notices (OrderingApp) */
+  --red-wash-soft: #FCEEEC;   /* Softer error background — Account page (e.g. remove-item confirm) */
+
+  /* -- Neutrals -- */
+  --gray: #6B7280;            /* Admin dashboard chart series (neutral) */
+  --purple: #9333EA;          /* Admin dashboard chart series (pie / legend) */
+
+  /* -- Google brand — Login modal "Sign in with Google" logo (official brand hues) -- */
+  --google-blue: #4285F4;
+  --google-red: #EA4335;
+  --google-yellow: #FBBC05;
+  --google-green: #34A853;
+
+  /* ---------- 3. SEMANTIC TOKENS ---------- */
+  /* Surfaces */
+  --surface-page: var(--cream-100);
+  --surface-card: var(--ivory-card); /* warm ivory — never stark white (root-level modals/drawers) */
+  --surface-raised: var(--cream-50);
+  --surface-sunken: var(--cream-200);
+  --surface-inverse: var(--ink-900);
+  --surface-overlay: rgba(43,29,18,.42);
+  --surface-glass: rgba(255,252,248,.72); /* Frosted nav/panel surface — pop-up modals & drawers. NOTE: on .adc-pattern-page pages this is remapped to --cream-bg (globals.css), which is the HOME/INNER-PAGE STICKY HEADER background you see */
+
+  /* Text */
+  --text-strong: var(--ink-900);
+  --text-body: var(--ink-700);
+  --text-muted: var(--ink-500);
+  --text-subtle: var(--ink-400);
+  --text-on-brand: var(--white);
+  --text-on-dark: var(--cream-100);
+  --text-link: var(--orange-600);
+
+  /* Brand */
+  --brand-primary: var(--amber-500);
+  --brand-primary-hover: var(--amber-600);
+  --brand-secondary: var(--orange-500);
+  --brand-secondary-hover: var(--orange-600);
+  --brand-accent: var(--teal-500);
+  --brand-accent-hover: var(--teal-600);
+  --gradient-warm: linear-gradient(135deg, var(--amber-500) 0%, var(--orange-500) 100%);
+  --gradient-warm-soft: linear-gradient(135deg, var(--amber-400) 0%, var(--orange-400) 100%);
+  --gradient-hero: radial-gradient(120% 120% at 50% 0%, var(--amber-100) 0%, var(--cream-100) 60%);
+
+  /* Borders */
+  --border-soft: rgba(43,29,18,.06);
+  --border-default: rgba(43,29,18,.10);
+  --border-strong: rgba(43,29,18,.16);
+  --border-brand: var(--amber-300);
+
+  /* Status */
+  --status-success: var(--green-500);
+  --status-success-bg: var(--green-50);
+  --status-error: var(--red-500);
+  --status-error-bg: var(--red-50);
+  --mark-veg: #2E9E5B;
+  --mark-nonveg: #C7372D;
+  --focus-ring: rgba(242,159,5,.45);
+
+  /* ---------- 4. ALPHA / OVERLAY / SCRIM ---------- */
+  /* Named after their base colour + opacity percent so the value is self-describing. */
+  /* White */
+  --white-90: rgba(255,255,255,.9);
+  --white-40: rgba(255,255,255,.4);
+  --white-16: rgba(255,255,255,.16);
+  --white-12: rgba(255,255,255,.12);
+  --white-10: rgba(255,255,255,.1);
+  --white-08: rgba(255,255,255,.08);
+  /* Pure black (photo overlays) */
+  --black-55: rgba(0,0,0,.55);
+  --black-50: rgba(0,0,0,.5);
+  --black-45: rgba(0,0,0,.45);
+  --black-42: rgba(0,0,0,.42);
+  --black-28: rgba(0,0,0,.28);
+  --black-18: rgba(0,0,0,.18);
+  /* Espresso (deep warm brown 20,12,4) — hero/photo scrims & gradients */
+  --espresso-95: rgba(20,12,4,.95);
+  --espresso-92: rgba(20,12,4,.92);
+  --espresso-78: rgba(20,12,4,.78);
+  --espresso-64: rgba(20,12,4,.64);
+  --espresso-62: rgba(20,12,4,.62);
+  --espresso-55: rgba(20,12,4,.55);
+  --espresso-50: rgba(20,12,4,.5);
+  --espresso-45: rgba(20,12,4,.45);
+  --espresso-30: rgba(20,12,4,.30);
+  --espresso-10: rgba(20,12,4,.10);
+  /* Cream-100 (#FFF8F1) translucent — glass panels, hairlines on dark */
+  --cream-100-72: rgba(255,248,241,.72);
+  --cream-100-68: rgba(255,248,241,.68);
+  --cream-100-60: rgba(255,248,241,.6);
+  --cream-100-55: rgba(255,248,241,.55);
+  --cream-100-50: rgba(255,248,241,.5);
+  --cream-100-30: rgba(255,248,241,.3);
+  --cream-100-14: rgba(255,248,241,.14);
+  --cream-100-08: rgba(255,248,241,.08);
+  /* Panel cream (#F4EAD6) translucent — card/panel fills */
+  --panel-92: rgba(244,234,214,.92);
+  --panel-90: rgba(244,234,214,.9);
+  --panel-86: rgba(244,234,214,.86);
+  --panel-82: rgba(244,234,214,.82);
+  --panel-74: rgba(244,234,214,.74);
+  /* Warm ivory (#FFF5E6) translucent */
+  --ivory-92: rgba(255,245,230,.92);
+  --ivory-88: rgba(255,245,230,.88);
+  /* Brand glows */
+  --amber-500-38: rgba(242,159,5,.38);
+  --amber-500-35: rgba(242,159,5,.35);
+  --orange-500-35: rgba(239,117,7,.35);
+  --wa-60: rgba(37,211,102,.6);   /* WhatsApp pulse */
+  --wa-45: rgba(37,211,102,.45);
+  --ink-900-08: rgba(43,29,18,.08);
+  --green-veg-14: rgba(48, 166, 92, .14);
+  --teal-500-14: rgba(6,177,187,.14);
+
+  /* ---------- 5. SHADOWS (colour-bearing elevation recipes) ---------- */
+  --shadow-xs: 0 1px 2px rgba(58,37,26,.06);
+  --shadow-sm: 0 2px 8px rgba(58,37,26,.06),0 1px 2px rgba(58,37,26,.05),0 0 18px rgba(58,37,26,.03);
+  --shadow-md: 0 8px 24px rgba(58,37,26,.08),0 2px 6px rgba(58,37,26,.05),0 0 28px rgba(58,37,26,.038);
+  --shadow-lg: 0 18px 44px rgba(58,37,26,.10),0 4px 12px rgba(58,37,26,.06);
+  --shadow-xl: 0 32px 70px rgba(58,37,26,.14),0 8px 20px rgba(58,37,26,.07);
+  --shadow-brand: 0 12px 30px rgba(242,159,5,.34),0 4px 10px rgba(239,117,7,.22);
+}

@@ -46,9 +46,9 @@ function CategoryTab({ label, selected, onClick, compact = false }: { label: str
           display: 'grid',
           placeItems: 'center',
           flex: 'none',
-          background: selected ? 'var(--teal-50)' : 'rgba(244,234,214,.74)',
+          background: selected ? 'var(--teal-50)' : 'var(--panel-74)',
           color: selected ? 'var(--brand-secondary)' : 'var(--text-muted)',
-          boxShadow: selected ? 'inset 0 0 0 1px rgba(6,177,187,.14)' : 'inset 0 0 0 1px var(--border-soft)',
+          boxShadow: selected ? 'inset 0 0 0 1px var(--teal-500-14)' : 'inset 0 0 0 1px var(--border-soft)',
           transition: 'background var(--dur-base), color var(--dur-base), box-shadow var(--dur-base)',
         }}
       >
@@ -158,7 +158,7 @@ function CheckoutStepper({ current }: { current: 'review' | 'pay' }) {
         return (
           <div key={label} style={{ display: 'flex', alignItems: 'flex-start' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 'clamp(76px,22vw,104px)' }}>
-              <span style={{ width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800, flex: 'none', background: on ? 'var(--gradient-warm)' : 'transparent', color: on ? '#fff' : 'var(--text-subtle)', border: on ? 'none' : '2px solid var(--border-strong)', boxShadow: isCurrent ? 'var(--shadow-brand)' : 'none' }}>
+              <span style={{ width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 800, flex: 'none', background: on ? 'var(--gradient-warm)' : 'transparent', color: on ? 'var(--white)' : 'var(--text-subtle)', border: on ? 'none' : '2px solid var(--border-strong)', boxShadow: isCurrent ? 'var(--shadow-brand)' : 'none' }}>
                 {done ? <Check size={15} strokeWidth={3} /> : i + 1}
               </span>
               <span style={{ fontSize: 'var(--text-xs)', fontWeight: isCurrent ? 800 : 600, color: isCurrent ? 'var(--text-strong)' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>{label}</span>
@@ -187,13 +187,13 @@ function Thumb({ size = 128, img, seed = 0 }: { size?: number; img?: string | nu
     </div>
   );
   const grads = [
-    'radial-gradient(120% 120% at 35% 28%,#F8C24D,#EF7507)',
-    'radial-gradient(120% 120% at 35% 28%,#F5AE21,#D2620A)',
-    'radial-gradient(120% 120% at 35% 28%,#FBD98A,#F29F05)',
+    'radial-gradient(120% 120% at 35% 28%,var(--amber-300),var(--orange-500))',
+    'radial-gradient(120% 120% at 35% 28%,var(--amber-400),var(--orange-600))',
+    'radial-gradient(120% 120% at 35% 28%,var(--amber-200),var(--amber-500))',
   ];
   return (
     <div style={{ width: size, height: size, borderRadius: 'var(--radius-image)', background: grads[seed % 3], boxShadow: 'var(--shadow-sm)', position: 'relative', overflow: 'hidden', flex: 'none' }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 32% 28%,rgba(255,255,255,.4),transparent 42%)' }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 32% 28%,var(--white-40),transparent 42%)' }} />
     </div>
   );
 }
@@ -346,15 +346,15 @@ function TinModal({ tin, onClose, onAdd }: { tin: typeof FALLBACK_TINS[0] | null
       }}>
         {tin && (
           <>
-            <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, zIndex: 3, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,.9)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}><X size={18} /></button>
+            <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, zIndex: 3, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'var(--white-90)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}><X size={18} /></button>
 
             <div className="hide-sb" style={{ flex: 1, overflowY: 'auto' }}>
               {/* Real tin image */}
               <div style={{ width: '100%', height: 190, position: 'relative', overflow: 'hidden' }}>
                 {tin.img ? <Image src={tin.img} alt={tin.name} fill style={{ objectFit: 'cover' }} /> : (
-                  <div style={{ width: '100%', height: '100%', background: 'radial-gradient(130% 120% at 40% 25%,#F8C24D,#EF7507)' }} />
+                  <div style={{ width: '100%', height: '100%', background: 'radial-gradient(130% 120% at 40% 25%,var(--amber-300),var(--orange-500))' }} />
                 )}
-                <span style={{ position: 'absolute', left: 14, bottom: 14, padding: '5px 12px', borderRadius: 'var(--radius-pill)', background: 'rgba(244,234,214,.92)', color: 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 800, boxShadow: 'var(--shadow-sm)' }}>Premium Gift Tin · {tin.count} cookies</span>
+                <span style={{ position: 'absolute', left: 14, bottom: 14, padding: '5px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--panel-92)', color: 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 800, boxShadow: 'var(--shadow-sm)' }}>Premium Gift Tin · {tin.count} cookies</span>
               </div>
 
               <div style={{ padding: '16px 20px 0' }}>
@@ -371,7 +371,7 @@ function TinModal({ tin, onClose, onAdd }: { tin: typeof FALLBACK_TINS[0] | null
 
             <div style={{ borderTop: '1px solid var(--border-soft)', padding: '14px 18px', display: 'flex', gap: 14, alignItems: 'center', background: 'var(--surface-card)' }}>
               <QStepper value={qty} onChange={n => setQty(Math.max(1, n))} />
-              <button onClick={() => onAdd(tin, qty)} style={{ flex: 1, padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer' }}>
+              <button onClick={() => onAdd(tin, qty)} style={{ flex: 1, padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer' }}>
                 Add to Cart · ₹{unit * qty}
               </button>
             </div>
@@ -585,7 +585,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         name: 'A Dough Cookie',
         description: `Order ${rp.orderNumber}`,
         prefill: { name: user.name || '', email: user.email || '', contact: chosen?.phone || '' },
-        theme: { color: '#E8772E' },
+        theme: { color: 'var(--orange-cta)' },
         handler: async (resp) => {
           try {
             await verifyPayment(order.id, {
@@ -650,7 +650,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       {/* Delivery promise — EXPRESS badge + a real date, like the big marketplaces */}
       {lines.length > 0 && delivCheck && delivCheck.serviceable && (delivCheck.intracity || deliverBy) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-soft)' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontWeight: 800, fontSize: 'var(--text-2xs)', letterSpacing: '.05em', flex: 'none' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 800, fontSize: 'var(--text-2xs)', letterSpacing: '.05em', flex: 'none' }}>
             <Truck size={13} /> {delivCheck.intracity ? 'SAME-DAY' : 'EXPRESS'}
           </span>
           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>
@@ -673,7 +673,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         </div>
         {gift && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>Gift wrap</span><span>₹{giftFee}</span></div>}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>Delivery fee</span><span>₹{delivery}</span></div>
-        {applied && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#1F8A5B', fontWeight: 700 }}><span>Coupon ({coupon})</span><span>−₹{discount}</span></div>}
+        {applied && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--green-success)', fontWeight: 700 }}><span>Coupon ({coupon})</span><span>−₹{discount}</span></div>}
         <Dash />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}><span>To pay</span><span>₹{grand}</span></div>
       </div>
@@ -690,7 +690,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{step === 'pay' ? 'Choose how to pay' : `${lines.length} item${lines.length !== 1 ? 's' : ''} · ready to order`}</div>
           </div>
           <a href="/" aria-label="a dough cookie home" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flex: 'none' }}>
-            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={desktop ? { height: 140, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -50 } : { height: 54, width: 'auto', objectFit: 'contain', display: 'block' }} />
+            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={desktop ? { height: 72, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -26 } : { height: 48, width: 'auto', objectFit: 'contain', display: 'block' }} />
           </a>
         </div>
         <CheckoutStepper current={step} />
@@ -710,7 +710,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   {!user ? (
                     <div style={{ textAlign: 'center', padding: '12px 8px' }}>
                       <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 12 }}>Please log in to choose your delivery address.</p>
-                      <button onClick={() => setLoginOpen(true)} style={{ padding: '11px 22px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Log in</button>
+                      <button onClick={() => setLoginOpen(true)} style={{ padding: '11px 22px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Log in</button>
                     </div>
                   ) : (
                   <>
@@ -721,7 +721,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     const on = addr === a.id;
                     return (
                       <div key={a.id} onClick={() => setAddr(a.id)} role="button" tabIndex={0} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '14px 16px', borderRadius: 'var(--radius-card)', cursor: 'pointer', textAlign: 'left', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-raised)' }}>
-                        <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: on ? 'var(--gradient-warm)' : 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{a.label === 'Office' ? <Briefcase size={18} color={on ? '#fff' : 'var(--brand-secondary)'} /> : a.label === 'Other' ? <MapPin size={18} color={on ? '#fff' : 'var(--brand-secondary)'} /> : <Home size={18} color={on ? '#fff' : 'var(--brand-secondary)'} />}</span>
+                        <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: on ? 'var(--gradient-warm)' : 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{a.label === 'Office' ? <Briefcase size={18} color={on ? 'var(--white)' : 'var(--brand-secondary)'} /> : a.label === 'Other' ? <MapPin size={18} color={on ? 'var(--white)' : 'var(--brand-secondary)'} /> : <Home size={18} color={on ? 'var(--white)' : 'var(--brand-secondary)'} />}</span>
                         <span style={{ flex: 1, minWidth: 0 }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                             <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>{a.label || 'Home'}</span>
@@ -768,12 +768,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
                       {/* Mark as default */}
                       <button onClick={() => setMakeDefault(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '3px 2px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
-                        <span style={{ width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center', border: makeDefault ? 'none' : '2px solid var(--border-strong)', background: makeDefault ? 'var(--gradient-warm)' : 'transparent', color: '#fff', flex: 'none' }}>{makeDefault && <Check size={13} strokeWidth={3} />}</span>
+                        <span style={{ width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center', border: makeDefault ? 'none' : '2px solid var(--border-strong)', background: makeDefault ? 'var(--gradient-warm)' : 'transparent', color: 'var(--white)', flex: 'none' }}>{makeDefault && <Check size={13} strokeWidth={3} />}</span>
                         <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>Mark as default address</span>
                       </button>
 
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button disabled={!aValid} onClick={saveAddr} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: aValid ? 'var(--gradient-warm)' : 'var(--border-default)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: aValid ? 'pointer' : 'not-allowed' }}>{editId != null ? 'Save changes' : 'Save & use'}</button>
+                        <button disabled={!aValid} onClick={saveAddr} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: aValid ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: aValid ? 'pointer' : 'not-allowed' }}>{editId != null ? 'Save changes' : 'Save & use'}</button>
                         <button onClick={closeAddrForm} style={{ padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
                       </div>
                     </div>
@@ -794,7 +794,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 {!delivChecking && delivCheck && (
                   delivCheck.serviceable ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
-                      <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} color="#fff" /></span>
+                      <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} style={{ color: 'var(--white)' }} /></span>
                       <div>
                         {delivCheck.intracity
                           ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Same-day delivery — arrives today, {fmtDay(new Date())}</div>
@@ -805,8 +805,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--status-error)', background: '#FFF0F0' }}>
-                      <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--status-error)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} color="#fff" /></span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--status-error)', background: 'var(--red-wash)' }}>
+                      <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--status-error)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} style={{ color: 'var(--white)' }} /></span>
                       <div>
                         <div style={{ fontWeight: 800, color: 'var(--status-error)', fontSize: 'var(--text-sm)' }}>Delivery not available to {chosen?.pincode}</div>
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>Please use a different address</div>
@@ -818,12 +818,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
               <div style={card$}>
                 <button onClick={() => setGift(!gift)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
-                  <span style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Gift size={19} color="#fff" /></span>
+                  <span style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Gift size={19} style={{ color: 'var(--white)' }} /></span>
                   <span style={{ flex: 1 }}>
                     <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Add this as a gift · +₹{GIFT_FEE}</span>
                     <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Premium gift wrap with a handwritten message card.</span>
                   </span>
-                  <span style={{ width: 26, height: 26, borderRadius: 9, display: 'grid', placeItems: 'center', border: gift ? 'none' : '2px solid var(--border-strong)', background: gift ? 'var(--gradient-warm)' : 'transparent', color: '#fff', flex: 'none' }}>{gift && <Check size={15} strokeWidth={3} />}</span>
+                  <span style={{ width: 26, height: 26, borderRadius: 9, display: 'grid', placeItems: 'center', border: gift ? 'none' : '2px solid var(--border-strong)', background: gift ? 'var(--gradient-warm)' : 'transparent', color: 'var(--white)', flex: 'none' }}>{gift && <Check size={15} strokeWidth={3} />}</span>
                 </button>
                 {gift && (
                   <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -850,16 +850,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               <div style={card$}>
                 {head(<Tag size={18} color="var(--brand-secondary)" />, 'Apply coupon')}
                 {applied ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', background: '#EDF7F0', border: '1.5px solid #1F8A5B' }}>
-                    <Check size={20} color="#1F8A5B" />
-                    <span style={{ flex: 1, fontWeight: 700, color: '#1F8A5B', fontSize: 'var(--text-sm)' }}>{coupon} applied!</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', background: 'var(--green-wash)', border: '1.5px solid var(--green-success)' }}>
+                    <Check size={20} style={{ color: 'var(--green-success)' }} />
+                    <span style={{ flex: 1, fontWeight: 700, color: 'var(--green-success)', fontSize: 'var(--text-sm)' }}>{coupon} applied!</span>
                     <button onClick={() => { setApplied(false); setCoupon(''); setDiscount(0); }} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 700, fontSize: 'var(--text-sm)' }}>Remove</button>
                   </div>
                 ) : (
                   <div>
                     <div style={{ display: 'flex', gap: 10 }}>
                       <input value={coupon} onChange={e => { setCoupon(e.target.value.toUpperCase()); setCouponErr(''); }} placeholder="Enter coupon code" style={{ flex: 1, minWidth: 0, padding: '13px 16px', borderRadius: 'var(--radius-input)', border: couponErr ? '1.5px solid var(--status-error)' : '1.5px solid var(--border-default)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', background: 'var(--surface-raised)', color: 'var(--text-strong)', outline: 'none' }} />
-                      <button onClick={applyCoupon} disabled={!coupon.trim()} style={{ padding: '13px 20px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Apply</button>
+                      <button onClick={applyCoupon} disabled={!coupon.trim()} style={{ padding: '13px 20px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Apply</button>
                     </div>
                     {couponErr && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--status-error)', marginTop: 6 }}>{couponErr}</div>}
                     <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 6, fontWeight: 600 }}>Try: ADC10 for 10% off</div>
@@ -913,15 +913,15 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
       <div style={{ padding: '14px var(--gutter)', borderTop: '1px solid var(--border-soft)', background: 'var(--surface-card)', flex: 'none' }}>
         {step === 'review' ? (
-          <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!hydrated || lines.length === 0} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: hydrated && lines.length ? 'var(--gradient-warm)' : 'var(--border-default)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: hydrated && lines.length ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!hydrated || lines.length === 0} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: hydrated && lines.length ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: hydrated && lines.length ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             Proceed to Pay · ₹{grand} <ArrowRight size={18} />
           </button>
         ) : (
           <>
             {payError && (
-              <div style={{ maxWidth: 720, margin: '0 auto 10px', padding: '10px 14px', borderRadius: 'var(--radius-button)', background: '#FFF0F0', border: '1.5px solid var(--status-error)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', fontWeight: 700, textAlign: 'center' }}>{payError}</div>
+              <div style={{ maxWidth: 720, margin: '0 auto 10px', padding: '10px 14px', borderRadius: 'var(--radius-button)', background: 'var(--red-wash)', border: '1.5px solid var(--status-error)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', fontWeight: 700, textAlign: 'center' }}>{payError}</div>
             )}
-            <button onClick={() => user ? handlePlace() : setLoginOpen(true)} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <button onClick={() => user ? handlePlace() : setLoginOpen(true)} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
               {user ? <>Pay ₹{grand} <Lock size={18} /></> : <>Log in to place order <Lock size={18} /></>}
             </button>
             <div style={{ textAlign: 'center', marginTop: 8, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
@@ -946,10 +946,10 @@ function OrderSuccessPage({ show, total, orderId, onBackToMenu, onViewOrder }: {
   return (
     <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, transform: show ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .38s cubic-bezier(.4,0,.2,1)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', textAlign: 'center', overflowY: 'auto' }}>
-        <div style={{ width: 120, height: 120, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', boxShadow: '0 20px 60px rgba(242,159,5,.38)', animation: 'riseIn .5s var(--ease-spring) both', marginBottom: 28 }}>
-          <Check size={62} color="#fff" strokeWidth={3} />
+        <div style={{ width: 120, height: 120, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', boxShadow: '0 20px 60px var(--amber-500-38)', animation: 'riseIn .5s var(--ease-spring) both', marginBottom: 28 }}>
+          <Check size={62} strokeWidth={3} style={{ color: 'var(--white)' }} />
         </div>
-        <div style={{ display: 'inline-block', background: '#EDF7F0', color: '#1F8A5B', fontWeight: 800, fontSize: 'var(--text-sm)', padding: '5px 14px', borderRadius: 'var(--radius-pill)', marginBottom: 16 }}>Payment Successful</div>
+        <div style={{ display: 'inline-block', background: 'var(--green-wash)', color: 'var(--green-success)', fontWeight: 800, fontSize: 'var(--text-sm)', padding: '5px 14px', borderRadius: 'var(--radius-pill)', marginBottom: 16 }}>Payment Successful</div>
         <h1 style={{ font: 'var(--weight-extra) var(--text-h1)/1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 10px' }}>Order Placed!</h1>
         <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '0 0 6px' }}>Your cookies are being baked fresh.</p>
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-subtle)', margin: '0 0 32px' }}>Order <strong style={{ color: 'var(--text-strong)' }}>{orderId}</strong> · ₹{total}</p>
@@ -964,7 +964,7 @@ function OrderSuccessPage({ show, total, orderId, onBackToMenu, onViewOrder }: {
           {steps.map((step, i) => (
             <div key={step.label} style={{ display: 'flex', alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: 64 }}>
-                <div style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', background: step.done ? 'var(--gradient-warm)' : 'var(--surface-sunken)', boxShadow: step.done ? '0 6px 20px rgba(242,159,5,.35)' : 'none', color: step.done ? '#fff' : 'var(--text-subtle)' }}>{step.icon}</div>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', background: step.done ? 'var(--gradient-warm)' : 'var(--surface-sunken)', boxShadow: step.done ? '0 6px 20px var(--amber-500-35)' : 'none', color: step.done ? 'var(--white)' : 'var(--text-subtle)' }}>{step.icon}</div>
                 <span style={{ fontSize: 'var(--text-2xs)', color: step.done ? 'var(--text-strong)' : 'var(--text-subtle)', fontWeight: step.done ? 800 : 500, whiteSpace: 'nowrap' }}>{step.label}</span>
               </div>
               {i < steps.length - 1 && <div style={{ height: 2, width: 24, background: 'var(--border-strong)', marginTop: 19, flexShrink: 0 }} />}
@@ -973,7 +973,7 @@ function OrderSuccessPage({ show, total, orderId, onBackToMenu, onViewOrder }: {
         </div>
       </div>
       <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--surface-card)', borderTop: '1px solid var(--border-soft)' }}>
-        <button onClick={onViewOrder} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><PackageCheck size={18} /> See your order &amp; status</button>
+        <button onClick={onViewOrder} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><PackageCheck size={18} /> See your order &amp; status</button>
         <button onClick={onBackToMenu} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Order more cookies</button>
       </div>
     </div>
@@ -1022,7 +1022,7 @@ function LocationSheet({ open, onClose, onPick }: { open: boolean; onClose: () =
                 <input style={inp} placeholder="Pincode" value={f.pincode} onChange={set('pincode')} />
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 2 }}>
-                <button disabled={!valid} onClick={save} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: valid ? 'var(--gradient-warm)' : 'var(--border-default)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: valid ? 'pointer' : 'not-allowed' }}>Save &amp; use</button>
+                <button disabled={!valid} onClick={save} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: valid ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: valid ? 'pointer' : 'not-allowed' }}>Save &amp; use</button>
                 <button onClick={() => setAdding(false)} style={{ padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Back</button>
               </div>
             </div>
@@ -1072,8 +1072,8 @@ function CorporatePanel() {
   return (
     <div>
       <div style={{ background: 'var(--surface-inverse)', borderRadius: 'var(--radius-card)', padding: '26px 24px', color: 'var(--cream-100)', marginBottom: 18 }}>
-        <div style={{ font: 'var(--weight-extra) var(--text-h3)/1.1 var(--font-display)', color: '#fff', marginBottom: 8 }}>Corporate &amp; bulk gifting</div>
-        <p style={{ color: 'rgba(255,248,241,.72)', lineHeight: 1.6, margin: 0, fontSize: 'var(--text-sm)' }}>Cookies for teams, clients, and celebrations — freshly baked, neatly packed, and delivered together. Pick a package below or request a custom quote for large or branded orders.</p>
+        <div style={{ font: 'var(--weight-extra) var(--text-h3)/1.1 var(--font-display)', color: 'var(--white)', marginBottom: 8 }}>Corporate &amp; bulk gifting</div>
+        <p style={{ color: 'var(--cream-100-72)', lineHeight: 1.6, margin: 0, fontSize: 'var(--text-sm)' }}>Cookies for teams, clients, and celebrations — freshly baked, neatly packed, and delivered together. Pick a package below or request a custom quote for large or branded orders.</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14, marginBottom: 22 }}>
@@ -1089,7 +1089,7 @@ function CorporatePanel() {
       <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', padding: 22, boxShadow: 'var(--shadow-sm)' }}>
         {status === 'done' ? (
           <div style={{ textAlign: 'center', padding: '20px 8px' }}>
-            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', margin: '0 auto 14px' }}><Check size={28} color="#fff" strokeWidth={3} /></div>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', margin: '0 auto 14px' }}><Check size={28} strokeWidth={3} style={{ color: 'var(--white)' }} /></div>
             <div style={{ fontWeight: 800, color: 'var(--text-strong)', marginBottom: 4 }}>Request received!</div>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0 }}>Our team will reach out with a custom quote shortly.</p>
           </div>
@@ -1107,7 +1107,7 @@ function CorporatePanel() {
               </div>
               <input style={inp} placeholder="Approx quantity (e.g. 80 boxes) *" value={f.qty} onChange={set('qty')} />
               <textarea rows={3} style={{ ...inp, resize: 'vertical' }} placeholder="Occasion, branding, delivery date…" value={f.message} onChange={set('message')} />
-              <button disabled={!valid || status === 'sending'} onClick={submit} style={{ padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: valid && status !== 'sending' ? 'var(--gradient-warm)' : 'var(--border-default)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: valid && status !== 'sending' ? 'pointer' : 'not-allowed' }}>{status === 'sending' ? 'Sending…' : 'Request quote'}</button>
+              <button disabled={!valid || status === 'sending'} onClick={submit} style={{ padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: valid && status !== 'sending' ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: valid && status !== 'sending' ? 'pointer' : 'not-allowed' }}>{status === 'sending' ? 'Sending…' : 'Request quote'}</button>
             </div>
           </>
         )}
@@ -1225,11 +1225,11 @@ export default function OrderingApp() {
               </button>
               <button onClick={() => router.push('/checkout')} aria-label={`View cart, ${count} items`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', flex: 'none' }}>
                 <ShoppingBag size={20} />
-                {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--gradient-warm)', color: '#fff', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>}
+                {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--gradient-warm)', color: 'var(--white)', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>}
               </button>
               {user ? (
                 <button onClick={() => router.push(user.role === 'ADMIN' ? '/admin' : '/account')} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px 8px 10px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
-                  <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: '#fff', flex: 'none' }}><User size={17} /></span>
+                  <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}><User size={17} /></span>
                   {user.name.split(' ')[0]}
                 </button>
               ) : (
@@ -1295,7 +1295,7 @@ export default function OrderingApp() {
 
             {/* Live cart panel — always visible so you see what you've added while browsing */}
             <aside style={{ position: 'sticky', top: 150, alignSelf: 'start' }}>
-              <div style={{ background: '#FFFBF2', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 172px)' }}>
+              <div style={{ background: 'var(--cream-lightest)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 172px)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 18px', borderBottom: '1px solid var(--border-soft)' }}>
                   <ShoppingBag size={18} color="var(--brand-secondary)" />
                   <span style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>Your cart</span>
@@ -1325,7 +1325,7 @@ export default function OrderingApp() {
                     </div>
                     <div style={{ borderTop: '1px solid var(--border-soft)', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}><span>Subtotal</span><span>₹{total}</span></div>
-                      <button onClick={() => router.push('/checkout')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-button)', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' }}>Checkout · ₹{total} <ArrowRight size={18} /></button>
+                      <button onClick={() => router.push('/checkout')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-button)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' }}>Checkout · ₹{total} <ArrowRight size={18} /></button>
                       <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', textAlign: 'center', margin: 0, lineHeight: 1.4 }}>Taxes included. Shipping and discount codes calculated at checkout.</p>
                     </div>
                   </>
@@ -1353,7 +1353,7 @@ export default function OrderingApp() {
               <Image src="/assets/adc-logo.png" height={54} width={92} alt="a dough cookie" style={{ objectFit: 'contain' }} />
             </a>
             {user ? (
-              <button onClick={() => router.push(user.role === 'ADMIN' ? '/admin' : '/account')} aria-label="Profile" style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', background: 'var(--gradient-warm)', color: '#fff', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><User size={20} /></button>
+              <button onClick={() => router.push(user.role === 'ADMIN' ? '/admin' : '/account')} aria-label="Profile" style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><User size={20} /></button>
             ) : (
               <button onClick={() => setLoginOpen(true)} aria-label="Login" style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><User size={20} /></button>
             )}
@@ -1411,12 +1411,12 @@ export default function OrderingApp() {
 
         {/* Floating bottom-right stack: menu on top, cart below it */}
         <div style={{ position: 'fixed', right: 16, bottom: 18, zIndex: 40, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12 }}>
-          <button onClick={() => setDrawer(true)} aria-label="Menu" style={{ width: 60, height: 60, borderRadius: 18, border: 'none', background: 'var(--surface-inverse)', color: '#fff', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, boxShadow: 'var(--shadow-lg)' }}><BookOpen size={21} /><span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.04em' }}>Menu</span></button>
+          <button onClick={() => setDrawer(true)} aria-label="Menu" style={{ width: 60, height: 60, borderRadius: 18, border: 'none', background: 'var(--surface-inverse)', color: 'var(--white)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, boxShadow: 'var(--shadow-lg)' }}><BookOpen size={21} /><span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.04em' }}>Menu</span></button>
           {count > 0 && (
-            <button onClick={() => router.push('/checkout')} aria-label="View cart" style={{ border: 'none', cursor: 'pointer', background: 'var(--gradient-warm)', color: '#fff', borderRadius: 'var(--radius-pill)', boxShadow: 'var(--shadow-brand)', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', fontFamily: 'var(--font-body)', fontWeight: 800, animation: 'riseIn .3s var(--ease-spring) both' }}>
+            <button onClick={() => router.push('/checkout')} aria-label="View cart" style={{ border: 'none', cursor: 'pointer', background: 'var(--gradient-warm)', color: 'var(--white)', borderRadius: 'var(--radius-pill)', boxShadow: 'var(--shadow-brand)', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', fontFamily: 'var(--font-body)', fontWeight: 800, animation: 'riseIn .3s var(--ease-spring) both' }}>
               <span style={{ position: 'relative', display: 'grid', placeItems: 'center' }}>
                 <ShoppingBag size={22} />
-                <span style={{ position: 'absolute', top: -8, right: -10, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: '#fff', color: 'var(--brand-secondary)', fontSize: 11, fontWeight: 900, display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>{count}</span>
+                <span style={{ position: 'absolute', top: -8, right: -10, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: 'var(--white)', color: 'var(--brand-secondary)', fontSize: 11, fontWeight: 900, display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>{count}</span>
               </span>
               <span style={{ fontSize: 'var(--text-base)' }}>₹{total}</span>
               <ArrowRight size={18} />
@@ -1431,20 +1431,20 @@ export default function OrderingApp() {
       {/* Category popup — compact dark menu, opens above the floating menu button */}
       {drawer && (
         <>
-          <div onClick={() => setDrawer(false)} style={{ position: 'fixed', inset: 0, zIndex: 45, background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(2px)' }} />
-          <div className="hide-sb" style={{ position: 'fixed', right: 16, bottom: 84, zIndex: 47, width: 'min(252px,80vw)', maxHeight: '56vh', overflowY: 'auto', background: '#1C140C', borderRadius: 'var(--radius-sheet)', boxShadow: 'var(--shadow-xl)', padding: 6, animation: 'riseIn .25s var(--ease-spring) both' }}>
-            <div style={{ padding: '8px 12px 5px', fontSize: 'var(--text-2xs)', letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,248,241,.5)', fontWeight: 800 }}>Menu</div>
+          <div onClick={() => setDrawer(false)} style={{ position: 'fixed', inset: 0, zIndex: 45, background: 'var(--black-50)', backdropFilter: 'blur(2px)' }} />
+          <div className="hide-sb" style={{ position: 'fixed', right: 16, bottom: 84, zIndex: 47, width: 'min(252px,80vw)', maxHeight: '56vh', overflowY: 'auto', background: 'var(--ink-975)', borderRadius: 'var(--radius-sheet)', boxShadow: 'var(--shadow-xl)', padding: 6, animation: 'riseIn .25s var(--ease-spring) both' }}>
+            <div style={{ padding: '8px 12px 5px', fontSize: 'var(--text-2xs)', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--cream-100-50)', fontWeight: 800 }}>Menu</div>
             {CATEGORIES.map(c => {
               const on = c === active;
               const cnt = c === 'Cookie Tins' ? tins.length : c === 'Cookies' ? menu.length : null;
               return (
-                <button key={c} onClick={() => { setActive(c); setDrawer(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid rgba(255,248,241,.08)', textAlign: 'left' }}>
+                <button key={c} onClick={() => { setActive(c); setDrawer(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid var(--cream-100-08)', textAlign: 'left' }}>
                   <span style={{ fontFamily: 'var(--font-body)', fontWeight: on ? 800 : 600, fontSize: 'var(--text-sm)', color: on ? 'var(--amber-400)' : 'var(--cream-100)' }}>{c}</span>
-                  {cnt != null && <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: on ? 'var(--amber-400)' : 'rgba(255,248,241,.5)' }}>{cnt}</span>}
+                  {cnt != null && <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: on ? 'var(--amber-400)' : 'var(--cream-100-50)' }}>{cnt}</span>}
                 </button>
               );
             })}
-            <button onClick={() => setDrawer(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', marginTop: 6, padding: '9px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'rgba(255,255,255,.12)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}><X size={14} /> Close</button>
+            <button onClick={() => setDrawer(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', marginTop: 6, padding: '9px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--white-12)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}><X size={14} /> Close</button>
           </div>
         </>
       )}
