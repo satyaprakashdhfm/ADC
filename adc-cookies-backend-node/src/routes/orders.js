@@ -320,6 +320,16 @@ router.get('/:id/delhivery-track', async (req, res) => {
   // Intracity orders ship via Shadowfax — track them there, NOT Delhivery (the AWB lives in the
   // delhivery_waybill column for both carriers, so branch on `carrier`).
   if (order.carrier === 'SHADOWFAX') {
+    // DEV/TEST ONLY: when SHADOWFAX_MOCK_TRACKING is set, don't hit Shadowfax's real API (whose
+    // sandbox AWBs stay stuck at "new"). Instead reflect what the webhook has pushed into our DB —
+    // shipment_status + the order_tracking timeline — so simulated status updates are visible in
+    // Live tracking. Leave this env UNSET in production so real carrier tracking is used.
+    if (process.env.SHADOWFAX_MOCK_TRACKING) {
+      const rows = await getAll('SELECT status, remarks, created_at FROM order_tracking WHERE order_id = $1 ORDER BY created_at DESC, id DESC', [order.id]);
+      const scans = rows.map(r => ({ time: r.created_at, event: r.status }));
+      console.log(`[SHADOWFAX] track | MOCK | awb=${order.delhivery_waybill} | status="${order.shipment_status}"`);
+      return res.json({ tracked: true, carrier: 'SHADOWFAX', waybill: order.delhivery_waybill, status: sfxStatusLabel(order.shipment_status) || order.shipment_status || null, trackUrl: null, scans });
+    }
     if (!shadowfaxConfigured()) return res.json({ tracked: false, reason: 'shadowfax_not_configured' });
     const result = await trackShadowfax(order.delhivery_waybill);
     if (!result.ok) return res.json({ tracked: false, reason: result.reason });
