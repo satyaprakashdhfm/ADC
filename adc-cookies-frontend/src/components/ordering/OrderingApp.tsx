@@ -92,6 +92,49 @@ const FALLBACK_TINS = [
   { id: 'biscoff-tin', name: 'Biscoff Tin', price: 850, count: 9, img: '/assets/products/m-and-m.jpg', desc: 'Nine Biscoff-filled cookies, gift-ready.' },
 ];
 
+// Search box with a live product-suggestions dropdown. Typing shows matching cookies; an empty,
+// focused box shows popular picks (rec/best). Picking one floats it to the top of the menu.
+type SuggestItem = { id: string; name: string; price: number; img: string | null; rec?: boolean; best?: boolean };
+function SearchSuggest({ value, onChange, onPick, items, placeholder, wrapStyle }: {
+  value: string; onChange: (v: string) => void; onPick: (name: string) => void;
+  items: SuggestItem[]; placeholder: string; wrapStyle: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  const q = value.trim().toLowerCase();
+  const matches = (q ? items.filter(i => i.name.toLowerCase().includes(q)) : items.filter(i => i.rec || i.best)).slice(0, 6);
+  return (
+    <div style={{ position: 'relative', ...wrapStyle }}>
+      <Search size={18} color="var(--text-subtle)" />
+      <input
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 160)}
+        onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
+        placeholder={placeholder}
+        style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', outline: 'none' }}
+      />
+      {open && matches.length > 0 && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0, zIndex: 60, background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
+          <div style={{ padding: '8px 14px 4px', fontSize: 'var(--text-2xs)', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-subtle)', fontWeight: 800 }}>{q ? 'Matches' : 'Popular picks'}</div>
+          {matches.map(m => (
+            <button key={m.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => { onPick(m.name); setOpen(false); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-sunken)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              <span style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--surface-sunken)', flex: 'none', overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
+                {m.img ? <Image src={m.img} alt="" width={38} height={38} style={{ width: 38, height: 38, objectFit: 'cover' }} /> : <Cookie size={18} color="var(--brand-secondary)" />}
+              </span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--brand-secondary)', flex: 'none' }}>₹{m.price}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 /* ---- Razorpay Checkout (popup) ---- */
 interface RazorpayResponse { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string; }
@@ -1216,10 +1259,8 @@ export default function OrderingApp() {
               <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flex: 'none' }}>
                 <Image src="/assets/adc-logo.png" height={104} width={174} alt="a dough cookie" style={{ height: 140, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -50 }} />
               </a>
-              <div style={{ flex: 1, maxWidth: 620, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-card)', borderRadius: 'var(--radius-pill)', padding: '9px 16px', border: '1.5px solid var(--border-default)' }}>
-                <Search size={18} color="var(--text-subtle)" />
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search cookies…" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', outline: 'none' }} />
-              </div>
+              <SearchSuggest value={search} onChange={setSearch} onPick={name => { setActive('Cookies'); setSearch(name); }} items={menu} placeholder="Search cookies…"
+                wrapStyle={{ flex: 1, maxWidth: 620, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-card)', borderRadius: 'var(--radius-pill)', padding: '9px 16px', border: '1.5px solid var(--border-default)' }} />
               <button onClick={() => setLocationOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-body)', fontWeight: 700, fontSize: 'var(--text-sm)', border: 'none', background: 'transparent', cursor: 'pointer', flex: 'none' }}>
                 <MapPin size={18} color="var(--brand-secondary)" /> {location}
               </button>
@@ -1359,10 +1400,8 @@ export default function OrderingApp() {
             )}
           </div>
           <div style={{ padding: '0 18px 14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-raised)', borderRadius: 'var(--radius-input)', padding: '11px 16px', gap: 10, border: '1.5px solid var(--border-default)' }}>
-              <Search size={18} color="var(--text-subtle)" />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search Cookies…" style={{ flex: 1, border: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', outline: 'none' }} />
-            </div>
+            <SearchSuggest value={search} onChange={setSearch} onPick={name => { setActive('Cookies'); setSearch(name); }} items={menu} placeholder="Search Cookies…"
+              wrapStyle={{ display: 'flex', alignItems: 'center', background: 'var(--surface-raised)', borderRadius: 'var(--radius-input)', padding: '11px 16px', gap: 10, border: '1.5px solid var(--border-default)' }} />
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 'use client';
 import Image from 'next/image';
 import { X, Info, Image as ImageIcon, BookOpen, Mail, ShoppingBag, ChevronRight, LogOut, User } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
 const NAV_LINKS = [
@@ -19,6 +19,7 @@ interface MenuDrawerProps {
 
 export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, logout } = useAuth();
 
   return (
@@ -99,7 +100,11 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
             <a
               key={lk.label}
               href={lk.href}
-              onClick={onClose}
+              onClick={e => {
+                // Already on this page? Don't reload — just glide back to the top.
+                if (lk.href === pathname) { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                onClose();
+              }}
               style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 11px', borderRadius: 13, textDecoration: 'none', color: 'var(--text-strong)', transition: 'background .18s' }}
               onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-sunken)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { getOrders, getAddresses, addAddress, trackOrderShipment, type DelhiveryTrackResult, type Address, type Order, type OrderItem } from '@/lib/api';
+import { OrderNextStep } from '@/lib/orderNextStep';
 import {
   ChevronLeft, Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
   Info, LifeBuoy, ChevronRight, LogOut, ShoppingBag, MapPin, Gift,
@@ -192,6 +193,7 @@ function ShipmentTracker({ order }: { order: Order }) {
 
   return (
     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
+      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} style={{ marginBottom: 12 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {order.delhiveryWaybill && (
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>

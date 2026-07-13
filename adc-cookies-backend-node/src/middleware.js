@@ -12,6 +12,19 @@ import { adminClient, supabaseConfigured } from './supabaseAdmin.js';
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 
+// Phone numbers that should get the ADMIN role when they log in via OTP. Compared on the last
+// 10 digits so country-code formatting (91…) doesn't matter.
+const ADMIN_PHONES = (process.env.ADMIN_PHONES || '')
+  .split(',').map((p) => p.replace(/\D/g, '').slice(-10)).filter((p) => p.length === 10);
+function isAdminPhone(phone) {
+  const p = String(phone || '').replace(/\D/g, '').slice(-10);
+  return p.length === 10 && ADMIN_PHONES.includes(p);
+}
+
+// Supabase creates phone-OTP accounts under a synthetic email (so the always-on Email provider
+// works without SMS config). We must never mirror that fake address into our users table.
+const SYNTHETIC_EMAIL = /^phone_\d+@phone\.adccookies\.app$/i;
+
 // Transfer all data from `fromId` into `intoId` and delete the `from` account.
 // Used when two accounts (Google + phone-OTP) are identified as the same person.
 async function absorbAccount(intoId, fromId) {
@@ -70,19 +83,21 @@ async function syncUser({ email, phone, name }) {
 
     return user;
   }
-  // Phone identity — keyed by phone, with a synthetic email so the rest of the app
-  // (which looks users up by email) keeps working unchanged.
+  // Phone identity — keyed by phone. Email stays NULL: phone users have no email unless they
+  // choose to add a real one later. Admins are matched from the ADMIN_PHONES allowlist.
   if (phone) {
+    const admin = isAdminPhone(phone);
     let user = await getOne('SELECT * FROM users WHERE phone = $1', [phone]);
     if (!user) {
       const ts = nowIso();
-      const synthetic = `phone_${phone}@phone.adccookies.app`;
       user = await getOne(
         `INSERT INTO users (name, email, phone, password, role, created_at, updated_at)
-         VALUES ($1,$2,$3,'otp-auth','CUSTOMER',$4,$4)
+         VALUES ($1, NULL, $2, 'otp-auth', $3, $4, $4)
          ON CONFLICT (phone) DO UPDATE SET updated_at = $4 RETURNING *`,
-        [name || 'Guest', synthetic, phone, ts]
+        [name || 'Guest', phone, admin ? 'ADMIN' : 'CUSTOMER', ts]
       );
+    } else if (admin && user.role !== 'ADMIN') {
+      user = await getOne('UPDATE users SET role = $2, updated_at = $3 WHERE id = $1 RETURNING *', [user.id, 'ADMIN', nowIso()]);
     }
     return user;
   }
@@ -97,8 +112,10 @@ export async function parseAuth(req, _res, next) {
     try {
       const payload = await verifySupabaseToken(header.substring(7));
       const meta = payload.user_metadata || {};
-      const email = String(payload.email || meta.email || '').toLowerCase();
+      const rawEmail = String(payload.email || meta.email || '').toLowerCase();
       const phone = String(payload.phone || meta.phone || '').replace(/\D/g, '');
+      // A synthetic phone-login email is NOT a real email — drop it so the phone branch handles it.
+      const email = SYNTHETIC_EMAIL.test(rawEmail) ? '' : rawEmail;
       if (email || phone) {
         const name = meta.full_name || meta.name || (email ? email.split('@')[0] : 'Guest');
         const user = await syncUser({ email, phone, name });

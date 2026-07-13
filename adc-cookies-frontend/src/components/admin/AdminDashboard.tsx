@@ -7,11 +7,11 @@ import {
   adminDashboard, adminAnalytics, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
   adminGetSettings, adminSetPromoProduct,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
-  adminToggleCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
+  adminCreateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
-  adminToggleWarehouse, adminGetShippingCost, adminCreateShipment, adminCancelShipment,
+  adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
   adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument, adminFetchShadowfaxDoc,
-  type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type AdminMessage,
+  type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type CouponInput, type AdminMessage,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput, type ShadowfaxDocResult,
 } from '@/lib/api';
 import {
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 
 const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+const PAGE_SIZE = 12; // rows per page in admin list tables
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
@@ -43,6 +44,18 @@ const td: React.CSSProperties = { padding: '12px', fontSize: 'var(--text-sm)', c
 
 const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, stockQuantity: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, images: '' };
 
+// Coupon create form uses string fields (easy inputs); converted to CouponInput on save.
+type CouponDraft = { code: string; discountType: 'PERCENTAGE' | 'FIXED'; discountValue: string; minimumOrderAmount: string; maximumDiscount: string; validDays: string; usageLimit: string };
+const EMPTY_COUPON: CouponDraft = { code: '', discountType: 'PERCENTAGE', discountValue: '', minimumOrderAmount: '', maximumDiscount: '', validDays: '', usageLimit: '' };
+
+// Live coupon status derived at read-time — no cron needed to "deactivate" a coupon.
+function couponStatus(c: AdminCoupon): { text: string; ok: boolean } {
+  if (!c.isActive) return { text: 'Disabled', ok: false };
+  if (c.expiryDate && c.expiryDate < new Date().toISOString().slice(0, 10)) return { text: 'Expired', ok: false };
+  if (c.usageLimit != null && (c.timesUsed ?? 0) >= c.usageLimit) return { text: 'Limit reached', ok: false };
+  return { text: 'Active', ok: true };
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
@@ -58,6 +71,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [messages, setMessages] = useState<AdminMessage[] | null>(null);
   const [editing, setEditing] = useState<{ id?: number; data: ProductInput } | null>(null);
+  const [couponForm, setCouponForm] = useState<CouponDraft | null>(null);
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [err, setErr] = useState('');
   const [loginOpen, setLoginOpen] = useState(false);
@@ -65,14 +79,31 @@ export default function AdminDashboard() {
   // Orders filter state
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('');
+  const [orderCarrier, setOrderCarrier] = useState('');
+  const [orderPayment, setOrderPayment] = useState('');
+
+  // Per-tab search/filter state for the other lists
+  const [productSearch, setProductSearch] = useState('');
+  const [productCat, setProductCat] = useState('');
+  const [productAvail, setProductAvail] = useState('');
+  const [couponSearch, setCouponSearch] = useState('');
+  const [couponStatusFilter, setCouponStatusFilter] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+  const [messageSearch, setMessageSearch] = useState('');
+  const [messageHandled, setMessageHandled] = useState('');
+
+  // Pagination: one page number per list key.
+  const [pages, setPages] = useState<Record<string, number>>({});
+  const pageOf = (k: string) => pages[k] || 1;
+  const setPageOf = (k: string, n: number) => setPages(p => ({ ...p, [k]: n }));
+  function paginate<T>(arr: T[], key: string): T[] {
+    const page = pageOf(key);
+    return arr.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  }
 
   // Delivery tab state
   const [warehouses, setWarehouses] = useState<Warehouse[] | null>(null);
   const [whForm, setWhForm] = useState<{ id?: number; data: WarehouseInput } | null>(null);
-  const [costPin, setCostPin] = useState('');
-  const [costWeight, setCostWeight] = useState('0.5');
-  const [costResult, setCostResult] = useState<{ ok: boolean; data?: { total_amount: number; gross_amount: number; zone: string; charged_weight: number; charge_DL: number; tax_data: { SGST: number; CGST: number; IGST: number } }[]; reason?: string } | null>(null);
-  const [costLoading, setCostLoading] = useState(false);
   const [purDate, setPurDate] = useState('');
   const [purTime, setPurTime] = useState('10:00');
   const [purCount, setPurCount] = useState('1');
@@ -80,7 +111,7 @@ export default function AdminDashboard() {
   const [shipmentBusy, setShipmentBusy] = useState<number | null>(null);
   const [trackResult, setTrackResult] = useState<Record<number, unknown>>({});
   const [shipmentWeights, setShipmentWeights] = useState<Record<number, string>>({});
-  const [delivSub, setDelivSub] = useState<'main' | 'shadowfax'>('main');
+  const [delivSub, setDelivSub] = useState<'main' | 'shadowfax' | 'delhivery'>('main');
   const [sfxDoc, setSfxDoc] = useState<Record<number, ShadowfaxDocResult | { error: string }>>({});
 
   const EMPTY_WH: WarehouseInput = { name: '', registeredName: '', pickupLocation: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', returnPincode: '', phone: '', email: '', isDefault: false, skipDelhivery: false };
@@ -126,7 +157,34 @@ export default function AdminDashboard() {
   };
   const toggleCoupon = async (id: number) => {
     const updated = await adminToggleCoupon(id).catch(() => null);
-    if (updated) setCoupons(c => (c || []).map(x => x.id === id ? updated : x));
+    if (updated) setCoupons(c => (c || []).map(x => x.id === id ? { ...updated, timesUsed: x.timesUsed } : x));
+  };
+  const saveCoupon = async () => {
+    if (!couponForm) return;
+    const f = couponForm;
+    if (!f.code.trim() || !f.discountValue) { setErr('A coupon needs a code and a discount value.'); return; }
+    const days = Number(f.validDays);
+    const payload: CouponInput = {
+      code: f.code.trim().toUpperCase(),
+      discountType: f.discountType,
+      discountValue: Number(f.discountValue),
+      minimumOrderAmount: f.minimumOrderAmount ? Number(f.minimumOrderAmount) : null,
+      maximumDiscount: f.maximumDiscount ? Number(f.maximumDiscount) : null,
+      // "Valid for N days" → concrete expiry date; blank = never expires.
+      expiryDate: days > 0 ? new Date(Date.now() + days * 864e5).toISOString().slice(0, 10) : null,
+      usageLimit: f.usageLimit ? Number(f.usageLimit) : null,
+      isActive: true,
+    };
+    try {
+      const created = await adminCreateCoupon(payload);
+      setCoupons(c => [...(c || []), { ...created, timesUsed: 0 }]);
+      setCouponForm(null); setErr('');
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not create coupon'); }
+  };
+  const removeCoupon = async (id: number) => {
+    if (!confirm('Delete this coupon? This cannot be undone.')) return;
+    await adminDeleteCoupon(id).catch(() => {});
+    setCoupons(c => (c || []).filter(x => x.id !== id));
   };
   const markHandled = async (id: number) => {
     await adminMarkMessageHandled(id).catch(() => {});
@@ -145,12 +203,11 @@ export default function AdminDashboard() {
           <h1 style={{ fontSize: 'var(--text-h3)', marginBottom: 8 }}>Admin access</h1>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 22 }}>
             {user
-              ? <>You&apos;re signed in as <strong>{user.email}</strong>, which isn&apos;t an admin account. Log in with an admin account to manage the store.</>
-              : <>Please sign in with an admin account to open the dashboard.</>}
+              ? <>You&apos;re signed in as <strong>{user.email || user.phone || 'a customer account'}</strong>, which isn&apos;t an admin account. Sign in with an authorised admin account to manage the store.</>
+              : <>Sign in with an authorised admin account — Google or your registered mobile (OTP) — to open the dashboard.</>}
           </p>
           <button onClick={() => setLoginOpen(true)} style={addBtn}>Log in as admin</button>
           {user && <div style={{ marginTop: 12 }}><button onClick={() => { logout(); }} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>Switch account</button></div>}
-          <div style={{ marginTop: 18, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Demo admin: admin@adccookies.com / admin123</div>
         </div>
         <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
       </main>
@@ -287,6 +344,8 @@ export default function AdminDashboard() {
           const q = orderSearch.trim().toLowerCase();
           const filtered = (orders || []).filter(o => {
             if (orderStatusFilter && o.orderStatus !== orderStatusFilter) return false;
+            if (orderCarrier && (o.carrier || '') !== orderCarrier) return false;
+            if (orderPayment && o.paymentStatus !== orderPayment) return false;
             if (!q) return true;
             return (
               o.orderNumber.toLowerCase().includes(q) ||
@@ -294,25 +353,19 @@ export default function AdminDashboard() {
               (o.address?.city || '').toLowerCase().includes(q)
             );
           });
+          const active = !!(orderStatusFilter || orderCarrier || orderPayment);
+          const clear = () => { setOrderStatusFilter(''); setOrderCarrier(''); setOrderPayment(''); setOrderSearch(''); setPageOf('orders', 1); };
+          const selStyle = { ...inp, cursor: 'pointer' } as React.CSSProperties;
           return (
             <Panel title={`Orders${orders ? ` (${filtered.length}${filtered.length !== orders.length ? '/' + orders.length : ''})` : ''}`} loading={orders === null}
               action={<button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-                <div style={{ position: 'relative', flex: '1 1 200px', minWidth: 180 }}>
-                  <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                  <input style={{ ...inp, paddingLeft: 34 }} placeholder="Search order #, customer, city…" value={orderSearch} onChange={e => setOrderSearch(e.target.value)} />
-                </div>
-                <div style={{ position: 'relative', flex: '0 0 auto' }}>
-                  <Filter size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                  <select value={orderStatusFilter} onChange={e => setOrderStatusFilter(e.target.value)} style={{ ...inp, paddingLeft: 30, width: 'auto', minWidth: 150, cursor: 'pointer' }}>
-                    <option value="">All statuses</option>
-                    {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                {(orderSearch || orderStatusFilter) && <button onClick={() => { setOrderSearch(''); setOrderStatusFilter(''); }} style={{ ...iconBtn, width: 'auto', padding: '0 12px', fontSize: 'var(--text-xs)', fontWeight: 700 }}>Clear</button>}
-              </div>
+              <FilterBar search={orderSearch} onSearch={v => { setOrderSearch(v); setPageOf('orders', 1); }} placeholder="Search order #, customer, city…" active={active} onClear={clear}>
+                <Field label="Order status"><select value={orderStatusFilter} onChange={e => { setOrderStatusFilter(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All statuses</option>{ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
+                <Field label="Carrier"><select value={orderCarrier} onChange={e => { setOrderCarrier(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All carriers</option><option value="SHADOWFAX">Shadowfax (intracity)</option><option value="DELHIVERY">Delhivery (outstation)</option></select></Field>
+                <Field label="Payment"><select value={orderPayment} onChange={e => { setOrderPayment(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">Any payment</option><option value="PAID">Paid</option><option value="PENDING">Pending</option></select></Field>
+              </FilterBar>
               <Table head={['Order', 'Customer', 'Total', 'Payment', 'Shipment', 'Status', 'Date']}>
-                {filtered.map(o => (
+                {paginate(filtered, 'orders').map(o => (
                   <tr key={o.id} onClick={() => setViewOrder(o)} style={{ cursor: 'pointer' }}>
                     <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{(o.items || []).length} item{(o.items || []).length !== 1 ? 's' : ''} · tap for details</span></td>
                     <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city || ''}</span></td>
@@ -329,6 +382,7 @@ export default function AdminDashboard() {
                 ))}
               </Table>
               {orders && !filtered.length && <Empty text={orders.length ? 'No orders match the filter.' : 'No orders yet.'} />}
+              <Pager page={pageOf('orders')} total={filtered.length} pageSize={PAGE_SIZE} onPage={n => setPageOf('orders', n)} />
             </Panel>
           );
         })()}
@@ -351,9 +405,27 @@ export default function AdminDashboard() {
               {(products || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </Panel>
-          <Panel title="Products" loading={products === null} action={<button onClick={() => setEditing({ data: { ...EMPTY_PRODUCT } })} style={addBtn}><Plus size={16} /> Add product</button>}>
+          {(() => {
+            const cats = Array.from(new Set((products || []).map(p => p.category))).sort();
+            const pq = productSearch.trim().toLowerCase();
+            const list = (products || []).filter(p => {
+              if (productCat && p.category !== productCat) return false;
+              if (productAvail === 'in' && !p.isAvailable) return false;
+              if (productAvail === 'out' && p.isAvailable) return false;
+              if (!pq) return true;
+              return p.name.toLowerCase().includes(pq) || (p.tag || '').toLowerCase().includes(pq);
+            });
+            const active = !!(productCat || productAvail);
+            const clear = () => { setProductCat(''); setProductAvail(''); setProductSearch(''); setPageOf('products', 1); };
+            const selStyle = { ...inp, cursor: 'pointer' } as React.CSSProperties;
+            return (
+          <Panel title={`Products${products ? ` (${list.length})` : ''}`} loading={products === null} action={<button onClick={() => setEditing({ data: { ...EMPTY_PRODUCT } })} style={addBtn}><Plus size={16} /> Add product</button>}>
+            <FilterBar search={productSearch} onSearch={v => { setProductSearch(v); setPageOf('products', 1); }} placeholder="Search product or tag…" active={active} onClear={clear}>
+              <Field label="Category"><select value={productCat} onChange={e => { setProductCat(e.target.value); setPageOf('products', 1); }} style={selStyle}><option value="">All categories</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
+              <Field label="Availability"><select value={productAvail} onChange={e => { setProductAvail(e.target.value); setPageOf('products', 1); }} style={selStyle}><option value="">Any</option><option value="in">In stock / available</option><option value="out">Unavailable</option></select></Field>
+            </FilterBar>
             <Table head={['Name', 'Category', 'Price', 'Stock', 'Tag', '']}>
-              {(products || []).map(p => (
+              {paginate(list, 'products').map(p => (
                 <tr key={p.id}>
                   <td style={td}><strong>{p.name}</strong></td>
                   <td style={td}>{p.category}</td>
@@ -367,8 +439,11 @@ export default function AdminDashboard() {
                 </tr>
               ))}
             </Table>
-            {products && !products.length && <Empty text="No products." />}
+            {products && !list.length && <Empty text={products.length ? 'No products match the filter.' : 'No products.'} />}
+            <Pager page={pageOf('products')} total={list.length} pageSize={PAGE_SIZE} onPage={n => setPageOf('products', n)} />
           </Panel>
+            );
+          })()}
           </div>
         )}
 
@@ -376,14 +451,15 @@ export default function AdminDashboard() {
         {tab === 'delivery' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-            {/* Sub-nav: Delhivery shipments/warehouses vs Shadowfax intracity */}
+            {/* Sub-nav: all shipments · Shadowfax intracity · Delhivery outstation */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {([['main', 'Shipments & Warehouses'], ['shadowfax', 'Shadowfax · Intracity']] as const).map(([id, label]) => {
+              {([['main', 'All shipments'], ['shadowfax', 'Shadowfax · Intracity'], ['delhivery', 'Delhivery · Outstation']] as const).map(([id, label]) => {
                 const on = delivSub === id;
                 return <button key={id} onClick={() => setDelivSub(id)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: on ? 'none' : '1.5px solid var(--border-default)', background: on ? 'var(--gradient-warm)' : 'var(--surface-card)', color: on ? 'var(--white)' : 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{label}</button>;
               })}
             </div>
 
+            {(delivSub === 'main' || delivSub === 'delhivery') && (<>
             {delivSub === 'main' && (<>
             {/* Warehouses */}
             <Panel title="Warehouses" loading={warehouses === null}
@@ -413,67 +489,50 @@ export default function AdminDashboard() {
               ) : warehouses !== null && <Empty text="No warehouses yet — add one to create shipments." />}
             </Panel>
 
-            {/* Shipping cost calculator */}
-            <Panel title="Shipping cost calculator (admin only — customer always pays ₹100)">
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 10 }}>
-                <Field label="Destination pincode">
-                  <input style={{ ...inp, width: 140 }} value={costPin} onChange={e => setCostPin(e.target.value)} placeholder="560001" maxLength={6} />
-                </Field>
-                <Field label="Weight (kg)">
-                  <input type="number" style={{ ...inp, width: 100 }} value={costWeight} onChange={e => setCostWeight(e.target.value)} min="0.1" step="0.1" />
-                </Field>
-                <button onClick={async () => { setCostLoading(true); setCostResult(null); const r = await adminGetShippingCost(costPin, Number(costWeight)).catch(e => ({ ok: false, reason: String(e.message || e) })); setCostResult(r as typeof costResult); setCostLoading(false); }} disabled={costPin.length !== 6 || costLoading} style={{ ...addBtn, opacity: costPin.length !== 6 ? 0.5 : 1 }}>
-                  {costLoading ? 'Checking…' : 'Calculate'}
-                </button>
-              </div>
-              {costResult && !costResult.ok && (
-                <div style={{ marginTop: 10, color: 'var(--status-error)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>Error: {costResult.reason}</div>
-              )}
-              {costResult?.ok && costResult.data?.[0] && (() => {
-                const d = costResult.data[0];
-                const tax = (d.tax_data.SGST || 0) + (d.tax_data.CGST || 0) + (d.tax_data.IGST || 0);
-                const rows: [string, string][] = [
-                  ['Zone', d.zone],
-                  ['Charged weight', `${d.charged_weight} kg`],
-                  ['Delivery charge', `₹${d.charge_DL.toFixed(2)}`],
-                  ['GST', `₹${tax.toFixed(2)}`],
-                  ['Total (Delhivery)', `₹${d.total_amount.toFixed(2)}`],
-                  ['Customer pays', '₹100.00'],
-                ];
-                return (
-                  <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 10, overflow: 'hidden' }}>
-                    {rows.map(([label, value], i) => (
-                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 14px', borderBottom: i < rows.length - 1 ? '1px solid var(--border-default)' : 'none', fontSize: 'var(--text-sm)' }}>
-                        <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{label}</span>
-                        <span style={{ fontWeight: label === 'Total (Delhivery)' || label === 'Customer pays' ? 800 : 600, color: label === 'Customer pays' ? 'var(--brand-secondary)' : 'var(--text-strong)' }}>{value}</span>
-                      </div>
+            {/* Pickup request (Delhivery only) */}
+            {(() => {
+              const pending = (orders || []).filter(o => o.carrier === 'DELHIVERY' && o.delhiveryWaybill && !['DELIVERED', 'CANCELLED'].includes(o.shipmentStatus || ''));
+              return (
+            <Panel title="Schedule a Delhivery pickup">
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                Delhivery collects <strong>all manifested outstation packages</strong> from your default warehouse at the chosen slot.
+                Shadowfax (intracity) needs no pickup request — a rider is dispatched to the store automatically once the order is confirmed.
+              </p>
+              <div style={{ marginBottom: 14, background: 'var(--surface-sunken)', borderRadius: 10, padding: '10px 14px' }}>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: pending.length ? 6 : 0 }}>
+                  {pending.length} Delhivery package{pending.length !== 1 ? 's' : ''} awaiting pickup
+                </div>
+                {pending.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {pending.map(o => (
+                      <span key={o.id} style={{ fontSize: 'var(--text-2xs)', fontFamily: 'monospace', background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '2px 7px', color: 'var(--text-body)' }} title={`${o.address?.fullName || ''} · ${o.delhiveryWaybill}`}>{o.orderNumber}</span>
                     ))}
                   </div>
-                );
-              })()}
-            </Panel>
-
-            {/* Pickup request */}
-            <Panel title="Create pickup request">
+                )}
+              </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <Field label="Pickup date"><input type="date" style={{ ...inp, width: 160 }} value={purDate} onChange={e => setPurDate(e.target.value)} /></Field>
+                <Field label="Pickup date"><input type="date" style={{ ...inp, width: 160 }} value={purDate} min={todayStr()} onChange={e => setPurDate(e.target.value)} /></Field>
                 <Field label="Pickup time"><input type="time" style={{ ...inp, width: 120 }} value={purTime} onChange={e => setPurTime(e.target.value)} /></Field>
-                <Field label="Package count"><input type="number" style={{ ...inp, width: 80 }} value={purCount} onChange={e => setPurCount(e.target.value)} min="1" /></Field>
+                <Field label="Package count"><input type="number" style={{ ...inp, width: 90 }} value={purCount} onChange={e => setPurCount(e.target.value)} min="1" /></Field>
+                <button onClick={() => setPurCount(String(Math.max(1, pending.length)))} style={{ ...iconBtn, width: 'auto', padding: '0 12px', height: 40, marginRight: 0, fontSize: 'var(--text-xs)', fontWeight: 700 }} title="Use the awaiting-pickup count">Use {Math.max(1, pending.length)}</button>
                 <button onClick={async () => {
                   setPurResult('Submitting…');
                   const r = await adminCreatePickupRequest(purDate, purTime, Number(purCount)).catch(e => ({ ok: false, reason: String(e.message || e), data: undefined }));
-                  setPurResult(r.ok ? `Pickup request created! ${JSON.stringify((r as { ok: boolean; data?: unknown }).data || {})}` : `Error: ${(r as { ok: boolean; reason?: string }).reason}`);
+                  setPurResult(r.ok ? `Pickup scheduled for ${purDate} at ${purTime} · ${purCount} package(s).` : `Error: ${(r as { ok: boolean; reason?: string }).reason}`);
                 }} disabled={!purDate || !purTime} style={{ ...addBtn, opacity: !purDate ? 0.5 : 1 }}>Request pickup</button>
               </div>
               {purResult && <div style={{ marginTop: 10, fontSize: 'var(--text-sm)', color: purResult.startsWith('Error') ? 'var(--status-error)' : 'var(--status-success)', fontWeight: 700 }}>{purResult}</div>}
             </Panel>
+              );
+            })()}
+            </>)}
 
-            {/* Orders with shipment actions */}
-            <Panel title="Order shipments" loading={orders === null}
+            {/* Orders with shipment actions — all carriers under "All", or Delhivery-only under its tab */}
+            <Panel title={delivSub === 'delhivery' ? 'Delhivery — outstation shipments' : 'Order shipments'} loading={orders === null}
               action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
               {orders && (
                 <Table head={['Order', 'Customer', 'Service', 'Waybill', 'Status', 'Actions']}>
-                  {(orders || []).map(o => {
+                  {(delivSub === 'delhivery' ? (orders || []).filter(o => o.carrier === 'DELHIVERY') : (orders || [])).map(o => {
                     const w = shipmentWeights[o.id] ?? '0.5';
                     const trackData = trackResult[o.id] as { status?: string; note?: string; scans?: { time: string; event: string }[] } | undefined;
                     const service = o.carrier === 'SHADOWFAX' ? { kind: 'Intracity', name: 'Shadowfax' }
@@ -565,7 +624,7 @@ export default function AdminDashboard() {
                   })}
                 </Table>
               )}
-              {orders !== null && !orders.length && <Empty text="No orders yet." />}
+              {orders !== null && !(delivSub === 'delhivery' ? orders.filter(o => o.carrier === 'DELHIVERY') : orders).length && <Empty text={delivSub === 'delhivery' ? 'No Delhivery (outstation) shipments yet.' : 'No orders yet.'} />}
               {orders === null && <button onClick={() => adminGetOrders().then(setOrders).catch(() => setOrders([]))} style={addBtn}>Load orders</button>}
             </Panel>
             </>)}
@@ -643,48 +702,86 @@ export default function AdminDashboard() {
         )}
 
         {/* ===== Coupons ===== */}
-        {tab === 'coupons' && (
-          <Panel title="Coupons" loading={coupons === null}>
-            <Table head={['Code', 'Type', 'Value', 'Min order', 'Active', '']}>
-              {(coupons || []).map(c => (
+        {tab === 'coupons' && (() => {
+          const cq = couponSearch.trim().toLowerCase();
+          const list = (coupons || []).filter(c => {
+            if (couponStatusFilter && couponStatus(c).text !== couponStatusFilter) return false;
+            return !cq || c.code.toLowerCase().includes(cq);
+          });
+          const selStyle = { ...inp, cursor: 'pointer' } as React.CSSProperties;
+          return (
+          <Panel title={`Coupons${coupons ? ` (${list.length})` : ''}`} loading={coupons === null}
+            action={<button onClick={() => setCouponForm({ ...EMPTY_COUPON })} style={addBtn}><Plus size={16} /> New coupon</button>}>
+            <FilterBar search={couponSearch} onSearch={v => { setCouponSearch(v); setPageOf('coupons', 1); }} placeholder="Search code…" active={!!couponStatusFilter} onClear={() => { setCouponStatusFilter(''); setCouponSearch(''); setPageOf('coupons', 1); }}>
+              <Field label="Status"><select value={couponStatusFilter} onChange={e => { setCouponStatusFilter(e.target.value); setPageOf('coupons', 1); }} style={selStyle}><option value="">All</option><option value="Active">Active</option><option value="Expired">Expired</option><option value="Limit reached">Limit reached</option><option value="Disabled">Disabled</option></select></Field>
+            </FilterBar>
+            <Table head={['Code', 'Discount', 'Min order', 'Valid till', 'Uses', 'Status', '']}>
+              {paginate(list, 'coupons').map(c => {
+                const st = couponStatus(c);
+                return (
                 <tr key={c.id}>
                   <td style={td}><strong>{c.code}</strong></td>
-                  <td style={td}>{c.discountType}</td>
-                  <td style={td}>{c.discountType === 'PERCENTAGE' ? `${c.discountValue}%` : money(c.discountValue)}</td>
+                  <td style={td}>{c.discountType === 'PERCENTAGE' ? `${c.discountValue}%${c.maximumDiscount ? ` (max ${money(c.maximumDiscount)})` : ''}` : money(c.discountValue)}</td>
                   <td style={td}>{c.minimumOrderAmount ? money(c.minimumOrderAmount) : '—'}</td>
-                  <td style={td}><Badge text={c.isActive ? 'Active' : 'Inactive'} ok={c.isActive} /></td>
-                  <td style={td}><button onClick={() => toggleCoupon(c.id)} style={{ ...iconBtn, width: 'auto', padding: '6px 12px', fontWeight: 700, fontSize: 'var(--text-sm)' }}>{c.isActive ? 'Disable' : 'Enable'}</button></td>
+                  <td style={td}>{c.expiryDate ? fmtDate(c.expiryDate) : 'No expiry'}</td>
+                  <td style={td}>{c.timesUsed ?? 0}{c.usageLimit != null ? ` / ${c.usageLimit}` : ''}</td>
+                  <td style={td}><Badge text={st.text} ok={st.ok} /></td>
+                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                    <button onClick={() => toggleCoupon(c.id)} style={{ ...iconBtn, width: 'auto', padding: '6px 10px', marginRight: 6, fontWeight: 700, fontSize: 'var(--text-xs)' }}>{c.isActive ? 'Disable' : 'Enable'}</button>
+                    <button onClick={() => removeCoupon(c.id)} aria-label="Delete" style={{ ...iconBtn, color: 'var(--status-error)' }}><Trash2 size={15} /></button>
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </Table>
-            {coupons && !coupons.length && <Empty text="No coupons." />}
+            {coupons && !list.length && <Empty text={coupons.length ? 'No coupons match the filter.' : 'No coupons yet — create one above.'} />}
+            <Pager page={pageOf('coupons')} total={list.length} pageSize={PAGE_SIZE} onPage={n => setPageOf('coupons', n)} />
           </Panel>
-        )}
+          );
+        })()}
 
         {/* ===== Users ===== */}
-        {tab === 'users' && (
-          <Panel title="Customers" loading={users === null}>
-            <Table head={['Name', 'Email', 'Phone', 'Orders', 'Role', 'Joined']}>
-              {(users || []).map(u => (
+        {tab === 'users' && (() => {
+          const uq = userSearch.trim().toLowerCase();
+          const list = (users || []).filter(u => !uq || u.name.toLowerCase().includes(uq) || (u.email || '').toLowerCase().includes(uq) || (u.phone || '').includes(uq));
+          return (
+          <Panel title={`Customers${users ? ` (${list.length})` : ''}`} loading={users === null}>
+            <FilterBar search={userSearch} onSearch={v => { setUserSearch(v); setPageOf('users', 1); }} placeholder="Search name, email, phone…" active={false} onClear={() => { setUserSearch(''); setPageOf('users', 1); }} />
+            <Table head={['Name', 'Email', 'Phone', 'Orders', 'Joined']}>
+              {paginate(list, 'users').map(u => (
                 <tr key={u.id}>
                   <td style={td}><strong>{u.name}</strong></td>
-                  <td style={td}>{u.email}</td>
+                  <td style={td}>{u.email || '—'}</td>
                   <td style={td}>{u.phone || '—'}</td>
                   <td style={td}>{u.orderCount}</td>
-                  <td style={td}><Badge text={u.role} ok={u.role === 'ADMIN'} /></td>
                   <td style={td}>{fmtDate(u.createdAt)}</td>
                 </tr>
               ))}
             </Table>
-            {users && !users.length && <Empty text="No customers yet." />}
+            {users && !list.length && <Empty text={users.length ? 'No customers match the search.' : 'No customers yet.'} />}
+            <Pager page={pageOf('users')} total={list.length} pageSize={PAGE_SIZE} onPage={n => setPageOf('users', n)} />
           </Panel>
-        )}
+          );
+        })()}
 
         {/* ===== Messages ===== */}
-        {tab === 'messages' && (
-          <Panel title="Contact messages" loading={messages === null}>
+        {tab === 'messages' && (() => {
+          const mq = messageSearch.trim().toLowerCase();
+          const list = (messages || []).filter(m => {
+            if (messageHandled === 'open' && m.handled) return false;
+            if (messageHandled === 'done' && !m.handled) return false;
+            if (!mq) return true;
+            return m.name.toLowerCase().includes(mq) || (m.email || '').toLowerCase().includes(mq) || m.message.toLowerCase().includes(mq);
+          });
+          const clear = () => { setMessageHandled(''); setMessageSearch(''); setPageOf('messages', 1); };
+          const selStyle = { ...inp, cursor: 'pointer' } as React.CSSProperties;
+          return (
+          <Panel title={`Contact messages${messages ? ` (${list.length})` : ''}`} loading={messages === null}>
+            <FilterBar search={messageSearch} onSearch={v => { setMessageSearch(v); setPageOf('messages', 1); }} placeholder="Search sender or message…" active={!!messageHandled} onClear={clear}>
+              <Field label="Status"><select value={messageHandled} onChange={e => { setMessageHandled(e.target.value); setPageOf('messages', 1); }} style={selStyle}><option value="">All messages</option><option value="open">Unhandled only</option><option value="done">Handled only</option></select></Field>
+            </FilterBar>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {(messages || []).map(m => (
+              {paginate(list, 'messages').map(m => (
                 <div key={m.id} style={{ ...card, padding: 16, opacity: m.handled ? 0.6 : 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
                     <strong style={{ color: 'var(--text-strong)' }}>{m.name}</strong>
@@ -698,10 +795,44 @@ export default function AdminDashboard() {
                 </div>
               ))}
             </div>
-            {messages && !messages.length && <Empty text="No messages yet." />}
+            {messages && !list.length && <Empty text={messages.length ? 'No messages match the filter.' : 'No messages yet.'} />}
+            <Pager page={pageOf('messages')} total={list.length} pageSize={PAGE_SIZE} onPage={n => setPageOf('messages', n)} />
           </Panel>
-        )}
+          );
+        })()}
       </div>
+
+      {/* Create-coupon modal */}
+      {couponForm && (
+        <div onClick={() => setCouponForm(null)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'var(--surface-overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 'min(480px,96vw)', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: 24 }} className="hide-sb">
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ flex: 1, fontSize: 'var(--text-h3)' }}>New coupon</h3>
+              <button onClick={() => setCouponForm(null)} style={iconBtn}><X size={18} /></button>
+            </div>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <Field label="Code"><input style={inp} value={couponForm.code} onChange={e => setCouponForm(f => f && ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="WELCOME10" /></Field>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="Discount type"><select style={{ ...inp, cursor: 'pointer' }} value={couponForm.discountType} onChange={e => setCouponForm(f => f && ({ ...f, discountType: e.target.value as 'PERCENTAGE' | 'FIXED' }))}><option value="PERCENTAGE">Percentage (%)</option><option value="FIXED">Fixed (₹)</option></select></Field>
+                <Field label={couponForm.discountType === 'PERCENTAGE' ? 'Percent off' : 'Amount off (₹)'}><input style={inp} type="number" min="0" value={couponForm.discountValue} onChange={e => setCouponForm(f => f && ({ ...f, discountValue: e.target.value }))} /></Field>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="Min order (₹)"><input style={inp} type="number" min="0" value={couponForm.minimumOrderAmount} onChange={e => setCouponForm(f => f && ({ ...f, minimumOrderAmount: e.target.value }))} placeholder="Optional" /></Field>
+                {couponForm.discountType === 'PERCENTAGE' && <Field label="Max discount (₹)"><input style={inp} type="number" min="0" value={couponForm.maximumDiscount} onChange={e => setCouponForm(f => f && ({ ...f, maximumDiscount: e.target.value }))} placeholder="Optional cap" /></Field>}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="Valid for (days)"><input style={inp} type="number" min="1" value={couponForm.validDays} onChange={e => setCouponForm(f => f && ({ ...f, validDays: e.target.value }))} placeholder="Blank = no expiry" /></Field>
+                <Field label="Total uses limit"><input style={inp} type="number" min="1" value={couponForm.usageLimit} onChange={e => setCouponForm(f => f && ({ ...f, usageLimit: e.target.value }))} placeholder="Blank = unlimited" /></Field>
+              </div>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>The coupon auto-stops when it expires or hits its use limit — no need to disable it manually.</p>
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button onClick={saveCoupon} style={{ ...addBtn, flex: 1, justifyContent: 'center' }}>Create coupon</button>
+                <button onClick={() => setCouponForm(null)} style={{ ...iconBtn, width: 'auto', padding: '0 16px', fontWeight: 700 }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Warehouse editor modal */}
       {whForm && (
@@ -1089,4 +1220,50 @@ function Empty({ text }: { text: string }) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label style={{ display: 'block' }}><span style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 5 }}>{label}</span>{children}</label>;
+}
+
+// Search box + a compact "Filters" popover (the filter symbol reveals the extra filters inside).
+function FilterBar({ search, onSearch, placeholder, onClear, active, children }: { search: string; onSearch: (v: string) => void; placeholder: string; onClear: () => void; active: boolean; children?: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+      <div style={{ position: 'relative', flex: '1 1 200px', minWidth: 180 }}>
+        <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+        <input style={{ ...inp, paddingLeft: 34 }} placeholder={placeholder} value={search} onChange={e => onSearch(e.target.value)} />
+      </div>
+      {children && (
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setOpen(o => !o)} aria-label="Filters" style={{ ...iconBtn, width: 'auto', padding: '0 14px', height: 40, marginRight: 0, display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 700, fontSize: 'var(--text-sm)', color: active ? 'var(--brand-secondary)' : 'var(--text-body)', borderColor: active ? 'var(--brand-secondary)' : 'var(--border-default)' }}>
+            <Filter size={15} /> Filters{active ? ' •' : ''}
+          </button>
+          {open && (<>
+            <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
+            <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 31, width: 250, background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-md)', padding: 14, display: 'grid', gap: 12 }}>
+              {children}
+              <button onClick={() => { onClear(); setOpen(false); }} style={{ ...iconBtn, width: '100%', padding: '8px', marginRight: 0, fontWeight: 700, fontSize: 'var(--text-sm)' }}>Clear all</button>
+            </div>
+          </>)}
+        </div>
+      )}
+      {!children && active && <button onClick={onClear} style={{ ...iconBtn, width: 'auto', padding: '0 12px', marginRight: 0, fontSize: 'var(--text-xs)', fontWeight: 700 }}>Clear</button>}
+    </div>
+  );
+}
+
+// Prev/next pager. Renders nothing when everything fits on one page.
+function Pager({ page, total, pageSize, onPage }: { page: number; total: number; pageSize: number; onPage: (n: number) => void }) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  if (pages <= 1) return null;
+  const from = (page - 1) * pageSize + 1, to = Math.min(total, page * pageSize);
+  const btn = (disabled: boolean): React.CSSProperties => ({ ...iconBtn, width: 'auto', padding: '0 12px', height: 34, marginRight: 0, opacity: disabled ? 0.45 : 1, cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 'var(--text-sm)' });
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{from}–{to} of {total}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button disabled={page <= 1} onClick={() => onPage(page - 1)} style={btn(page <= 1)}>Prev</button>
+        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{page} / {pages}</span>
+        <button disabled={page >= pages} onClick={() => onPage(page + 1)} style={btn(page >= pages)}>Next</button>
+      </div>
+    </div>
+  );
 }

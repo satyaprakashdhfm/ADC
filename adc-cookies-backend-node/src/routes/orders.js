@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { shadowfaxConfigured, createShadowfaxOrder, zoneStores, trackShadowfax, sfxStatusLabel } from '../shadowfax.js';
+import { shadowfaxConfigured, createShadowfaxOrder, zoneStores, trackShadowfax, sfxStatusLabel, sfxStatusRank } from '../shadowfax.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from '../razorpay.js';
 
 const router = Router();
@@ -143,6 +143,16 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId) {
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [orderId, 'CONFIRMED', 'Payment received via Razorpay', ts]);
 
+  // Record coupon redemption now (on payment) — idempotent via the per-order check, so calling
+  // finalizePaidOrder from both the verify route and the webhook can't double-count a use.
+  if (order.coupon_code) {
+    const already = await getOne('SELECT 1 FROM coupon_usage WHERE order_id = $1', [orderId]);
+    if (!already) {
+      const coupon = await getOne('SELECT id FROM coupons WHERE UPPER(code) = UPPER($1)', [order.coupon_code]);
+      if (coupon) await query('INSERT INTO coupon_usage (coupon_id, user_id, order_id, used_at) VALUES ($1,$2,$3,$4)', [coupon.id, order.user_id, orderId, ts]);
+    }
+  }
+
   // Create the Delhivery shipment + label in the BACKGROUND so payment confirmation returns
   // to the shopper immediately (the carrier round-trip used to block the response ~5s).
   // A carrier hiccup can neither fail nor delay payment; the Razorpay webhook is a backstop
@@ -252,12 +262,8 @@ router.post('/', async (req, res) => {
       'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
       [oid, 'PLACED', 'Order placed successfully', ts]
     );
-    if (coupon) {
-      await client.query(
-        'INSERT INTO coupon_usage (coupon_id, user_id, order_id, used_at) VALUES ($1,$2,$3,$4)',
-        [coupon.id, user.id, oid, ts]
-      );
-    }
+    // NOTE: coupon redemption is recorded on PAYMENT success (finalizePaidOrder), not here —
+    // an abandoned/unpaid order must not burn a coupon use.
     return oid;
   });
 
@@ -323,7 +329,11 @@ router.get('/:id/delhivery-track', async (req, res) => {
     if (!shadowfaxConfigured()) return res.json({ tracked: false, reason: 'shadowfax_not_configured' });
     const result = await trackShadowfax(order.delhivery_waybill);
     if (!result.ok) return res.json({ tracked: false, reason: result.reason });
-    if (result.status) await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [result.status, nowIso(), order.id]);
+    // Store the human label, and only when it ADVANCES the lifecycle — so a stale poll (e.g. staging
+    // returning `new`) can't overwrite a status the webhook already moved forward.
+    if (result.status && sfxStatusRank(result.status) > sfxStatusRank(order.shipment_status)) {
+      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [sfxStatusLabel(result.status), nowIso(), order.id]);
+    }
     const scans = (result.data?.tracking_details || [])
       .map(t => ({ time: t.created, event: sfxStatusLabel(t.status_id) || t.status || t.remarks }))
       .reverse();

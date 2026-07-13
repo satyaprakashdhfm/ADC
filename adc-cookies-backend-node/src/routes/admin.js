@@ -132,7 +132,12 @@ router.patch('/orders/:id/status', async (req, res) => {
 /* ---------- Coupons ---------- */
 router.get('/coupons', async (_req, res) => {
   const rows = await getAll('SELECT * FROM coupons ORDER BY id');
-  res.json(rows.map(serializeCoupon));
+  // Attach live redemption counts so the UI can show Active / Expired / Limit-reached at a glance.
+  const withUsage = await Promise.all(rows.map(async (c) => {
+    const { n } = await getOne('SELECT COUNT(*) AS n FROM coupon_usage WHERE coupon_id = $1', [c.id]);
+    return { ...serializeCoupon(c), timesUsed: Number(n) };
+  }));
+  res.json(withUsage);
 });
 
 router.post('/coupons', async (req, res) => {
@@ -154,9 +159,18 @@ router.patch('/coupons/:id/toggle', async (req, res) => {
   res.json(serializeCoupon(row));
 });
 
+router.delete('/coupons/:id', async (req, res) => {
+  const coupon = await getOne('SELECT * FROM coupons WHERE id = $1', [req.params.id]);
+  if (!coupon) throw new ApiError('Coupon not found', 404);
+  await query('DELETE FROM coupon_usage WHERE coupon_id = $1', [coupon.id]);
+  await query('DELETE FROM coupons WHERE id = $1', [coupon.id]);
+  res.json({ ok: true });
+});
+
 /* ---------- Users ---------- */
 router.get('/users', async (_req, res) => {
-  const rows = await getAll('SELECT * FROM users ORDER BY id DESC');
+  // Customers only — admin accounts are separated out and never listed here.
+  const rows = await getAll("SELECT * FROM users WHERE role <> 'ADMIN' ORDER BY id DESC");
   const withCounts = await Promise.all(rows.map(async (u) => {
     const { c } = await getOne('SELECT COUNT(*) AS c FROM orders WHERE user_id = $1', [u.id]);
     return { ...serializeUser(u), orderCount: Number(c) };

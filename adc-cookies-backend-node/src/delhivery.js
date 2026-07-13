@@ -387,7 +387,7 @@ export async function trackShipment(waybill) {
       return { ok: false, reason: `api_error_${status}` };
     }
     const pkg = data?.ShipmentData?.[0]?.Shipment;
-    const status_str = pkg?.Status || pkg?.status || '?';
+    const status_str = pkg?.Status?.Status || pkg?.status || '?';
     log('track', `waybill=${waybill} | ✓ status=${status_str}`);
     return { ok: true, data };
   } catch (err) {

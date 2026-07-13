@@ -30,7 +30,7 @@ export default function Footer() {
             ['Order Online', '/order'],
           ]],
           ['Help', [
-            ['Track Order', '/order'],
+            ['Track Order', '/account'],
             ['FAQs', '/contact'],
             ['Contact', '/contact'],
             ['Returns', '/contact'],

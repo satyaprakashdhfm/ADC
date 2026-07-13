@@ -76,6 +76,43 @@ export function sfxStatusLabel(status) {
   return SFX_STATUS_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Forward-progression rank for Shadowfax statuses (higher = later in the lifecycle). Used to stop a
+// live-tracking poll from DOWNGRADING a status a webhook already advanced — e.g. the staging API
+// returning `new` must not wipe a webhook-delivered "Out for delivery"/"Delivered". Return/cancel/lost
+// are terminal, so they rank high enough to stick once reached.
+const SFX_STATUS_RANK = {
+  new: 1,
+  on_hold: 1,
+  assigned_for_seller_pickup: 2,
+  ofp: 3,
+  seller_pickup_done: 4,
+  pickup_done: 4,
+  item_manifested: 5,
+  bag_in_transit: 6,
+  bag_received: 7,
+  recd_at_rev_hub: 7,
+  ofd: 8,
+  rts_nd: 9,
+  rts: 90,
+  rts_d: 95,
+  rto: 95,
+  cancelled: 100,
+  cancelled_by_customer: 100,
+  lost: 100,
+  delivered: 100,
+};
+// Rank a value that may be a raw status_id (from the poll) OR a stored human label (from the webhook).
+// Unknown/empty → 0 so it can seed an unset status but never override a recognised one.
+export function sfxStatusRank(value) {
+  const key = String(value || '').toLowerCase().trim();
+  if (!key) return 0;
+  if (key in SFX_STATUS_RANK) return SFX_STATUS_RANK[key];
+  for (const [id, label] of Object.entries(SFX_STATUS_LABELS)) {
+    if (label.toLowerCase() === key) return SFX_STATUS_RANK[id] ?? 0;
+  }
+  return 0;
+}
+
 async function sfxRequest(path, { method = 'GET', query, body, timeoutMs = 15_000 } = {}) {
   const url = new URL(BASE_URL + path);
   if (query) for (const [k, v] of Object.entries(query)) if (v != null && v !== '') url.searchParams.set(k, String(v));

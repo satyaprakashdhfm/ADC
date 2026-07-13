@@ -218,6 +218,8 @@ export async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_order_id TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS carrier TEXT; -- 'SHADOWFAX' (intracity) or 'DELHIVERY' (outstation)
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_delivery TEXT; -- Shadowfax promised date from the webhook (YYYY-MM-DD HH:MM:SS)
+    -- Phone-login users have no email: it stays NULL (we never fabricate a synthetic address).
+    ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
 
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This
