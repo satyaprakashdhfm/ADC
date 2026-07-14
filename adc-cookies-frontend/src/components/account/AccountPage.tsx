@@ -139,6 +139,15 @@ function shipStage(s?: string | null): number {
   return 0; // placed / confirmed / new / preparing / pending
 }
 const isCancelledStatus = (s?: string | null) => /cancel|\brto\b|returned|lost/i.test(s || '');
+
+// One coherent, customer-friendly status for the card summary line. Never prints raw courier codes
+// ("new", "Manifested") and never contradicts the order badge — a DELIVERED order can't read "new"
+// just because the courier scan lagged. Uses whichever of order/shipment status is furthest along.
+function friendlyOrderStatus(order: Order): string {
+  if (isCancelledStatus(order.orderStatus) || isCancelledStatus(order.shipmentStatus)) return 'Cancelled';
+  const stage = Math.max(shipStage(order.orderStatus), shipStage(order.shipmentStatus));
+  return stage >= 0 ? SHIP_STAGES[stage] : 'Preparing shipment';
+}
 function whenLabel(iso?: string): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -326,7 +335,7 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
             {giftCount > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 900 }}><Gift size={12} /> Gift packed</span>}
           </div>
           <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 5 }}>Order {order.orderNumber}</h2>
-          <p style={{ color: 'var(--text-muted)', lineHeight: 1.45, fontSize: 'var(--text-sm)' }}>{formatDate(order.createdAt)} · {itemCount || items.length} item{(itemCount || items.length) === 1 ? '' : 's'} · {order.shipmentStatus || 'Preparing shipment'}</p>
+          <p style={{ color: 'var(--text-muted)', lineHeight: 1.45, fontSize: 'var(--text-sm)' }}>{formatDate(order.createdAt)} · {itemCount || items.length} item{(itemCount || items.length) === 1 ? '' : 's'} · {friendlyOrderStatus(order)}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>{formatMoney(order.totalAmount)}</div>

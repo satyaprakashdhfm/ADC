@@ -119,10 +119,10 @@ async function autoCreateShipment(orderId, addressArg) {
   }
 
   await query(
-    `UPDATE orders SET delhivery_waybill=$1, carrier='DELHIVERY', shipment_status='CREATED', tracking_url=$2, label_generated=TRUE, updated_at=$3 WHERE id=$4`,
+    `UPDATE orders SET delhivery_waybill=$1, carrier='DELHIVERY', shipment_status='Manifested', tracking_url=$2, label_generated=TRUE, updated_at=$3 WHERE id=$4`,
     [result.waybill, `https://www.delhivery.com/track/package/${result.waybill}`, nowIso(), orderId]
   );
-  console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=DELHIVERY | waybill=${result.waybill} | ok=true | label=ready`);
+  console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=DELHIVERY | waybill=${result.waybill} | ok=true | label=ready | status=Manifested`);
   return { ok: true, waybill: result.waybill, carrier: 'DELHIVERY' };
 }
 

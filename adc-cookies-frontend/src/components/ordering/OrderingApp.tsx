@@ -620,7 +620,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>{icon}<span style={{ font: 'var(--weight-bold) var(--text-base)/1 var(--font-body)', color: 'var(--text-strong)' }}>{label}</span></div>
   );
 
-  if (done) return <OrderSuccessPage show total={paid} orderId={orderId} onBackToMenu={() => router.push('/order')} onViewOrder={() => router.push('/account')} />;
+  if (done) return <OrderSuccessPage show total={paid} orderId={orderId} deliv={delivCheck} deliverBy={deliverBy} onBackToMenu={() => router.push('/order')} onViewOrder={() => router.push('/account')} />;
 
   if (placing) return (
     <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32, textAlign: 'center' }}>
@@ -936,7 +936,21 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 }
 
 /* ---- Order Success Page ---- */
-function OrderSuccessPage({ show, total, orderId, onBackToMenu, onViewOrder }: { show: boolean; total: number; orderId: string; onBackToMenu: () => void; onViewOrder: () => void }) {
+function OrderSuccessPage({ show, total, orderId, deliv, deliverBy, onBackToMenu, onViewOrder }: { show: boolean; total: number; orderId: string; deliv: DeliveryCheck | null; deliverBy: Date | null; onBackToMenu: () => void; onViewOrder: () => void }) {
+  // ETA is carrier-conditional: intracity ships same-day via Shadowfax (~30 min), everywhere else
+  // ships via Delhivery and we show the real expected-delivery date from Delhivery's TAT API
+  // (computed in checkout from /api/delivery/check → expected_tat). No hard-coded guess for pan-India.
+  const sameDay = !!(deliv && deliv.serviceable && (deliv.intracity || deliv.sameDay));
+  const etaTitle = sameDay
+    ? 'Arriving in ~30 min'
+    : deliverBy
+      ? `Arriving by ${fmtDay(deliverBy)}`
+      : 'On its way soon';
+  const etaSub = sameDay
+    ? 'Same-day delivery'
+    : deliverBy
+      ? (deliv?.tat != null ? `Express delivery · ${deliv.tat} day${deliv.tat !== 1 ? 's' : ''}` : 'Estimated delivery date')
+      : 'Estimated delivery time';
   const steps = [
     { icon: <Check size={18} />, label: 'Placed', done: true },
     { icon: <span style={{ fontSize: 14 }}>🧑‍🍳</span>, label: 'Baking', done: false },
@@ -956,8 +970,8 @@ function OrderSuccessPage({ show, total, orderId, onBackToMenu, onViewOrder }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 24px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)', marginBottom: 36 }}>
           <Bike size={22} color="var(--brand-secondary)" />
           <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}>Arriving in ~30 min</div>
-            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Estimated delivery time</div>
+            <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}>{etaTitle}</div>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{etaSub}</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, marginBottom: 16 }}>

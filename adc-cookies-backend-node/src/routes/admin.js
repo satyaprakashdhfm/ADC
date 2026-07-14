@@ -435,11 +435,13 @@ router.post('/orders/:id/shipment', async (req, res) => {
     return res.status(502).json({ error: result.reason, detail: result.detail });
   }
 
+  // Manifested = Delhivery's first lifecycle state once create.json succeeds (see auto-create in
+  // routes/orders.js). Store it directly so the shipments table shows the real status right away.
   await query(
-    `UPDATE orders SET delhivery_waybill=$1, carrier='DELHIVERY', shipment_status='CREATED', tracking_url=$2, label_generated=TRUE, updated_at=$3 WHERE id=$4`,
+    `UPDATE orders SET delhivery_waybill=$1, carrier='DELHIVERY', shipment_status='Manifested', tracking_url=$2, label_generated=TRUE, updated_at=$3 WHERE id=$4`,
     [result.waybill, `https://www.delhivery.com/track/package/${result.waybill}`, nowIso(), order.id]
   );
-  console.log(`[ADMIN-SHIPMENT] create OK | order=${order.order_number} | waybill=${result.waybill} | label=ready`);
+  console.log(`[ADMIN-SHIPMENT] create OK | order=${order.order_number} | waybill=${result.waybill} | label=ready | status=Manifested`);
   const updated = await getOne('SELECT * FROM orders WHERE id = $1', [order.id]);
   const serialized = serializeOrder(updated, items, address);
   res.json({ ...serialized, waybill: result.waybill });
