@@ -7,6 +7,15 @@ DELHIVERY
 [ ] Add wallet balance (no shipment works without it)
 [ ] Warehouse "Adough Cookie" registered on prod (done) + default in admin
 
+SHADOWFAX (intracity, same-city last-mile)
+[ ] .env: switch SHADOWFAX_URL + SHADOWFAX_API to PRODUCTION values
+[ ] REMOVE SHADOWFAX_TEST_PICKUP_PIN (staging-only override; prod must use real store pincodes)
+[ ] SHADOWFAX_WEBHOOK_SECRET set on Railway (not just local)
+[ ] In Shadowfax dashboard: set webhook/callback URL -> https://<prod-domain>/api/shadowfax/webhook
+[ ] In Shadowfax dashboard: set the webhook Authorization header = SHADOWFAX_WEBHOOK_SECRET
+    (MUST match exactly, else every status push is rejected 401 and statuses never update)
+[ ] Test: place intracity order -> pay -> shipment -> send a status push -> status reflects in DB
+
 RAZORPAY
 [ ] Swap test keys -> LIVE keys (rzp_live_...) in .env / Railway
 [ ] Add payment.captured webhook + RAZORPAY_WEBHOOK_SECRET
@@ -14,6 +23,7 @@ RAZORPAY
 
 ENV (set on RAILWAY + locally)
 [ ] DELIVERY_API_TOKEN, DELHIVERY_BASE_URL, ORIGIN_PINCODE
+[ ] SHADOWFAX_URL, SHADOWFAX_API, SHADOWFAX_WEBHOOK_SECRET (remove SHADOWFAX_TEST_PICKUP_PIN)
 [ ] RAZORPAY_API_KEY, RAZORPAY_API_SECRET
 [ ] All keys present on Railway, not just local
 
@@ -30,4 +40,69 @@ PLACEHOLDERS TO REPLACE
 [ ] Real WhatsApp/phone number (site.ts)
 [ ] Confirm store list (stores.ts)
 [ ] Licensed fonts (globals.css trial files)
+==================================================
+
+
+==================================================
+SHADOWFAX — WEBHOOK STATUS TESTING (reference)
+==================================================
+Manually push order statuses to the webhook to test tracking.
+Server must be running (npm run dev) and $AWB must match an
+existing order's delhivery_waybill, else you get matched:false.
+
+
+STEP 1 — set these once per terminal (from adc-cookies-backend-node/):
+
+    SECRET=$(grep -E "^SHADOWFAX_WEBHOOK_SECRET=" .env | cut -d= -f2-)
+    AWB=SF1776195036DOF        # <- the waybill you want to update
+
+
+STEP 2 — pick an EVENT from the table and send it. One full curl:
+
+    curl -X POST http://localhost:8080/api/shadowfax/webhook \
+      -H "Content-Type: application/json" \
+      -H "Authorization: $SECRET" \
+      -d '{
+            "awb_number": "'"$AWB"'",
+            "event": "ofd",
+            "status": "Out for delivery",
+            "comments": "Rider en route to customer",
+            "event_timestamp": "'"$(date -Iseconds)"'"
+          }'
+
+  Expected reply:  {"ok":true,"matched":true}
+
+
+ALL STATUS EVENTS
+(RANK = lifecycle order; a live poll can only move status UP the ranks)
+
+  +------------------------------+------------------------+------+----------------------+
+  | EVENT  (send as "event")     | STATUS LABEL           | RANK | ALSO SETS order_status|
+  +------------------------------+------------------------+------+----------------------+
+  | new                          | Order placed           |   1  |  -                   |
+  | assigned_for_seller_pickup   | Pickup assigned        |   2  |  -                   |
+  | ofp                          | Out for pickup         |   3  |  -                   |
+  | seller_pickup_done           | Picked up from store   |   4  |  -                   |
+  | item_manifested              | Packed                 |   5  |  -                   |
+  | bag_in_transit               | In transit             |   6  |  -                   |
+  | bag_received                 | At delivery hub        |   7  |  -                   |
+  | ofd                          | Out for delivery       |   8  |  -                   |
+  | delivered                    | Delivered              | 100  |  DELIVERED           |
+  +------------------------------+------------------------+------+----------------------+
+  | rts_nd                       | Delivery attempted     |   9  |  -                   |
+  | rts                          | Returning to store     |  90  |  -                   |
+  | rts_d                        | Returned to store      |  95  |  CANCELLED           |
+  | cancelled_by_customer        | Cancelled              | 100  |  CANCELLED           |
+  | lost                         | Lost in transit        | 100  |  CANCELLED           |
+  | on_hold                      | On hold                |   1  |  -                   |
+  +------------------------------+------------------------+------+----------------------+
+
+
+NOTES
+- Only delivered / rts_d / cancelled_by_customer / lost also move order_status;
+  all others change shipment_status only.
+- The RANK guard is on the tracking POLL only, not the webhook — via curl you can
+  set any status in any order (even backwards) for testing.
+- To see the literal token (e.g. for Postman): grep SHADOWFAX_WEBHOOK_SECRET .env
+- In production, point the curl at https://<prod-domain> instead of localhost:8080.
 ==================================================

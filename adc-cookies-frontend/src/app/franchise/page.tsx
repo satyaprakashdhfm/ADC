@@ -72,7 +72,7 @@ export default function FranchisePage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 'clamp(14px,2vw,22px)' }}>
             {STEPS.map(s => (
               <div key={s.n} style={{ textAlign: 'center' }}>
-                <span style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--gradient-warm)', color: '#fff', display: 'grid', placeItems: 'center', margin: '0 auto 12px', fontWeight: 900, fontSize: 'var(--text-lg)', fontFamily: 'var(--font-display)' }}>{s.n}</span>
+                <span style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--gradient-warm)', color: 'var(--white)', display: 'grid', placeItems: 'center', margin: '0 auto 12px', fontWeight: 900, fontSize: 'var(--text-lg)', fontFamily: 'var(--font-display)' }}>{s.n}</span>
                 <h3 style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>{s.t}</h3>
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{s.d}</p>
               </div>

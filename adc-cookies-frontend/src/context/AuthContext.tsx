@@ -15,7 +15,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;                          // emails a reset link
   sendOtp: (phone: string) => Promise<{ verificationId: string; timeout: number }>;
   verifyOtp: (phone: string, verificationId: string, code: string) => Promise<{ role: string; needsName: boolean }>;
-  updateProfile: (patch: { name?: string; phone?: string }) => Promise<void>; // persists to the backend
+  updateProfile: (patch: { name?: string; phone?: string; email?: string }) => Promise<void>; // persists to the backend
   updateUser: (patch: Partial<Pick<User, 'name' | 'phone'>>) => void;
   logout: () => void;
 }
@@ -25,8 +25,12 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const initialsOf = (name: string) =>
   (name || '').split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase();
 
+// Phone-login accounts carry a synthetic Supabase email — never show it as the user's email.
+const SYNTHETIC_EMAIL = /^phone_\d+@phone\.adccookies\.app$/i;
+const cleanEmail = (e?: string | null) => (e && !SYNTHETIC_EMAIL.test(e) ? e : '');
+
 const userFromMe = (me: MeResponse): User =>
-  ({ name: me.name, email: me.email, role: me.role, initials: initialsOf(me.name), phone: me.phone ?? undefined });
+  ({ name: me.name, email: cleanEmail(me.email), role: me.role, initials: initialsOf(me.name), phone: me.phone ?? undefined });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -37,8 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fromSessionMeta = (session: Session | null): User | null => {
     if (!session) return null;
     const meta = (session.user.user_metadata || {}) as Record<string, string>;
-    const email = session.user.email || '';
-    const name = meta.full_name || meta.name || email.split('@')[0] || 'You';
+    const email = cleanEmail(session.user.email);
+    const name = meta.full_name || meta.name || (email ? email.split('@')[0] : 'You');
     return { name, email, role: 'CUSTOMER', initials: initialsOf(name), phone: meta.phone };
   };
 
@@ -113,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // Persist name/phone to the backend (DB) and reflect it in the session.
-  const updateProfile = async (patch: { name?: string; phone?: string }) => {
+  const updateProfile = async (patch: { name?: string; phone?: string; email?: string }) => {
     const me = await updateMe(patch);
     setUser(userFromMe(me));
   };

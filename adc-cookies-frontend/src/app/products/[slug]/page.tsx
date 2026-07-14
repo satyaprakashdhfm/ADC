@@ -61,7 +61,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <ol style={{ margin: '0 0 38px', padding: 0, listStyle: 'none', display: 'grid', gap: 14 }}>
             {product.making.map((step, index) => (
               <li key={step} style={{ display: 'grid', gridTemplateColumns: '32px 1fr', gap: 14, alignItems: 'start', lineHeight: 1.8, color: 'var(--text-body)' }}>
-                <span aria-hidden style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--gradient-warm)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: 'var(--text-sm)' }}>{index + 1}</span>
+                <span aria-hidden style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--gradient-warm)', color: 'var(--white)', display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: 'var(--text-sm)' }}>{index + 1}</span>
                 <span>{step}</span>
               </li>
             ))}
@@ -85,12 +85,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         <div style={{ maxWidth: 1080, margin: '0 auto' }}>
           <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 18, textAlign: 'center' }}>Good to know</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 18 }} className="product-doc-grid">
-            <article style={{ background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 22, boxShadow: 'var(--shadow-sm)' }}>
+            <article style={{ background: 'var(--panel-82)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 22, boxShadow: 'var(--shadow-sm)' }}>
               <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 10 }}>Sweetness &amp; texture</h3>
               <p style={{ lineHeight: 1.7, color: 'var(--text-body)', fontSize: 'var(--text-sm)' }}>{product.sweetness} {product.texture}</p>
             </article>
 
-            <article style={{ background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 22, boxShadow: 'var(--shadow-sm)' }}>
+            <article style={{ background: 'var(--panel-82)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 22, boxShadow: 'var(--shadow-sm)' }}>
               <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 12 }}>What goes inside</h3>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {product.ingredients.map((item) => (
@@ -99,12 +99,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               </div>
             </article>
 
-            <article style={{ background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 22, boxShadow: 'var(--shadow-sm)' }}>
+            <article style={{ background: 'var(--panel-82)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 22, boxShadow: 'var(--shadow-sm)' }}>
               <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 10 }}>Serving note</h3>
               <p style={{ lineHeight: 1.7, color: 'var(--text-body)', fontSize: 'var(--text-sm)' }}>{product.serving}</p>
             </article>
 
-            <article style={{ background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 22, boxShadow: 'var(--shadow-sm)' }}>
+            <article style={{ background: 'var(--panel-82)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 22, boxShadow: 'var(--shadow-sm)' }}>
               <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 10 }}>Storage</h3>
               <p style={{ lineHeight: 1.7, color: 'var(--text-body)', fontSize: 'var(--text-sm)' }}>{product.storage}</p>
             </article>
@@ -114,9 +114,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
       <section style={{ padding: '0 var(--gutter) 96px' }}>
         <div style={{ maxWidth: 980, margin: '0 auto', textAlign: 'center', padding: '42px 28px', borderRadius: 28, background: 'var(--surface-inverse)', color: 'var(--cream-100)' }}>
-          <h2 style={{ color: '#fff', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Ready for {product.name}?</h2>
-          <p style={{ color: 'rgba(255,248,241,.68)', marginBottom: 26 }}>Order it fresh from A Dough Cookie and enjoy the texture, aroma, and packaging exactly the way this cookie is meant to be served.</p>
-          <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
+          <h2 style={{ color: 'var(--white)', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Ready for {product.name}?</h2>
+          <p style={{ color: 'var(--cream-100-68)', marginBottom: 26 }}>Order it fresh from A Dough Cookie and enjoy the texture, aroma, and packaging exactly the way this cookie is meant to be served.</p>
+          <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
             <ShoppingBag size={19} /> Order Now
           </Link>
         </div>

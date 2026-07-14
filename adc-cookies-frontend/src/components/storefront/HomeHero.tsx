@@ -35,7 +35,7 @@ const CATEGORIES: Category[] = [
     href: '/order?cat=cookies',
     img: '/assets/home-cookies.png',
     icon: <Cookie size={18} />,
-    tint: 'linear-gradient(135deg,#FDEBC2,#FAD98A)',
+    tint: 'linear-gradient(135deg,var(--amber-100),var(--amber-soft))',
   },
   {
     key: 'tins',
@@ -45,7 +45,7 @@ const CATEGORIES: Category[] = [
     href: '/order?cat=tins',
     img: '/assets/home-tins.png',
     icon: <Gift size={18} />,
-    tint: 'linear-gradient(135deg,#FDDCC2,#FAB988)',
+    tint: 'linear-gradient(135deg,var(--orange-100),var(--orange-200))',
   },
 ];
 
@@ -102,7 +102,7 @@ function NavItem({ item, menu }: { item: NavLink; menu?: { label: string; href: 
 
 const ctaBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 18px', border: 'none', cursor: 'pointer',
-  borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff',
+  borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)',
   fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', whiteSpace: 'nowrap',
   boxShadow: 'var(--shadow-brand)',
 };
@@ -118,7 +118,7 @@ function CategoryCard({ c, onGo, priority }: { c: Category; onGo: (href: string)
       className="home-cat-card"
       style={{
         textAlign: 'left', border: '1px solid var(--border-default)', cursor: 'pointer', padding: 0,
-        background: '#FFF4DE', borderRadius: 'var(--radius-card)', overflow: 'hidden',
+        background: 'var(--vanilla)', borderRadius: 'var(--radius-card)', overflow: 'hidden',
         boxShadow: 'var(--shadow-sm)', transition: 'transform .25s var(--ease-out), box-shadow .25s var(--ease-out)',
         display: 'flex', flexDirection: 'column',
       }}
@@ -168,7 +168,7 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
     <button onClick={() => router.push('/checkout')} aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', flex: 'none' }}>
       <ShoppingBag size={21} />
       {count > 0 && (
-        <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--gradient-warm)', color: '#fff', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>
+        <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--gradient-warm)', color: 'var(--white)', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>
       )}
     </button>
   );
@@ -185,7 +185,7 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
             <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
               <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 140, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -50 }} />
             </a>
-            <form onSubmit={onSearch} role="search" style={{ flex: 1, maxWidth: 640, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 8, background: '#FFF4DF', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '6px 6px 6px 18px', boxShadow: 'var(--shadow-xs)' }}>
+            <form onSubmit={onSearch} role="search" style={{ flex: 1, maxWidth: 640, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream-bg)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '6px 6px 6px 18px', boxShadow: 'var(--shadow-xs)' }}>
               <Search size={18} color="var(--text-muted)" style={{ flex: 'none' }} />
               <input name="q" placeholder="Search cookies, gift tins…" aria-label="Search products" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)' }} />
               <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: '9px 18px' }}>Search</button>
@@ -234,7 +234,7 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
           </div>
 
           {/* Search — in the header on mobile (was previously in the hero body) */}
-          <form onSubmit={onSearch} role="search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FFF4DF', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '5px 5px 5px 14px', boxShadow: 'var(--shadow-xs)' }}>
+          <form onSubmit={onSearch} role="search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream-bg)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '5px 5px 5px 14px', boxShadow: 'var(--shadow-xs)' }}>
             <Search size={17} color="var(--text-muted)" style={{ flex: 'none' }} />
             <input name="q" placeholder="Search cookies, gift tins…" aria-label="Search products" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }} />
             <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: '8px 14px' }}>Search</button>
@@ -243,7 +243,7 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
       </div>
 
       {/* Hero content (below the sticky header; overflow-hidden keeps decorations clipped) */}
-      <header style={{ position: 'relative', overflow: 'hidden', background: '#FFCD90' }}>
+      <header style={{ position: 'relative', overflow: 'hidden', background: 'var(--gold)' }}>
         <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Compact hero band */}
         <section style={{ maxWidth: 1680, margin: '0 auto', padding: 'clamp(8px,1.6vw,20px) var(--gutter) clamp(14px,2vw,22px)', textAlign: 'center' }}>
@@ -274,13 +274,13 @@ export default function HomeHero({ onMenuOpen, onLoginOpen }: HomeHeroProps) {
             }}
           >
             <Image src={CORPORATE.img} alt="" fill sizes="100vw" style={{ objectFit: 'cover' }} />
-            <span aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(20,12,4,.92) 0%,rgba(20,12,4,.78) 55%,rgba(20,12,4,.64) 100%)' }} />
-            <div className="home-corp-body" style={{ position: 'relative', padding: 'clamp(20px,3vw,38px)', maxWidth: 600, color: '#fff', textShadow: '0 1px 14px rgba(0,0,0,.45)' }}>
+            <span aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,var(--espresso-92) 0%,var(--espresso-78) 55%,var(--espresso-64) 100%)' }} />
+            <div className="home-corp-body" style={{ position: 'relative', padding: 'clamp(20px,3vw,38px)', maxWidth: 600, color: 'var(--white)', textShadow: '0 1px 14px var(--black-45)' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <span style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,.16)', backdropFilter: 'blur(6px)', color: '#fff', display: 'grid', placeItems: 'center' }}>{CORPORATE.icon}</span>
-                <h2 style={{ font: '900 clamp(1.4rem,1.1rem + 1.4vw,2.1rem)/1 var(--font-display)', color: '#fff', margin: 0, letterSpacing: '-.02em' }}>{CORPORATE.label}</h2>
+                <span style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--white-16)', backdropFilter: 'blur(6px)', color: 'var(--white)', display: 'grid', placeItems: 'center' }}>{CORPORATE.icon}</span>
+                <h2 style={{ font: '900 clamp(1.4rem,1.1rem + 1.4vw,2.1rem)/1 var(--font-display)', color: 'var(--white)', margin: 0, letterSpacing: '-.02em' }}>{CORPORATE.label}</h2>
               </div>
-              <p style={{ color: 'rgba(255,245,230,.88)', lineHeight: 1.5, margin: '0 0 16px', fontSize: 'var(--text-base)', maxWidth: 480 }}>{CORPORATE.desc}</p>
+              <p style={{ color: 'var(--ivory-88)', lineHeight: 1.5, margin: '0 0 16px', fontSize: 'var(--text-base)', maxWidth: 480 }}>{CORPORATE.desc}</p>
               <span style={ctaBtn}>{CORPORATE.cta} <ArrowRight size={16} /></span>
             </div>
           </button>

@@ -20,7 +20,7 @@ export default function GetInTouch() {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(16px,2.4vw,32px)', flexWrap: 'wrap', marginBottom: 18 }}>
         <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={chip}>
-          <span style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--whatsapp-green)', color: '#fff', display: 'grid', placeItems: 'center', flex: 'none' }}><MessageCircle size={16} /></span>
+          <span style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--whatsapp-green)', color: 'var(--white)', display: 'grid', placeItems: 'center', flex: 'none' }}><MessageCircle size={16} /></span>
           WhatsApp
         </a>
         <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={chip}>
@@ -36,7 +36,7 @@ export default function GetInTouch() {
       <button
         onClick={() => setOpen(o => !o)}
         aria-expanded={open}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '12px 24px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' }}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '12px 24px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' }}
       >
         {open ? 'Close' : 'Leave your details'} <ChevronDown size={17} style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
       </button>

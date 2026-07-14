@@ -1,7 +1,7 @@
 'use client';
 import Image from 'next/image';
 import { X, Info, Image as ImageIcon, BookOpen, Mail, ShoppingBag, ChevronRight, LogOut, User } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
 const NAV_LINKS = [
@@ -19,6 +19,7 @@ interface MenuDrawerProps {
 
 export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, logout } = useAuth();
 
   return (
@@ -28,7 +29,7 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
         onClick={onClose}
         style={{
           position: 'fixed', inset: 0, zIndex: 70,
-          background: 'rgba(20,12,4,.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+          background: 'var(--espresso-45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
           opacity: open ? 1 : 0, pointerEvents: open ? 'auto' : 'none',
           transition: 'opacity .3s ease',
         }}
@@ -40,7 +41,7 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
         width: 'min(300px,calc(100vw - 36px))',
         background: 'var(--surface-page)',
         borderRadius: 22,
-        boxShadow: '0 32px 80px rgba(0,0,0,.28)',
+        boxShadow: '0 32px 80px var(--black-28)',
         display: 'flex', flexDirection: 'column',
         transform: open ? 'translateX(0)' : 'translateX(calc(100% + 32px))',
         transition: 'transform .4s cubic-bezier(.34,1.2,.64,1)',
@@ -59,9 +60,9 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
 
         {/* Account / Login CTA — reflects the shared auth state */}
         {user ? (
-          <div style={{ margin: '0 14px 12px', padding: '13px 15px', borderRadius: 16, background: 'linear-gradient(135deg,var(--amber-100),#FDE8C4)' }}>
+          <div style={{ margin: '0 14px 12px', padding: '13px 15px', borderRadius: 16, background: 'linear-gradient(135deg,var(--amber-100),var(--amber-wash))' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
-              <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 'var(--text-sm)', flex: 'none' }}>{user.initials}</div>
+              <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: 'var(--white)', fontWeight: 800, fontSize: 'var(--text-sm)', flex: 'none' }}>{user.initials}</div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
@@ -69,7 +70,7 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
             </div>
             <button
               onClick={() => { onClose(); router.push(user.role === 'ADMIN' ? '/admin' : '/account'); }}
-              style={{ width: '100%', padding: '9px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 8 }}
+              style={{ width: '100%', padding: '9px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 8 }}
             ><User size={15} /> My Account</button>
             <button
               onClick={() => logout()}
@@ -77,13 +78,13 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
             ><LogOut size={15} /> Log out</button>
           </div>
         ) : (
-          <div style={{ margin: '0 14px 12px', padding: '15px', borderRadius: 16, background: 'linear-gradient(135deg,var(--amber-100),#FDE8C4)' }}>
+          <div style={{ margin: '0 14px 12px', padding: '15px', borderRadius: 16, background: 'linear-gradient(135deg,var(--amber-100),var(--amber-wash))' }}>
             <div style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--text-strong)', marginBottom: 3 }}>Welcome back!</div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 11 }}>Log in to track orders &amp; save favourites.</div>
             <div style={{ display: 'flex', gap: 9 }}>
               <button
                 onClick={() => { onClose(); onLoginOpen(); }}
-                style={{ flex: 1, padding: '9px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '9px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
               >Log in</button>
               <button
                 onClick={() => { onClose(); onLoginOpen(); }}
@@ -99,7 +100,11 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
             <a
               key={lk.label}
               href={lk.href}
-              onClick={onClose}
+              onClick={e => {
+                // Already on this page? Don't reload — just glide back to the top.
+                if (lk.href === pathname) { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                onClose();
+              }}
               style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 11px', borderRadius: 13, textDecoration: 'none', color: 'var(--text-strong)', transition: 'background .18s' }}
               onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-sunken)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -119,8 +124,8 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
             onClick={() => { onClose(); router.push('/order'); }}
             style={{
               width: '100%', padding: '13px', borderRadius: 'var(--radius-pill)', border: 'none',
-              background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer',
-              boxShadow: '0 10px 24px rgba(239,117,7,.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer',
+              boxShadow: '0 10px 24px var(--orange-500-35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
             <ShoppingBag size={16} /> Order Fresh Cookies

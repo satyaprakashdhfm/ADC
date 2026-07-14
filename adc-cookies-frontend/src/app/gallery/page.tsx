@@ -36,7 +36,7 @@ export default function GalleryPage() {
               ['Signature flavors', 'Chocolate, Biscoff, Matcha, and more.'],
               ['Store moments', 'A warm bakery experience.'],
             ].map(([title, body]) => (
-              <div key={title} style={{ background: 'rgba(244,234,214,.82)', border: '1px solid var(--border-default)', borderRadius: 18, padding: 18 }}>
+              <div key={title} style={{ background: 'var(--panel-82)', border: '1px solid var(--border-default)', borderRadius: 18, padding: 18 }}>
                 <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 6 }}>{title}</h2>
                 <p style={{ color: 'var(--text-muted)', lineHeight: 1.55 }}>{body}</p>
               </div>

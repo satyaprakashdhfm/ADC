@@ -87,6 +87,16 @@ router.patch('/me', requireAuth, async (req, res) => {
     sets.push(`phone = $${i++}`); params.push(normalizedPhone);
   }
 
+  // Phone-OTP users can optionally add a real email as contact info. We only store it in our
+  // users table (their Supabase login stays keyed on the synthetic address) — never fabricated.
+  if (req.body?.email != null && String(req.body.email).trim() !== '') {
+    const email = String(req.body.email).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError('Enter a valid email address.');
+    const taken = await getOne('SELECT id FROM users WHERE email = $1 AND id <> $2', [email, req.user.id]);
+    if (taken) throw new ApiError('That email is already linked to another account.');
+    sets.push(`email = $${i++}`); params.push(email);
+  }
+
   if (!sets.length) throw new ApiError('Nothing to update.');
 
   sets.push(`updated_at = $${i++}`); params.push(nowIso());

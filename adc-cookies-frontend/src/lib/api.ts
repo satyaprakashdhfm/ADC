@@ -56,13 +56,13 @@ export async function verifyOtp(phone: string, verificationId: string, code: str
 }
 
 /** The signed-in user as our backend sees them (synced from the Supabase session). */
-export interface MeResponse { email: string; name: string; role: string; phone: string | null; }
+export interface MeResponse { email: string | null; name: string; role: string; phone: string | null; }
 export async function getMe(): Promise<MeResponse> {
   return request('/auth/me');
 }
 
 /** Update the signed-in user's profile (name and/or phone). Persists to the DB. */
-export async function updateMe(patch: { name?: string; phone?: string }): Promise<MeResponse> {
+export async function updateMe(patch: { name?: string; phone?: string; email?: string }): Promise<MeResponse> {
   return request('/auth/me', { method: 'PATCH', body: JSON.stringify(patch) });
 }
 
@@ -241,8 +241,9 @@ export interface AdminStats {
   ordersByStatus: Record<string, number>;
   topProducts: { name: string; qty: number; revenue: number }[];
 }
-export interface AdminUser { id: number; name: string; email: string; phone?: string; role: string; createdAt: string; orderCount: number; }
-export interface AdminCoupon { id: number; code: string; discountType: string; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive: boolean; }
+export interface AdminUser { id: number; name: string; email: string | null; phone?: string; role: string; createdAt: string; orderCount: number; }
+export interface AdminCoupon { id: number; code: string; discountType: string; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive: boolean; timesUsed?: number; }
+export interface CouponInput { code: string; discountType: 'PERCENTAGE' | 'FIXED'; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive?: boolean; }
 export interface AdminMessage { id: number; name: string; email: string; phone?: string | null; message: string; handled: boolean; createdAt: string; }
 export interface ProductInput {
   name: string; category: 'COOKIES' | 'TINS'; description?: string; price: number;
@@ -287,8 +288,14 @@ export async function adminDeleteProduct(id: number): Promise<void> {
 }
 
 export async function adminGetCoupons(): Promise<AdminCoupon[]> { return request('/admin/coupons'); }
+export async function adminCreateCoupon(data: CouponInput): Promise<AdminCoupon> {
+  return request('/admin/coupons', { method: 'POST', body: JSON.stringify(data) });
+}
 export async function adminToggleCoupon(id: number): Promise<AdminCoupon> {
   return request(`/admin/coupons/${id}/toggle`, { method: 'PATCH' });
+}
+export async function adminDeleteCoupon(id: number): Promise<{ ok: boolean }> {
+  return request(`/admin/coupons/${id}`, { method: 'DELETE' });
 }
 
 export async function adminGetUsers(): Promise<AdminUser[]> { return request('/admin/users'); }

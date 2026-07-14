@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { getOrders, getAddresses, addAddress, trackOrderShipment, type DelhiveryTrackResult, type Address, type Order, type OrderItem } from '@/lib/api';
+import { OrderNextStep } from '@/lib/orderNextStep';
 import {
   ChevronLeft, Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
   Info, LifeBuoy, ChevronRight, LogOut, ShoppingBag, MapPin, Gift,
@@ -12,7 +13,7 @@ import {
 } from 'lucide-react';
 
 const card: React.CSSProperties = {
-  background: 'rgba(244,234,214,.92)',
+  background: 'var(--panel-92)',
   border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-card)',
   boxShadow: 'var(--shadow-sm)',
@@ -60,7 +61,7 @@ function AddressForm({ initial, onSave, onCancel }: { initial?: Address; onSave:
         <input type="checkbox" checked={f.isDefault} onChange={e => setF({ ...f, isDefault: e.target.checked })} /> Set as default
       </label>
       <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-        <button disabled={!valid} onClick={() => onSave(f)} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: valid ? 'var(--gradient-warm)' : 'var(--border-default)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: valid ? 'pointer' : 'not-allowed' }}>Save address</button>
+        <button disabled={!valid} onClick={() => onSave(f)} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: valid ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: valid ? 'pointer' : 'not-allowed' }}>Save address</button>
         <button onClick={onCancel} style={{ padding: '10px 16px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
       </div>
     </div>
@@ -201,6 +202,7 @@ function ShipmentTracker({ order }: { order: Order }) {
 
   return (
     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
+      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} style={{ marginBottom: 12 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {order.delhiveryWaybill && (
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
@@ -208,7 +210,7 @@ function ShipmentTracker({ order }: { order: Order }) {
           </span>
         )}
         {order.delhiveryWaybill && isShadowfax && !delivered ? (
-          <button onClick={openLiveTracking} disabled={tracking} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'var(--brand-secondary)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: tracking ? 'default' : 'pointer' }}>
+          <button onClick={openLiveTracking} disabled={tracking} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'var(--brand-secondary)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: tracking ? 'default' : 'pointer' }}>
             <MapPin size={14} /> {tracking ? 'Loading live…' : 'Live tracking'}
           </button>
         ) : order.delhiveryWaybill ? (
@@ -234,7 +236,7 @@ function ShipmentTracker({ order }: { order: Order }) {
           />
           <div style={{ padding: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--status-success)', boxShadow: '0 0 0 4px rgba(48, 166, 92, .14)' }} />
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--status-success)', boxShadow: '0 0 0 4px var(--green-veg-14)' }} />
               <strong style={{ color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{latestStatus || order.shipmentStatus || 'Tracking order'}</strong>
               <button onClick={doTrack} disabled={tracking} style={{ marginLeft: 'auto', border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 900, fontSize: 'var(--text-xs)', cursor: tracking ? 'default' : 'pointer', fontFamily: 'var(--font-body)' }}>
                 {tracking ? 'Refreshing…' : 'Refresh'}
@@ -272,7 +274,7 @@ function ShipmentTracker({ order }: { order: Order }) {
                   return (
                     <div key={label} style={{ display: 'flex', gap: 12 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none' }}>
-                        <span style={{ width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', flex: 'none', background: done ? 'var(--status-success)' : 'var(--surface-card)', border: done ? 'none' : '2px solid var(--border-strong)', color: '#fff' }}>
+                        <span style={{ width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', flex: 'none', background: done ? 'var(--status-success)' : 'var(--surface-card)', border: done ? 'none' : '2px solid var(--border-strong)', color: 'var(--white)' }}>
                           {done && <Check size={13} strokeWidth={3} />}
                         </span>
                         {!isLast && <span style={{ width: 2, flex: 1, minHeight: 22, background: i < reached ? 'var(--status-success)' : 'var(--border-strong)' }} />}
@@ -506,7 +508,7 @@ export default function AccountPage() {
           <aside style={{ display: 'grid', gap: 16, position: 'sticky', top: 92 }} className="account-sidebar">
             <div style={{ ...card, padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
-                <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 'var(--text-h3)', fontWeight: 900, flex: 'none' }}>{user.initials}</div>
+                <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: 'var(--white)', fontSize: 'var(--text-h3)', fontWeight: 900, flex: 'none' }}>{user.initials}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h1 style={{ fontSize: 'var(--text-h4)', marginBottom: 3 }}>{user.name}</h1>
                   <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>{user.email}</p>
@@ -526,7 +528,7 @@ export default function AccountPage() {
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Email cannot be changed from this page.</div>
                   {profileErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)' }}>{profileErr}</div>}
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={saveProfile} disabled={savingProfile} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: savingProfile ? 'var(--border-default)' : 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: savingProfile ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Check size={15} /> {savingProfile ? 'Saving…' : 'Save'}</button>
+                    <button onClick={saveProfile} disabled={savingProfile} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: savingProfile ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: savingProfile ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Check size={15} /> {savingProfile ? 'Saving…' : 'Save'}</button>
                     <button onClick={() => { setEditing(false); setProfileErr(''); setName(user.name); setPhone(national10(user.phone)); }} style={{ padding: '10px 14px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><X size={15} /> Cancel</button>
                   </div>
                 </div>
@@ -546,8 +548,8 @@ export default function AccountPage() {
                 </Link>
               ))}
               <button onClick={doLogout} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
-                <span style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', display: 'grid', placeItems: 'center', background: '#FCEEEC', flex: 'none', color: '#D24B36' }}><LogOut size={17} /></span>
-                <span style={{ fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', color: '#D24B36' }}>Log out</span>
+                <span style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', display: 'grid', placeItems: 'center', background: 'var(--red-wash-soft)', flex: 'none', color: 'var(--red-danger)' }}><LogOut size={17} /></span>
+                <span style={{ fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', color: 'var(--red-danger)' }}>Log out</span>
               </button>
             </div>
           </aside>
@@ -559,7 +561,7 @@ export default function AccountPage() {
                   <p style={{ fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 6 }}>Order history</p>
                   <h2 style={sectionTitle}>Full order details</h2>
                 </div>
-                <button onClick={() => router.push('/order')} style={{ padding: '10px 16px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)' }}><ShoppingBag size={16} /> New order</button>
+                <button onClick={() => router.push('/order')} style={{ padding: '10px 16px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)' }}><ShoppingBag size={16} /> New order</button>
               </div>
 
               <div style={{ display: 'grid', gap: 14 }}>
@@ -570,7 +572,7 @@ export default function AccountPage() {
                     <div style={{ width: 58, height: 58, borderRadius: '50%', background: 'var(--amber-50)', display: 'grid', placeItems: 'center', margin: '0 auto 12px', color: 'var(--brand-secondary)' }}><ShoppingBag size={26} /></div>
                     <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 8 }}>No orders yet</h2>
                     <p style={{ color: 'var(--text-muted)', marginBottom: 18 }}>Once you place an order, this page will show every cookie, gift pack, message, delivery address, and payment detail.</p>
-                    <button onClick={() => router.push('/order')} style={{ padding: '10px 20px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 900, cursor: 'pointer' }}>Start an order</button>
+                    <button onClick={() => router.push('/order')} style={{ padding: '10px 20px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, cursor: 'pointer' }}>Start an order</button>
                   </div>
                 ) : orders.map(o => (
                   <OrderCard key={o.id} order={o} expanded={expanded === o.id} onToggle={() => setExpanded(expanded === o.id ? null : o.id)} onReorder={() => router.push('/order')} />
@@ -609,7 +611,7 @@ export default function AccountPage() {
                     </div>
                     <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
                       <button onClick={() => setEditingAddr(a.id)} aria-label="Edit address" style={{ width: 32, height: 32, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Pencil size={14} /></button>
-                      <button onClick={() => deleteAddress(a.id)} aria-label="Delete address" style={{ width: 32, height: 32, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: '#D24B36' }}><Trash2 size={14} /></button>
+                      <button onClick={() => deleteAddress(a.id)} aria-label="Delete address" style={{ width: 32, height: 32, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--red-danger)' }}><Trash2 size={14} /></button>
                     </div>
                   </div>
                 ))}
