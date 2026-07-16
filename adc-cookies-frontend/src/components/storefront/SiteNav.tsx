@@ -44,9 +44,9 @@ function NavItem({ item, menu }: { item: NavLink; menu?: { label: string; href: 
   const hasMenu = !!menu && menu.length > 0;
   return (
     <div onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} style={{ position: 'relative' }}>
-      <a href={item.href} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--text-strong)', textDecoration: 'none', whiteSpace: 'nowrap', transition: 'color .18s' }}
-        onMouseEnter={e => (e.currentTarget.style.color = 'var(--brand-secondary)')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-strong)')}>
+      <a href={item.href} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--white)', textDecoration: 'none', whiteSpace: 'nowrap', transition: 'color .18s' }}
+        onMouseEnter={e => (e.currentTarget.style.color = 'var(--ink-900)')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'var(--white)')}>
         {item.label}{hasMenu && <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />}
       </a>
       {hasMenu && open && (
@@ -110,12 +110,12 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
   return (
     <>
       {/* Sticky header — a distinct warm band (vanilla) so it stands off the page behind it. */}
-      <div className="home-sticky-header" style={{ position: revealOnScroll ? 'fixed' : 'sticky', top: 0, left: 0, right: 0, zIndex: 50, background: 'var(--vanilla)', boxShadow: 'var(--shadow-sm)', borderBottom: '1px solid var(--border-default)', transform: revealed ? 'translateY(0)' : 'translateY(-110%)', transition: 'transform .35s var(--ease-out)' }}>
+      <div className="home-sticky-header" style={{ position: revealOnScroll ? 'fixed' : 'sticky', top: 0, left: 0, right: 0, zIndex: 50, background: 'var(--navbar-bg)', boxShadow: 'var(--shadow-md)', borderBottom: '1px solid var(--white-16)', transform: revealed ? 'translateY(0)' : 'translateY(-110%)', transition: 'transform .35s var(--ease-out)' }}>
         {/* Desktop — Row 1: logo · search · cart · account. Row 2: nav links. */}
         <nav className="home-nav--desktop">
           <div style={{ maxWidth: 1680, margin: '0 auto', padding: '10px var(--gutter) 6px', display: 'flex', alignItems: 'center', gap: 'clamp(16px,2vw,32px)' }}>
             <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
-              <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 62, width: 'auto', objectFit: 'contain', display: 'block' }} />
+              <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 62, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }} />
             </a>
             <form onSubmit={onSearch} role="search" style={{ flex: 1, maxWidth: 640, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream-bg)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '6px 6px 6px 18px', boxShadow: 'var(--shadow-xs)' }}>
               <Search size={18} color="var(--text-muted)" style={{ flex: 'none' }} />
@@ -150,7 +150,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
                 height={168}
                 alt="a dough cookie"
                 priority
-                style={{ height: 'clamp(52px,13vw,80px)', width: 'auto', objectFit: 'contain', display: 'block' }}
+                style={{ height: 'clamp(52px,13vw,80px)', width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }}
               />
             </a>
 

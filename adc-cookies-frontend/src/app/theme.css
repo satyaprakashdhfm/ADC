@@ -45,9 +45,16 @@
   /* ---------- 2. NAMED COLORS (were hardcoded — comment says WHERE each is used) ---------- */
 
   /* -- Warm page surfaces & section bands -- */
-  --gold: #f7c886;            /* Home HERO HEADER · Home "Finest Ingredients" + "Get in Touch" bands · Order/Checkout/Account page background (.order-cards) */
-  --band-ivory: #f7e3be;      /* Home "About Us" + "Our Stores" bands · "Customer Love" reviews strip — the pale band that alternates with --gold */
-  --cream-bg: #f7e6d2;        /* STICKY HEADER / nav band on home + inner pages (via --surface-glass) · fixed backdrop behind EVERY page · home search-bar fill */
+  /* Brand palette — 4 oranges, dark → light. Navbar uses the top two, sections the bottom two. */
+  --peach-500: #FFA652;       /* darkest — navbar */
+  --peach-400: #FFB76B;       /* announcement ribbon / accents */
+  --peach-300: #FFCD90;       /* section bands (peach) */
+  --peach-100: #FFF4DF;       /* page background / lightest sections */
+  --navbar-bg: var(--peach-500); /* dark navbar band */
+
+  --gold: var(--peach-300);   /* Home "Finest Ingredients" + "Get in Touch" bands · products section · Order/Checkout/Account page background (.order-cards) */
+  --band-ivory: var(--peach-100); /* Home "About Us" + "Our Stores" bands · reviews strip — the light band that alternates with --gold */
+  --cream-bg: var(--peach-100); /* fixed backdrop behind EVERY page · home search-bar fill (nav band now uses --navbar-bg) */
   --vanilla: #fdf1d8;         /* Cards on inner pages (product/store/form) · Order/Checkout/Account cards · home category cards */
   --vanilla-raised: #F5E7C6;  /* Inputs & chips sitting INSIDE vanilla cards (a notch darker so fields stand out) */
   --ivory-card: #f9efda;      /* Default card/drawer/modal surface app-wide (feeds --surface-card; never stark white) */
@@ -59,7 +66,7 @@
 
   /* -- Warm accents -- */
   --orange-cta: #eca87b;      /* Admin dashboard charts (sales line/area, bar rows, pie series 1) · Razorpay checkout theme colour */
-  --orange-light: #dc9556;    /* Announcement bar background (the top promo strip) */
+  --orange-light: var(--peach-400); /* Announcement bar background (the top promo strip) */
   --orange-dark: #C2410C;     /* Admin dashboard chart series (pie / legend) */
   --orange-brown: #B4561F;    /* Login modal text-button / link colour */
   --amber-soft: #FAD98A;      /* Home category-card tint gradient (Cookies card) */
