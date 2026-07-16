@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   // Allow the dev server's HMR/assets to be loaded from your LAN IP (phone on same Wi-Fi).
   // Add whatever IP `next dev` prints under "Network:" (it can change with DHCP).
-  allowedDevOrigins: ['192.168.1.24', '192.168.1.35', '192.168.1.37'],
+  allowedDevOrigins: ['192.168.1.24', '192.168.1.35', '192.168.1.37','192.168.1.42'],
   images: {
     remotePatterns: [],
   },

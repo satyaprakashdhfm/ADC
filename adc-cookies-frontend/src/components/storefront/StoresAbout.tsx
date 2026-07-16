@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, ShoppingBag, Mail, Phone, MessageCircle, ChevronDown } from 'lucide-react';
 import { STORES } from '@/lib/stores';
 import ContactForm from './ContactForm';
+import AboutVideo from './AboutVideo';
 import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
@@ -13,7 +14,7 @@ const subhead: React.CSSProperties = { font: '900 clamp(1.3rem,1rem + 1.3vw,1.85
 const body: React.CSSProperties = { fontSize: 'var(--text-base)', lineHeight: 1.6, color: 'var(--text-body)', margin: '0 0 16px', maxWidth: 600 };
 const link: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--brand-secondary)', fontWeight: 800, fontSize: 'var(--text-sm)' };
 
-const band = (bg: string, extra?: React.CSSProperties): React.CSSProperties => ({ padding: 'clamp(36px,5vw,72px) 0', background: bg, ...extra });
+const band = (bg: string, extra?: React.CSSProperties): React.CSSProperties => ({ padding: 'clamp(26px,4.5vw,72px) 0', background: bg, ...extra });
 const inner: React.CSSProperties = { maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter)' };
 const split: React.CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 'clamp(24px,4vw,56px)', alignItems: 'center' };
 const col: React.CSSProperties = { flex: '1 1 320px', minWidth: 0 };
@@ -74,9 +75,10 @@ export default function StoresAbout() {
             <div>
               <p style={eyebrow}>About Us</p>
               <h2 style={{ ...heading, marginBottom: 12 }}>A Dough Cookie — baked fresh, served warm.</h2>
-              <div style={{ position: 'relative', width: '100%', height: 150, borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', marginBottom: 12 }}>
-                <Image src="/assets/cookies_new_images/cookie-sundae.jpeg" alt="A dough cookie sundae with warm cookies" fill sizes="100vw" style={{ objectFit: 'cover' }} />
-              </div>
+              <AboutVideo
+                sizes="100vw"
+                style={{ width: '100%', aspectRatio: '16 / 9', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-md)', marginBottom: 12 }}
+              />
               <p style={{ ...body, marginBottom: 12 }}>Warm, soft-centre cookies with premium fillings and gift-ready packaging — baked in small batches so every centre stays soft.</p>
               <Link href="/about" style={link}>Read our full story <ArrowRight size={15} /></Link>
             </div>
@@ -102,9 +104,7 @@ export default function StoresAbout() {
                 <Link href="/about" style={link}>Read our full story <ArrowRight size={15} /></Link>
               </div>
               <div style={col}>
-                <div style={imgWrap}>
-                  <Image src="/assets/cookies_new_images/cookie-sundae.jpeg" alt="A dough cookie sundae with warm cookies" fill sizes="(max-width:860px) 100vw, 540px" style={{ objectFit: 'cover' }} />
-                </div>
+                <AboutVideo style={{ ...imgWrap, aspectRatio: '16 / 9', maxWidth: 560, marginInline: 'auto' }} />
               </div>
             </div>
           )}

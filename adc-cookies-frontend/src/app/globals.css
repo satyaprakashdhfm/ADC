@@ -159,7 +159,23 @@ body::before {
 @keyframes annSlide { from{opacity:0;transform:translateY(7px)} to{opacity:1;transform:none} }
 @keyframes waPulse { 0%{transform:scale(1);opacity:.55} 70%,100%{transform:scale(1.6);opacity:0} }
 
+/* Home products grid — 4-up, stepping down on smaller screens */
+.home-products-grid { grid-template-columns: repeat(4, 1fr); }
+@media (max-width:1024px) { .home-products-grid { grid-template-columns: repeat(3, 1fr) !important; } }
+@media (max-width:680px) { .home-products-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  /* Hide the mid-side hero cookies on phones so they don't crowd the centred text */
+  .hero-cookie--side { display: none !important; }
+}
+
+/* Footer (brand band) */
+.footer-link:hover { color: var(--white) !important; }
+.footer-pill { transition: transform .15s ease, box-shadow .15s ease; }
+.footer-pill:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+
 /* Mobile */
+/* Scale the whole UI down a touch on phones so more of each page is visible per screen
+   (rem-based type + spacing shrink proportionally). */
+@media (max-width:680px) { html { font-size: 94%; } }
 @media (max-width:760px) { :root { --hc: 300px; } }
 @media (max-width:480px) { :root { --hc: 240px; } }
 @media (max-width:680px) {
@@ -185,6 +201,8 @@ body::before {
      the page short on phones instead of stacking every column. */
   .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 20px 18px !important; }
   .footer-grid > div:first-child { grid-column: 1 / -1 !important; }
+  /* Mascot would collide with stacked columns on phones — hide it there. */
+  .footer-mascot { display: none !important; }
 }
 
 /* Home promo popup — portrait card on mobile, larger landscape card on desktop */

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { getPromoProduct } from '@/lib/api';
 
 // Slim top ribbon — rotates between the veg promise, the offer and the login/track-order nudge.
 const MESSAGES = [
@@ -10,11 +11,19 @@ const MESSAGES = [
 
 export default function AnnouncementBar() {
   const [i, setI] = useState(0);
+  // Trending product headlines the rotation (was the home popup; now just a ribbon line).
+  const [messages, setMessages] = useState<string[]>(MESSAGES);
 
   useEffect(() => {
-    const t = setInterval(() => setI(p => (p + 1) % MESSAGES.length), 4000);
-    return () => clearInterval(t);
+    getPromoProduct()
+      .then(p => { if (p?.name) setMessages([`🔥 Trending now: ${p.name} — freshly baked, order today`, ...MESSAGES]); })
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => setI(p => (p + 1) % messages.length), 4000);
+    return () => clearInterval(t);
+  }, [messages.length]);
 
   return (
     <div
@@ -32,7 +41,7 @@ export default function AnnouncementBar() {
           fontWeight: 700, letterSpacing: '.01em', animation: 'annSlide .5s var(--ease-out) both',
         }}
       >
-        {MESSAGES[i]}
+        {messages[i % messages.length]}
       </span>
     </div>
   );

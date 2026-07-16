@@ -308,7 +308,11 @@ function ShipmentTracker({ order }: { order: Order }) {
 }
 
 function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; expanded: boolean; onToggle: () => void; onReorder: () => void }) {
-  const colors = statusColor(order.orderStatus);
+  // Cancellation is terminal — if either the order OR the shipment is cancelled/RTO/returned,
+  // show CANCELLED, never a stale "Delivered". Keeps the badge, meta line and refund note in sync.
+  const cancelled = isCancelledStatus(order.orderStatus) || isCancelledStatus(order.shipmentStatus);
+  const displayStatus = cancelled ? 'Cancelled' : order.orderStatus;
+  const colors = statusColor(cancelled ? 'cancelled' : order.orderStatus);
   const items = order.items ?? [];
   const itemCount = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const giftCount = items.filter((item) => hasGift(parseOptions(item.selectedOptions))).length;
@@ -323,12 +327,12 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
         </span>
         <div style={{ flex: 1, minWidth: 260 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 7 }}>
-            <span style={{ padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: colors.bg, color: colors.fg, fontSize: 'var(--text-xs)', fontWeight: 900 }}>{order.orderStatus}</span>
+            <span style={{ padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: colors.bg, color: colors.fg, fontSize: 'var(--text-xs)', fontWeight: 900 }}>{displayStatus}</span>
             <span style={{ padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', color: 'var(--text-muted)', fontSize: 'var(--text-xs)', fontWeight: 800 }}>{order.paymentStatus}</span>
             {giftCount > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 900 }}><Gift size={12} /> Gift packed</span>}
           </div>
           <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 5 }}>Order {order.orderNumber}</h2>
-          <p style={{ color: 'var(--text-muted)', lineHeight: 1.45, fontSize: 'var(--text-sm)' }}>{formatDate(order.createdAt)} · {itemCount || items.length} item{(itemCount || items.length) === 1 ? '' : 's'} · {order.shipmentStatus || 'Preparing shipment'}</p>
+          <p style={{ color: 'var(--text-muted)', lineHeight: 1.45, fontSize: 'var(--text-sm)' }}>{formatDate(order.createdAt)} · {itemCount || items.length} item{(itemCount || items.length) === 1 ? '' : 's'} · {cancelled ? 'Cancelled' : (order.shipmentStatus || 'Preparing shipment')}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>{formatMoney(order.totalAmount)}</div>

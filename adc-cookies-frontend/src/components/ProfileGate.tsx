@@ -15,14 +15,16 @@ const DISMISS_KEY = 'adc_profile_prompt_dismissed'; // comma list of skipped fie
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ProfileGate() {
-  const { user, loading, updateProfile } = useAuth();
+  const { user, loading, profileLoaded, updateProfile } = useAuth();
   const [value, setValue] = useState('');
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
   const [field, setField] = useState<'phone' | 'email' | null>(null);
 
   useEffect(() => {
-    if (loading || !user) { setField(null); return; }
+    // Wait for the authoritative /me profile before deciding — the instant session-metadata
+    // user often lacks the phone/email, and acting on it made the prompt flash up then vanish.
+    if (loading || !profileLoaded || !user) { setField(null); return; }
     let skipped: string[] = [];
     try { skipped = (sessionStorage.getItem(DISMISS_KEY) || '').split(',').filter(Boolean); } catch {}
     // Phone first (needed for delivery), then email.
@@ -31,7 +33,7 @@ export default function ProfileGate() {
       : !user.email && !skipped.includes('email') ? 'email'
       : null;
     setField(need); setValue(''); setErr('');
-  }, [user, loading]);
+  }, [user, loading, profileLoaded]);
 
   if (!field || !user) return null;
 

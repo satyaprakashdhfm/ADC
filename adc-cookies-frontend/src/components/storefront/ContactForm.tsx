@@ -5,6 +5,19 @@ import { submitContact } from '@/lib/api';
 
 const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
+// Quick-pick topics so people don't stare at a blank box — each drops in a starter line
+// they can edit. (The full free-text box stays, so anything goes.)
+const TOPIC_STARTERS: Record<string, string> = {
+  'Bulk / corporate order': 'I’d like to place a bulk / corporate order for ',
+  'Gifting order': 'I’d like to send cookies as a gift — ',
+  'Franchise / partnership': 'I’m interested in a franchise / partnership. ',
+  'Order or delivery help': 'I need help with my order / delivery. ',
+  'Custom / theme cookies': 'I’d like custom / themed cookies for ',
+  'Feedback': 'I’d like to share some feedback: ',
+  'Something else': '',
+};
+const TOPICS = Object.keys(TOPIC_STARTERS);
+
 const inputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box', padding: '13px 16px', borderRadius: 'var(--radius-input)',
   border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)',
@@ -16,7 +29,16 @@ export default function ContactForm() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
+  const [topic, setTopic] = useState('');
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
+
+  // Picking a topic drops in a starter line — but never clobbers text the user has typed
+  // themselves (only replaces an empty box or a previously-inserted starter).
+  const pickTopic = (t: string) => {
+    setTopic(t);
+    const starters = Object.values(TOPIC_STARTERS);
+    setForm(f => ({ ...f, message: (!f.message || starters.includes(f.message)) ? TOPIC_STARTERS[t] : f.message }));
+  };
 
   const valid = form.name.trim() && isEmail(form.email.trim()) && form.message.trim();
 
@@ -28,6 +50,7 @@ export default function ContactForm() {
       await submitContact({ name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim() || undefined, message: form.message.trim() });
       setStatus('done');
       setForm({ name: '', email: '', phone: '', message: '' });
+      setTopic('');
     } catch (err) {
       setStatus('error');
       setError(err instanceof Error ? err.message : 'Could not send. Please try again.');
@@ -63,7 +86,27 @@ export default function ContactForm() {
       </div>
       <div>
         <label style={labelStyle} htmlFor="cf-message">How can we help? *</label>
-        <textarea id="cf-message" rows={4} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Tell us about your order, gifting, or bulk request…" value={form.message} onChange={set('message')} />
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          {TOPICS.map(t => {
+            const on = topic === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => pickTopic(t)}
+                style={{
+                  padding: '7px 13px', borderRadius: 'var(--radius-pill)', cursor: 'pointer',
+                  border: `1.5px solid ${on ? 'var(--brand-secondary)' : 'var(--border-default)'}`,
+                  background: on ? 'var(--gradient-warm)' : 'var(--surface-raised)',
+                  color: on ? 'var(--white)' : 'var(--text-body)',
+                  fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-xs)',
+                  boxShadow: on ? 'var(--shadow-brand)' : 'none', transition: 'all .15s ease',
+                }}
+              >{t}</button>
+            );
+          })}
+        </div>
+        <textarea id="cf-message" rows={4} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Pick a topic above, or tell us about your order, gifting, or bulk request…" value={form.message} onChange={set('message')} />
       </div>
       {status === 'error' && <div style={{ color: 'var(--status-error)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>{error}</div>}
       <button type="submit" disabled={!valid || status === 'sending'} style={{ padding: '15px', borderRadius: 'var(--radius-button)', border: 'none', background: valid && status !== 'sending' ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: valid && status !== 'sending' ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>

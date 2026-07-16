@@ -1,14 +1,18 @@
 'use client';
 import Image from 'next/image';
-import { X, Info, Image as ImageIcon, BookOpen, Mail, ShoppingBag, ChevronRight, LogOut, User } from 'lucide-react';
+import { X, Home, MapPin, Briefcase, Info, Image as ImageIcon, Mail, ShoppingBag, ChevronRight, LogOut, User } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
+// Mirrors the desktop navbar, minus the product menus (Buy Cookies / Cookie Tins) —
+// those live behind the search + Order CTA on mobile.
 const NAV_LINKS = [
+  { label: 'Home', icon: <Home size={16} />, href: '/' },
+  { label: 'Locations', icon: <MapPin size={16} />, href: '/locations' },
+  { label: 'Partner with us', icon: <Briefcase size={16} />, href: '/franchise' },
   { label: 'About Us', icon: <Info size={16} />, href: '/about' },
   { label: 'Gallery', icon: <ImageIcon size={16} />, href: '/gallery' },
-  { label: 'Blog', icon: <BookOpen size={16} />, href: '/blogs' },
-  { label: 'Contact Us', icon: <Mail size={16} />, href: '/contact' },
+  { label: 'Contact', icon: <Mail size={16} />, href: '/contact' },
 ];
 
 interface MenuDrawerProps {

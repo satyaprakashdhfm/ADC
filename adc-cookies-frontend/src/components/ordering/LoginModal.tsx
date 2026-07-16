@@ -182,11 +182,11 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
 
   return (
     <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 90, background: 'var(--espresso-50)', backdropFilter: 'blur(4px)',
+      position: 'fixed', inset: 0, zIndex: 120, background: 'var(--espresso-50)', backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        zIndex: 91, width: 'min(440px,94vw)', maxHeight: '92vh', background: 'var(--surface-page)',
+        zIndex: 121, width: 'min(440px,94vw)', maxHeight: '92vh', background: 'var(--surface-page)',
         borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)',
         overflow: 'hidden', display: 'flex', flexDirection: 'column',
         animation: 'riseIn .3s var(--ease-spring) both',

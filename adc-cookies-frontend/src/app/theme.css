@@ -53,6 +53,10 @@
   --ivory-card: #f9efda;      /* Default card/drawer/modal surface app-wide (feeds --surface-card; never stark white) */
   --cream-lightest: #f5ebd5;  /* Checkout order-summary box fill (OrderingApp) */
 
+  /* -- Footer (brand-coloured band — the big orange footer) -- */
+  --footer-bg: linear-gradient(158deg, var(--orange-500) 0%, var(--orange-700) 58%, var(--orange-800) 100%); /* warm brand band behind the whole footer */
+  --footer-watermark: rgba(255,255,255,.07); /* giant "cookie" wordmark ghosted behind footer content */
+
   /* -- Warm accents -- */
   --orange-cta: #eca87b;      /* Admin dashboard charts (sales line/area, bar rows, pie series 1) · Razorpay checkout theme colour */
   --orange-light: #dc9556;    /* Announcement bar background (the top promo strip) */
@@ -128,6 +132,9 @@
   /* Named after their base colour + opacity percent so the value is self-describing. */
   /* White */
   --white-90: rgba(255,255,255,.9);
+  --white-82: rgba(255,255,255,.82);
+  --white-72: rgba(255,255,255,.72);
+  --white-60: rgba(255,255,255,.6);
   --white-40: rgba(255,255,255,.4);
   --white-16: rgba(255,255,255,.16);
   --white-12: rgba(255,255,255,.12);

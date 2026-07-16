@@ -9,6 +9,7 @@ interface User { name: string; email: string; role: string; initials: string; ph
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  profileLoaded: boolean;  // true once the authoritative /me profile has loaded (or there's no user)
   login: (email: string, password: string) => Promise<string>;            // returns role
   register: (name: string, email: string, phone: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
@@ -35,6 +36,7 @@ const userFromMe = (me: MeResponse): User =>
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   // Instant user straight from the Supabase session (no network) so the UI reflects login
   // immediately. We never block the logged-in state on a backend round-trip.
@@ -46,22 +48,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { name, email, role: 'CUSTOMER', initials: initialsOf(name), phone: meta.phone };
   };
 
-  // Refine with the canonical name + role from our backend (DB) in the background.
+  // Session metadata often lacks the phone/email (those live in our DB, not Supabase),
+  // so merging preserves contact details we already know instead of blanking them on every
+  // token refresh / tab-refocus — which is what made the ProfileGate flash back up.
+  const mergeSessionUser = (prev: User | null, next: User | null): User | null => {
+    if (!next) return null;
+    if (!prev) return next;
+    return {
+      ...next,
+      phone: next.phone || prev.phone,
+      email: next.email || prev.email,
+      role: prev.role || next.role,
+      name: next.name || prev.name,
+      initials: initialsOf(next.name || prev.name),
+    };
+  };
+
+  // Refine with the canonical name + role + contact from our backend (DB) in the background.
   // If it's slow or fails, the session-based user above stays — login never "lags".
   const refineFromBackend = async () => {
     try { const me = await getMe(); setUser(userFromMe(me)); } catch { /* keep session user */ }
+    finally { setProfileLoaded(true); }
   };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setUser(fromSessionMeta(data.session));   // instant — no waiting on the backend
+      setUser(prev => mergeSessionUser(prev, fromSessionMeta(data.session)));   // instant — no waiting on the backend
       setLoading(false);
-      if (data.session) refineFromBackend();
+      if (data.session) refineFromBackend(); else setProfileLoaded(true);
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(fromSessionMeta(session));         // instant on login / logout / token refresh
-      if (session) refineFromBackend();
+      setUser(prev => mergeSessionUser(prev, fromSessionMeta(session)));         // instant on login / logout / token refresh
+      if (session) refineFromBackend(); else setProfileLoaded(true);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -71,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
     const me = await getMe();
     setUser(userFromMe(me));
+    setProfileLoaded(true);
     return me.role;
   };
 
@@ -83,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!data.session) throw new Error('Account created — please check your email to confirm, then log in.');
     const me = await getMe();
     setUser(userFromMe(me));
+    setProfileLoaded(true);
   };
 
   const loginWithGoogle = async () => {
@@ -113,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
     const me = await getMe();
     setUser(userFromMe(me));
+    setProfileLoaded(true);
     return { role: me.role, needsName };
   };
 
@@ -138,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
+    <AuthContext.Provider value={{ user, loading, profileLoaded, login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, ChevronDown, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, PackageCheck } from 'lucide-react';
 import { STORES } from '@/lib/stores';
+import { LocationPill, LocationBanner } from '@/components/storefront/LocationPicker';
 import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
@@ -425,6 +426,25 @@ function TinModal({ tin, onClose, onAdd }: { tin: typeof FALLBACK_TINS[0] | null
   );
 }
 
+// Valid Indian states + UTs — the address form only accepts one of these.
+const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 'Haryana',
+  'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
+  'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
+  'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi',
+  'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
+];
+const PIN_RE = /^[1-9]\d{5}$/; // Indian PIN: 6 digits, not starting with 0
+// Map a free-text (e.g. geocoded) state onto a canonical list entry.
+const matchState = (s?: string) => {
+  const t = (s || '').toLowerCase().trim();
+  if (!t) return '';
+  return INDIAN_STATES.find(x => x.toLowerCase() === t)
+    || INDIAN_STATES.find(x => t.includes(x.toLowerCase()) || x.toLowerCase().includes(t))
+    || '';
+};
+
 /* ---- Checkout flow — one page, two steps: 'review' (address + order) then 'pay' (payment) ---- */
 function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const router = useRouter();
@@ -492,7 +512,14 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     : null;
 
   const aset = (k: keyof typeof aform) => (e: React.ChangeEvent<HTMLInputElement>) => setAform({ ...aform, [k]: e.target.value });
-  const aValid = aform.fullName && aform.addressLine1 && aform.city && aform.pincode;
+  const pinOk = PIN_RE.test(aform.pincode.trim());
+  const stateOk = INDIAN_STATES.some(s => s.toLowerCase() === aform.state.trim().toLowerCase());
+  const aValid = !!(aform.fullName.trim() && aform.addressLine1.trim() && aform.city.trim() && pinOk && stateOk);
+  // Can't head to payment without a selected, PIN-valid, serviceable address.
+  const chosenPinOk = PIN_RE.test((chosen?.pincode || '').trim());
+  const canProceed = hydrated && lines.length > 0 && !!chosen && chosenPinOk && (delivCheck ? delivCheck.serviceable : true);
+  const fieldStyle: React.CSSProperties = { flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
+  const hintStyle: React.CSSProperties = { fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 600 };
   const EMPTY_AFORM = { fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' };
   // New address starts pre-filled with the signed-in user's name & phone (they can edit it, e.g. gifting to someone else).
   const prefillAform = () => ({ ...EMPTY_AFORM, fullName: user?.name || '', phone: user?.phone || '' });
@@ -547,8 +574,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             // Flat / House / Building is user-specific — GPS can't know it, so leave it for the user to type.
             addressLine2: f.addressLine2 || area,
             city: a.city || cleanDistrict(a.state_district) || a.town || a.municipality || a.county || a.village || f.city,
-            state: a.state || f.state,
-            pincode: a.postcode || f.pincode,
+            state: matchState(a.state) || f.state,
+            pincode: (a.postcode || '').replace(/\D/g, '').slice(0, 6) || f.pincode,
           }));
           if (!a.postcode && !a.city && !a.state_district) setDetectErr('Got your location, but couldn’t read the full address — please complete it.');
           else setDetectErr('');
@@ -556,8 +583,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           setDetectErr('Could not look up your address. Please fill it in manually.');
         } finally { setDetecting(false); }
       },
-      err => { setDetecting(false); setDetectErr(err.code === 1 ? 'Location permission denied — allow it or type your address.' : 'Could not get your location. Please type your address.'); },
-      { enableHighAccuracy: true, timeout: 10000 },
+      err => {
+        setDetecting(false);
+        setDetectErr(
+          err.code === 1 ? 'Location permission denied — allow it in your browser, or just type your address below.'
+            : err.code === 3 ? 'Location timed out — try again, or type your address below.'
+              : 'Could not read your location — please type your address below.',
+        );
+      },
+      // High-accuracy often times out on desktops/indoors; coarse + a longer window is far more reliable.
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
     );
   };
 
@@ -791,10 +826,15 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                         <input key={k} value={aform[k as keyof typeof aform]} onChange={aset(k as keyof typeof aform)} placeholder={ph} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                       ))}
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        <input value={aform.city} onChange={aset('city')} placeholder="City" style={{ flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
-                        <input value={aform.state} onChange={aset('state')} placeholder="State" style={{ flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
-                        <input value={aform.pincode} onChange={aset('pincode')} placeholder="Pincode" inputMode="numeric" maxLength={6} style={{ flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
+                        <input value={aform.city} onChange={aset('city')} placeholder="City" style={fieldStyle} />
+                        <select value={aform.state} onChange={e => setAform(f => ({ ...f, state: e.target.value }))} style={{ ...fieldStyle, cursor: 'pointer', color: aform.state ? 'var(--text-strong)' : 'var(--text-subtle)', appearance: 'none' }}>
+                          <option value="">State</option>
+                          {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <input value={aform.pincode} onChange={e => setAform(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))} placeholder="Pincode" inputMode="numeric" maxLength={6} style={fieldStyle} />
                       </div>
+                      {aform.pincode.length > 0 && !pinOk && <div style={hintStyle}>Enter a valid 6-digit PIN code.</div>}
+                      {!aform.state && <div style={{ ...hintStyle, color: 'var(--text-muted)', fontWeight: 500 }}>Select your state to continue.</div>}
 
                       {/* Save this address as … */}
                       <div>
@@ -956,9 +996,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
       <div style={{ padding: '14px var(--gutter)', borderTop: '1px solid var(--border-soft)', background: 'var(--surface-card)', flex: 'none' }}>
         {step === 'review' ? (
-          <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!hydrated || lines.length === 0} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: hydrated && lines.length ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: hydrated && lines.length ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            Proceed to Pay · ₹{grand} <ArrowRight size={18} />
-          </button>
+          <>
+            {hydrated && lines.length > 0 && !chosen && (
+              <div style={{ maxWidth: 720, margin: '0 auto 10px', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', textAlign: 'center', fontWeight: 700 }}>
+                {user ? 'Add & select a delivery address to continue.' : 'Log in and add a delivery address to continue.'}
+              </div>
+            )}
+            <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!canProceed} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: canProceed ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: canProceed ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              Proceed to Pay · ₹{grand} <ArrowRight size={18} />
+            </button>
+          </>
         ) : (
           <>
             {payError && (
@@ -1018,75 +1065,6 @@ function OrderSuccessPage({ show, total, orderId, onBackToMenu, onViewOrder }: {
       <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--surface-card)', borderTop: '1px solid var(--border-soft)' }}>
         <button onClick={onViewOrder} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><PackageCheck size={18} /> See your order &amp; status</button>
         <button onClick={onBackToMenu} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Order more cookies</button>
-      </div>
-    </div>
-  );
-}
-
-/* ---- Location Sheet — pick a saved delivery address or add a new one ---- */
-function LocationSheet({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (a: Address) => void }) {
-  const { user } = useAuth();
-  const [addresses, setAddresses] = useState<Address[]>([]);
-  const [adding, setAdding] = useState(false);
-  const [f, setF] = useState({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '' });
-  useEffect(() => {
-    if (open && user) getAddresses().then(a => setAddresses(a || [])).catch(() => setAddresses([]));
-    else if (!user) setAddresses([]);
-  }, [open, user]);
-  if (!open) return null;
-
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
-  const valid = f.fullName && f.addressLine1 && f.city && f.pincode;
-  const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
-  const save = async () => {
-    const data: Omit<Address, 'id'> = { ...f, isDefault: false };
-    let picked: Address;
-    try { picked = await addAddress(data); } catch { picked = { ...data, id: Date.now() }; }
-    setAddresses(p => [...p, picked]); onPick(picked); onClose();
-  };
-
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'var(--surface-overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 'min(420px,92vw)', maxHeight: '78vh', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', overflow: 'hidden', display: 'flex', flexDirection: 'column', animation: 'riseIn .28s var(--ease-spring) both' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '15px 18px', borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-card)', flex: 'none' }}>
-          <MapPin size={20} color="var(--brand-secondary)" />
-          <div style={{ flex: 1, font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>{adding ? 'Add address' : 'Choose location'}</div>
-          <button onClick={onClose} aria-label="Close" style={{ width: 34, height: 34, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><X size={17} /></button>
-        </div>
-        <div className="hide-sb" style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 20px' }}>
-          {adding ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <input style={inp} placeholder="Full name" value={f.fullName} onChange={set('fullName')} />
-              <input style={inp} placeholder="Phone" value={f.phone} onChange={set('phone')} />
-              <input style={inp} placeholder="Flat / House / Building" value={f.addressLine1} onChange={set('addressLine1')} />
-              <input style={inp} placeholder="Area / Landmark" value={f.addressLine2} onChange={set('addressLine2')} />
-              <div style={{ display: 'flex', gap: 10 }}>
-                <input style={inp} placeholder="City" value={f.city} onChange={set('city')} />
-                <input style={inp} placeholder="Pincode" value={f.pincode} onChange={set('pincode')} />
-              </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 2 }}>
-                <button disabled={!valid} onClick={save} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: valid ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: valid ? 'pointer' : 'not-allowed' }}>Save &amp; use</button>
-                <button onClick={() => setAdding(false)} style={{ padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Back</button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {addresses.map(a => (
-                <button key={a.id} onClick={() => { onPick(a); onClose(); }} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', textAlign: 'left' }}>
-                  <span style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{a.isDefault ? <Home size={17} color="var(--brand-secondary)" /> : <Briefcase size={17} color="var(--brand-secondary)" />}</span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{a.isDefault ? 'Home' : 'Work'} · {a.city}</span>
-                    <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.4 }}>{[a.addressLine1, a.addressLine2, a.pincode].filter(Boolean).join(', ')}</span>
-                  </span>
-                  <ChevronRight size={18} color="var(--text-subtle)" />
-                </button>
-              ))}
-              <button onClick={() => { setF(ff => ({ ...ff, fullName: ff.fullName || user?.name || '', phone: ff.phone || user?.phone || '' })); setAdding(true); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
-                <Plus size={17} color="var(--brand-secondary)" /><span style={{ fontWeight: 700, color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Add new address</span>
-              </button>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -1175,8 +1153,6 @@ export default function OrderingApp() {
   const [search, setSearch] = useState('');
   const [tin, setTin] = useState<typeof FALLBACK_TINS[0] | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [locationOpen, setLocationOpen] = useState(false);
-  const [location, setLocation] = useState('Bengaluru');
 
   // Load products from backend — faithful mapping (real images, groups, tags, stable ratings)
   useEffect(() => {
@@ -1261,9 +1237,7 @@ export default function OrderingApp() {
               </a>
               <SearchSuggest value={search} onChange={setSearch} onPick={name => { setActive('Cookies'); setSearch(name); }} items={menu} placeholder="Search cookies…"
                 wrapStyle={{ flex: 1, maxWidth: 620, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-card)', borderRadius: 'var(--radius-pill)', padding: '9px 16px', border: '1.5px solid var(--border-default)' }} />
-              <button onClick={() => setLocationOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-body)', fontWeight: 700, fontSize: 'var(--text-sm)', border: 'none', background: 'transparent', cursor: 'pointer', flex: 'none' }}>
-                <MapPin size={18} color="var(--brand-secondary)" /> {location}
-              </button>
+              <LocationPill />
               <button onClick={() => router.push('/checkout')} aria-label={`View cart, ${count} items`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', flex: 'none' }}>
                 <ShoppingBag size={20} />
                 {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--gradient-warm)', color: 'var(--white)', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>}
@@ -1313,6 +1287,7 @@ export default function OrderingApp() {
                 <span style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>{active}</span>
                 <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-subtle)', fontWeight: 600 }}>{loading || active === 'Corporate Gifting' ? '' : active === 'Cookie Tins' ? tins.length : filtered.length}</span>
               </div>
+              <LocationBanner />
               {active === 'Corporate Gifting' ? (
                 <CorporatePanel />
               ) : active === 'Cookie Tins' ? (
@@ -1376,7 +1351,6 @@ export default function OrderingApp() {
           </div>
 
         <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
-        <LocationSheet open={locationOpen} onClose={() => setLocationOpen(false)} onPick={a => setLocation(a.city)} />
         </div>
       </>
     );
@@ -1399,6 +1373,9 @@ export default function OrderingApp() {
               <button onClick={() => setLoginOpen(true)} aria-label="Login" style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><User size={20} /></button>
             )}
           </div>
+          <div style={{ padding: '0 18px 12px' }}>
+            <LocationPill block />
+          </div>
           <div style={{ padding: '0 18px 14px' }}>
             <SearchSuggest value={search} onChange={setSearch} onPick={name => { setActive('Cookies'); setSearch(name); }} items={menu} placeholder="Search Cookies…"
               wrapStyle={{ display: 'flex', alignItems: 'center', background: 'var(--surface-raised)', borderRadius: 'var(--radius-input)', padding: '11px 16px', gap: 10, border: '1.5px solid var(--border-default)' }} />
@@ -1420,6 +1397,7 @@ export default function OrderingApp() {
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
             <span style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>{active}</span>
           </div>
+          <LocationBanner />
           {active === 'Corporate Gifting' ? (
             <div style={{ paddingBottom: 24 }}><CorporatePanel /></div>
           ) : active === 'Cookie Tins' ? (
@@ -1464,7 +1442,6 @@ export default function OrderingApp() {
         </div>
         <TinModal tin={tin} onClose={() => setTin(null)} onAdd={addTin} />
         <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
-        <LocationSheet open={locationOpen} onClose={() => setLocationOpen(false)} onPick={a => setLocation(a.city)} />
       </div>
 
       {/* Category popup — compact dark menu, opens above the floating menu button */}
