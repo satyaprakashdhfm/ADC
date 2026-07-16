@@ -6,13 +6,8 @@ import { ShoppingBag, Plus, Minus, ArrowRight, Cookie, Gift, Briefcase } from 'l
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 
-const CATS = [
-  { key: 'COOKIES', label: 'Cookies', icon: <Cookie size={16} /> },
-  { key: 'TINS', label: 'Cookie Tins', icon: <Gift size={16} /> },
-] as const;
-type CatKey = typeof CATS[number]['key'];
-
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
+const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'clamp(14px,1.8vw,22px)' };
 
 function ProductCard({ p }: { p: Product }) {
   const { cart, setQty } = useCart();
@@ -49,11 +44,19 @@ function ProductCard({ p }: { p: Product }) {
   );
 }
 
+function SubHead({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: 'clamp(26px,3.5vw,44px) 0 16px' }}>
+      <span style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--amber-50)', color: 'var(--brand-secondary)', display: 'grid', placeItems: 'center', flex: 'none' }}>{icon}</span>
+      <h3 style={{ font: '900 clamp(1.4rem,1.1rem + 1.2vw,2rem)/1 var(--font-display)', color: 'var(--text-strong)', margin: 0, letterSpacing: '-.02em' }}>{title}</h3>
+    </div>
+  );
+}
+
 export default function HomeProducts() {
   const router = useRouter();
   const { count, total } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
-  const [cat, setCat] = useState<CatKey>('COOKIES');
   const [q, setQ] = useState('');
   const sectionRef = useRef<HTMLElement>(null);
   const [inView, setInView] = useState(false); // the floating checkout bar only shows while browsing products
@@ -68,64 +71,68 @@ export default function HomeProducts() {
     return () => io.disconnect();
   }, []);
 
-  // Deep-link support (replaces the old /order?cat=&q= — those now land here).
+  // Deep-link from old /order?q= / nav search: float the match to the top and scroll here.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const c = params.get('cat');
-    const query = params.get('q');
-    if (c === 'tins') setCat('TINS'); else if (c === 'cookies') setCat('COOKIES');
-    if (query) { setQ(query); if (/tin|gift/i.test(query)) setCat('TINS'); }
-    // Arrived from a product/search link → scroll the grid into view.
-    if (c || query) {
-      const t = setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 300);
-      return () => clearTimeout(t);
-    }
+    const query = new URLSearchParams(window.location.search).get('q');
+    if (!query) return;
+    setQ(query);
+    const t = setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 300);
+    return () => clearTimeout(t);
   }, []);
 
-  // Selecting/searching a product floats it to the top but KEEPS the others visible
-  // (so you always see "more" cookies below), rather than hiding the rest.
+  // Selecting/searching a product floats it to the top but KEEPS every other cookie visible.
   const ql = q.trim().toLowerCase();
-  const list = products
-    .filter(p => p.category === cat && p.isAvailable)
-    .filter(p => !/sundae/i.test(p.name)) // Cookie Sundae hidden from the menu for now
+  const cookies = products
+    .filter(p => p.category === 'COOKIES' && p.isAvailable && !/sundae/i.test(p.name))
     .sort((a, b) => (ql ? (a.name.toLowerCase().includes(ql) ? 0 : 1) - (b.name.toLowerCase().includes(ql) ? 0 : 1) : 0));
+  const tins = products.filter(p => p.category === 'TINS' && p.isAvailable);
 
   return (
     <section ref={sectionRef} id="products" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 'clamp(20px,3vw,32px)' }}>
+        <div style={{ textAlign: 'center', marginBottom: 'clamp(6px,1.5vw,14px)' }}>
           <p style={eyebrow}>Order online</p>
           <h2 style={{ font: '900 clamp(1.7rem,1.2rem + 2vw,2.6rem)/1 var(--font-display)', letterSpacing: '-.02em', color: 'var(--text-strong)', margin: '0 0 10px' }}>Fresh from the oven</h2>
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-body)', maxWidth: 520, margin: '0 auto' }}>Pick your favourites and add them to the cart — checkout in a tap.</p>
         </div>
 
-        {/* Category tabs */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 'clamp(20px,3vw,30px)' }}>
-          {CATS.map(c => {
-            const on = c.key === cat;
-            return (
-              <button key={c.key} onClick={() => { setCat(c.key); setQ(''); }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', border: `1.5px solid ${on ? 'var(--brand-secondary)' : 'var(--border-default)'}`, background: on ? 'var(--gradient-warm)' : 'var(--surface-card)', color: on ? 'var(--white)' : 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: on ? 'var(--shadow-brand)' : 'none' }}>
-                {c.icon} {c.label}
-              </button>
-            );
-          })}
-          <button onClick={() => router.push('/franchise')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>
-            <Briefcase size={16} /> Corporate &amp; bulk
-          </button>
-        </div>
-
-        {/* Grid */}
-        {list.length === 0 ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px 0' }}>Loading fresh cookies…</p>
+        {/* Cookies */}
+        <SubHead icon={<Cookie size={19} />} title="Cookies" />
+        {cookies.length === 0 ? (
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0' }}>Loading fresh cookies…</p>
         ) : (
-          <div className="home-products-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'clamp(14px,1.8vw,22px)' }}>
-            {list.map(p => <ProductCard key={p.id} p={p} />)}
+          <div className="home-products-grid" style={gridStyle}>
+            {cookies.map(p => <ProductCard key={p.id} p={p} />)}
           </div>
         )}
+
+        {/* Cookie Tins */}
+        {tins.length > 0 && (
+          <>
+            <SubHead icon={<Gift size={19} />} title="Cookie Tins" />
+            <div className="home-products-grid" style={gridStyle}>
+              {tins.map(p => <ProductCard key={p.id} p={p} />)}
+            </div>
+          </>
+        )}
+
+        {/* Corporate & bulk gifting — last, as a wide card */}
+        <button
+          onClick={() => router.push('/contact')}
+          style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: 'var(--surface-inverse)', color: 'var(--cream-100)', padding: 'clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 260, flex: '1 1 320px' }}>
+            <span style={{ width: 46, height: 46, borderRadius: 13, background: 'var(--white-16)', color: 'var(--white)', display: 'grid', placeItems: 'center', flex: 'none' }}><Briefcase size={22} /></span>
+            <div>
+              <h3 style={{ font: '900 clamp(1.3rem,1rem + 1.2vw,1.9rem)/1.1 var(--font-display)', color: 'var(--white)', margin: '0 0 4px', letterSpacing: '-.02em' }}>Corporate &amp; Bulk Gifting</h3>
+              <p style={{ color: 'var(--cream-100-72)', margin: 0, fontSize: 'var(--text-sm)', lineHeight: 1.5, maxWidth: 460 }}>Cookies for teams, clients &amp; celebrations — branded boxes, bulk pricing and coordinated delivery.</p>
+            </div>
+          </div>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '13px 22px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', flex: 'none', boxShadow: 'var(--shadow-brand)' }}>Enquire / Order in bulk <ArrowRight size={16} /></span>
+        </button>
       </div>
 
-      {/* Floating checkout bar — only while the products section is on screen (elsewhere use the top cart) */}
+      {/* Floating checkout bar — only while the products section is on screen */}
       {count > 0 && inView && (
         <button onClick={() => router.push('/checkout')} className="home-cart-bar"
           style={{ position: 'fixed', left: '50%', bottom: 20, transform: 'translateX(-50%)', zIndex: 45, display: 'flex', alignItems: 'center', gap: 12, padding: '13px 22px', borderRadius: 'var(--radius-pill)', border: 'none', cursor: 'pointer', background: 'var(--surface-inverse)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-xl)' }}>

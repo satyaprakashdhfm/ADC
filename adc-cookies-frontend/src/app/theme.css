@@ -55,9 +55,9 @@
   --gold: var(--peach-100);   /* CREAM (#FFF4DF) bands — products · "Finest Ingredients" · "Get in Touch" · Order/Checkout/Account bg */
   --band-ivory: var(--peach-300); /* LIGHT-ORANGE (#FFCD90) bands — "About Us" · "Our Stores" · reviews strip (alternates with the cream --gold bands) */
   --cream-bg: var(--peach-100); /* fixed backdrop behind EVERY page · home search-bar fill (nav band now uses --navbar-bg) */
-  --vanilla: #fdf1d8;         /* Cards on inner pages (product/store/form) · Order/Checkout/Account cards · home category cards */
-  --vanilla-raised: #F5E7C6;  /* Inputs & chips sitting INSIDE vanilla cards (a notch darker so fields stand out) */
-  --ivory-card: #f9efda;      /* Default card/drawer/modal surface app-wide (feeds --surface-card; never stark white) */
+  --vanilla: #F3E5C2;         /* Cards on inner pages (product/store/form) · Order/Checkout/Account cards · home category cards — warm beige */
+  --vanilla-raised: #E9D8AF;  /* Inputs & chips sitting INSIDE vanilla cards (a notch darker so fields stand out) */
+  --ivory-card: #F0E1BD;      /* Default card/drawer/modal surface app-wide (feeds --surface-card) — warm beige */
   --cream-lightest: #f5ebd5;  /* Checkout order-summary box fill (OrderingApp) */
 
   /* -- Footer (brand-coloured band — the big orange footer) -- */
