@@ -206,10 +206,12 @@ body::before {
   .account-address-grid { grid-template-columns: 1fr !important; }
   /* Footer: brand on top (full width), then Shop | Company / Help side by side — keeps
      the page short on phones instead of stacking every column. */
-  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 20px 18px !important; }
+  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 14px 16px !important; }
   .footer-grid > div:first-child { grid-column: 1 / -1 !important; }
   /* Mascot would collide with stacked columns on phones — hide it there. */
   .footer-mascot { display: none !important; }
+  /* Shorter footer on phones */
+  .site-footer { padding-top: 24px !important; padding-bottom: 12px !important; border-radius: 22px 22px 0 0 !important; }
 }
 
 /* Home promo popup — portrait card on mobile, larger landscape card on desktop */

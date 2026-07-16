@@ -33,11 +33,11 @@ export default function HomeHero() {
         {/* Center content */}
         <motion.div initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           style={{ position: 'relative', zIndex: 3, textAlign: 'center', padding: '0 var(--gutter)', maxWidth: 720 }}>
-          <Image src="/assets/adc-logo.png" width={360} height={260} alt="a dough cookie" priority style={{ width: 'clamp(160px,22vw,260px)', height: 'auto', margin: '0 auto 8px' }} />
-          <h1 style={{ font: '900 clamp(1.9rem,1.4rem + 3.2vw,3.3rem)/1.03 var(--font-display)', letterSpacing: '-.03em', color: 'var(--text-strong)', margin: '0 0 14px', textWrap: 'balance' }}>
+          <Image src="/assets/adc-logo.png" width={480} height={347} alt="a dough cookie" priority style={{ width: 'clamp(230px,36vw,400px)', height: 'auto', margin: '0 auto 10px' }} />
+          <h1 style={{ font: '900 clamp(1.35rem,1.05rem + 1.7vw,2.2rem)/1.08 var(--font-display)', letterSpacing: '-.02em', color: 'var(--text-strong)', margin: '0 0 12px', textWrap: 'balance' }}>
             Chunky, gooey cookies — baked fresh, delivered warm.
           </h1>
-          <p style={{ fontSize: 'clamp(1rem,.9rem + .4vw,1.15rem)', color: 'var(--text-body)', lineHeight: 1.55, maxWidth: 500, margin: '0 auto 24px', fontWeight: 600 }}>
+          <p style={{ fontSize: 'clamp(.9rem,.85rem + .3vw,1.05rem)', color: 'var(--text-body)', lineHeight: 1.5, maxWidth: 460, margin: '0 auto 22px', fontWeight: 600 }}>
             Handcrafted in small batches with real butter, couverture chocolate &amp; 100% real fillings.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>

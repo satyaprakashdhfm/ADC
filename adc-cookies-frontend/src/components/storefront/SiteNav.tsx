@@ -142,31 +142,33 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
           maxWidth: 1680, margin: '0 auto', padding: 'clamp(8px,1.6vw,12px) var(--gutter) 10px',
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
               <Image
                 src="/assets/adc-logo.png"
                 width={232}
                 height={168}
                 alt="a dough cookie"
                 priority
-                style={{ height: 'clamp(52px,13vw,80px)', width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }}
+                style={{ height: 'clamp(46px,11vw,66px)', width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }}
               />
             </a>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* location as a compact inline link, not a full-width row */}
+            <LocationPill compact />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
               {cartButton}
               <button
                 onClick={() => setMenuOpen(true)}
+                className="nav-round-btn"
                 aria-label="Open menu"
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-xs)' }}
+                style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', boxShadow: 'var(--shadow-xs)', flex: 'none' }}
               >
-                <Menu size={20} /> <span className="home-topbar-menu-label">Menu</span>
+                <Menu size={20} />
               </button>
             </div>
           </div>
-
-          <LocationPill block />
 
           <form onSubmit={onSearch} role="search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream-bg)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '5px 5px 5px 14px', boxShadow: 'var(--shadow-xs)' }}>
             <Search size={17} color="var(--text-muted)" style={{ flex: 'none' }} />

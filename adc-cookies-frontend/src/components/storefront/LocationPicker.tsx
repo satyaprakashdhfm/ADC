@@ -62,10 +62,26 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
   );
 }
 
-/* ---- Pill: the header "Deliver to …" control. `block` = full-width row (mobile). ---- */
-export function LocationPill({ block = false }: { block?: boolean }) {
+/* ---- Pill: the header "Deliver to …" control.
+   `compact` = tiny inline pin-link (mobile navbar) · `block` = full-width row · default = desktop pill. ---- */
+export function LocationPill({ block = false, compact = false }: { block?: boolean; compact?: boolean }) {
   const { store, label } = useLocation();
   const [open, setOpen] = useState(false);
+
+  if (compact) {
+    return (
+      <>
+        <button onClick={() => setOpen(true)} aria-label="Choose delivery location"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1, padding: '6px 2px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--white)' }}>
+          <MapPin size={16} color="var(--white)" style={{ flex: 'none' }} />
+          <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--text-sm)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'left', color: 'var(--white)' }}>{store ? label : 'Set location'}</span>
+          <ChevronDown size={14} color="var(--white)" style={{ flex: 'none' }} />
+        </button>
+        <LocationModal open={open} onClose={() => setOpen(false)} />
+      </>
+    );
+  }
+
   return (
     <>
       <button onClick={() => setOpen(true)} aria-label="Choose delivery location"

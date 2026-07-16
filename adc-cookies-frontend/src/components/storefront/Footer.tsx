@@ -6,6 +6,7 @@ import { footerHeadingStyle, footerLinkStyle } from './footerStyles';
 export default function Footer() {
   return (
     <footer
+      className="site-footer"
       style={{
         position: 'relative',
         overflow: 'hidden',
