@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 
-// Dummy brand video for now — swap the ID when the real one is ready.
-const VIDEO_ID = 'PFJAuAWxuvI';
+// Brand video for the About section.
+const VIDEO_ID = 'rEdl2Uetpvo';
 const DEFAULT_POSTER = '/assets/cookies_new_images/cookie-sundae.jpeg';
 
 /**

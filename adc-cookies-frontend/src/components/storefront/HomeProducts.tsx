@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { ShoppingBag, Plus, Minus, ArrowRight, Cookie, Gift, Briefcase } from 'lucide-react';
@@ -55,8 +55,18 @@ export default function HomeProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [cat, setCat] = useState<CatKey>('COOKIES');
   const [q, setQ] = useState('');
+  const sectionRef = useRef<HTMLElement>(null);
+  const [inView, setInView] = useState(false); // the floating checkout bar only shows while browsing products
 
   useEffect(() => { getProducts().then(p => setProducts(p || [])).catch(() => {}); }, []);
+
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: '-10% 0px -10% 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   // Deep-link support (replaces the old /order?cat=&q= — those now land here).
   useEffect(() => {
@@ -72,13 +82,16 @@ export default function HomeProducts() {
     }
   }, []);
 
+  // Selecting/searching a product floats it to the top but KEEPS the others visible
+  // (so you always see "more" cookies below), rather than hiding the rest.
+  const ql = q.trim().toLowerCase();
   const list = products
     .filter(p => p.category === cat && p.isAvailable)
     .filter(p => !/sundae/i.test(p.name)) // Cookie Sundae hidden from the menu for now
-    .filter(p => !q || p.name.toLowerCase().includes(q.toLowerCase()));
+    .sort((a, b) => (ql ? (a.name.toLowerCase().includes(ql) ? 0 : 1) - (b.name.toLowerCase().includes(ql) ? 0 : 1) : 0));
 
   return (
-    <section id="products" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
+    <section ref={sectionRef} id="products" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter)' }}>
         <div style={{ textAlign: 'center', marginBottom: 'clamp(20px,3vw,32px)' }}>
           <p style={eyebrow}>Order online</p>
@@ -112,8 +125,8 @@ export default function HomeProducts() {
         )}
       </div>
 
-      {/* Sticky cart bar — appears once something's in the cart */}
-      {count > 0 && (
+      {/* Floating checkout bar — only while the products section is on screen (elsewhere use the top cart) */}
+      {count > 0 && inView && (
         <button onClick={() => router.push('/checkout')} className="home-cart-bar"
           style={{ position: 'fixed', left: '50%', bottom: 20, transform: 'translateX(-50%)', zIndex: 45, display: 'flex', alignItems: 'center', gap: 12, padding: '13px 22px', borderRadius: 'var(--radius-pill)', border: 'none', cursor: 'pointer', background: 'var(--surface-inverse)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-xl)' }}>
           <ShoppingBag size={19} /> {count} item{count === 1 ? '' : 's'} · ₹{total} <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, opacity: .95 }}>Checkout <ArrowRight size={17} /></span>

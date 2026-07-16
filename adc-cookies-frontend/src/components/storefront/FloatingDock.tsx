@@ -29,11 +29,16 @@ export default function FloatingDock() {
   const [spin, setSpin] = useState(false);
   const [chat, setChat] = useState(false);
 
-  // Auto-open the spin wheel on the first visit, then at most once a day.
+  // Auto-open the spin wheel — but NOT on the very first visit (the location prompt goes first);
+  // then at most once a day.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    let last = 0;
-    try { last = Number(localStorage.getItem('adc_spin_last') || 0); } catch { /* ignore */ }
+    let askedLocation = false, last = 0;
+    try {
+      askedLocation = !!localStorage.getItem('adc_location_asked');
+      last = Number(localStorage.getItem('adc_spin_last') || 0);
+    } catch { /* ignore */ }
+    if (!askedLocation) return;              // first visit → let the location modal show instead
     const DAY = 24 * 60 * 60 * 1000;
     if (last && Date.now() - last <= DAY) return;
     const t = setTimeout(() => {
@@ -45,7 +50,7 @@ export default function FloatingDock() {
 
   return (
     <>
-      <div style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+      <div className="floating-dock" style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
         {/* Spin & win (top) */}
         <button onClick={() => setSpin(true)} aria-label="Spin & win a discount" title="Spin & win"
           style={{ ...fab, background: 'var(--white)', border: '1.5px solid var(--border-default)' }}>

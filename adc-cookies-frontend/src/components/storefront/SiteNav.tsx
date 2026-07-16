@@ -99,8 +99,8 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
     router.push(q ? `/order?q=${encodeURIComponent(q)}` : '/order');
   };
   const cartButton = (
-    <button onClick={() => router.push('/checkout')} aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', flex: 'none' }}>
-      <ShoppingBag size={21} />
+    <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', flex: 'none' }}>
+      <ShoppingBag size={20} />
       {count > 0 && (
         <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--gradient-warm)', color: 'var(--white)', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>
       )}
@@ -125,7 +125,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
               <LocationPill />
               {cartButton}
-              <button onClick={accountClick} aria-label={user ? 'My account' : 'Log in'} style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}><User size={21} /></button>
+              <button onClick={accountClick} className="nav-round-btn" aria-label={user ? 'My account' : 'Log in'} style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}><User size={20} /></button>
             </div>
           </div>
           <div>

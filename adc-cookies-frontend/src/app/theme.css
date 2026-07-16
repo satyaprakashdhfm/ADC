@@ -52,8 +52,8 @@
   --peach-100: #FFF4DF;       /* page background / lightest sections */
   --navbar-bg: var(--peach-500); /* dark navbar band */
 
-  --gold: var(--peach-300);   /* Home "Finest Ingredients" + "Get in Touch" bands · products section · Order/Checkout/Account page background (.order-cards) */
-  --band-ivory: var(--peach-100); /* Home "About Us" + "Our Stores" bands · reviews strip — the light band that alternates with --gold */
+  --gold: var(--peach-100);   /* CREAM (#FFF4DF) bands — products · "Finest Ingredients" · "Get in Touch" · Order/Checkout/Account bg */
+  --band-ivory: var(--peach-300); /* LIGHT-ORANGE (#FFCD90) bands — "About Us" · "Our Stores" · reviews strip (alternates with the cream --gold bands) */
   --cream-bg: var(--peach-100); /* fixed backdrop behind EVERY page · home search-bar fill (nav band now uses --navbar-bg) */
   --vanilla: #fdf1d8;         /* Cards on inner pages (product/store/form) · Order/Checkout/Account cards · home category cards */
   --vanilla-raised: #F5E7C6;  /* Inputs & chips sitting INSIDE vanilla cards (a notch darker so fields stand out) */

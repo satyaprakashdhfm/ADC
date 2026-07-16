@@ -173,9 +173,16 @@ body::before {
 .footer-pill:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
 
 /* Mobile */
-/* Scale the whole UI down a touch on phones so more of each page is visible per screen
-   (rem-based type + spacing shrink proportionally). */
-@media (max-width:680px) { html { font-size: 94%; } }
+/* Scale the whole UI down on phones so more of each page is visible per screen
+   (rem-based type + spacing shrink proportionally), and trim oversized controls. */
+@media (max-width:680px) {
+  html { font-size: 90%; }
+  .floating-dock { right: 14px !important; bottom: 14px !important; gap: 10px !important; }
+  .floating-dock > * { width: 46px !important; height: 46px !important; }
+  .nav-round-btn { width: 40px !important; height: 40px !important; }
+  /* Checkout bar sits to the left of the floating dock instead of under it */
+  .home-cart-bar { left: 12px !important; right: 78px !important; transform: none !important; justify-content: center !important; padding: 11px 14px !important; font-size: var(--text-sm) !important; }
+}
 @media (max-width:760px) { :root { --hc: 300px; } }
 @media (max-width:480px) { :root { --hc: 240px; } }
 @media (max-width:680px) {

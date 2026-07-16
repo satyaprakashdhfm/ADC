@@ -1,8 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MapPin, Navigation, ChevronDown, X, Check } from 'lucide-react';
 import { STORES } from '@/lib/stores';
 import { useLocation, storeArea } from '@/context/LocationContext';
+
+const ASKED_KEY = 'adc_location_asked';
 
 /* ---- Modal: detect location or pick a store ---- */
 function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -68,22 +70,44 @@ export function LocationPill({ block = false }: { block?: boolean }) {
     <>
       <button onClick={() => setOpen(true)} aria-label="Choose delivery location"
         style={{
-          display: 'flex', alignItems: 'center', gap: 9,
-          padding: block ? '9px 14px' : '5px 12px',
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: block ? '8px 13px' : '5px 12px',
           borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)',
           background: 'var(--surface-card)', cursor: 'pointer',
           width: block ? '100%' : undefined, flex: block ? undefined : 'none', maxWidth: block ? undefined : 210,
         }}>
-        <MapPin size={18} color="var(--brand-secondary)" style={{ flex: 'none' }} />
-        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: block ? 1 : undefined, minWidth: 0, lineHeight: 1.15 }}>
-          <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700 }}>{store ? 'Deliver to' : 'Location'}</span>
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: block ? '100%' : 140 }}>{store ? label : (block ? 'Select your nearest store' : 'Select location')}</span>
-        </span>
+        <MapPin size={17} color="var(--brand-secondary)" style={{ flex: 'none' }} />
+        {block ? (
+          // Mobile: single tidy line — just the pin + place name.
+          <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'left' }}>{store ? label : 'Select your nearest store'}</span>
+        ) : (
+          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, lineHeight: 1.15 }}>
+            <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700 }}>{store ? 'Deliver to' : 'Location'}</span>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>{store ? label : 'Select location'}</span>
+          </span>
+        )}
         <ChevronDown size={15} color="var(--text-muted)" style={{ flex: 'none' }} />
       </button>
       <LocationModal open={open} onClose={() => setOpen(false)} />
     </>
   );
+}
+
+/* ---- Gate: on the very first visit, ask for the delivery location once ---- */
+export function LocationGate() {
+  const { store, ready } = useLocation();
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    let asked = false;
+    try { asked = !!localStorage.getItem(ASKED_KEY); } catch { /* ignore */ }
+    if (asked) return;
+    try { localStorage.setItem(ASKED_KEY, '1'); } catch { /* ignore */ }
+    if (store) return; // returning visitor already has a store
+    const t = setTimeout(() => setOpen(true), 800);
+    return () => clearTimeout(t);
+  }, [ready, store]);
+  return <LocationModal open={open} onClose={() => setOpen(false)} />;
 }
 
 /* ---- Banner: shown on the order page when no location is set yet ---- */
