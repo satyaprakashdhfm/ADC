@@ -129,12 +129,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendOtp = (phone: string) => apiSendOtp(phone);
 
   const verifyOtp = async (phone: string, verificationId: string, code: string) => {
-    const { accessToken, refreshToken, needsName } = await apiVerifyOtp(phone, verificationId, code);
+    const { accessToken, refreshToken } = await apiVerifyOtp(phone, verificationId, code);
     const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
     if (error) throw new Error(error.message);
     const me = await getMe();
     setUser(userFromMe(me));
     setProfileLoaded(true);
+    // Mandatory, no-skip name + email: keep asking on every OTP login until BOTH are on file —
+    // not just for brand-new numbers (the backend's own needsName only ever checked the name).
+    const needsName = !me.name || me.name === 'Guest' || !cleanEmail(me.email);
     return { role: me.role, needsName };
   };
 

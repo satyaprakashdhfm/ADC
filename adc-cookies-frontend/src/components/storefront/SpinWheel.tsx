@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight, Clock, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import { getActiveCoupons, claimSpin, type ActiveCoupon } from '@/lib/api';
@@ -18,6 +18,7 @@ interface Prize {
   label: string; code: string; win: boolean; weight: number;
   discountType?: string; discountValue?: number;
   minimumOrderAmount?: number | null; maximumDiscount?: number | null; terms?: string;
+  isGift?: boolean;
 }
 
 // Decorative wheel shown only while offers are still loading — purely visual, not spin-able.
@@ -35,6 +36,7 @@ function buildPrizes(coupons: ActiveCoupon[]): Prize[] {
     label: c.label, code: c.code, win: true, weight: c.weight,
     discountType: c.discountType, discountValue: c.discountValue,
     minimumOrderAmount: c.minimumOrderAmount, maximumDiscount: c.maximumDiscount, terms: c.terms,
+    isGift: c.isGift,
   }));
   const totalWinWeight = wins.reduce((s, w) => s + (w.weight || 0), 0);
   const noReward: Prize = {
@@ -69,6 +71,12 @@ const wheelBg = (prizes: Prize[]) => {
 
 function valueSummary(p: Prize): string {
   if (!p.win) return 'No reward this spin.';
+  // A "free item" reward hands over an actual product — say that, not a "₹X off" figure,
+  // which is really just the internal discount mechanics, not what the customer is getting.
+  if (p.isGift) {
+    const min = p.minimumOrderAmount ? ` · min. order ₹${p.minimumOrderAmount}` : '';
+    return `Added to your cart, free${min}`;
+  }
   const base = p.discountType === 'PERCENTAGE' ? `${p.discountValue}% off` : `₹${p.discountValue} off`;
   const cap = p.discountType === 'PERCENTAGE' && p.maximumDiscount ? `, capped at ₹${p.maximumDiscount}` : '';
   const min = p.minimumOrderAmount ? ` · min. order ₹${p.minimumOrderAmount}` : '';
@@ -222,11 +230,20 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           {/* Action area */}
           {activeReward ? (
             <div>
-              <button onClick={() => copyCode(activeReward.code)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 8px', padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
-                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{activeReward.code}</span>
-                {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
-              </button>
+              {activeReward.claimed ? (
+                <button onClick={() => copyCode(activeReward.code)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 8px', padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{activeReward.code}</span>
+                  {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
+                </button>
+              ) : (
+                // The code itself stays hidden until they actually log in and claim it — showing
+                // it early would defeat the point of gating the reward behind a real login.
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 8px', padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--border-strong)', background: 'var(--surface-raised)' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--text-subtle)' }}>••••••</span>
+                  <Lock size={16} color="var(--text-subtle)" />
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 12 }}>
                 <Clock size={13} /> {activeReward.claimed ? `Valid for ${formatRemaining(activeReward.expiresAtMs - now)}` : `Expires in ${formatRemaining(activeReward.expiresAtMs - now)}`}
               </div>

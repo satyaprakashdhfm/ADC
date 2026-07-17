@@ -129,6 +129,9 @@ router.get('/active', couponLimiter, async (_req, res) => {
       weight: Number(c.spin_weight),
       label: c.spin_label || (c.discount_type === 'PERCENTAGE' ? `${Math.round(c.discount_value)}% OFF` : `₹${Math.round(c.discount_value)} OFF`),
       terms: c.terms || '',
+      // A "free item" reward (see gift_kind) hands over a real product — the wheel should say so
+      // rather than a misleading "₹X off", which is really just the internal discount mechanics.
+      isGift: !!c.gift_kind,
     });
   }
   res.json(usable);

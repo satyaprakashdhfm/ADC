@@ -164,6 +164,7 @@ export interface ActiveCoupon {
   code: string; discountType: string; discountValue: number;
   minimumOrderAmount?: number | null; maximumDiscount?: number | null;
   weight: number; label: string; terms: string;
+  isGift?: boolean; // a real product is added to the cart, not a generic amount off
 }
 export async function getActiveCoupons(): Promise<ActiveCoupon[]> {
   return request('/coupons/active');

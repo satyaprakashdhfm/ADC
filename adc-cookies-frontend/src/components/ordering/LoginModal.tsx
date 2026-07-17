@@ -44,7 +44,8 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   // Phone OTP flow
   const [otpStep, setOtpStep] = useState<'phone' | 'code' | 'name'>('phone');
   const [otpPhone, setOtpPhone] = useState('');
-  const [profileName, setProfileName] = useState(''); // collected only for brand-new accounts
+  const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState(''); // asked alongside name — mandatory, no skip
   const [verificationId, setVerificationId] = useState('');
   const [code, setCode] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
@@ -57,7 +58,7 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   useEffect(() => {
     if (open) {
       setError(''); setEmail(''); setPassword(''); setName(''); setPhone(''); setLoading(false); setGoogleLoading(false);
-      setOtpStep('phone'); setOtpPhone(''); setProfileName(''); setVerificationId(''); setCode(''); setOtpLoading(false); setOtpError(''); setResendIn(0);
+      setOtpStep('phone'); setOtpPhone(''); setProfileName(''); setProfileEmail(''); setVerificationId(''); setCode(''); setOtpLoading(false); setOtpError(''); setResendIn(0);
       setResetSent(false);
     }
   }, [open]);
@@ -69,7 +70,13 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
     return () => clearTimeout(id);
   }, [resendIn]);
 
+  // Name + phone are mandatory on sign-up, same as the OTP path — no skipping either flow.
+  const submitValid = mode === 'login'
+    ? !!email.trim() && !!password.trim()
+    : !!name.trim() && !!phone.trim() && !!email.trim() && !!password.trim();
+
   const handleSubmit = async () => {
+    if (!submitValid) return;
     setError(''); setLoading(true);
     try {
       let role = 'CUSTOMER';
@@ -133,8 +140,8 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
     setOtpError(''); setOtpLoading(true);
     try {
       const { role, needsName } = await verifyOtp(otpPhone, verificationId, code);
-      // New number (or no name yet) → ask the name now; returning users go straight in.
-      if (needsName) { setProfileName(''); setOtpStep('name'); }
+      // Missing name and/or email → ask now, mandatory, no skip; only a fully-complete profile goes straight in.
+      if (needsName) { setProfileName(''); setProfileEmail(''); setOtpStep('name'); }
       else finishLogin(role);
     } catch (e) {
       setOtpError(e instanceof Error ? e.message : 'Invalid OTP');
@@ -143,13 +150,17 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
     }
   };
 
-  const handleSaveName = async () => {
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const profileValid = !!profileName.trim() && EMAIL_RE.test(profileEmail.trim());
+
+  const handleSaveProfile = async () => {
+    if (!profileValid) return;
     setOtpError(''); setOtpLoading(true);
     try {
-      await updateProfile({ name: profileName.trim() });
+      await updateProfile({ name: profileName.trim(), email: profileEmail.trim() });
       finishLogin('CUSTOMER'); // a brand-new phone signup is always a customer
     } catch (e) {
-      setOtpError(e instanceof Error ? e.message : 'Could not save your name');
+      setOtpError(e instanceof Error ? e.message : 'Could not save your details');
     } finally {
       setOtpLoading(false);
     }
@@ -180,8 +191,13 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
 
   if (!open) return null;
 
+  // Mandatory, no-skip: once we're asking for the missing name/email, the modal can't be
+  // dismissed via backdrop or the X — closing it any other way would let them in without either.
+  const dismissible = otpStep !== 'name';
+  const dismiss = () => { if (dismissible) onClose(); };
+
   return (
-    <div onClick={onClose} style={{
+    <div onClick={dismiss} style={{
       position: 'fixed', inset: 0, zIndex: 120, background: 'var(--espresso-50)', backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
     }}>
@@ -194,9 +210,11 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
         {/* Header — cookie photo kept faint in the background, big logo on top */}
         <div style={{ height: 190, position: 'relative', overflow: 'hidden', background: 'var(--ink-950)', flex: 'none' }}>
           <Image src="/assets/login-bg.jpg" alt="" fill priority sizes="440px" style={{ objectFit: 'cover', opacity: 0.4 }} />
-          <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'var(--white-90)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
+          {dismissible && (
+          <button onClick={dismiss} style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'var(--white-90)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
             <X size={18} color="var(--text-strong)" />
           </button>
+          )}
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
             <Image src="/assets/adc-logo.png" width={232} height={168} alt="a dough cookie" priority style={{ height: 150, width: 'auto', maxWidth: '82%', objectFit: 'contain', filter: 'drop-shadow(0 4px 16px var(--black-55))' }} />
           </div>
@@ -204,20 +222,29 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
 
         <div className="hide-sb" style={{ padding: '22px 24px 26px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
           {otpStep === 'name' ? (
-            /* Post-verify name capture — only shown for a brand-new phone signup. */
+            /* Post-verify profile capture — mandatory, no skip: we need a real name + email on
+               every account regardless of how they signed in, so this keeps showing until both
+               are on file (not just once, for brand-new numbers). */
             <div>
               <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>Almost there!</h2>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 18px' }}>What should we call you?</p>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 18px' }}>A couple of details so we can keep you posted on your order.</p>
               <label style={labelStyle}>Full name</label>
               <input
                 value={profileName}
                 onChange={e => setProfileName(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && profileName.trim()) handleSaveName(); }}
                 placeholder="Your name" autoComplete="name" autoFocus
                 style={{ ...inputStyle, marginBottom: 14 }}
               />
-              <button onClick={handleSaveName} disabled={otpLoading || !profileName.trim()} style={primaryBtn(!otpLoading && !!profileName.trim())}>
-                {otpLoading ? 'Saving…' : 'Continue'}{!otpLoading && !!profileName.trim() && <ArrowRight size={18} />}
+              <label style={labelStyle}>Email address</label>
+              <input
+                value={profileEmail}
+                onChange={e => setProfileEmail(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && profileValid) handleSaveProfile(); }}
+                placeholder="you@example.com" type="email" autoComplete="email"
+                style={{ ...inputStyle, marginBottom: 14 }}
+              />
+              <button onClick={handleSaveProfile} disabled={otpLoading || !profileValid} style={primaryBtn(!otpLoading && profileValid)}>
+                {otpLoading ? 'Saving…' : 'Continue'}{!otpLoading && profileValid && <ArrowRight size={18} />}
               </button>
               {otpError && (
                 <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', textAlign: 'center' }}>{otpError}</div>
@@ -309,14 +336,14 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
             <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', marginBottom: 12 }}>{error}</div>
           )}
 
-          <button onClick={handleSubmit} disabled={loading} style={{
+          <button onClick={handleSubmit} disabled={loading || !submitValid} style={{
             width: '100%', padding: '14px', borderRadius: 'var(--radius-button)', border: 'none',
-            background: loading ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)',
-            fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: loading ? 'default' : 'pointer',
+            background: (loading || !submitValid) ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)',
+            fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: (loading || !submitValid) ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12,
           }}>
             {loading ? 'Please wait…' : (mode === 'login' ? 'Log in with email' : 'Create account')}
-            {!loading && <ArrowRight size={18} />}
+            {!loading && submitValid && <ArrowRight size={18} />}
           </button>
 
           <button onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', textAlign: 'center' }}>
