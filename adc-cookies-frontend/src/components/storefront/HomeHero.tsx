@@ -5,8 +5,8 @@ import { motion } from 'framer-motion';
 import { ArrowRight, ChevronDown } from 'lucide-react';
 import SiteNav from './SiteNav';
 
-const ctaPrimary: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 26px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' };
-const ctaGhost: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 26px', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--surface-card)', border: '1.5px solid var(--border-strong)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)' };
+const ctaPrimary: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 20px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' };
+const ctaGhost: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 20px', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--surface-card)', border: '1.5px solid var(--border-strong)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)' };
 
 export default function HomeHero() {
   const router = useRouter();
@@ -37,12 +37,20 @@ export default function HomeHero() {
           <h1 style={{ font: '900 clamp(1.35rem,1.05rem + 1.7vw,2.2rem)/1.08 var(--font-display)', letterSpacing: '-.02em', color: 'var(--text-strong)', margin: '0 0 12px', textWrap: 'balance' }}>
             Chunky, gooey cookies — baked fresh, delivered warm.
           </h1>
-          <p style={{ fontSize: 'clamp(.9rem,.85rem + .3vw,1.05rem)', color: 'var(--text-body)', lineHeight: 1.5, maxWidth: 460, margin: '0 auto 22px', fontWeight: 600 }}>
+          <p style={{ fontSize: 'clamp(.9rem,.85rem + .3vw,1.05rem)', color: 'var(--text-body)', lineHeight: 1.55, maxWidth: 500, margin: '0 auto 18px', fontWeight: 600 }}>
             Handcrafted in small batches with real butter, couverture chocolate &amp; 100% real fillings.
+            Warm, gooey, and never from a freezer — baked the moment you order and rushed to your door.
           </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button onClick={scrollToProducts} style={ctaPrimary}>Order Cookies <ArrowRight size={18} /></button>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={scrollToProducts} style={ctaPrimary}>Order Cookies <ArrowRight size={16} /></button>
             <button onClick={() => router.push('/about')} style={ctaGhost}>Our Story</button>
+          </div>
+
+          {/* Trust line — a little more copy under the buttons */}
+          <div style={{ display: 'flex', gap: 'clamp(10px,2.2vw,20px)', justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }}>
+            {['🍪 Eggless options', '🔥 Baked to order', '🚚 Same-day delivery', '⭐ 4.9 / 5 loved'].map(t => (
+              <span key={t} style={{ fontSize: 'clamp(.7rem,.66rem + .2vw,.84rem)', fontWeight: 700, color: 'var(--text-body)', whiteSpace: 'nowrap' }}>{t}</span>
+            ))}
           </div>
         </motion.div>
 

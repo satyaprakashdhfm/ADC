@@ -66,7 +66,9 @@ export default function HomeProducts() {
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
-    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: '-10% 0px -10% 0px' });
+    // Only reveal the checkout bar once products fill the lower ~45% of the screen
+    // (a full card row is visible) — never while the hero is still on screen.
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: '0px 0px -45% 0px' });
     io.observe(el);
     return () => io.disconnect();
   }, []);
