@@ -164,7 +164,11 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
         isGift: activeReward.isGift,
       }
     : result?.win ? result : null;
-  const guestWinNeedsLogin = !!result?.win && !user && !activeReward;
+  const guestWinNeedsLogin = !!result?.win && !user;
+
+  useEffect(() => {
+    if (open && guestWinNeedsLogin) setLoginOpen(true);
+  }, [open, guestWinNeedsLogin]);
 
   const spin = async () => {
     if (spinning || result || activeReward || !prizes) return;
