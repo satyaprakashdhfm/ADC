@@ -10,6 +10,15 @@ import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
 import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, createRazorpayOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, type Product, type Address, type OrderItemInput, type DeliveryCheck } from '@/lib/api';
+import { whatsappLink, SITE_PHONE } from '@/lib/site';
+
+// STALL MODE — temporary, for the pop-up-stall launch: online payment is switched off and the
+// payment step instead points people at WhatsApp/call/in-person ordering. Nothing below this is
+// deleted — every bit of the real checkout/payment flow still exists, just not rendered while
+// this is true. Flip back to false (and it all comes straight back) once online payment resumes.
+const STALL_MODE = true;
+// Fill in with today's actual stall location/time once known — shown on the payment-replacement panel.
+const TODAYS_STALL = '';
 
 /* ---- Data ---- */
 const CATEGORIES = ['Cookies', 'Cookie Tins', 'Corporate Gifting'];
@@ -1048,22 +1057,49 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               )}
             </div>
 
-            <div style={card$}>
-              {head(<CreditCard size={18} color="var(--brand-secondary)" />, 'Payment method')}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                  Tap <strong style={{ color: 'var(--text-strong)' }}>Pay ₹{grand}</strong> to open the secure payment window. Pick <strong>UPI</strong> (GPay, PhonePe, Paytm), <strong>card</strong>, <strong>netbanking</strong> or <strong>wallet</strong> there — you&apos;ll come right back here once it&apos;s done.
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {['UPI', 'Cards', 'Netbanking', 'Wallets'].map(m => (
-                    <span key={m} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-raised)', border: '1.5px solid var(--border-default)', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)' }}>{m}</span>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
-                  <Lock size={13} /> Secured by Razorpay · your card / UPI details never touch our servers
+            {STALL_MODE ? (
+              <div style={card$}>
+                {head(<ShoppingBag size={18} color="var(--brand-secondary)" />, 'How to get your order')}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                    We&apos;re not taking online payment just yet — message us on WhatsApp or give us a call to place this order, or come find us in person.
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 160px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 'var(--radius-button)', background: 'var(--whatsapp-green)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
+                      WhatsApp us
+                    </a>
+                    <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ flex: '1 1 160px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
+                      Call {SITE_PHONE}
+                    </a>
+                  </div>
+                  {TODAYS_STALL && (
+                    <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-card)', background: 'var(--amber-50)', border: '1px solid var(--border-default)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 700 }}>
+                      📍 Today&apos;s stall: {TODAYS_STALL}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
+                    Or visit any of our stores — see all locations on the <a href="/locations" style={{ color: 'var(--text-link)', fontWeight: 700 }}>Locations page</a>.
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div style={card$}>
+                {head(<CreditCard size={18} color="var(--brand-secondary)" />, 'Payment method')}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                    Tap <strong style={{ color: 'var(--text-strong)' }}>Pay ₹{grand}</strong> to open the secure payment window. Pick <strong>UPI</strong> (GPay, PhonePe, Paytm), <strong>card</strong>, <strong>netbanking</strong> or <strong>wallet</strong> there — you&apos;ll come right back here once it&apos;s done.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {['UPI', 'Cards', 'Netbanking', 'Wallets'].map(m => (
+                      <span key={m} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-raised)', border: '1.5px solid var(--border-default)', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)' }}>{m}</span>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
+                    <Lock size={13} /> Secured by Razorpay · your card / UPI details never touch our servers
+                  </div>
+                </div>
+              </div>
+            )}
 
             {billCard}
           </div>
@@ -1085,10 +1121,21 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               </button>
             ) : (
               <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!canProceed} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: canProceed ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: canProceed ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                Proceed to Pay · ₹{grand} <ArrowRight size={18} />
+                {STALL_MODE ? <>Continue <ArrowRight size={18} /></> : <>Proceed to Pay · ₹{grand} <ArrowRight size={18} /></>}
               </button>
             )}
           </>
+        ) : STALL_MODE ? (
+          // STALL MODE — real payment trigger below (in the `false` branch) is untouched and
+          // ready to come straight back the moment STALL_MODE flips off.
+          <div style={{ display: 'flex', gap: 10, maxWidth: 720, margin: '0 auto' }}>
+            <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '16px', borderRadius: 'var(--radius-button)', background: 'var(--whatsapp-green)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', textDecoration: 'none' }}>
+              WhatsApp us
+            </a>
+            <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '16px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', textDecoration: 'none' }}>
+              Call us
+            </a>
+          </div>
         ) : (
           <>
             {payError && (

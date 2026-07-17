@@ -294,17 +294,24 @@ export interface AdminAnalytics {
   topProducts: { name: string; qty: number; revenue: number }[];
 }
 
+interface SiteSettings { promoProductId: number | null; headerOffer: string | null; stallInfo: string | null; }
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
-export async function adminGetSettings(): Promise<{ promoProductId: number | null; headerOffer: string | null }> { return request('/admin/settings'); }
-export async function adminSetPromoProduct(promoProductId: number | null): Promise<{ promoProductId: number | null; headerOffer: string | null }> {
+export async function adminGetSettings(): Promise<SiteSettings> { return request('/admin/settings'); }
+export async function adminSetPromoProduct(promoProductId: number | null): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ promoProductId }) });
 }
 // Free-text offer shown in the site header banner — e.g. "Get 5% off with code XYZ". null/empty clears it.
-export async function adminSetHeaderOffer(headerOffer: string | null): Promise<{ promoProductId: number | null; headerOffer: string | null }> {
+export async function adminSetHeaderOffer(headerOffer: string | null): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ headerOffer }) });
+}
+// Free-text "today's stall / visit us" note shown as a homepage card. null/empty hides the card.
+export async function adminSetStallInfo(stallInfo: string | null): Promise<SiteSettings> {
+  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ stallInfo }) });
 }
 // Public: the current header-banner offer text (or null if the admin hasn't set one).
 export async function getAnnouncement(): Promise<{ text: string | null }> { return request('/products/announcement'); }
+// Public: today's stall/store-visit note (or null if the admin hasn't set one).
+export async function getStallInfo(): Promise<{ text: string | null }> { return request('/products/stall-info'); }
 export async function adminAnalytics(from?: string, to?: string): Promise<AdminAnalytics> {
   const qs = from && to ? `?from=${from}&to=${to}` : '';
   return request(`/admin/analytics${qs}`);

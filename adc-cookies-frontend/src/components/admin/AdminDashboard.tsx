@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import {
   adminDashboard, adminAnalytics, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
-  adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer,
+  adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
   adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
@@ -87,6 +87,8 @@ export default function AdminDashboard() {
   const [promoProductId, setPromoProductId] = useState<number | null>(null);
   const [headerOffer, setHeaderOffer] = useState('');
   const [headerOfferSaved, setHeaderOfferSaved] = useState(false);
+  const [stallInfo, setStallInfo] = useState('');
+  const [stallInfoSaved, setStallInfoSaved] = useState(false);
   const [coupons, setCoupons] = useState<AdminCoupon[] | null>(null);
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [messages, setMessages] = useState<AdminMessage[] | null>(null);
@@ -139,7 +141,7 @@ export default function AdminDashboard() {
   const isAdmin = !!user && user.role === 'ADMIN';
 
   useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
-  useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); }).catch(() => {}); }, [isAdmin]);
+  useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); setStallInfo(s.stallInfo || ''); }).catch(() => {}); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminAnalytics(range.from, range.to).then(setAnalytics).catch(() => {}); }, [isAdmin, range.from, range.to]);
 
   // Lazy-load each tab's data the first time it's opened.
@@ -451,6 +453,24 @@ export default function AdminDashboard() {
                 }}
                 style={addBtn}
               >{headerOfferSaved ? 'Saved ✓' : 'Save'}</button>
+            </div>
+          </Panel>
+          <Panel title="Today's stall — visit us">
+            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>Shown as a card on the homepage (right under the hero). Use it for a pop-up stall's location and timing — leave blank to hide the card entirely.</p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <input
+                value={stallInfo}
+                onChange={e => { setStallInfo(e.target.value); setStallInfoSaved(false); }}
+                placeholder="e.g. Phoenix Mall, Whitefield — 11am to 8pm today"
+                style={{ ...inp, flex: '1 1 320px' }}
+              />
+              <button
+                onClick={async () => {
+                  await adminSetStallInfo(stallInfo.trim() || null).catch(err => setErr(String(err.message || err)));
+                  setStallInfoSaved(true);
+                }}
+                style={addBtn}
+              >{stallInfoSaved ? 'Saved ✓' : 'Save'}</button>
             </div>
           </Panel>
           {(() => {

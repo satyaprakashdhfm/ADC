@@ -216,7 +216,8 @@ router.patch('/contact/:id/handled', async (req, res) => {
 router.get('/settings', async (_req, res) => {
   const row = await getOne("SELECT value FROM site_settings WHERE key = 'promo_product_id'");
   const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
-  res.json({ promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null });
+  const stall = await getOne("SELECT value FROM site_settings WHERE key = 'stall_info'");
+  res.json({ promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null, stallInfo: stall?.value || null });
 });
 router.put('/settings', async (req, res) => {
   if (req.body?.promoProductId !== undefined) {
@@ -246,9 +247,23 @@ router.put('/settings', async (req, res) => {
       );
     }
   }
+  // Today's stall/store-visit note shown as a homepage card — same free-text pattern.
+  if (req.body?.stallInfo !== undefined) {
+    const text = String(req.body.stallInfo || '').trim();
+    if (!text) {
+      await query("DELETE FROM site_settings WHERE key = 'stall_info'");
+    } else {
+      await query(
+        `INSERT INTO site_settings (key, value) VALUES ('stall_info', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [text]
+      );
+    }
+  }
   const row = await getOne("SELECT value FROM site_settings WHERE key = 'promo_product_id'");
   const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
-  res.json({ promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null });
+  const stall = await getOne("SELECT value FROM site_settings WHERE key = 'stall_info'");
+  res.json({ promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null, stallInfo: stall?.value || null });
 });
 
 /* ---------- Dashboard ---------- */

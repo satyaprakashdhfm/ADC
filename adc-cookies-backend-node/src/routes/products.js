@@ -36,6 +36,13 @@ router.get('/announcement', async (_req, res) => {
   res.json({ text: setting?.value || null });
 });
 
+// Public: today's stall/store-visit note (or null) — shown as a homepage card.
+// Declared before '/:id' so "stall-info" isn't captured as an id.
+router.get('/stall-info', async (_req, res) => {
+  const setting = await getOne("SELECT value FROM site_settings WHERE key = 'stall_info'");
+  res.json({ text: setting?.value || null });
+});
+
 router.get('/:id', async (req, res) => {
   const row = await getOne('SELECT * FROM products WHERE id = $1', [req.params.id]);
   if (!row) throw new ApiError('Product not found');
