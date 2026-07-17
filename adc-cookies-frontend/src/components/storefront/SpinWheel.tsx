@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight, Clock, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight, Clock, Lock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import { getActiveCoupons, claimSpin, spinDraw, type ActiveCoupon } from '@/lib/api';
@@ -61,9 +61,9 @@ function valueSummary(p: Prize): string {
   if (!p.win) return 'No reward this spin.';
   // A "free item" reward hands over an actual product — say that, not a "₹X off" figure,
   // which is really just the internal discount mechanics, not what the customer is getting.
-  if (p.isGift) {
+  if (p.isGift || Number(p.discountValue || 0) === 0 || /^free\b/i.test(p.label)) {
     const min = p.minimumOrderAmount ? ` · min. order ₹${p.minimumOrderAmount}` : '';
-    return `Added to your cart, free${min}`;
+    return `Free reward${min}`;
   }
   const base = p.discountType === 'PERCENTAGE' ? `${p.discountValue}% off` : `₹${p.discountValue} off`;
   const cap = p.discountType === 'PERCENTAGE' && p.maximumDiscount ? `, capped at ₹${p.maximumDiscount}` : '';
@@ -92,7 +92,6 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const [spinError, setSpinError] = useState('');
   const [drawExpiresAtMs, setDrawExpiresAtMs] = useState<number | null>(null); // when a MISS result stops being "locked in" (wins are governed by activeReward instead)
   const [showTerms, setShowTerms] = useState(false);
-  const [termsIndex, setTermsIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRewardRef = useRef<ActiveReward | null>(null);
   // A local per-second tick while the modal is open, so every countdown in it (win reward AND a
@@ -118,11 +117,13 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   // before it expires would just replay the same result, so don't let the idle button reappear
   // until it genuinely has.
   useEffect(() => {
-    if (drawExpiresAtMs && nowMs >= drawExpiresAtMs) {
+    if (!drawExpiresAtMs) return;
+    const t = setTimeout(() => {
       setResult(null);
       setDrawExpiresAtMs(null);
-    }
-  }, [drawExpiresAtMs, nowMs]);
+    }, Math.max(0, drawExpiresAtMs - Date.now()));
+    return () => clearTimeout(t);
+  }, [drawExpiresAtMs]);
 
   // Load the wheel's real offers as soon as this component exists (FloatingDock mounts it on
   // every page, well before anyone opens the modal) — not gated on `open`. Waiting for `open`
@@ -154,6 +155,15 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const wheelRot = (spinning || result || activeIdx < 0) ? rot : 360 * 5 - (activeIdx * SEG + SEG / 2);
 
   const close = onClose;
+  const wonPrize: Prize | null = activeReward
+    ? {
+        label: activeReward.label, code: activeReward.code, win: true, weight: 0,
+        discountType: activeReward.discountType, discountValue: activeReward.discountValue,
+        minimumOrderAmount: activeReward.minimumOrderAmount, maximumDiscount: activeReward.maximumDiscount,
+        terms: activeReward.terms,
+        isGift: activeReward.isGift,
+      }
+    : result?.win ? result : null;
 
   const spin = async () => {
     if (spinning || result || activeReward || !prizes) return;
@@ -185,10 +195,10 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
       if (user) {
         try {
           const claimed = await claimSpin(p.code);
-          setActiveReward({ code: claimed.code, label: claimed.label, discountType: claimed.discountType, discountValue: claimed.discountValue, minimumOrderAmount: claimed.minimumOrderAmount, maximumDiscount: claimed.maximumDiscount, terms: claimed.terms, expiresAtMs: new Date(claimed.expiresAt).getTime(), claimed: true });
+          setActiveReward({ code: claimed.code, label: claimed.label, discountType: claimed.discountType, discountValue: claimed.discountValue, minimumOrderAmount: claimed.minimumOrderAmount, maximumDiscount: claimed.maximumDiscount, terms: claimed.terms, isGift: claimed.isGift, expiresAtMs: new Date(claimed.expiresAt).getTime(), claimed: true });
         } catch { /* leave the result showing even if the claim call failed — they can retry via login prompt */ }
       } else {
-        const pending: ActiveReward = { code: p.code, label: p.label, discountType: p.discountType, discountValue: p.discountValue, minimumOrderAmount: p.minimumOrderAmount, maximumDiscount: p.maximumDiscount, terms: p.terms, expiresAtMs, claimed: false };
+        const pending: ActiveReward = { code: p.code, label: p.label, discountType: p.discountType, discountValue: p.discountValue, minimumOrderAmount: p.minimumOrderAmount, maximumDiscount: p.maximumDiscount, terms: p.terms, isGift: p.isGift, expiresAtMs, claimed: false };
         savePending(pending);
         setActiveReward(pending);
       }
@@ -310,11 +320,15 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             No thanks, maybe later
           </button>
 
-          {/* Terms & conditions */}
-          {offersLoaded && (
-            <button onClick={() => { setTermsIndex(0); setShowTerms(true); }} style={{ display: 'block', margin: '4px auto 0', background: 'none', border: 'none', color: 'var(--text-subtle)', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 'var(--text-2xs)', textDecoration: 'underline', cursor: 'pointer', padding: 4 }}>
-              Terms &amp; conditions apply
-            </button>
+          {/* Terms for only the reward this shopper got. */}
+          {wonPrize && (
+            <div style={{ margin: '12px 0 0', padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-raised)', border: '1px solid var(--border-default)', textAlign: 'left' }}>
+              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 4 }}>Terms</div>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0 }}>{wonPrize.terms || valueSummary(wonPrize)}</p>
+              <button onClick={() => setShowTerms(true)} style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-2xs)', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>
+                View coupon details
+              </button>
+            </div>
           )}
 
           {/* Social links */}
@@ -330,26 +344,18 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
         </div>
       </div>
 
-      {/* Terms & Conditions — a small pager explaining every wheel offer, one at a time */}
-      {showTerms && prizes && (
+      {/* Terms & Conditions — only the exact coupon this shopper won. */}
+      {showTerms && wonPrize && (
         <div onClick={() => setShowTerms(false)} style={{ position: 'fixed', inset: 0, zIndex: 97, background: 'var(--espresso-55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, animation: 'loaderFadeIn .2s ease both' }}>
           <div onClick={e => e.stopPropagation()} style={{ width: 'min(360px,92vw)', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '22px 22px 18px', textAlign: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-              <h3 style={{ flex: 1, fontSize: 'var(--text-base)', fontWeight: 800, color: 'var(--text-strong)', textAlign: 'left' }}>Spin & Win — Terms</h3>
+              <h3 style={{ flex: 1, fontSize: 'var(--text-base)', fontWeight: 800, color: 'var(--text-strong)', textAlign: 'left' }}>Coupon Terms</h3>
               <button onClick={() => setShowTerms(false)} aria-label="Close" style={{ width: 30, height: 30, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><X size={15} /></button>
             </div>
-            <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 700, margin: '0 0 12px' }}>Offer {termsIndex + 1} of {prizes.length}</p>
-            <div style={{ minHeight: 130 }}>
-              <h4 style={{ font: '900 var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>{prizes[termsIndex].label}</h4>
-              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--brand-secondary)', margin: '0 0 10px' }}>{valueSummary(prizes[termsIndex])}</p>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55, margin: 0 }}>{prizes[termsIndex].terms || 'No additional terms.'}</p>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
-              <button onClick={() => setTermsIndex(i => Math.max(0, i - 1))} disabled={termsIndex === 0} aria-label="Previous offer" style={{ width: 38, height: 38, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: termsIndex === 0 ? 'default' : 'pointer', opacity: termsIndex === 0 ? 0.4 : 1, display: 'grid', placeItems: 'center' }}><ChevronLeft size={18} /></button>
-              <div style={{ display: 'flex', gap: 5 }}>
-                {prizes.map((_, i) => <span key={i} aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: i === termsIndex ? 'var(--brand-secondary)' : 'var(--border-default)' }} />)}
-              </div>
-              <button onClick={() => setTermsIndex(i => Math.min(prizes.length - 1, i + 1))} disabled={termsIndex === prizes.length - 1} aria-label="Next offer" style={{ width: 38, height: 38, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: termsIndex === prizes.length - 1 ? 'default' : 'pointer', opacity: termsIndex === prizes.length - 1 ? 0.4 : 1, display: 'grid', placeItems: 'center' }}><ChevronRight size={18} /></button>
+            <div style={{ minHeight: 112, textAlign: 'left' }}>
+              <h4 style={{ font: '900 var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>{wonPrize.label}</h4>
+              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--brand-secondary)', margin: '0 0 10px' }}>{valueSummary(wonPrize)}</p>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55, margin: 0 }}>{wonPrize.terms || 'No additional terms.'}</p>
             </div>
           </div>
         </div>

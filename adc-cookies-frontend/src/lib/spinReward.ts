@@ -8,6 +8,7 @@ import { getSpinStatus, claimSpin } from '@/lib/api';
 export interface ActiveReward {
   code: string; label: string; discountType?: string; discountValue?: number;
   minimumOrderAmount?: number | null; maximumDiscount?: number | null; terms?: string;
+  isGift?: boolean;
   expiresAtMs: number; claimed: boolean;
 }
 
@@ -65,7 +66,7 @@ export function useActiveSpinReward() {
       if (pending) {
         try {
           const claimed = await claimSpin(pending.code);
-          reward = { code: claimed.code, label: claimed.label, discountType: claimed.discountType, discountValue: claimed.discountValue, minimumOrderAmount: claimed.minimumOrderAmount, maximumDiscount: claimed.maximumDiscount, terms: claimed.terms, expiresAtMs: new Date(claimed.expiresAt).getTime(), claimed: true };
+          reward = { code: claimed.code, label: claimed.label, discountType: claimed.discountType, discountValue: claimed.discountValue, minimumOrderAmount: claimed.minimumOrderAmount, maximumDiscount: claimed.maximumDiscount, terms: claimed.terms, isGift: claimed.isGift, expiresAtMs: new Date(claimed.expiresAt).getTime(), claimed: true };
         } catch { /* the code may no longer be valid — fall through to a server status check */ }
         clearPending();
       }
@@ -73,7 +74,7 @@ export function useActiveSpinReward() {
         const status = await getSpinStatus().catch(() => null);
         if (status?.active) {
           const a = status.active;
-          reward = { code: a.code, label: a.label, discountType: a.discountType, discountValue: a.discountValue, minimumOrderAmount: a.minimumOrderAmount, maximumDiscount: a.maximumDiscount, terms: a.terms, expiresAtMs: new Date(a.expiresAt).getTime(), claimed: true };
+          reward = { code: a.code, label: a.label, discountType: a.discountType, discountValue: a.discountValue, minimumOrderAmount: a.minimumOrderAmount, maximumDiscount: a.maximumDiscount, terms: a.terms, isGift: a.isGift, expiresAtMs: new Date(a.expiresAt).getTime(), claimed: true };
         }
       }
     } else {
@@ -83,7 +84,10 @@ export function useActiveSpinReward() {
     setChecking(false);
   }, [user]);
 
-  useEffect(() => { resolve(); }, [resolve]);
+  useEffect(() => {
+    const t = setTimeout(() => { void resolve(); }, 0);
+    return () => clearTimeout(t);
+  }, [resolve]);
 
   // Tick every second so the hr/min/sec countdown (badge + popup) stays live. Only runs while a
   // reward is actually being shown, so there's no per-second render churn otherwise.
@@ -95,11 +99,13 @@ export function useActiveSpinReward() {
 
   // Drop the reward the moment its window runs out, wherever it's being displayed.
   useEffect(() => {
-    if (activeReward && activeReward.expiresAtMs <= now) {
+    if (!activeReward) return;
+    const t = setTimeout(() => {
       clearPending();
       setActiveReward(null);
-    }
-  }, [activeReward, now]);
+    }, Math.max(0, activeReward.expiresAtMs - Date.now()));
+    return () => clearTimeout(t);
+  }, [activeReward]);
 
   return { activeReward, setActiveReward, checking, now, refresh: resolve };
 }

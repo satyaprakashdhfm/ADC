@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Bot } from 'lucide-react';
+import { Bot, Clock } from 'lucide-react';
 import { whatsappLink } from '@/lib/site';
 import { useActiveSpinReward, formatRemainingShort } from '@/lib/spinReward';
 import SpinWheel from './SpinWheel';
@@ -61,12 +61,13 @@ export default function FloatingDock() {
           <MiniWheel />
           {activeReward && (
             <span aria-hidden style={{
-              position: 'absolute', top: -5, right: -5, minWidth: 26, height: 22, padding: '0 6px',
-              borderRadius: 'var(--radius-pill)', background: activeReward.claimed ? 'var(--status-success)' : 'var(--gradient-warm)',
-              border: '2px solid var(--white)', color: 'var(--white)', fontSize: 10.5, fontWeight: 800,
-              display: 'grid', placeItems: 'center', lineHeight: 1, letterSpacing: '-.02em',
-              boxShadow: '0 2px 6px var(--black-18)', fontFamily: 'var(--font-body)',
+              position: 'absolute', top: -11, right: -13, height: 24, padding: '0 8px 0 7px',
+              borderRadius: 'var(--radius-pill)', background: activeReward.claimed ? 'var(--green-success)' : 'var(--gradient-warm)',
+              border: '2px solid var(--white)', color: 'var(--white)', fontSize: 10.5, fontWeight: 900,
+              display: 'inline-flex', alignItems: 'center', gap: 3.5, lineHeight: 1, whiteSpace: 'nowrap',
+              boxShadow: '0 6px 14px var(--black-18)', fontFamily: 'var(--font-body)',
             }}>
+              <Clock size={11} strokeWidth={3} />
               {formatRemainingShort(activeReward.expiresAtMs - now)}
             </span>
           )}

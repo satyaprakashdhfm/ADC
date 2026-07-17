@@ -20,33 +20,24 @@
   /* ---------- 1. RAW PALETTE ---------- */
   --amber-50: #FEF6E6; --amber-100: #FDEBC2; --amber-200: #FBD98A;
   --amber-300: #F8C24D; --amber-400: #F5AE21; --amber-500: #F29F05;
-  --amber-600: #D9890A; --amber-700: #B06D0C; --amber-800: #8A5510; --amber-900: #6E4410;
-  --orange-50: #FEF0E6; --orange-100: #FDDCC2; --orange-200: #FAB988;
-  --orange-300: #F69A4D; --orange-400: #F38525; --orange-500: #EF7507;
-  --orange-600: #D2620A; --orange-700: #A94E0E; --orange-800: #843E10; --orange-900: #6B3210;
-  --teal-50: #E3F8F9; --teal-100: #BCEEF1; --teal-200: #82E0E6;
-  --teal-300: #45CDD6; --teal-400: #14BDC8; --teal-500: #06B1BB;
-  --teal-600: #08929B; --teal-700: #0C747B; --teal-800: #0F5A60; --teal-900: #114950;
+  --amber-600: #D9890A; --amber-800: #8A5510;
+  --orange-50: #FEF0E6; --orange-500: #EF7507;
+  --orange-600: #D2620A; --orange-800: #843E10;
+  --teal-50: #E3F8F9; --teal-500: #06B1BB;
   --cream-50: #FFFCF8; --cream-100: #FFF8F1; --cream-200: #F7ECE0;
-  --cream-300: #ECDBC9; --cream-400: #DBC6AE;
-  --band-salmon: #FBE1CE; /* soft salmon wash — About Us accent bands, distinct from the cream hero */
-  --band-apricot: #FBE7C1; /* light apricot wash — warm section bands */
-  --apricot: #FAD282;      /* palette "light apricot" — accents / warm fills */
-  --ink-300: #C2B2A3; --ink-400: #9C8676; --ink-500: #7A6353;
-  --ink-600: #5C4636; --ink-700: #4A3525; --ink-800: #36251A; --ink-900: #2B1D12;
+  --ink-400: #9C8676; --ink-500: #7A6353;
+  --ink-700: #4A3525; --ink-800: #36251A; --ink-900: #2B1D12;
   --ink-950: #160D06;  /* deepest warm near-black — dark footer / badge fills */
   --ink-975: #1C140C;  /* near-black warm — modal chrome */
   --white: #FFFFFF;
-  --green-50: #E7F6EE; --green-500: #2E9E5B; --green-600: #1F8A4C;
+  --green-50: #E7F6EE; --green-500: #2E9E5B;
   --whatsapp-green: #25D366;
-  --red-50: #FCEAE8; --red-500: #E2483D; --red-600: #C7372D;
-  --yellow-50: #FEF6DE; --yellow-500: #F2B705;
+  --red-50: #FCEAE8; --red-500: #E2483D;
 
   /* ---------- 2. NAMED COLORS (were hardcoded — comment says WHERE each is used) ---------- */
 
   /* -- Warm page surfaces & section bands -- */
   /* Brand palette — 4 oranges, dark → light. Navbar uses the top two, sections the bottom two. */
-  --peach-500: #FFA652;       /* darkest — navbar */
   --peach-400: #FFB76B;       /* announcement ribbon / accents */
   --peach-300: #FFCD90;       /* section bands (peach) */
   --peach-100: #FFF4DF;       /* page background / lightest sections */
@@ -62,14 +53,12 @@
 
   /* -- Footer (brand-coloured band — the big orange footer) -- */
   --footer-bg: linear-gradient(180deg, #EF7507 0%, #D2620A 100%); /* main brand orange (#ef7507), slight depth toward the base */
-  --footer-watermark: rgba(255,255,255,.07); /* giant "cookie" wordmark ghosted behind footer content */
 
   /* -- Warm accents -- */
   --orange-cta: #eca87b;      /* Admin dashboard charts (sales line/area, bar rows, pie series 1) · Razorpay checkout theme colour */
   --orange-light: var(--peach-400); /* Announcement bar background (the top promo strip) */
   --orange-dark: #C2410C;     /* Admin dashboard chart series (pie / legend) */
   --orange-brown: #B4561F;    /* Login modal text-button / link colour */
-  --amber-soft: #FAD98A;      /* Home category-card tint gradient (Cookies card) */
   --amber-wash: #FDE8C4;      /* Menu drawer highlight-panel gradient */
 
   /* -- Status washes & accents -- */
@@ -105,20 +94,11 @@
   --text-body: var(--ink-700);
   --text-muted: var(--ink-500);
   --text-subtle: var(--ink-400);
-  --text-on-brand: var(--white);
-  --text-on-dark: var(--cream-100);
   --text-link: var(--orange-600);
 
   /* Brand */
-  --brand-primary: var(--amber-500);
-  --brand-primary-hover: var(--amber-600);
   --brand-secondary: var(--orange-500);
-  --brand-secondary-hover: var(--orange-600);
-  --brand-accent: var(--teal-500);
-  --brand-accent-hover: var(--teal-600);
   --gradient-warm: linear-gradient(135deg, var(--amber-500) 0%, var(--orange-500) 100%);
-  --gradient-warm-soft: linear-gradient(135deg, var(--amber-400) 0%, var(--orange-400) 100%);
-  --gradient-hero: radial-gradient(120% 120% at 50% 0%, var(--amber-100) 0%, var(--cream-100) 60%);
 
   /* Borders */
   --border-soft: rgba(43,29,18,.06);
@@ -132,7 +112,6 @@
   --status-error: var(--red-500);
   --status-error-bg: var(--red-50);
   --mark-veg: #2E9E5B;
-  --mark-nonveg: #C7372D;
   --focus-ring: rgba(242,159,5,.45);
 
   /* ---------- 4. ALPHA / OVERLAY / SCRIM ---------- */
@@ -145,8 +124,6 @@
   --white-40: rgba(255,255,255,.4);
   --white-16: rgba(255,255,255,.16);
   --white-12: rgba(255,255,255,.12);
-  --white-10: rgba(255,255,255,.1);
-  --white-08: rgba(255,255,255,.08);
   /* Pure black (photo overlays) */
   --black-55: rgba(0,0,0,.55);
   --black-50: rgba(0,0,0,.5);
@@ -156,9 +133,6 @@
   --black-18: rgba(0,0,0,.18);
   /* Espresso (deep warm brown 20,12,4) — hero/photo scrims & gradients */
   --espresso-95: rgba(20,12,4,.95);
-  --espresso-92: rgba(20,12,4,.92);
-  --espresso-78: rgba(20,12,4,.78);
-  --espresso-64: rgba(20,12,4,.64);
   --espresso-62: rgba(20,12,4,.62);
   --espresso-55: rgba(20,12,4,.55);
   --espresso-50: rgba(20,12,4,.5);
@@ -168,11 +142,8 @@
   /* Cream-100 (#FFF8F1) translucent — glass panels, hairlines on dark */
   --cream-100-72: rgba(255,248,241,.72);
   --cream-100-68: rgba(255,248,241,.68);
-  --cream-100-60: rgba(255,248,241,.6);
-  --cream-100-55: rgba(255,248,241,.55);
   --cream-100-50: rgba(255,248,241,.5);
   --cream-100-30: rgba(255,248,241,.3);
-  --cream-100-14: rgba(255,248,241,.14);
   --cream-100-08: rgba(255,248,241,.08);
   /* Panel cream (#F4EAD6) translucent — card/panel fills */
   --panel-92: rgba(244,234,214,.92);
@@ -182,7 +153,6 @@
   --panel-74: rgba(244,234,214,.74);
   /* Warm ivory (#FFF5E6) translucent */
   --ivory-92: rgba(255,245,230,.92);
-  --ivory-88: rgba(255,245,230,.88);
   /* Brand glows */
   --amber-500-38: rgba(242,159,5,.38);
   --amber-500-35: rgba(242,159,5,.35);

@@ -203,6 +203,7 @@ export async function spinDraw(): Promise<{ code: string | null; expiresAt: stri
 export interface SpinClaim {
   code: string; label: string; discountType: string; discountValue: number;
   minimumOrderAmount?: number | null; maximumDiscount?: number | null; terms: string;
+  isGift?: boolean;
   claimedAt: string; expiresAt: string;
 }
 // Does the signed-in shopper already hold an unexpired spin reward?

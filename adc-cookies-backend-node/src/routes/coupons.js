@@ -249,6 +249,7 @@ function serializeClaim(row, coupon) {
     discountType: coupon.discount_type, discountValue: coupon.discount_value,
     minimumOrderAmount: coupon.minimum_order_amount, maximumDiscount: coupon.maximum_discount,
     terms: coupon.terms || '',
+    isGift: !!coupon.gift_kind || Number(coupon.discount_value) === 0,
     claimedAt: row.claimed_at, expiresAt: row.expires_at,
   };
 }
