@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { getMe, updateMe, logLoginLocation, sendOtp as apiSendOtp, verifyOtp as apiVerifyOtp, type MeResponse } from '@/lib/api';
+import { isValidName, isValidEmail } from '@/lib/profileValidation';
 
 interface User { name: string; email: string; role: string; initials: string; phone?: string; }
 
@@ -146,9 +147,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const me = await getMe();
     setUser(userFromMe(me));
     setProfileLoaded(true);
-    // Mandatory, no-skip name + email: keep asking on every OTP login until BOTH are on file —
-    // not just for brand-new numbers (the backend's own needsName only ever checked the name).
-    const needsName = !me.name || me.name === 'Guest' || !cleanEmail(me.email);
+    // Mandatory, no-skip name + email: keep asking on every OTP login until both meet the real
+    // bar (proper length/format) — not just "present", and not just for brand-new numbers.
+    const needsName = me.name === 'Guest' || !isValidName(me.name) || !isValidEmail(cleanEmail(me.email));
     return { role: me.role, needsName };
   };
 

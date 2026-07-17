@@ -4,16 +4,13 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { X, ArrowRight, Phone } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { isValidName, isValidEmail } from '@/lib/profileValidation';
 
 interface LoginModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess?: () => void;
 }
-
-// Rejects junk like "123@gmail.com" (digits-only local part) — mirrors the backend's check.
-const EMAIL_RE = /^(?=[^\s@]*[a-zA-Z])[^\s@]{2,}@[^\s@]+\.[a-zA-Z]{2,}$/;
-const MIN_NAME_LEN = 5;
 
 function Divider({ label }: { label: string }) {
   return (
@@ -77,7 +74,7 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   // Name + phone are mandatory on sign-up, same as the OTP path — no skipping either flow.
   const submitValid = mode === 'login'
     ? !!email.trim() && !!password.trim()
-    : name.trim().length >= MIN_NAME_LEN && !!phone.trim() && EMAIL_RE.test(email.trim()) && !!password.trim();
+    : isValidName(name) && !!phone.trim() && isValidEmail(email) && !!password.trim();
 
   const handleSubmit = async () => {
     if (!submitValid) return;
@@ -154,7 +151,7 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
     }
   };
 
-  const profileValid = profileName.trim().length >= MIN_NAME_LEN && EMAIL_RE.test(profileEmail.trim());
+  const profileValid = isValidName(profileName) && isValidEmail(profileEmail);
 
   const handleSaveProfile = async () => {
     if (!profileValid) return;

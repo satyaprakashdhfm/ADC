@@ -115,15 +115,20 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     }
   }, [drawExpiresAtMs, now]);
 
-  // Load the wheel's offers once the modal opens.
+  // Load the wheel's real offers as soon as this component exists (FloatingDock mounts it on
+  // every page, well before anyone opens the modal) — not gated on `open`. Waiting for `open`
+  // meant the decorative placeholder wheel (generic emoji wedges) visibly flashed for however
+  // long the fetch took every time someone clicked the launcher; prefetching in the background
+  // means the real wheel is already loaded by the time they actually see it in the vast majority
+  // of cases.
   useEffect(() => {
-    if (!open || prizes !== null) return;
+    if (prizes !== null) return;
     let cancelled = false;
     getActiveCoupons()
       .then(cs => { if (!cancelled) setPrizes(buildPrizes(cs)); })
       .catch(() => { if (!cancelled) setPrizes(buildPrizes([])); });
     return () => { cancelled = true; };
-  }, [open, prizes]);
+  }, [prizes]);
 
   const displayPrizes = prizes ?? DECOR_PRIZES;
   const N = displayPrizes.length;
