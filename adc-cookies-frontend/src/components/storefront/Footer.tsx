@@ -13,7 +13,6 @@ export default function Footer() {
         overflow: 'hidden',
         background: 'var(--footer-bg)',
         color: 'var(--white)',
-        borderRadius: '30px 30px 0 0',
         padding: '40px 0 18px',
       }}
     >
