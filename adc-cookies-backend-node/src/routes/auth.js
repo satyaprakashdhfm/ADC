@@ -108,13 +108,19 @@ router.patch('/me', requireAuth, async (req, res) => {
   params.push(req.user.id);
   const row = await getOne(`UPDATE users SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, params);
 
-  // Best-effort mirror into Supabase (never blocks the response).
+  // Best-effort mirror into Supabase (never blocks the response). CRITICAL for phone-OTP users:
+  // they have no real email, so looking up auth.users by req.user.email found nothing and the
+  // name never synced — which made the client fall back to a generic name on the next load and
+  // re-show the "add your name" prompt forever. Resolve their auth row by the synthetic phone
+  // email (or the current email for email/Google users) so the name actually persists.
   try {
     if (supabaseConfigured()) {
       const meta = {};
       if (req.body?.name != null) meta.full_name = String(req.body.name).trim();
       if (normalizedPhone) meta.phone = normalizedPhone;
-      const su = await getOne('SELECT id FROM auth.users WHERE email = $1', [req.user.email]).catch(() => null);
+      const effectivePhone = normalizedPhone || row.phone;
+      const lookupEmail = req.user.email || (effectivePhone ? `phone_${effectivePhone}@phone.adccookies.app` : null);
+      const su = lookupEmail ? await getOne('SELECT id FROM auth.users WHERE email = $1', [lookupEmail]).catch(() => null) : null;
       if (su) await adminClient().auth.admin.updateUserById(su.id, { user_metadata: meta });
     }
   } catch { /* metadata sync is non-critical */ }

@@ -45,7 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!session) return null;
     const meta = (session.user.user_metadata || {}) as Record<string, string>;
     const email = cleanEmail(session.user.email);
-    const name = meta.full_name || meta.name || (email ? email.split('@')[0] : 'You');
+    // No fabricated fallback name here: a generic placeholder ('You') is truthy, so it used to
+    // overwrite the real backend name in mergeSessionUser on every token refresh/tab refocus —
+    // which made ProfileGate think the name was missing and pop up again and again. Leaving it
+    // empty lets `next.name || prev.name` keep the good name we already have.
+    const name = meta.full_name || meta.name || (email ? email.split('@')[0] : '');
     return { name, email, role: 'CUSTOMER', initials: initialsOf(name), phone: meta.phone };
   };
 

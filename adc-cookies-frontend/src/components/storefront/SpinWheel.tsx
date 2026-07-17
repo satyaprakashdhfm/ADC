@@ -95,6 +95,15 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const [termsIndex, setTermsIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRewardRef = useRef<ActiveReward | null>(null);
+  // A local per-second tick while the modal is open, so every countdown in it (win reward AND a
+  // miss's "try again in…") stays live — the prop `now` only ticks when a reward exists.
+  const [localNow, setLocalNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!open) return;
+    const t = setInterval(() => setLocalNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [open]);
+  const nowMs = Math.max(now, localNow);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
@@ -109,11 +118,11 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   // before it expires would just replay the same result, so don't let the idle button reappear
   // until it genuinely has.
   useEffect(() => {
-    if (drawExpiresAtMs && now >= drawExpiresAtMs) {
+    if (drawExpiresAtMs && nowMs >= drawExpiresAtMs) {
       setResult(null);
       setDrawExpiresAtMs(null);
     }
-  }, [drawExpiresAtMs, now]);
+  }, [drawExpiresAtMs, nowMs]);
 
   // Load the wheel's real offers as soon as this component exists (FloatingDock mounts it on
   // every page, well before anyone opens the modal) — not gated on `open`. Waiting for `open`
@@ -223,9 +232,9 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           </h2>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 auto 16px', maxWidth: 300, lineHeight: 1.5 }}>
             {activeReward
-              ? (activeReward.claimed ? 'Here’s your exclusive discount — use it at checkout.' : `Log in within ${formatRemaining(activeReward.expiresAtMs - now)} to claim this reward before it expires.`)
+              ? (activeReward.claimed ? 'Here’s your exclusive discount — use it at checkout.' : `Log in within ${formatRemaining(activeReward.expiresAtMs - nowMs)} to claim this reward before it expires.`)
               : result
-                ? (result.win ? 'Here’s your exclusive discount — use it at checkout.' : `No prize this time — treats are always fresh though! Try the wheel again in ${formatRemaining((drawExpiresAtMs ?? 0) - now)}.`)
+                ? (result.win ? 'Here’s your exclusive discount — use it at checkout.' : `No prize this time — treats are always fresh though! Try the wheel again in ${formatRemaining((drawExpiresAtMs ?? 0) - nowMs)}.`)
                 : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
           </p>
 
@@ -269,7 +278,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
                 </div>
               )}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 12 }}>
-                <Clock size={13} /> {activeReward.claimed ? `Valid for ${formatRemaining(activeReward.expiresAtMs - now)}` : `Expires in ${formatRemaining(activeReward.expiresAtMs - now)}`}
+                <Clock size={13} /> {activeReward.claimed ? `Valid for ${formatRemaining(activeReward.expiresAtMs - nowMs)}` : `Expires in ${formatRemaining(activeReward.expiresAtMs - nowMs)}`}
               </div>
               {activeReward.claimed ? (
                 <button onClick={() => { close(); router.push('/'); }}

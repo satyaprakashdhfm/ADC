@@ -56,12 +56,24 @@ export async function resolveGiftProduct(coupon, userId) {
 // giftValue (the gift product's price, when this is a gift-type coupon) is subtracted from
 // orderAmount before the minimum-order check — the freebie itself shouldn't help a cart
 // qualify for its own reward; the rest of the cart has to clear the minimum on its own.
-export async function validateCoupon(code, orderAmount, giftValue = 0) {
+// userId is required to redeem a SPIN-WHEEL coupon: those are personal rewards, only valid for
+// the exact account that won them (has an unexpired spin_claims row). Regular admin coupons
+// ignore userId and work for anyone, as before.
+export async function validateCoupon(code, orderAmount, giftValue = 0, userId = null) {
   const coupon = await getCouponByCode(code);
   if (!coupon) throw new ApiError('Invalid or inactive coupon');
 
   if (coupon.expiry_date && coupon.expiry_date < new Date().toISOString().slice(0, 10)) {
     throw new ApiError('Coupon has expired');
+  }
+  // Spin-wheel reward: must belong to THIS account. Stops someone sharing their won code with a
+  // friend — a code only works for the account whose spin produced it, within its 12h window.
+  if (coupon.spin_weight != null) {
+    const claim = userId ? await getOne(
+      'SELECT 1 FROM spin_claims WHERE user_id = $1 AND code = $2 AND expires_at > $3 LIMIT 1',
+      [userId, coupon.code, new Date().toISOString()]
+    ) : null;
+    if (!claim) throw new ApiError('This reward code isn’t linked to your account. Spin the wheel to win your own!');
   }
   if (coupon.usage_limit != null) {
     const row = await getOne('SELECT COUNT(*) AS c FROM coupon_usage WHERE coupon_id = $1', [coupon.id]);
@@ -97,7 +109,7 @@ router.get('/validate', requireAuth, couponLimiter, async (req, res) => {
   const { code, orderAmount } = req.query;
   const raw = await getCouponByCode(String(code || ''));
   const giftProduct = raw ? await resolveGiftProduct(raw, req.user.id) : null;
-  const coupon = await validateCoupon(String(code || ''), orderAmount ?? 0, giftProduct ? Number(giftProduct.price) : 0);
+  const coupon = await validateCoupon(String(code || ''), orderAmount ?? 0, giftProduct ? Number(giftProduct.price) : 0, req.user.id);
   res.json({
     ...serializeCoupon(coupon),
     valid: true,

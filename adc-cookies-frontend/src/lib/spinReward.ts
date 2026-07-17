@@ -26,20 +26,26 @@ export function readPending(): ActiveReward | null {
 export function savePending(r: ActiveReward) { try { localStorage.setItem(PENDING_KEY, JSON.stringify(r)); } catch { /* ignore */ } }
 export function clearPending() { try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ } }
 
+// Full hr/min/sec countdown, e.g. "11h 42m 05s" — used in the wheel popup where there's room.
 export function formatRemaining(ms: number): string {
   if (ms <= 0) return 'Expired';
-  const totalMin = Math.ceil(ms / 60_000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}h ${pad(m)}m ${pad(s)}s` : m > 0 ? `${m}m ${pad(s)}s` : `${s}s`;
 }
 
-// Compact form for a small badge — "11h", "42m", or "Now" — where the full "11h 42m" wouldn't fit.
+// Compact clock for the small launcher badge — "11:42:05" (H:MM:SS), still hr/min/sec but tight.
 export function formatRemainingShort(ms: number): string {
   if (ms <= 0) return 'Now';
-  const totalMin = Math.ceil(ms / 60_000);
-  const h = Math.floor(totalMin / 60);
-  return h > 0 ? `${h}h` : `${totalMin}m`;
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
 // Resolves and tracks the shopper's active Spin & Win reward (claimed or pending-login),
@@ -79,11 +85,13 @@ export function useActiveSpinReward() {
 
   useEffect(() => { resolve(); }, [resolve]);
 
-  // Tick every 30s so a visible countdown stays fresh even while the modal is closed.
+  // Tick every second so the hr/min/sec countdown (badge + popup) stays live. Only runs while a
+  // reward is actually being shown, so there's no per-second render churn otherwise.
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30_000);
+    if (!activeReward) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [activeReward]);
 
   // Drop the reward the moment its window runs out, wherever it's being displayed.
   useEffect(() => {

@@ -231,7 +231,7 @@ router.post('/', async (req, res) => {
   if (couponCode && String(couponCode).trim()) {
     const rawCoupon = await getCouponByCode(couponCode);
     const giftProduct = rawCoupon ? await resolveGiftProduct(rawCoupon, user.id) : null;
-    coupon = await validateCoupon(couponCode, subtotal, giftProduct ? Number(giftProduct.price) : 0);
+    coupon = await validateCoupon(couponCode, subtotal, giftProduct ? Number(giftProduct.price) : 0, user.id);
     // A "free item" reward only makes sense if that item is actually in the order — the
     // frontend auto-adds it the moment the coupon is applied, so this only fires if it was
     // removed afterwards (or the request was tampered with).
