@@ -1,8 +1,9 @@
 'use client';
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { Phone, Navigation, ShoppingBag, Search } from 'lucide-react';
+import { Phone, Navigation, ShoppingBag, Search, MapPin } from 'lucide-react';
 import { STORES } from '@/lib/stores';
 
 const StoreMap = dynamic(() => import('./StoreMap'), {
@@ -37,17 +38,28 @@ export default function LocationsClient() {
           {q && <button onClick={() => setQ('')} style={{ padding: '5px 12px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'transparent', color: 'var(--brand-secondary)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>Clear</button>}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {list.map((s) => (
-            <article key={s.name} style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', padding: 16, boxShadow: 'var(--shadow-sm)' }}>
-              <p style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', margin: '0 0 4px' }}>{s.city}</p>
-              <h3 style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>{s.name}</h3>
-              <p style={{ color: 'var(--text-body)', lineHeight: 1.5, margin: '0 0 10px', fontSize: 'var(--text-xs)' }}>{s.address}</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 12 }}>
-                <a href={`tel:${s.phone.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-xs)' }}><Phone size={13} /> {s.phone}</a>
-                <Link href={s.map} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--brand-secondary)', fontWeight: 800, fontSize: 'var(--text-xs)' }}><Navigation size={13} /> Directions</Link>
+            <article key={s.name} style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+              {s.image ? (
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 10' }}>
+                  <Image src={s.image} alt={s.name} fill sizes="(max-width:760px) 100vw, 420px" style={{ objectFit: 'cover', objectPosition: 'top' }} />
+                </div>
+              ) : (
+                <div style={{ width: '100%', aspectRatio: '16 / 10', background: 'radial-gradient(120% 120% at 35% 28%,var(--amber-300),var(--orange-500))', display: 'grid', placeItems: 'center' }}>
+                  <MapPin size={34} color="var(--white)" />
+                </div>
+              )}
+              <div style={{ padding: 16 }}>
+                <p style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', margin: '0 0 4px' }}>{s.city}</p>
+                <h3 style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>{s.name}</h3>
+                <p style={{ color: 'var(--text-body)', lineHeight: 1.5, margin: '0 0 10px', fontSize: 'var(--text-xs)' }}>{s.address}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <a href={`tel:${s.phone.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-xs)' }}><Phone size={13} /> {s.phone}</a>
+                  <Link href={s.map} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--brand-secondary)', fontWeight: 800, fontSize: 'var(--text-xs)' }}><Navigation size={13} /> Directions</Link>
+                </div>
+                <Link href={`/order?store=${encodeURIComponent(s.city.toLowerCase())}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', boxSizing: 'border-box', padding: '10px 16px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}><ShoppingBag size={15} /> Order from this store</Link>
               </div>
-              <Link href={`/order?store=${encodeURIComponent(s.city.toLowerCase())}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', boxSizing: 'border-box', padding: '10px 16px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}><ShoppingBag size={15} /> Order from this store</Link>
             </article>
           ))}
           {!list.length && <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>No stores match “{q}”. Try Bengaluru or Chennai.</p>}

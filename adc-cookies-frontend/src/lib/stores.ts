@@ -10,6 +10,7 @@ export interface Store {
   map: string;
   lat: number;
   lng: number;
+  image?: string; // storefront photo shown on the /locations store card
 }
 
 /** ADC store locations — shared by the homepage About/Stores, /locations store finder and Contact. */
@@ -24,6 +25,7 @@ export const STORES: Store[] = [
     map: 'https://www.google.com/maps/search/?api=1&query=ADC+A+Dough+Cookie+Jayanagar+9th+Block+Bengaluru+560041',
     lat: 12.9166,
     lng: 77.5906,
+    image: '/assets/stores/jayanagar.jpeg',
   },
   {
     city: 'Bengaluru',
@@ -46,6 +48,7 @@ export const STORES: Store[] = [
     map: 'https://www.google.com/maps/search/?api=1&query=ADC+A+Dough+Cookie+Electronic+City+Phase+1+Bengaluru+560100',
     lat: 12.8452,
     lng: 77.6602,
+    image: '/assets/stores/electronic-city.jpeg',
   },
   {
     city: 'Chennai',
@@ -57,5 +60,6 @@ export const STORES: Store[] = [
     map: 'https://www.google.com/maps/search/?api=1&query=ADC+A+Dough+Cookie+Besant+Nagar+Chennai+600090',
     lat: 13.0002,
     lng: 80.2668,
+    image: '/assets/stores/besant-nagar.jpeg',
   },
 ];
