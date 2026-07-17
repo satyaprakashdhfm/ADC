@@ -747,16 +747,28 @@ export default function AdminDashboard() {
           return (
           <Panel title={`Customers${users ? ` (${list.length})` : ''}`} loading={users === null}>
             <FilterBar search={userSearch} onSearch={v => { setUserSearch(v); setPageOf('users', 1); }} placeholder="Search name, email, phone…" active={false} onClear={() => { setUserSearch(''); setPageOf('users', 1); }} />
-            <Table head={['Name', 'Email', 'Phone', 'Orders', 'Joined']}>
-              {paginate(list, 'users').map(u => (
+            <Table head={['Name', 'Email', 'Phone', 'Address', 'Orders', 'Joined']}>
+              {paginate(list, 'users').map(u => {
+                const addr = u.addresses?.find(a => a.isDefault) || u.addresses?.[0];
+                const addrText = addr ? [addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ') : '';
+                return (
                 <tr key={u.id}>
                   <td style={td}><strong>{u.name}</strong></td>
                   <td style={td}>{u.email || '—'}</td>
                   <td style={td}>{u.phone || '—'}</td>
+                  <td style={{ ...td, maxWidth: 280, whiteSpace: 'normal', lineHeight: 1.4 }}>
+                    {addr ? (
+                      <span title={addrText}>
+                        {addrText}
+                        {(u.addresses?.length || 0) > 1 && <span style={{ color: 'var(--text-subtle)', fontWeight: 700 }}> · +{(u.addresses!.length - 1)} more</span>}
+                      </span>
+                    ) : '—'}
+                  </td>
                   <td style={td}>{u.orderCount}</td>
                   <td style={td}>{fmtDate(u.createdAt)}</td>
                 </tr>
-              ))}
+                );
+              })}
             </Table>
             {users && !list.length && <Empty text={users.length ? 'No customers match the search.' : 'No customers yet.'} />}
             <Pager page={pageOf('users')} total={list.length} pageSize={PAGE_SIZE} onPage={n => setPageOf('users', n)} />

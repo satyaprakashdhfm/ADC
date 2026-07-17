@@ -251,7 +251,7 @@ export interface AdminStats {
   ordersByStatus: Record<string, number>;
   topProducts: { name: string; qty: number; revenue: number }[];
 }
-export interface AdminUser { id: number; name: string; email: string | null; phone?: string; role: string; createdAt: string; orderCount: number; }
+export interface AdminUser { id: number; name: string; email: string | null; phone?: string; role: string; createdAt: string; orderCount: number; addresses?: Address[]; }
 export interface AdminCoupon { id: number; code: string; discountType: string; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive: boolean; timesUsed?: number; }
 export interface CouponInput { code: string; discountType: 'PERCENTAGE' | 'FIXED'; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive?: boolean; }
 export interface AdminMessage { id: number; name: string; email: string; phone?: string | null; message: string; handled: boolean; createdAt: string; }

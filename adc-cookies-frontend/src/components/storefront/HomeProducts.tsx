@@ -59,6 +59,7 @@ export default function HomeProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState('');
   const sectionRef = useRef<HTMLElement>(null);
+  const deepLinkScrolled = useRef(false); // scroll a ?q= deep-link to its section only once, after products load
   const [inView, setInView] = useState(false); // the floating checkout bar only shows while browsing products
 
   useEffect(() => { getProducts().then(p => setProducts(p || [])).catch(() => {}); }, []);
@@ -73,17 +74,26 @@ export default function HomeProducts() {
     return () => io.disconnect();
   }, []);
 
-  // Deep-link from nav search / product menus (/order?q= → redirects here): float the match to the
-  // top and scroll to it. Then strip ?q= from the address bar so the home URL stays clean — the float
-  // is driven by state, so removing the param doesn't undo it.
+  // Deep-link from nav search / product menus (/order?q= → redirects here): remember the query (it
+  // floats a matching cookie to the top) and strip ?q= from the address bar so the home URL stays clean.
   useEffect(() => {
     const query = new URLSearchParams(window.location.search).get('q');
     if (!query) return;
     setQ(query);
-    const t = setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 300);
     try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignore */ }
-    return () => clearTimeout(t);
   }, []);
+
+  // Once products load, scroll a deep-linked query to the right place: a TIN query (or a tin name)
+  // jumps to the Cookie Tins section; anything else scrolls to the (floated) cookies.
+  useEffect(() => {
+    if (!q || deepLinkScrolled.current || products.length === 0) return;
+    deepLinkScrolled.current = true;
+    const term = q.trim().toLowerCase();
+    const isTin = /tin/.test(term) || products.some(p => p.category === 'TINS' && p.name.toLowerCase().includes(term));
+    const id = isTin ? 'tins-section' : 'products';
+    const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+    return () => clearTimeout(t);
+  }, [q, products]);
 
   // Nav category deep-link (/order?cat=cookies|tins|corporate → redirects here): scroll to that section.
   useEffect(() => {
