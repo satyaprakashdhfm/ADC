@@ -436,6 +436,7 @@ const INDIAN_STATES = [
   'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
 ];
 const PIN_RE = /^[1-9]\d{5}$/; // Indian PIN: 6 digits, not starting with 0
+const PHONE_RE = /^(91)?[6-9]\d{9}$/; // Indian mobile, optional 91 country-code prefix
 // Map a free-text (e.g. geocoded) state onto a canonical list entry.
 const matchState = (s?: string) => {
   const t = (s || '').toLowerCase().trim();
@@ -527,11 +528,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
   const aset = (k: keyof typeof aform) => (e: React.ChangeEvent<HTMLInputElement>) => setAform({ ...aform, [k]: e.target.value });
   const pinOk = PIN_RE.test(aform.pincode.trim());
+  const phoneOk = PHONE_RE.test(aform.phone.replace(/\D/g, ''));
   const stateOk = INDIAN_STATES.some(s => s.toLowerCase() === aform.state.trim().toLowerCase());
-  const aValid = !!(aform.fullName.trim() && aform.addressLine1.trim() && aform.city.trim() && pinOk && stateOk);
-  // Can't head to payment without a selected, PIN-valid, serviceable address.
+  // A phone number is required — Delhivery/Shadowfax can't create a shipment without one, so an
+  // address saved without a valid one would silently never ship.
+  const aValid = !!(aform.fullName.trim() && phoneOk && aform.addressLine1.trim() && aform.city.trim() && pinOk && stateOk);
+  // Can't head to payment without a selected, PIN-valid, serviceable address with a real phone
+  // number (older saved addresses may predate that requirement — block those too, not just new ones).
   const chosenPinOk = PIN_RE.test((chosen?.pincode || '').trim());
-  const canProceed = hydrated && lines.length > 0 && !!chosen && chosenPinOk && (delivCheck ? delivCheck.serviceable : true);
+  const chosenPhoneOk = PHONE_RE.test((chosen?.phone || '').replace(/\D/g, ''));
+  const canProceed = hydrated && lines.length > 0 && !!chosen && chosenPinOk && chosenPhoneOk && (delivCheck ? delivCheck.serviceable : true);
   const fieldStyle: React.CSSProperties = { flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
   const hintStyle: React.CSSProperties = { fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 600 };
   const EMPTY_AFORM = { fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' };
@@ -879,8 +885,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       {detectErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 600, lineHeight: 1.4 }}>{detectErr}</div>}
 
                       {[['fullName', 'Full name'], ['phone', 'Phone'], ['addressLine1', 'Flat / House / Building'], ['addressLine2', 'Area / Landmark']].map(([k, ph]) => (
-                        <input key={k} value={aform[k as keyof typeof aform]} onChange={aset(k as keyof typeof aform)} placeholder={ph} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
+                        <input key={k} value={aform[k as keyof typeof aform]} onChange={aset(k as keyof typeof aform)} placeholder={ph} inputMode={k === 'phone' ? 'tel' : undefined} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                       ))}
+                      {aform.phone.trim().length > 0 && !phoneOk && <div style={hintStyle}>Enter a valid 10-digit mobile number — needed to deliver this order.</div>}
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                         <input value={aform.city} onChange={aset('city')} placeholder="City" style={fieldStyle} />
                         <select value={aform.state} onChange={e => setAform(f => ({ ...f, state: e.target.value }))} style={{ ...fieldStyle, cursor: 'pointer', color: aform.state ? 'var(--text-strong)' : 'var(--text-subtle)', appearance: 'none' }}>
@@ -1027,7 +1034,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       {selected.fullName && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600 }}>· {selected.fullName}</span>}
                     </div>
                     <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>{[selected.addressLine1, selected.addressLine2, selected.city, selected.state, selected.pincode].filter(Boolean).join(', ')}</div>
-                    {selected.phone && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 4 }}>Phone: {selected.phone}</div>}
+                    {PHONE_RE.test((selected.phone || '').replace(/\D/g, ''))
+                      ? <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 4 }}>Phone: {selected.phone}</div>
+                      : <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, marginTop: 4 }}>No phone on file — tap Change to add one before paying.</div>}
                   </div>
                   <button onClick={() => router.push('/checkout')} style={{ border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', flex: 'none' }}>Change</button>
                 </div>
