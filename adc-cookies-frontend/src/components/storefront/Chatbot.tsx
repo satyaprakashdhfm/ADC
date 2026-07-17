@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { X, Send } from 'lucide-react';
+import { whatsappLink } from '@/lib/site';
 
 /*
  * Lightweight support bot — canned answers to the questions people actually ask.
@@ -91,9 +92,9 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
             </div>
           </>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-            <Send size={14} /> Still need help? Message us on WhatsApp (the green button).
-          </div>
+          <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 700, textDecoration: 'none' }}>
+            <Send size={14} /> Still need help? Message us on WhatsApp
+          </a>
         )}
       </div>
     </div>

@@ -17,7 +17,9 @@ export default function Footer() {
         padding: '40px 0 18px',
       }}
     >
-      {/* Giant ghosted brand wordmark — centred in the footer box (both axes) */}
+      {/* Giant ghosted brand mark — the ADC logo shape filled with the warm gradient, centred
+          in the footer box (both axes). Uses a CSS mask so the gradient shows through the
+          logo's own silhouette instead of a flat faded colour. */}
       <span
         aria-hidden
         style={{
@@ -25,20 +27,23 @@ export default function Footer() {
           left: '50%',
           top: '50%',
           transform: 'translate(-50%,-50%)',
-          fontFamily: 'var(--font-display)',
-          fontWeight: 800,
-          fontSize: 'clamp(120px, 20vw, 300px)',
-          lineHeight: 0.8,
-          letterSpacing: '-0.04em',
-          color: 'var(--footer-watermark)',
-          whiteSpace: 'nowrap',
+          width: 'clamp(260px, 34vw, 520px)',
+          height: 'clamp(190px, 25vw, 380px)',
+          background: 'var(--gradient-warm)',
+          WebkitMaskImage: 'url(/assets/adc-logo.png)',
+          maskImage: 'url(/assets/adc-logo.png)',
+          WebkitMaskSize: 'contain',
+          maskSize: 'contain',
+          WebkitMaskRepeat: 'no-repeat',
+          maskRepeat: 'no-repeat',
+          WebkitMaskPosition: 'center',
+          maskPosition: 'center',
+          opacity: 0.16,
           pointerEvents: 'none',
           userSelect: 'none',
           zIndex: 0,
         }}
-      >
-        cookie
-      </span>
+      />
 
       {/* Waving cookie mascot — bottom-left, near the logo/social where there's open space */}
       <Image
