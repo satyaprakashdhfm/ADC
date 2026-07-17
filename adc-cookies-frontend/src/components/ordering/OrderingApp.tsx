@@ -9,7 +9,7 @@ import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, createRazorpayOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, type Product, type Address, type OrderItemInput, type DeliveryCheck } from '@/lib/api';
+import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, createRazorpayOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, getAvailableCoupons, type Product, type Address, type OrderItemInput, type DeliveryCheck, type AvailableCoupon } from '@/lib/api';
 import { whatsappLink, SITE_PHONE } from '@/lib/site';
 
 // STALL MODE — temporary, for the pop-up-stall launch: online payment is switched off and the
@@ -463,6 +463,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const { user } = useAuth();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [couponErr, setCouponErr] = useState('');
+  const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
   const [adding, setAdding] = useState(false);
   const [aform, setAform] = useState({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' });
   const [editId, setEditId] = useState<number | null>(null);   // address being edited (null = adding new)
@@ -484,6 +485,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     if (user) getAddresses().then(setAddresses).catch(() => setAddresses([]));
     else setAddresses([]);
   }, [user]);
+
+  // General, anyone-can-use coupons for the "Available offers" list — public, so it can render
+  // before login (applying one still requires being logged in, same as typing a code manually).
+  useEffect(() => {
+    getAvailableCoupons().then(setAvailableCoupons).catch(() => setAvailableCoupons([]));
+  }, []);
 
   // Auto-select an address once they load and nothing valid is selected:
   // prefer the default, else fall back to the first address (so users without a
@@ -627,8 +634,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
   // Coupons are validated on the backend right here at apply-time — so an invalid code is caught
   // now, not later at payment. Only genuinely valid, active codes ever set `applied`.
-  const applyCoupon = async () => {
-    const code = coupon.trim().toUpperCase();
+  const applyCoupon = async (overrideCode?: string) => {
+    const code = (overrideCode ?? coupon).trim().toUpperCase();
     if (!code) return;
     if (!user) { setCouponErr('Please log in to apply a coupon.'); setApplied(false); setDiscount(0); return; }
     try {
@@ -1015,12 +1022,40 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   </div>
                 ) : (
                   <div>
-                    <div style={{ display: 'flex', gap: 10 }}>
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
                       <input value={coupon} onChange={e => { setCoupon(e.target.value.toUpperCase()); setCouponErr(''); }} placeholder="Enter coupon code" style={{ flex: 1, minWidth: 0, padding: '13px 16px', borderRadius: 'var(--radius-input)', border: couponErr ? '1.5px solid var(--status-error)' : '1.5px solid var(--border-default)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', background: 'var(--surface-raised)', color: 'var(--text-strong)', outline: 'none' }} />
-                      <button onClick={applyCoupon} disabled={!coupon.trim()} style={{ padding: '13px 20px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Apply</button>
+                      <button onClick={() => applyCoupon()} disabled={!coupon.trim()} style={{ padding: '13px 20px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Apply</button>
                     </div>
-                    {couponErr && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--status-error)', marginTop: 6 }}>{couponErr}</div>}
-                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 6, fontWeight: 600 }}>Have a coupon? Enter it above — or tap the Spin &amp; Win wheel at the bottom-right of the screen to win a code.</div>
+                    {couponErr && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--status-error)', marginTop: -6, marginBottom: 10 }}>{couponErr}</div>}
+
+                    {/* Available offers — Zomato/Swiggy-style tappable list, so shoppers don't have
+                        to already know a code to use one. */}
+                    {availableCoupons.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Available offers</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {availableCoupons.map(c => (
+                            <div key={c.code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--brand-secondary)', background: 'var(--amber-50)' }}>
+                              <Tag size={16} color="var(--brand-secondary)" style={{ flex: 'none' }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-sm)', letterSpacing: '.04em', color: 'var(--brand-secondary)' }}>{c.code}</span>
+                                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{c.label}</span>
+                                </div>
+                                <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 2 }}>
+                                  {c.minimumOrderAmount ? `Min. order ₹${c.minimumOrderAmount}` : 'No minimum order'}
+                                </div>
+                              </div>
+                              <button onClick={() => { setCoupon(c.code); setCouponErr(''); void applyCoupon(c.code); }}
+                                style={{ flex: 'none', padding: '7px 14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
+                                Apply
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 10, fontWeight: 600 }}>Or tap the Spin &amp; Win wheel at the bottom-right of the screen to win a code.</div>
                   </div>
                 )}
               </div>

@@ -174,6 +174,18 @@ export interface ActiveCoupon {
 export async function getActiveCoupons(): Promise<ActiveCoupon[]> {
   return request('/coupons/active');
 }
+
+// General, anyone-can-use coupons (admin-created, not a personal spin-wheel win) — shown at
+// checkout as a Zomato/Swiggy-style tappable offers list. Public (no auth) so it can render
+// before login; actually applying one still goes through validateCoupon as normal.
+export interface AvailableCoupon {
+  code: string; discountType: string; discountValue: number;
+  minimumOrderAmount?: number | null; maximumDiscount?: number | null;
+  label: string; terms: string; isGift?: boolean;
+}
+export async function getAvailableCoupons(): Promise<AvailableCoupon[]> {
+  return request('/coupons/available');
+}
 // A random id generated once per browser and reused forever — lets the backend recognize repeat
 // spin attempts from the same device (see spinDraw) without requiring an account. Not a security
 // boundary (clearing storage resets it), just enough to stop casual "reload and try again" abuse.

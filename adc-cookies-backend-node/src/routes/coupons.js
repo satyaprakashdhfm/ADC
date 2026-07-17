@@ -155,6 +155,39 @@ router.get('/active', couponLimiter, async (_req, res) => {
   })));
 });
 
+// Currently-usable GENERAL coupons (spin_weight IS NULL, active, not expired, under their usage
+// limit) — the codes anyone can use, as opposed to a personal spin-wheel win. Public listing (no
+// auth) so the checkout page can show a Zomato/Swiggy-style "available offers" list before login;
+// actually redeeming one still goes through /validate as normal.
+async function getUsableGeneralCoupons() {
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = await getAll('SELECT * FROM coupons WHERE is_active = TRUE AND spin_weight IS NULL ORDER BY id DESC');
+  const usable = [];
+  for (const c of rows) {
+    if (c.expiry_date && c.expiry_date < today) continue;
+    if (c.usage_limit != null) {
+      const row = await getOne('SELECT COUNT(*) AS n FROM coupon_usage WHERE coupon_id = $1', [c.id]);
+      if (Number(row.n) >= c.usage_limit) continue;
+    }
+    usable.push(c);
+  }
+  return usable;
+}
+
+router.get('/available', couponLimiter, async (_req, res) => {
+  const usable = await getUsableGeneralCoupons();
+  res.json(usable.map(c => ({
+    code: c.code,
+    discountType: c.discount_type,
+    discountValue: c.discount_value,
+    minimumOrderAmount: c.minimum_order_amount,
+    maximumDiscount: c.maximum_discount,
+    label: c.discount_type === 'PERCENTAGE' ? `${Math.round(c.discount_value)}% OFF` : `₹${Math.round(c.discount_value)} OFF`,
+    terms: c.terms || '',
+    isGift: !!c.gift_kind,
+  })));
+});
+
 // --- Server-authoritative draw: a shuffled "ticket pool" guarantees EXACT odds across every
 // batch of spins (e.g. precisely 5% land on the tin), instead of independent per-spin randomness
 // that only converges to the target % over a long run. See spin_ticket_pool in db.js. ---
