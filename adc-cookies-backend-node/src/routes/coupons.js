@@ -196,6 +196,10 @@ const NO_REWARD = '__NONE__';
 // How long a draw (win or miss) — and separately, a claimed reward — is honoured before it
 // expires. Shared by /spin's device-lock and claim-spin's claim window (see spin_claims in db.js).
 const CLAIM_WINDOW_HOURS = 12;
+// One spin per device/account per day: even after a draw's own 12h window has expired, they must
+// wait the rest of this cooldown (24h from the ORIGINAL draw) before a fresh spin is allowed.
+// Without this, the moment the 12h window lapsed the very next click just drew again immediately.
+const SPIN_COOLDOWN_HOURS = 24;
 
 // A stable fingerprint of the current odds config — if the admin changes a weight, adds, removes,
 // or deactivates a wheel coupon, this changes too, which tells /spin to reshuffle a fresh batch
@@ -226,20 +230,53 @@ function buildTickets(coupons) {
   return shuffled(tickets);
 }
 
+// Read-only status check — lets the wheel show "you're done for today, come back at X" the
+// moment it opens, without actually drawing. (POST /spin itself can't safely be called just to
+// check: once the cooldown has fully elapsed, it draws for real rather than only reporting.)
+router.get('/spin-cooldown', couponLimiter, async (req, res) => {
+  const deviceId = String(req.query.deviceId || '').trim();
+  const userId = req.user?.id ?? null;
+  if (!deviceId && !userId) return res.json({ completed: false });
+  const nowIsoStr = nowIso();
+  const existing = await getOne(
+    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2) ORDER BY id DESC LIMIT 1`,
+    [deviceId, userId]
+  );
+  if (!existing || existing.expires_at > nowIsoStr) return res.json({ completed: false });
+  const nextSpinAtMs = new Date(existing.drawn_at).getTime() + SPIN_COOLDOWN_HOURS * 3600_000;
+  if (nextSpinAtMs > Date.now()) {
+    return res.json({ completed: true, nextSpinAt: new Date(nextSpinAtMs).toISOString() });
+  }
+  res.json({ completed: false });
+});
+
 router.post('/spin', couponLimiter, async (req, res) => {
   const deviceId = String(req.body?.deviceId || '').trim();
   if (!deviceId) throw new ApiError('Missing device id.');
   const userId = req.user?.id ?? null; // parseAuth already ran — set if this caller happens to be logged in
   const nowIsoStr = nowIso();
 
-  // Already has an unexpired draw (win OR miss) for this device or account — replay it instead
-  // of drawing again. This is what actually stops "keep spinning until I like the result": once
-  // drawn, that's the outcome for this window, whether it's been claimed or not.
+  // Latest draw for this device or account, regardless of whether its own window has expired —
+  // needed to enforce the cooldown below, not just the in-progress replay.
   const existing = await getOne(
-    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2) AND expires_at > $3 ORDER BY id DESC LIMIT 1`,
-    [deviceId, userId, nowIsoStr]
+    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2) ORDER BY id DESC LIMIT 1`,
+    [deviceId, userId]
   );
-  if (existing) return res.json({ code: existing.code, expiresAt: existing.expires_at });
+  if (existing) {
+    // Still within its own 12h window (win or miss) — replay it instead of drawing again. This is
+    // what actually stops "keep spinning until I like the result": once drawn, that's the outcome
+    // for this window, whether it's been claimed or not.
+    if (existing.expires_at > nowIsoStr) {
+      return res.json({ code: existing.code, expiresAt: existing.expires_at });
+    }
+    // That window is over, but the daily cooldown (from the ORIGINAL draw, not the window's end)
+    // hasn't — tell the client this spin is done and when the next one opens up, rather than
+    // silently allowing another draw the moment the 12h window lapsed.
+    const nextSpinAtMs = new Date(existing.drawn_at).getTime() + SPIN_COOLDOWN_HOURS * 3600_000;
+    if (nextSpinAtMs > Date.now()) {
+      return res.json({ code: null, completed: true, nextSpinAt: new Date(nextSpinAtMs).toISOString() });
+    }
+  }
 
   const coupons = await getUsableSpinCoupons();
   const signature = oddsSignature(coupons);

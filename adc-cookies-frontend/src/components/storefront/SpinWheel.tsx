@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight, Clock, Lock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
-import { getActiveCoupons, claimSpin, spinDraw, type ActiveCoupon } from '@/lib/api';
+import { getActiveCoupons, claimSpin, spinDraw, getSpinCooldown, type ActiveCoupon } from '@/lib/api';
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, whatsappLink } from '@/lib/site';
 import { type ActiveReward, CLAIM_WINDOW_HOURS, savePending, formatRemaining } from '@/lib/spinReward';
 import { useIsDesktop } from '@/lib/useIsDesktop';
@@ -96,6 +96,9 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const [spinError, setSpinError] = useState('');
   const [drawExpiresAtMs, setDrawExpiresAtMs] = useState<number | null>(null); // when a MISS result stops being "locked in" (wins are governed by activeReward instead)
   const [showTerms, setShowTerms] = useState(false);
+  // One spin per device/account per day: once null (no active reward/result), check whether
+  // they're still waiting out yesterday's cooldown before letting the idle spin button show.
+  const [cooldown, setCooldown] = useState<{ completed: boolean; nextSpinAt?: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRewardRef = useRef<ActiveReward | null>(null);
   // A local per-second tick while the modal is open, so every countdown in it (win reward AND a
@@ -128,6 +131,24 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     }, Math.max(0, drawExpiresAtMs - Date.now()));
     return () => clearTimeout(t);
   }, [drawExpiresAtMs]);
+
+  // Read-only check (no side effect) so a returning shopper sees "come back at X" the moment the
+  // wheel opens, instead of only finding out after tapping spin. Re-checked whenever the reward/
+  // result clears, since that's exactly when the idle spin button would otherwise reappear.
+  useEffect(() => {
+    if (!open || activeReward || result) return;
+    let cancelled = false;
+    getSpinCooldown().then(c => { if (!cancelled) setCooldown(c.completed ? c : null); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [open, activeReward, result]);
+
+  // Once the wait is actually over, drop back to the idle spin button on its own rather than
+  // leaving "Next spin in 0s" stuck on screen.
+  useEffect(() => {
+    if (!cooldown?.completed || !cooldown.nextSpinAt) return;
+    const t = setTimeout(() => setCooldown(null), Math.max(0, new Date(cooldown.nextSpinAt).getTime() - Date.now()));
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   // Load the wheel's real offers as soon as this component exists (FloatingDock mounts it on
   // every page, well before anyone opens the modal) — not gated on `open`. Waiting for `open`
@@ -171,7 +192,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const guestWinNeedsLogin = !!result?.win && !user;
 
   const spin = async () => {
-    if (spinning || result || activeReward || !prizes) return;
+    if (spinning || result || activeReward || cooldown?.completed || !prizes) return;
     setSpinning(true);
     setSpinError('');
     // The server draws the outcome (a shuffled ticket pool — see POST /coupons/spin) so odds are
@@ -180,7 +201,17 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     let code: string | null;
     let expiresAt: string;
     try {
-      ({ code, expiresAt } = await spinDraw());
+      const drawn = await spinDraw();
+      // The cooldown check above is read-only and can go slightly stale (e.g. two tabs open) —
+      // the server is the real authority, so honour a `completed` reply here too instead of
+      // animating a spin that never actually happened.
+      if (drawn.completed) {
+        setSpinning(false);
+        setCooldown({ completed: true, nextSpinAt: drawn.nextSpinAt });
+        return;
+      }
+      code = drawn.code;
+      expiresAt = drawn.expiresAt!;
     } catch {
       setSpinning(false);
       setSpinError('Could not spin right now — please try again.');
@@ -245,7 +276,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             <Gift size={desktop ? 14 : 13} /> Spin &amp; win
           </div>
           <h2 style={{ font: `900 var(${desktop ? '--text-h3' : '--text-h4'})/1.05 var(--font-display)`, color: 'var(--text-strong)', margin: '0 0 5px', letterSpacing: '-.02em' }}>
-            {activeReward ? (activeReward.claimed ? 'You won! 🎉' : 'You won! Sign in to claim 🎉') : result ? (result.win ? 'You won! 🎉' : 'So close!') : 'Spin & win a treat!'}
+            {activeReward ? (activeReward.claimed ? 'You won! 🎉' : 'You won! Sign in to claim 🎉') : result ? (result.win ? 'You won! 🎉' : 'So close!') : cooldown?.completed ? 'Spin completed ✅' : 'Spin & win a treat!'}
           </h2>
           <p style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-muted)', margin: `0 auto ${desktop ? 18 : 10}px`, maxWidth: desktop ? 320 : 290, lineHeight: 1.45 }}>
             {activeReward
@@ -254,7 +285,9 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
                 ? (result.win
                   ? (guestWinNeedsLogin ? 'Log in to claim this reward before it expires.' : 'Here’s your exclusive discount — use it at checkout.')
                   : `No prize this time — treats are always fresh though! Try the wheel again in ${formatRemaining((drawExpiresAtMs ?? 0) - nowMs)}.`)
-                : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
+                : cooldown?.completed
+                  ? `You've already used today's spin. Please wait until your next spin in ${formatRemaining(new Date(cooldown.nextSpinAt ?? 0).getTime() - nowMs)}.`
+                  : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
           </p>
 
           {/* Wheel */}
@@ -323,6 +356,10 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
                 Order now <ArrowRight size={18} />
               </button>
             )
+          ) : cooldown?.completed ? (
+            <div style={{ width: '100%', boxSizing: 'border-box', padding: desktop ? '16px' : '13px', borderRadius: 'var(--radius-button)', background: 'var(--surface-raised)', border: '1.5px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--text-subtle)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)' }}>
+              <Clock size={18} /> Next spin in {formatRemaining(new Date(cooldown.nextSpinAt ?? 0).getTime() - nowMs)}
+            </div>
           ) : (
             <button onClick={spin} disabled={spinning || !offersLoaded || checkingReward}
               style={{ width: '100%', padding: desktop ? '16px' : '13px', borderRadius: 'var(--radius-button)', border: 'none', background: (spinning || !offersLoaded || checkingReward) ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-base)', letterSpacing: '.04em', cursor: spinning ? 'wait' : (!offersLoaded || checkingReward) ? 'default' : 'pointer', boxShadow: (spinning || !offersLoaded || checkingReward) ? 'none' : 'var(--shadow-brand)' }}>

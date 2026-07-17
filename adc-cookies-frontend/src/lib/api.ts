@@ -205,8 +205,20 @@ function getDeviceId(): string {
 // Server-authoritative draw from the shuffled ticket pool — guarantees exact odds across every
 // batch of spins. Returns the winning coupon code (or null for "no reward"), and when this draw
 // expires — a repeat call before then just replays the SAME result, it doesn't draw again.
-export async function spinDraw(): Promise<{ code: string | null; expiresAt: string }> {
+// One spin per device/account per day: once that draw's own window has passed too, `completed`
+// comes back true with `nextSpinAt` — the next spin isn't drawn until then, even on a fresh call.
+export interface SpinDrawResult {
+  code: string | null; expiresAt?: string; completed?: boolean; nextSpinAt?: string;
+}
+export async function spinDraw(): Promise<SpinDrawResult> {
   return request('/coupons/spin', { method: 'POST', body: JSON.stringify({ deviceId: getDeviceId() }) });
+}
+
+// Read-only check for the same daily cooldown — lets the wheel show "come back at X" the moment
+// it opens, without the side effect of actually drawing (see the backend route for why POST
+// /spin alone can't safely double as this check).
+export async function getSpinCooldown(): Promise<{ completed: boolean; nextSpinAt?: string }> {
+  return request(`/coupons/spin-cooldown?deviceId=${encodeURIComponent(getDeviceId())}`);
 }
 
 // A claimed spin reward — the SAME reward is honoured for a fixed window after the first
