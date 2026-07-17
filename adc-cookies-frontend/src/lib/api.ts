@@ -154,14 +154,33 @@ export async function validateCoupon(code: string, orderAmount: number): Promise
   return request(`/coupons/validate?code=${encodeURIComponent(code)}&orderAmount=${orderAmount}`);
 }
 
-// Active, currently-usable coupons (admin-controlled) — used by the Spin & Win wheel so it only
-// ever hands out real codes that work at checkout. Empty array = no active offers right now.
+// Active, currently-usable SPIN WHEEL rewards (admin-controlled) — the wheel only ever hands
+// out real codes that work at checkout. Empty array = no active offers right now. Public
+// (no auth) so guests can spin before logging in.
 export interface ActiveCoupon {
   code: string; discountType: string; discountValue: number;
-  minimumOrderAmount?: number | null; label: string;
+  minimumOrderAmount?: number | null; maximumDiscount?: number | null;
+  weight: number; label: string; terms: string;
 }
 export async function getActiveCoupons(): Promise<ActiveCoupon[]> {
   return request('/coupons/active');
+}
+
+// A claimed spin reward — the SAME reward is honoured for a fixed window after the first
+// claim (see CLAIM_WINDOW_HOURS on the backend), so re-spinning inside that window can't win
+// something else.
+export interface SpinClaim {
+  code: string; label: string; discountType: string; discountValue: number;
+  minimumOrderAmount?: number | null; maximumDiscount?: number | null; terms: string;
+  claimedAt: string; expiresAt: string;
+}
+// Does the signed-in shopper already hold an unexpired spin reward?
+export async function getSpinStatus(): Promise<{ active: SpinClaim | null }> {
+  return request('/coupons/spin-status');
+}
+// Record a spin win against the signed-in shopper's account (idempotent — see backend).
+export async function claimSpin(code: string): Promise<SpinClaim> {
+  return request('/coupons/claim-spin', { method: 'POST', body: JSON.stringify({ code }) });
 }
 
 /* ---- Orders ---- */
@@ -252,8 +271,8 @@ export interface AdminStats {
   topProducts: { name: string; qty: number; revenue: number }[];
 }
 export interface AdminUser { id: number; name: string; email: string | null; phone?: string; role: string; createdAt: string; orderCount: number; addresses?: Address[]; }
-export interface AdminCoupon { id: number; code: string; discountType: string; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive: boolean; timesUsed?: number; }
-export interface CouponInput { code: string; discountType: 'PERCENTAGE' | 'FIXED'; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive?: boolean; }
+export interface AdminCoupon { id: number; code: string; discountType: string; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive: boolean; timesUsed?: number; spinWeight?: number | null; spinLabel?: string | null; terms?: string | null; }
+export interface CouponInput { code: string; discountType: 'PERCENTAGE' | 'FIXED'; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive?: boolean; spinWeight?: number | null; spinLabel?: string | null; terms?: string | null; }
 export interface AdminMessage { id: number; name: string; email: string; phone?: string | null; message: string; handled: boolean; createdAt: string; }
 export interface ProductInput {
   name: string; category: 'COOKIES' | 'TINS'; description?: string; price: number;
@@ -300,6 +319,9 @@ export async function adminDeleteProduct(id: number): Promise<void> {
 export async function adminGetCoupons(): Promise<AdminCoupon[]> { return request('/admin/coupons'); }
 export async function adminCreateCoupon(data: CouponInput): Promise<AdminCoupon> {
   return request('/admin/coupons', { method: 'POST', body: JSON.stringify(data) });
+}
+export async function adminUpdateCoupon(id: number, data: CouponInput): Promise<AdminCoupon> {
+  return request(`/admin/coupons/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 export async function adminToggleCoupon(id: number): Promise<AdminCoupon> {
   return request(`/admin/coupons/${id}/toggle`, { method: 'PATCH' });

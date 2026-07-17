@@ -45,6 +45,7 @@ export function serializeCoupon(c) {
     id: c.id, code: c.code, discountType: c.discount_type, discountValue: c.discount_value,
     minimumOrderAmount: c.minimum_order_amount, maximumDiscount: c.maximum_discount,
     expiryDate: c.expiry_date, usageLimit: c.usage_limit, isActive: !!c.is_active,
+    spinWeight: c.spin_weight, spinLabel: c.spin_label, terms: c.terms,
   };
 }
 

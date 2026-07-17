@@ -208,8 +208,27 @@ export async function initSchema() {
       value TEXT
     );
 
+    -- A spin (before or after login) that has won a real prize. Guests spin first — the pending
+    -- win is held client-side until they log in, then this row is created (or reused, if they
+    -- already have an unexpired one) so the SAME reward is honoured for CLAIM_WINDOW_HOURS
+    -- (12h) — spinning again inside that window can't win a different prize.
+    CREATE TABLE IF NOT EXISTS spin_claims (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      coupon_id INTEGER NOT NULL REFERENCES coupons(id),
+      code TEXT NOT NULL,
+      label TEXT NOT NULL,
+      claimed_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+
     -- Idempotent migrations
     ALTER TABLE addresses ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT 'Home';
+    -- Spin & Win: which active coupons the wheel can award, their odds, and their terms.
+    -- spin_weight is a 0-100 probability share; NULL = a normal (non-wheel) coupon.
+    ALTER TABLE coupons ADD COLUMN IF NOT EXISTS spin_weight FLOAT8;
+    ALTER TABLE coupons ADD COLUMN IF NOT EXISTS spin_label TEXT;
+    ALTER TABLE coupons ADD COLUMN IF NOT EXISTS terms TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS delhivery_waybill TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS delhivery_shipment_id TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT;
@@ -220,6 +239,21 @@ export async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_delivery TEXT; -- Shadowfax promised date from the webhook (YYYY-MM-DD HH:MM:SS)
     -- Phone-login users have no email: it stays NULL (we never fabricate a synthetic address).
     ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+
+    -- Spin & Win wheel — 7 real rewards + one "no reward" slot (the 8th, handled client-side).
+    -- Odds: Free Cookie Tin is rare (5%); the other 6 real rewards split the remaining 95%
+    -- evenly alongside the no-reward slot (~13.57% each of 7). Runs every boot but only
+    -- inserts a code the first time — the admin's later edits (value, weight, terms, limits,
+    -- active/expiry) are never overwritten.
+    INSERT INTO coupons (code, discount_type, discount_value, minimum_order_amount, maximum_discount, usage_limit, is_active, spin_weight, spin_label, terms) VALUES
+      ('SPINTIN', 'FIXED', 800, 800, 800, NULL, TRUE, 5, 'Free Cookie Tin', 'Valid on a cart of ₹800 or more. Discount capped at ₹800 — the value of one gift tin. One reward per account per spin. Cannot be combined with other offers.'),
+      ('SPINCOOKIE', 'FIXED', 110, 110, 110, NULL, TRUE, 13.57, 'Free Filled Cookie', 'Valid on a cart of ₹110 or more. Discount capped at ₹110 — the price of one filled cookie of your choice. One reward per account per spin. Cannot be combined with other offers.'),
+      ('SPIN100', 'FIXED', 100, 200, 100, NULL, TRUE, 13.57, 'Flat ₹100 OFF', 'Valid on a cart of ₹200 or more. Flat ₹100 off your order. One reward per account per spin. Cannot be combined with other offers.'),
+      ('SPINMYSTERY', 'FIXED', 60, 150, 60, NULL, TRUE, 13.57, 'Mystery Cookie Gift', 'A surprise reward. Valid on a cart of ₹150 or more. One reward per account per spin. Cannot be combined with other offers.'),
+      ('SPINCHOC', 'FIXED', 65, 65, 65, NULL, TRUE, 13.57, 'Free Signature Choc Chunk Cookie', 'Valid on a cart of ₹65 or more. Discount capped at ₹65 — the price of one Chocolate Chunk cookie. One reward per account per spin. Cannot be combined with other offers.'),
+      ('SPIN10', 'PERCENTAGE', 10, 200, 150, NULL, TRUE, 13.57, '10% OFF', '10% off your order, capped at ₹150. Valid on a cart of ₹200 or more. One reward per account per spin. Cannot be combined with other offers.'),
+      ('SPIN75', 'FIXED', 75, 499, 75, NULL, TRUE, 13.57, '₹75 OFF on ₹499', 'Valid on a cart of ₹499 or more. Flat ₹75 off your order. One reward per account per spin. Cannot be combined with other offers.')
+    ON CONFLICT (code) DO NOTHING;
 
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This
