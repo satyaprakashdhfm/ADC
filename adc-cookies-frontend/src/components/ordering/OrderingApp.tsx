@@ -983,7 +983,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       <button onClick={applyCoupon} disabled={!coupon.trim()} style={{ padding: '13px 20px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Apply</button>
                     </div>
                     {couponErr && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--status-error)', marginTop: 6 }}>{couponErr}</div>}
-                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 6, fontWeight: 600 }}>Have a coupon or a Spin &amp; Win code? Enter it above.</div>
+                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 6, fontWeight: 600 }}>Have a coupon? Enter it above — or tap the Spin &amp; Win wheel at the bottom-right of the screen to win a code.</div>
                   </div>
                 )}
               </div>
