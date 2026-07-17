@@ -1,10 +1,13 @@
 import nodemailer from 'nodemailer';
 
 /*
- * Email via Gmail SMTP (Nodemailer). Configure with env vars:
- *   MAIL_USER          = the Gmail address that sends mail (e.g. satyaprakashreddy6789@gmail.com)
- *   MAIL_APP_PASSWORD  = a Google "App password" (16 chars; needs 2-Step Verification on)
+ * Email via SMTP (Nodemailer). Works with Gmail OR any SMTP host (Zoho, etc.). Env vars:
+ *   MAIL_USER          = the address that sends mail (e.g. info@adoughcookie.com)
+ *   MAIL_APP_PASSWORD  = its app password (Gmail App password, or a Zoho app-specific password)
  *   BUSINESS_EMAIL     = where enquiries / order copies go (defaults to MAIL_USER)
+ *   MAIL_HOST          = SMTP host — set for Zoho: smtp.zoho.in (India) or smtp.zoho.com
+ *   MAIL_PORT          = SMTP port (default 465, SSL). MAIL_SECURE=false for STARTTLS on 587.
+ *   (If MAIL_HOST is unset, it falls back to Gmail's service preset.)
  *
  * If MAIL_USER / MAIL_APP_PASSWORD are not set, email is simply skipped (logged) — the
  * API keeps working. Sending never throws, so it can't break a request.
@@ -23,8 +26,13 @@ function transport() {
   const { user, pass } = cfg();
   if (!user || !pass) return null;
   if (!transporter) {
+    const host = process.env.MAIL_HOST || '';
+    // Custom host (e.g. Zoho) if MAIL_HOST is set; otherwise Gmail's service preset.
+    const base = host
+      ? { host, port: Number(process.env.MAIL_PORT || 465), secure: String(process.env.MAIL_SECURE ?? 'true') !== 'false' }
+      : { service: 'gmail' };
     transporter = nodemailer.createTransport({
-      service: 'gmail',
+      ...base,
       auth: { user, pass },
       connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
     });
