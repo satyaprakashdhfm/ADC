@@ -190,11 +190,11 @@ function addDays(n: number): Date { const d = new Date(); d.setDate(d.getDate() 
 const GIFT_OCCASIONS = ['Birthday', 'Anniversary', 'Wedding', 'Love', 'Thank you', 'Congrats', 'Other'];
 
 /* ---- Checkout progress — Cart › Checkout › Payment, so the page tells you where you are ---- */
-function CheckoutStepper({ current }: { current: 'review' | 'pay' }) {
+function CheckoutStepper({ current, inline = false }: { current: 'review' | 'pay'; inline?: boolean }) {
   const steps = ['Cart', 'Checkout', 'Payment'];
   const activeIndex = current === 'pay' ? 2 : 1; // by the time we're here, the cart step is behind us
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '0 var(--gutter) 12px' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: inline ? 0 : '0 var(--gutter) 12px' }}>
       {steps.map((label, i) => {
         const done = i < activeIndex;
         const isCurrent = i === activeIndex;
@@ -792,15 +792,18 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       <div style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', flex: 'none' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '8px var(--gutter)' }}>
           <button onClick={() => router.push(step === 'pay' ? '/checkout' : '/order')} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronLeft size={20} /></button>
-          <div>
+          <div style={{ flex: 'none' }}>
             <div style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>{step === 'pay' ? 'Payment' : 'Checkout'}</div>
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{step === 'pay' ? 'Choose how to pay' : `${lines.length} item${lines.length !== 1 ? 's' : ''} · ready to order`}</div>
           </div>
+          {/* Desktop: the Cart › Checkout › Payment stepper sits inline so the header stays short */}
+          {desktop && <div style={{ flex: 1, display: 'flex', justifyContent: 'center', minWidth: 0 }}><CheckoutStepper current={step} inline /></div>}
           <a href="/" aria-label="a dough cookie home" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flex: 'none' }}>
-            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={desktop ? { height: 72, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -26 } : { height: 48, width: 'auto', objectFit: 'contain', display: 'block' }} />
+            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={desktop ? { height: 56, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -20 } : { height: 46, width: 'auto', objectFit: 'contain', display: 'block' }} />
           </a>
         </div>
-        <CheckoutStepper current={step} />
+        {/* Mobile keeps the stepper on its own row */}
+        {!desktop && <CheckoutStepper current={step} />}
       </div>
 
       <div className="hide-sb" style={{ flex: 1, overflowY: 'auto', padding: '24px var(--gutter) 120px' }}>
