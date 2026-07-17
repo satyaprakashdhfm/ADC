@@ -131,6 +131,14 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const WHEEL_BG = wheelBg(displayPrizes);
   const offersLoaded = prizes !== null;
 
+  // `rot` only ever gets set inside spin() — so a reward restored from the server/localStorage
+  // on a fresh mount (reopening the wheel later, or on a different page) left the disc sitting
+  // at its default position while the result text correctly showed the real prize. Whenever
+  // there's an active reward but no in-progress/just-finished spin THIS session, derive the
+  // rotation that actually brings its wedge under the pointer instead of trusting stale `rot`.
+  const activeIdx = activeReward ? displayPrizes.findIndex(p => p.code === activeReward.code) : -1;
+  const wheelRot = (spinning || result || activeIdx < 0) ? rot : 360 * 5 - (activeIdx * SEG + SEG / 2);
+
   const close = onClose;
 
   const spin = () => {
@@ -213,7 +221,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             <div style={{
               position: 'absolute', inset: 0, borderRadius: '50%', background: WHEEL_BG,
               border: '7px solid var(--white)', boxShadow: '0 12px 30px var(--espresso-30), inset 0 0 0 2px var(--amber-600)',
-              transform: `rotate(${rot}deg)`, transition: 'transform 4.2s cubic-bezier(.15,.86,.24,1)',
+              transform: `rotate(${wheelRot}deg)`, transition: 'transform 4.2s cubic-bezier(.15,.86,.24,1)',
             }}>
               {displayPrizes.map((p, i) => (
                 <div key={i} style={{ position: 'absolute', inset: 0, transform: `rotate(${i * SEG + SEG / 2}deg)` }}>
