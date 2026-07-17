@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight, Clock, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
-import { getActiveCoupons, claimSpin, type ActiveCoupon } from '@/lib/api';
+import { getActiveCoupons, claimSpin, spinDraw, type ActiveCoupon } from '@/lib/api';
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, whatsappLink } from '@/lib/site';
 import { type ActiveReward, CLAIM_WINDOW_HOURS, savePending, formatRemaining } from '@/lib/spinReward';
 
@@ -47,18 +47,6 @@ function buildPrizes(coupons: ActiveCoupon[]): Prize[] {
   return wins.length ? [...wins, noReward] : [noReward];
 }
 
-// Weighted random pick — visually the wedges are equal-sized, but WHICH one the pointer lands
-// on is chosen here first (then the wheel just rotates to match), so a 5%-weight prize really
-// does land about 1 spin in 20, not 1 in N-wedges.
-function weightedPick(prizes: Prize[]): number {
-  const total = prizes.reduce((s, p) => s + (p.weight || 0), 0) || 1;
-  let r = Math.random() * total;
-  for (let i = 0; i < prizes.length; i++) {
-    r -= prizes[i].weight || 0;
-    if (r <= 0) return i;
-  }
-  return prizes.length - 1;
-}
 
 // Alternating brand wedges — amber / orange, straight from the theme.
 const wheelBg = (prizes: Prize[]) => {
@@ -101,6 +89,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const [result, setResult] = useState<Prize | null>(null);
   const [copied, setCopied] = useState(false);
   const [prizes, setPrizes] = useState<Prize[] | null>(null); // null until the admin's active coupons load
+  const [spinError, setSpinError] = useState('');
   const [showTerms, setShowTerms] = useState(false);
   const [termsIndex, setTermsIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -141,10 +130,23 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
 
   const close = onClose;
 
-  const spin = () => {
+  const spin = async () => {
     if (spinning || result || activeReward || !prizes) return;
     setSpinning(true);
-    const idx = weightedPick(prizes);
+    setSpinError('');
+    // The server draws the outcome (a shuffled ticket pool — see POST /coupons/spin) so odds are
+    // an exact ratio across every batch of spins, not just independent per-spin randomness. The
+    // wheel here only animates to whatever it's told; it never decides the result itself.
+    let code: string | null;
+    try {
+      ({ code } = await spinDraw());
+    } catch {
+      setSpinning(false);
+      setSpinError('Could not spin right now — please try again.');
+      return;
+    }
+    const found = code ? prizes.findIndex(p => p.code === code) : prizes.findIndex(p => !p.win);
+    const idx = found >= 0 ? found : prizes.length - 1;
     // Bring segment idx's centre under the top pointer, after 5 full turns.
     const target = 360 * 5 - (idx * SEG + SEG / 2);
     setRot(target);
@@ -278,6 +280,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
               {checkingReward || !offersLoaded ? 'Loading…' : spinning ? 'Spinning…' : 'SPIN THE WHEEL'}
             </button>
           )}
+          {spinError && <div style={{ marginTop: 8, fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, textAlign: 'center' }}>{spinError}</div>}
 
           {/* Cancel */}
           <button onClick={handleClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', marginTop: 12, padding: 6 }}>

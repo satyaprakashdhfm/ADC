@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { getOne, getAll } from '../db.js';
+import { getOne, getAll, withTransaction, nowIso } from '../db.js';
 import { requireAuth, ApiError } from '../middleware.js';
 import { serializeCoupon } from '../serializers.js';
 
@@ -105,12 +105,10 @@ router.get('/validate', requireAuth, couponLimiter, async (req, res) => {
   });
 });
 
-// Currently-usable SPIN WHEEL rewards (spin_weight IS NOT NULL) — the admin's other, regular
-// coupons never appear on the wheel. Returns only coupons that are ACTIVE, haven't expired and
-// haven't hit their usage limit, so any code the wheel hands out actually works at checkout.
-// Public — the wheel lets guests spin before logging in, so this can't be auth-gated; it's
-// still rate-limited to blunt scraping.
-router.get('/active', couponLimiter, async (_req, res) => {
+// Currently-usable SPIN WHEEL rewards (spin_weight IS NOT NULL, active, not expired, under their
+// usage limit) — shared by /active (what the wheel displays) and /spin (what it can actually
+// draw), so the two are always in lockstep.
+async function getUsableSpinCoupons() {
   const today = new Date().toISOString().slice(0, 10);
   const rows = await getAll('SELECT * FROM coupons WHERE is_active = TRUE AND spin_weight IS NOT NULL ORDER BY spin_weight ASC');
   const usable = [];
@@ -120,21 +118,93 @@ router.get('/active', couponLimiter, async (_req, res) => {
       const row = await getOne('SELECT COUNT(*) AS n FROM coupon_usage WHERE coupon_id = $1', [c.id]);
       if (Number(row.n) >= c.usage_limit) continue;
     }
-    usable.push({
-      code: c.code,
-      discountType: c.discount_type,
-      discountValue: c.discount_value,
-      minimumOrderAmount: c.minimum_order_amount,
-      maximumDiscount: c.maximum_discount,
-      weight: Number(c.spin_weight),
-      label: c.spin_label || (c.discount_type === 'PERCENTAGE' ? `${Math.round(c.discount_value)}% OFF` : `₹${Math.round(c.discount_value)} OFF`),
-      terms: c.terms || '',
-      // A "free item" reward (see gift_kind) hands over a real product — the wheel should say so
-      // rather than a misleading "₹X off", which is really just the internal discount mechanics.
-      isGift: !!c.gift_kind,
-    });
+    usable.push(c);
   }
-  res.json(usable);
+  return usable;
+}
+
+// Currently-usable SPIN WHEEL rewards — the admin's other, regular coupons never appear on the
+// wheel. Public — the wheel lets guests spin before logging in, so this can't be auth-gated;
+// it's still rate-limited to blunt scraping.
+router.get('/active', couponLimiter, async (_req, res) => {
+  const usable = await getUsableSpinCoupons();
+  res.json(usable.map(c => ({
+    code: c.code,
+    discountType: c.discount_type,
+    discountValue: c.discount_value,
+    minimumOrderAmount: c.minimum_order_amount,
+    maximumDiscount: c.maximum_discount,
+    weight: Number(c.spin_weight),
+    label: c.spin_label || (c.discount_type === 'PERCENTAGE' ? `${Math.round(c.discount_value)}% OFF` : `₹${Math.round(c.discount_value)} OFF`),
+    terms: c.terms || '',
+    // A "free item" reward (see gift_kind) hands over a real product — the wheel should say so
+    // rather than a misleading "₹X off", which is really just the internal discount mechanics.
+    isGift: !!c.gift_kind,
+  })));
+});
+
+// --- Server-authoritative draw: a shuffled "ticket pool" guarantees EXACT odds across every
+// batch of spins (e.g. precisely 5% land on the tin), instead of independent per-spin randomness
+// that only converges to the target % over a long run. See spin_ticket_pool in db.js. ---
+const POOL_SIZE = 1000;
+const NO_REWARD = '__NONE__';
+
+// A stable fingerprint of the current odds config — if the admin changes a weight, adds, removes,
+// or deactivates a wheel coupon, this changes too, which tells /spin to reshuffle a fresh batch
+// instead of keeping handing out tickets built from stale odds.
+function oddsSignature(coupons) {
+  return JSON.stringify(coupons.map(c => [c.code, Number(c.spin_weight)]).sort((a, b) => a[0].localeCompare(b[0])));
+}
+
+function shuffled(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// Builds one batch: each coupon gets round(weight% of POOL_SIZE) tickets; "no reward" silently
+// absorbs whatever's left so the batch always totals exactly POOL_SIZE, then the whole thing is
+// shuffled once. Drawing tickets off the front in order is what makes the ratio exact per batch.
+function buildTickets(coupons) {
+  const tickets = [];
+  for (const c of coupons) {
+    const count = Math.round((Number(c.spin_weight) || 0) / 100 * POOL_SIZE);
+    for (let i = 0; i < count; i++) tickets.push(c.code);
+  }
+  const noRewardCount = Math.max(0, POOL_SIZE - tickets.length);
+  for (let i = 0; i < noRewardCount; i++) tickets.push(NO_REWARD);
+  return shuffled(tickets);
+}
+
+router.post('/spin', couponLimiter, async (req, res) => {
+  const coupons = await getUsableSpinCoupons();
+  if (!coupons.length) return res.json({ code: null });
+  const signature = oddsSignature(coupons);
+
+  const ticket = await withTransaction(async (client) => {
+    const { rows } = await client.query('SELECT * FROM spin_ticket_pool WHERE id = 1 FOR UPDATE');
+    const pool = rows[0];
+    let tickets = pool && pool.signature === signature ? JSON.parse(pool.tickets) : null;
+    let position = tickets ? pool.position : 0;
+    // Reshuffle a fresh batch the moment the odds changed (signature mismatch) or the current
+    // batch is used up — either way this spin draws from a batch that matches today's odds.
+    if (!tickets || position >= tickets.length) {
+      tickets = buildTickets(coupons);
+      position = 0;
+    }
+
+    const drawn = tickets[position];
+    await client.query(
+      `INSERT INTO spin_ticket_pool (id, signature, tickets, position, updated_at) VALUES (1,$1,$2,$3,$4)
+       ON CONFLICT (id) DO UPDATE SET signature=$1, tickets=$2, position=$3, updated_at=$4`,
+      [signature, JSON.stringify(tickets), position + 1, nowIso()]
+    );
+    return drawn;
+  });
+
+  res.json({ code: ticket === NO_REWARD ? null : ticket });
 });
 
 // How long a claimed spin reward is honoured before it expires (see spin_claims in db.js).

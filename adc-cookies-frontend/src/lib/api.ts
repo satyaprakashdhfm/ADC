@@ -174,6 +174,11 @@ export interface ActiveCoupon {
 export async function getActiveCoupons(): Promise<ActiveCoupon[]> {
   return request('/coupons/active');
 }
+// Server-authoritative draw from the shuffled ticket pool — guarantees exact odds across every
+// batch of spins. Returns the winning coupon code, or null for "no reward this spin".
+export async function spinDraw(): Promise<{ code: string | null }> {
+  return request('/coupons/spin', { method: 'POST' });
+}
 
 // A claimed spin reward — the SAME reward is honoured for a fixed window after the first
 // claim (see CLAIM_WINDOW_HOURS on the backend), so re-spinning inside that window can't win

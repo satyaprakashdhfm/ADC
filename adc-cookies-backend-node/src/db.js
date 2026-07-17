@@ -223,6 +223,20 @@ export async function initSchema() {
       gift_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL
     );
 
+    -- Spin & Win's server-authoritative "ticket pool": a shuffled batch of POOL_SIZE (1000)
+    -- outcomes built from the admin's current odds (e.g. tin=5% -> exactly 50 tickets in the
+    -- batch), so every batch of spins delivers an EXACT ratio instead of independent randomness
+    -- that only converges to the target % over a long run. Singleton row (id=1) advanced one
+    -- ticket per spin under a row lock (see POST /coupons/spin); rebuilt automatically whenever
+    -- the admin's weights/coupons change (signature mismatch) or the batch runs out.
+    CREATE TABLE IF NOT EXISTS spin_ticket_pool (
+      id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+      signature TEXT NOT NULL,
+      tickets TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+
     -- Idempotent migrations
     ALTER TABLE addresses ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT 'Home';
     -- Spin & Win: which active coupons the wheel can award, their odds, and their terms.
