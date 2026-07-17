@@ -90,6 +90,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const [copied, setCopied] = useState(false);
   const [prizes, setPrizes] = useState<Prize[] | null>(null); // null until the admin's active coupons load
   const [spinError, setSpinError] = useState('');
+  const [drawExpiresAtMs, setDrawExpiresAtMs] = useState<number | null>(null); // when a MISS result stops being "locked in" (wins are governed by activeReward instead)
   const [showTerms, setShowTerms] = useState(false);
   const [termsIndex, setTermsIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,6 +104,16 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     if (prevRewardRef.current && !activeReward) setResult(null);
     prevRewardRef.current = activeReward;
   }, [activeReward]);
+
+  // A MISS is locked in for the same window as a win (see spin_draws server-side) — re-spinning
+  // before it expires would just replay the same result, so don't let the idle button reappear
+  // until it genuinely has.
+  useEffect(() => {
+    if (drawExpiresAtMs && now >= drawExpiresAtMs) {
+      setResult(null);
+      setDrawExpiresAtMs(null);
+    }
+  }, [drawExpiresAtMs, now]);
 
   // Load the wheel's offers once the modal opens.
   useEffect(() => {
@@ -138,8 +149,9 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     // an exact ratio across every batch of spins, not just independent per-spin randomness. The
     // wheel here only animates to whatever it's told; it never decides the result itself.
     let code: string | null;
+    let expiresAt: string;
     try {
-      ({ code } = await spinDraw());
+      ({ code, expiresAt } = await spinDraw());
     } catch {
       setSpinning(false);
       setSpinError('Could not spin right now — please try again.');
@@ -154,7 +166,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
       const p = prizes[idx];
       setResult(p);
       setSpinning(false);
-      if (!p.win) return;
+      if (!p.win) { setDrawExpiresAtMs(new Date(expiresAt).getTime()); return; }
       const expiresAtMs = Date.now() + CLAIM_WINDOW_HOURS * 3600_000;
       if (user) {
         try {
@@ -173,12 +185,9 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* ignore */ }
   };
 
-  // Closing after a MISS resets the in-session result so reopening lets them spin again
-  // (a WIN keeps its state via activeReward, so it can't be re-rolled).
-  const handleClose = () => {
-    if (result && !result.win) setResult(null);
-    close();
-  };
+  // A MISS used to reset here so reopening let them spin again — now both outcomes are locked
+  // in server-side for the same window (see spin_draws), so closing just closes.
+  const handleClose = () => close();
 
   if (!open) return null;
 
@@ -211,7 +220,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             {activeReward
               ? (activeReward.claimed ? 'Here’s your exclusive discount — use it at checkout.' : `Log in within ${formatRemaining(activeReward.expiresAtMs - now)} to claim this reward before it expires.`)
               : result
-                ? (result.win ? 'Here’s your exclusive discount — use it at checkout.' : 'No prize this time, but treats are always fresh. Order away!')
+                ? (result.win ? 'Here’s your exclusive discount — use it at checkout.' : `No prize this time — treats are always fresh though! Try the wheel again in ${formatRemaining((drawExpiresAtMs ?? 0) - now)}.`)
                 : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
           </p>
 

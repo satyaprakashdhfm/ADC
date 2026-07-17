@@ -237,6 +237,23 @@ export async function initSchema() {
       updated_at TEXT NOT NULL
     );
 
+    -- Anti-abuse: without this, someone could just keep re-spinning (reload the page, reopen the
+    -- wheel) discarding every result they don't like — and since each attempt still consumes a
+    -- ticket from the shared pool, that also burns through tickets meant for other real
+    -- customers. One row per device (and per account, once logged in) records its current
+    -- unexpired draw; a repeat spin request within the window replays that SAME draw instead of
+    -- pulling a new ticket. See POST /coupons/spin.
+    CREATE TABLE IF NOT EXISTS spin_draws (
+      id SERIAL PRIMARY KEY,
+      device_id TEXT NOT NULL,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      code TEXT,
+      drawn_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_spin_draws_device_id ON spin_draws(device_id);
+    CREATE INDEX IF NOT EXISTS idx_spin_draws_user_id ON spin_draws(user_id);
+
     -- Idempotent migrations
     ALTER TABLE addresses ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT 'Home';
     -- Spin & Win: which active coupons the wheel can award, their odds, and their terms.

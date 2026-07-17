@@ -820,8 +820,11 @@ export default function AdminDashboard() {
               <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 6px', lineHeight: 1.5 }}>
                 Each offer's <strong>Weight</strong> is its % chance of landing when someone spins. Weights across active offers currently sum to <strong>{totalSpinWeight.toFixed(1)}%</strong> — the remaining <strong>{noRewardChance.toFixed(1)}%</strong> is &quot;Better luck next time&quot;.
               </p>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '0 0 14px', lineHeight: 1.5 }}>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '0 0 6px', lineHeight: 1.5 }}>
                 <strong>How odds are guaranteed:</strong> every 1,000 spins draw from one shuffled batch pre-built to these exact weights (e.g. 5% weight = exactly 50 of the 1,000) — a real ratio per batch, not just an average over time. The batch auto-rebuilds the moment you change a weight here, and again once it runs out.
+              </p>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '0 0 14px', lineHeight: 1.5 }}>
+                <strong>Anti-abuse:</strong> re-spinning (reload, reopen) doesn't draw again — each device/account gets one locked-in result (win or miss) per 12h window, replayed if they retry, so no one can re-roll for a better prize or burn through other customers' tickets.
               </p>
               <Table head={['Wheel label', 'Code', 'Discount', 'Weight', 'Uses', 'Status', '']}>
                 {spinCoupons.map(c => {

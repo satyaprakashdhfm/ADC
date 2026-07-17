@@ -174,10 +174,27 @@ export interface ActiveCoupon {
 export async function getActiveCoupons(): Promise<ActiveCoupon[]> {
   return request('/coupons/active');
 }
+// A random id generated once per browser and reused forever — lets the backend recognize repeat
+// spin attempts from the same device (see spinDraw) without requiring an account. Not a security
+// boundary (clearing storage resets it), just enough to stop casual "reload and try again" abuse.
+function getDeviceId(): string {
+  const KEY = 'adc_device_id';
+  try {
+    let id = localStorage.getItem(KEY);
+    if (!id) {
+      id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(KEY, id);
+    }
+    return id;
+  } catch {
+    return 'no-storage';
+  }
+}
 // Server-authoritative draw from the shuffled ticket pool — guarantees exact odds across every
-// batch of spins. Returns the winning coupon code, or null for "no reward this spin".
-export async function spinDraw(): Promise<{ code: string | null }> {
-  return request('/coupons/spin', { method: 'POST' });
+// batch of spins. Returns the winning coupon code (or null for "no reward"), and when this draw
+// expires — a repeat call before then just replays the SAME result, it doesn't draw again.
+export async function spinDraw(): Promise<{ code: string | null; expiresAt: string }> {
+  return request('/coupons/spin', { method: 'POST', body: JSON.stringify({ deviceId: getDeviceId() }) });
 }
 
 // A claimed spin reward — the SAME reward is honoured for a fixed window after the first

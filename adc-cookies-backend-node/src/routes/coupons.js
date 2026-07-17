@@ -148,6 +148,9 @@ router.get('/active', couponLimiter, async (_req, res) => {
 // that only converges to the target % over a long run. See spin_ticket_pool in db.js. ---
 const POOL_SIZE = 1000;
 const NO_REWARD = '__NONE__';
+// How long a draw (win or miss) — and separately, a claimed reward — is honoured before it
+// expires. Shared by /spin's device-lock and claim-spin's claim window (see spin_claims in db.js).
+const CLAIM_WINDOW_HOURS = 12;
 
 // A stable fingerprint of the current odds config — if the admin changes a weight, adds, removes,
 // or deactivates a wheel coupon, this changes too, which tells /spin to reshuffle a fresh batch
@@ -179,36 +182,54 @@ function buildTickets(coupons) {
 }
 
 router.post('/spin', couponLimiter, async (req, res) => {
+  const deviceId = String(req.body?.deviceId || '').trim();
+  if (!deviceId) throw new ApiError('Missing device id.');
+  const userId = req.user?.id ?? null; // parseAuth already ran — set if this caller happens to be logged in
+  const nowIsoStr = nowIso();
+
+  // Already has an unexpired draw (win OR miss) for this device or account — replay it instead
+  // of drawing again. This is what actually stops "keep spinning until I like the result": once
+  // drawn, that's the outcome for this window, whether it's been claimed or not.
+  const existing = await getOne(
+    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2) AND expires_at > $3 ORDER BY id DESC LIMIT 1`,
+    [deviceId, userId, nowIsoStr]
+  );
+  if (existing) return res.json({ code: existing.code, expiresAt: existing.expires_at });
+
   const coupons = await getUsableSpinCoupons();
-  if (!coupons.length) return res.json({ code: null });
   const signature = oddsSignature(coupons);
+  const expiresAt = new Date(Date.now() + CLAIM_WINDOW_HOURS * 3600_000).toISOString();
 
-  const ticket = await withTransaction(async (client) => {
-    const { rows } = await client.query('SELECT * FROM spin_ticket_pool WHERE id = 1 FOR UPDATE');
-    const pool = rows[0];
-    let tickets = pool && pool.signature === signature ? JSON.parse(pool.tickets) : null;
-    let position = tickets ? pool.position : 0;
-    // Reshuffle a fresh batch the moment the odds changed (signature mismatch) or the current
-    // batch is used up — either way this spin draws from a batch that matches today's odds.
-    if (!tickets || position >= tickets.length) {
-      tickets = buildTickets(coupons);
-      position = 0;
+  const code = await withTransaction(async (client) => {
+    let ticket = null;
+    if (coupons.length) {
+      const { rows } = await client.query('SELECT * FROM spin_ticket_pool WHERE id = 1 FOR UPDATE');
+      const pool = rows[0];
+      let tickets = pool && pool.signature === signature ? JSON.parse(pool.tickets) : null;
+      let position = tickets ? pool.position : 0;
+      // Reshuffle a fresh batch the moment the odds changed (signature mismatch) or the current
+      // batch is used up — either way this spin draws from a batch that matches today's odds.
+      if (!tickets || position >= tickets.length) {
+        tickets = buildTickets(coupons);
+        position = 0;
+      }
+      ticket = tickets[position];
+      await client.query(
+        `INSERT INTO spin_ticket_pool (id, signature, tickets, position, updated_at) VALUES (1,$1,$2,$3,$4)
+         ON CONFLICT (id) DO UPDATE SET signature=$1, tickets=$2, position=$3, updated_at=$4`,
+        [signature, JSON.stringify(tickets), position + 1, nowIsoStr]
+      );
     }
-
-    const drawn = tickets[position];
+    const drawnCode = ticket && ticket !== NO_REWARD ? ticket : null;
     await client.query(
-      `INSERT INTO spin_ticket_pool (id, signature, tickets, position, updated_at) VALUES (1,$1,$2,$3,$4)
-       ON CONFLICT (id) DO UPDATE SET signature=$1, tickets=$2, position=$3, updated_at=$4`,
-      [signature, JSON.stringify(tickets), position + 1, nowIso()]
+      'INSERT INTO spin_draws (device_id, user_id, code, drawn_at, expires_at) VALUES ($1,$2,$3,$4,$5)',
+      [deviceId, userId, drawnCode, nowIsoStr, expiresAt]
     );
-    return drawn;
+    return drawnCode;
   });
 
-  res.json({ code: ticket === NO_REWARD ? null : ticket });
+  res.json({ code, expiresAt });
 });
-
-// How long a claimed spin reward is honoured before it expires (see spin_claims in db.js).
-const CLAIM_WINDOW_HOURS = 12;
 
 function serializeClaim(row, coupon) {
   return {
