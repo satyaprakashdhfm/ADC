@@ -219,7 +219,8 @@ export async function initSchema() {
       code TEXT NOT NULL,
       label TEXT NOT NULL,
       claimed_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL
+      expires_at TEXT NOT NULL,
+      gift_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL
     );
 
     -- Idempotent migrations
@@ -229,6 +230,15 @@ export async function initSchema() {
     ALTER TABLE coupons ADD COLUMN IF NOT EXISTS spin_weight FLOAT8;
     ALTER TABLE coupons ADD COLUMN IF NOT EXISTS spin_label TEXT;
     ALTER TABLE coupons ADD COLUMN IF NOT EXISTS terms TEXT;
+    -- "Free item" rewards (a tin / a cookie) don't just knock money off — they hand over a real
+    -- product. gift_kind tells the redemption code WHICH product: 'TIN'/'FILLED_COOKIE' resolve to
+    -- the cheapest currently-available match (so catalog/price changes are honoured automatically),
+    -- 'PRODUCT' is a fixed item (gift_product_id), 'MYSTERY' is assigned once per spin_claims row
+    -- (see below) so the same surprise cookie is used consistently from preview through checkout.
+    -- NULL = a normal money-off coupon, unchanged.
+    ALTER TABLE coupons ADD COLUMN IF NOT EXISTS gift_kind TEXT;
+    ALTER TABLE coupons ADD COLUMN IF NOT EXISTS gift_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL;
+    ALTER TABLE spin_claims ADD COLUMN IF NOT EXISTS gift_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS delhivery_waybill TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS delhivery_shipment_id TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT;
@@ -254,6 +264,26 @@ export async function initSchema() {
       ('SPIN10', 'PERCENTAGE', 10, 200, 150, NULL, TRUE, 13.57, '10% OFF', '10% off your order, capped at ₹150. Valid on a cart of ₹200 or more. One reward per account per spin. Cannot be combined with other offers.'),
       ('SPIN75', 'FIXED', 75, 499, 75, NULL, TRUE, 13.57, '₹75 OFF on ₹499', 'Valid on a cart of ₹499 or more. Flat ₹75 off your order. One reward per account per spin. Cannot be combined with other offers.')
     ON CONFLICT (code) DO NOTHING;
+
+    -- One-time backfill: tag the 4 "free item" wheel rewards with WHICH product they hand
+    -- over (see gift_kind above), and correct SPINCHOC's label — "Chocolate Chunk" was never
+    -- a real menu item; Double Choc Chip is the actual ₹65 cookie this reward was priced for.
+    -- Guarded by "gift_kind IS NULL" so this runs once only and can never overwrite a later
+    -- admin edit to these coupons.
+    UPDATE coupons SET gift_kind = 'TIN',
+      terms = 'Our cheapest gift tin is added to your cart automatically when you redeem this reward, free of charge (discount capped at ₹800). Valid once the rest of your cart totals ₹800 or more. One reward per account per spin. Cannot be combined with other offers.'
+      WHERE code = 'SPINTIN' AND gift_kind IS NULL;
+    UPDATE coupons SET gift_kind = 'FILLED_COOKIE',
+      terms = 'Our cheapest filled cookie is added to your cart automatically when you redeem this reward, free of charge (discount capped at ₹110). Valid once the rest of your cart totals ₹110 or more. One reward per account per spin. Cannot be combined with other offers.'
+      WHERE code = 'SPINCOOKIE' AND gift_kind IS NULL;
+    UPDATE coupons SET gift_kind = 'MYSTERY',
+      terms = 'A surprise cookie is added to your cart automatically when you redeem this reward, free of charge. Valid once the rest of your cart totals ₹150 or more. One reward per account per spin. Cannot be combined with other offers.'
+      WHERE code = 'SPINMYSTERY' AND gift_kind IS NULL;
+    UPDATE coupons SET gift_kind = 'PRODUCT',
+      gift_product_id = (SELECT id FROM products WHERE name = 'Double Choc Chip' LIMIT 1),
+      spin_label = 'Free Double Choc Chip Cookie',
+      terms = 'A free Double Choc Chip cookie is added to your cart automatically when you redeem this reward, free of charge (discount capped at ₹65). Valid once the rest of your cart totals ₹65 or more. One reward per account per spin. Cannot be combined with other offers.'
+      WHERE code = 'SPINCHOC' AND gift_kind IS NULL;
 
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This

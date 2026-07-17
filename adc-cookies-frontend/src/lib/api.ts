@@ -148,6 +148,9 @@ export async function submitContact(data: ContactInput): Promise<{ ok: boolean; 
 export interface CouponResult {
   valid: boolean; discountType: string; discountValue: number;
   maximumDiscount?: number; message?: string;
+  // Set for "free item" rewards (free tin / free cookie) — the named product should be added to
+  // the cart, free (capped at maximumDiscount), rather than treating this as a flat money-off.
+  giftProduct?: { id: number; name: string; price: number; images?: string } | null;
 }
 
 export async function validateCoupon(code: string, orderAmount: number): Promise<CouponResult> {

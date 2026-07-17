@@ -3,7 +3,7 @@ import { getOne, getAll, query, withTransaction, nowIso } from '../db.js';
 import { requireAuth, ApiError } from '../middleware.js';
 import { serializeOrder, serializeOrderItem, serializeTracking, serializeAddress, PAYMENT_SELECT } from '../serializers.js';
 import { getCartRow } from './cart.js';
-import { validateCoupon, calculateDiscount } from './coupons.js';
+import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
 import { shadowfaxConfigured, createShadowfaxOrder, zoneStores, trackShadowfax, sfxStatusLabel, sfxStatusRank } from '../shadowfax.js';
@@ -229,8 +229,16 @@ router.post('/', async (req, res) => {
   const subtotal = lineItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
   let discount = 0, coupon = null;
   if (couponCode && String(couponCode).trim()) {
-    coupon = await validateCoupon(couponCode, subtotal);
-    discount = calculateDiscount(coupon, subtotal);
+    const rawCoupon = await getCouponByCode(couponCode);
+    const giftProduct = rawCoupon ? await resolveGiftProduct(rawCoupon, user.id) : null;
+    coupon = await validateCoupon(couponCode, subtotal, giftProduct ? Number(giftProduct.price) : 0);
+    // A "free item" reward only makes sense if that item is actually in the order — the
+    // frontend auto-adds it the moment the coupon is applied, so this only fires if it was
+    // removed afterwards (or the request was tampered with).
+    if (giftProduct && !lineItems.some(li => li.product?.id === giftProduct.id && li.quantity >= 1)) {
+      throw new ApiError(`Add "${giftProduct.name}" to your cart to use this reward.`);
+    }
+    discount = calculateDiscount(coupon, subtotal, giftProduct);
   }
 
   // Intra-city orders (a pincode inside one of our store zones → same-day Shadowfax) ship FREE;

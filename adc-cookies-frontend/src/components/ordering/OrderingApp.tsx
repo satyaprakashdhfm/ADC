@@ -449,7 +449,7 @@ const matchState = (s?: string) => {
 function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const router = useRouter();
   const desktop = useIsDesktop(920);
-  const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, clearAll } = useCart();
+  const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, giftLineId, setGiftLineId, clearAll } = useCart();
   const { user } = useAuth();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [couponErr, setCouponErr] = useState('');
@@ -619,8 +619,23 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     try {
       const result = await validateCoupon(code, total);
       if (result.valid) {
-        const d = result.discountType === 'PERCENTAGE' ? Math.round(total * result.discountValue / 100) : result.discountValue;
-        setDiscount(Math.min(d, result.maximumDiscount || d));
+        if (result.giftProduct) {
+          // A "free item" reward: the item itself is the prize (capped at maximumDiscount), not
+          // a generic amount off — add it to the cart if they don't already have one.
+          const gp = result.giftProduct;
+          setDiscount(Math.min(gp.price, result.maximumDiscount ?? gp.price));
+          const gid = String(gp.id);
+          if (!cart[gid]) {
+            setQty(gid, 1, gp.name, gp.price, firstImage(gp.images));
+            setGiftLineId(gid);
+          } else {
+            setGiftLineId(null); // already in their cart on its own merit — don't remove it later
+          }
+        } else {
+          const d = result.discountType === 'PERCENTAGE' ? Math.round(total * result.discountValue / 100) : result.discountValue;
+          setDiscount(Math.min(d, result.maximumDiscount || d));
+          setGiftLineId(null);
+        }
         setApplied(true); setCouponErr('');
       } else { setCouponErr(result.message || 'This code isn’t valid.'); setApplied(false); setDiscount(0); }
     } catch (e) {
@@ -745,6 +760,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               {l.addOns && l.addOns.length > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 600 }}>+ {l.addOns.join(', ')}</div>}
               {l.note && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', fontStyle: 'italic' }}>&ldquo;{l.note}&rdquo;</div>}
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>₹{l.price}</div>
+              {applied && l.id === giftLineId && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--green-success)', fontWeight: 800, marginTop: 2 }}>🎁 Free — your spin reward</div>}
             </div>
             <QStepper value={l.qty} onChange={n => setQty(l.id, n, l.name, l.price, l.img)} size="sm" />
           </div>
@@ -976,7 +992,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', background: 'var(--green-wash)', border: '1.5px solid var(--green-success)' }}>
                     <Check size={20} style={{ color: 'var(--green-success)' }} />
                     <span style={{ flex: 1, fontWeight: 700, color: 'var(--green-success)', fontSize: 'var(--text-sm)' }}>{coupon} applied!</span>
-                    <button onClick={() => { setApplied(false); setCoupon(''); setDiscount(0); }} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 700, fontSize: 'var(--text-sm)' }}>Remove</button>
+                    <button onClick={() => {
+                      setApplied(false); setCoupon(''); setDiscount(0);
+                      if (giftLineId) { setQty(giftLineId, 0); setGiftLineId(null); }
+                    }} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 700, fontSize: 'var(--text-sm)' }}>Remove</button>
                   </div>
                 ) : (
                   <div>

@@ -28,6 +28,11 @@ interface CartContextType {
   setApplied: (v: boolean) => void;
   discount: number;
   setDiscount: (v: number) => void;
+  // Cart line id of a "free item" reward's product we auto-added (null if none, or if the
+  // customer already had it in their cart themselves) — so removing the coupon removes only
+  // what we added on its behalf, not something they were buying anyway.
+  giftLineId: string | null;
+  setGiftLineId: (v: string | null) => void;
   clearAll: () => void;
 }
 
@@ -42,6 +47,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [coupon, setCoupon] = useState('');
   const [applied, setApplied] = useState(false);
   const [discount, setDiscount] = useState(0);
+  const [giftLineId, setGiftLineId] = useState<string | null>(null);
 
   // Persist the cart across sessions so a returning visitor still sees their items on reopen.
   // Hydrate once on mount (client-only), then save on every change. Cleared when clearAll runs.
@@ -75,7 +81,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const clearAll = useCallback(() => { setCart({}); setGift(false); setGiftMessage(''); setGiftOccasion(''); setCoupon(''); setApplied(false); setDiscount(0); }, []);
+  const clearAll = useCallback(() => { setCart({}); setGift(false); setGiftMessage(''); setGiftOccasion(''); setCoupon(''); setApplied(false); setDiscount(0); setGiftLineId(null); }, []);
 
   // Keep carts independent per user: when a logged-in user LOGS OUT (or a different user signs in),
   // start a fresh cart so the next person never inherits someone else's items. A guest logging in
@@ -96,7 +102,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const total = Object.values(cart).reduce((s, e) => s + e.price * e.qty, 0);
 
   return (
-    <CartContext.Provider value={{ cart, count, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId, setAddrId, coupon, setCoupon, applied, setApplied, discount, setDiscount, clearAll }}>
+    <CartContext.Provider value={{ cart, count, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId, setAddrId, coupon, setCoupon, applied, setApplied, discount, setDiscount, giftLineId, setGiftLineId, clearAll }}>
       {children}
     </CartContext.Provider>
   );
