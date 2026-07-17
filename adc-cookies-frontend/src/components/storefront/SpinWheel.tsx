@@ -78,9 +78,10 @@ interface SpinWheelProps {
   setActiveReward: (r: ActiveReward | null) => void;
   checkingReward: boolean;
   now: number;
+  refreshReward?: () => void | Promise<void>;
 }
 
-export default function SpinWheel({ open, onClose, activeReward, setActiveReward, checkingReward, now }: SpinWheelProps) {
+export default function SpinWheel({ open, onClose, activeReward, setActiveReward, checkingReward, now, refreshReward }: SpinWheelProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
@@ -376,7 +377,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
         </div>
       )}
 
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onSuccess={() => setLoginOpen(false)} />
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onSuccess={() => { setLoginOpen(false); void refreshReward?.(); }} />
     </>
   );
 }

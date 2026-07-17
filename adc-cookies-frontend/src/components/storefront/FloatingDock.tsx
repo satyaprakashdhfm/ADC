@@ -32,7 +32,7 @@ export default function FloatingDock() {
   const spinDone = useRef(false);
   // Lifted here (not inside SpinWheel) so the 12h claim countdown stays visible on the launcher
   // itself even after the wheel modal is closed — not just while it's open.
-  const { activeReward, setActiveReward, checking: checkingReward, now } = useActiveSpinReward();
+  const { activeReward, setActiveReward, checking: checkingReward, now, refresh } = useActiveSpinReward();
 
   // Spin pops on its own a few seconds after load (at most once a day) — location is no longer a
   // prerequisite; it's collected at checkout via the delivery address, so nothing gates the wheel
@@ -89,7 +89,7 @@ export default function FloatingDock() {
         </a>
       </div>
 
-      <SpinWheel open={spin} onClose={() => setSpin(false)} activeReward={activeReward} setActiveReward={setActiveReward} checkingReward={checkingReward} now={now} />
+      <SpinWheel open={spin} onClose={() => setSpin(false)} activeReward={activeReward} setActiveReward={setActiveReward} checkingReward={checkingReward} now={now} refreshReward={refresh} />
       <Chatbot open={chat} onClose={() => setChat(false)} />
     </>
   );
