@@ -164,6 +164,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
         isGift: activeReward.isGift,
       }
     : result?.win ? result : null;
+  const guestWinNeedsLogin = !!result?.win && !user && !activeReward;
 
   const spin = async () => {
     if (spinning || result || activeReward || !prizes) return;
@@ -245,7 +246,9 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             {activeReward
               ? (activeReward.claimed ? 'Here’s your exclusive discount — use it at checkout.' : `Log in within ${formatRemaining(activeReward.expiresAtMs - nowMs)} to claim this reward before it expires.`)
               : result
-                ? (result.win ? 'Here’s your exclusive discount — use it at checkout.' : `No prize this time — treats are always fresh though! Try the wheel again in ${formatRemaining((drawExpiresAtMs ?? 0) - nowMs)}.`)
+                ? (result.win
+                  ? (guestWinNeedsLogin ? 'Log in to claim this reward before it expires.' : 'Here’s your exclusive discount — use it at checkout.')
+                  : `No prize this time — treats are always fresh though! Try the wheel again in ${formatRemaining((drawExpiresAtMs ?? 0) - nowMs)}.`)
                 : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
           </p>
 
@@ -304,10 +307,17 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
               )}
             </div>
           ) : result ? (
-            <button onClick={() => { close(); router.push('/'); }}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
-              Order now <ArrowRight size={18} />
-            </button>
+            guestWinNeedsLogin ? (
+              <button onClick={() => { setShowTerms(false); setLoginOpen(true); }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+                <LogIn size={18} /> Log in to claim
+              </button>
+            ) : (
+              <button onClick={() => { close(); router.push('/'); }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+                Order now <ArrowRight size={18} />
+              </button>
+            )
           ) : (
             <button onClick={spin} disabled={spinning || !offersLoaded || checkingReward}
               style={{ width: '100%', padding: '15px', borderRadius: 'var(--radius-button)', border: 'none', background: (spinning || !offersLoaded || checkingReward) ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-base)', letterSpacing: '.04em', cursor: spinning ? 'wait' : (!offersLoaded || checkingReward) ? 'default' : 'pointer', boxShadow: (spinning || !offersLoaded || checkingReward) ? 'none' : 'var(--shadow-brand)' }}>
