@@ -128,10 +128,13 @@ body::before {
   --surface-card: var(--peach-300);        /* cards — light orange (#FFCD90) on the cream page background */
   --surface-raised: var(--vanilla-raised);  /* inputs/chips inside cards — a notch darker than the card so fields stand out */
   --surface-glass: var(--cream-bg);         /* header/nav band — very light warm (not pure white) */
-  /* Inner pages (about/contact/blog/gallery/product) build their cards on --panel-* — match the card colour */
+  /* Inner pages (about/contact/blog/gallery/product/account) build their cards on --panel-* —
+     match the card colour so every inner-page card is FFCD90 too. (Home uses no --panel-* tokens.) */
+  --panel-74: var(--surface-card);
   --panel-82: var(--surface-card);
   --panel-86: var(--surface-card);
   --panel-90: var(--surface-card);
+  --panel-92: var(--surface-card);
 }
 
 .adc-pattern-page::before {
