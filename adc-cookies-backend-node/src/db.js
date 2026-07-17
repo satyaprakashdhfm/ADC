@@ -263,7 +263,7 @@ export async function initSchema() {
     ALTER TABLE coupons ADD COLUMN IF NOT EXISTS terms TEXT;
     -- "Free item" rewards (a tin / a cookie) don't just knock money off — they hand over a real
     -- product. gift_kind tells the redemption code WHICH product: 'TIN'/'FILLED_COOKIE' resolve to
-    -- the cheapest currently-available match (so catalog/price changes are honoured automatically),
+    -- an eligible currently-available match (so catalog/price changes are honoured automatically),
     -- 'PRODUCT' is a fixed item (gift_product_id), 'MYSTERY' is assigned once per spin_claims row
     -- (see below) so the same surprise cookie is used consistently from preview through checkout.
     -- NULL = a normal money-off coupon, unchanged.
@@ -289,9 +289,9 @@ export async function initSchema() {
     -- 10% free mini cookie bowl on ₹1500, and the remaining 19% no reward.
     INSERT INTO coupons (code, discount_type, discount_value, minimum_order_amount, maximum_discount, usage_limit, is_active, spin_weight, spin_label, terms) VALUES
       ('SPIN5', 'PERCENTAGE', 5, NULL, NULL, NULL, TRUE, 50, '5% off', '5% off your order. One reward per account per spin. Valid for 12 hours. Cannot be combined with other offers.'),
-      ('SPINCOOKIE', 'FIXED', 110, 299, 110, NULL, TRUE, 10, 'Free Filled Cookie', 'Our cheapest filled cookie is added to your cart automatically when you redeem this reward, free of charge. Valid once the rest of your cart totals ₹299 or more. One reward per account per spin. Cannot be combined with other offers.'),
+      ('SPINCOOKIE', 'FIXED', 110, 299, 110, NULL, TRUE, 10, 'Free Filled Cookie', 'A filled cookie is added to your cart automatically when you redeem this reward, free of charge. Valid once the rest of your cart totals ₹299 or more. One reward per account per spin. Cannot be combined with other offers.'),
       ('SPIN75', 'FIXED', 75, 599, 75, NULL, TRUE, 10, '₹75 off on ₹599', 'Flat ₹75 off your order. Valid on a cart of ₹599 or more. One reward per account per spin. Cannot be combined with other offers.'),
-      ('SPINTIN', 'FIXED', 850, 1600, 850, NULL, TRUE, 1, 'Free Cookie Tin', 'Our cheapest gift tin is added to your cart automatically when you redeem this reward, free of charge. Valid once the rest of your cart totals ₹1600 or more. One reward per account per spin. Cannot be combined with other offers.'),
+      ('SPINTIN', 'FIXED', 850, 1600, 850, NULL, TRUE, 1, 'Free Cookie Tin', 'A gift tin is added to your cart automatically when you redeem this reward, free of charge. Valid once the rest of your cart totals ₹1600 or more. One reward per account per spin. Cannot be combined with other offers.'),
       ('SPINBOWL', 'FIXED', 0, 1500, 0, NULL, TRUE, 10, 'Free Mini Cookie Bowl', 'A free mini cookie bowl is included with your order. Valid on a cart of ₹1500 or more. One reward per account per spin. Cannot be combined with other offers.')
     ON CONFLICT (code) DO UPDATE SET
       discount_type = EXCLUDED.discount_type,
@@ -315,11 +315,11 @@ export async function initSchema() {
     -- admin edit to these coupons.
     UPDATE coupons SET gift_kind = 'TIN',
       discount_value = 850, maximum_discount = 850, minimum_order_amount = 1600,
-      terms = 'Our cheapest gift tin is added to your cart automatically when you redeem this reward, free of charge. Valid once the rest of your cart totals ₹1600 or more. One reward per account per spin. Cannot be combined with other offers.'
+      terms = 'A gift tin is added to your cart automatically when you redeem this reward, free of charge. Valid once the rest of your cart totals ₹1600 or more. One reward per account per spin. Cannot be combined with other offers.'
       WHERE code = 'SPINTIN' AND gift_kind IS NULL;
     UPDATE coupons SET gift_kind = 'FILLED_COOKIE',
       minimum_order_amount = 299,
-      terms = 'Our cheapest filled cookie is added to your cart automatically when you redeem this reward, free of charge. Valid once the rest of your cart totals ₹299 or more. One reward per account per spin. Cannot be combined with other offers.'
+      terms = 'A filled cookie is added to your cart automatically when you redeem this reward, free of charge. Valid once the rest of your cart totals ₹299 or more. One reward per account per spin. Cannot be combined with other offers.'
       WHERE code = 'SPINCOOKIE' AND gift_kind IS NULL;
     UPDATE coupons SET gift_kind = 'MYSTERY',
       terms = 'A surprise cookie is added to your cart automatically when you redeem this reward, free of charge. Valid once the rest of your cart totals ₹150 or more. One reward per account per spin. Cannot be combined with other offers.'

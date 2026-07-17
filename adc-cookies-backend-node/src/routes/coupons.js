@@ -19,8 +19,8 @@ export async function getCouponByCode(code) {
 
 // A "free item" coupon (gift_kind set) doesn't just knock money off — it hands over a real
 // product. This resolves WHICH one, right now, so admin catalog/price changes are honoured:
-//   TIN            → the cheapest currently-available gift tin
-//   FILLED_COOKIE  → the cheapest currently-available filled cookie
+//   TIN            → an eligible currently-available gift tin
+//   FILLED_COOKIE  → an eligible currently-available filled cookie
 //   PRODUCT        → a fixed catalog item (coupon.gift_product_id)
 //   MYSTERY        → whatever cookie was randomly assigned to THIS user's claim (see
 //                    /claim-spin) — resolved from spin_claims, not re-randomized here, so the

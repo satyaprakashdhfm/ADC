@@ -201,6 +201,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
         const pending: ActiveReward = { code: p.code, label: p.label, discountType: p.discountType, discountValue: p.discountValue, minimumOrderAmount: p.minimumOrderAmount, maximumDiscount: p.maximumDiscount, terms: p.terms, isGift: p.isGift, expiresAtMs, claimed: false };
         savePending(pending);
         setActiveReward(pending);
+        setLoginOpen(true);
       }
     }, 4300);
   };
@@ -296,7 +297,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
                   Order now <ArrowRight size={18} />
                 </button>
               ) : (
-                <button onClick={() => setLoginOpen(true)}
+                <button onClick={() => { setShowTerms(false); setLoginOpen(true); }}
                   style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
                   <LogIn size={18} /> Log in to claim
                 </button>
@@ -361,7 +362,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
         </div>
       )}
 
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onSuccess={() => setLoginOpen(false)} />
     </>
   );
 }
