@@ -1,11 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Menu, User, Search, ShoppingBag, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
-import { getProducts, type Product } from '@/lib/api';
+import { getProducts, firstImage, type Product } from '@/lib/api';
 import { STORES } from '@/lib/stores';
 import MenuDrawer from './MenuDrawer';
 import LoginModal from '@/components/ordering/LoginModal';
@@ -65,6 +65,88 @@ function NavItem({ item, menu }: { item: NavLink; menu?: { label: string; href: 
   );
 }
 
+// Search bar with a live "products matching what you're typing" dropdown — customers browsing a
+// brand-new site don't know our menu names yet, so surfacing matches as they type (not just after
+// they hit Enter) is what actually helps them find something.
+function SearchBox({ products, compact, autoFocus, onNavigate }: { products: Product[]; compact?: boolean; autoFocus?: boolean; onNavigate?: () => void }) {
+  const router = useRouter();
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDocDown = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocDown);
+    return () => document.removeEventListener('mousedown', onDocDown);
+  }, []);
+
+  const term = query.trim();
+  const suggestions = term.length
+    ? products.filter(p => p.isAvailable && p.name.toLowerCase().includes(term.toLowerCase())).slice(0, 6)
+    : [];
+
+  const go = (q: string) => {
+    setQuery('');
+    setOpen(false);
+    setActiveIndex(-1);
+    onNavigate?.();
+    router.push(q ? `/order?q=${encodeURIComponent(q)}` : '/order');
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!open || !suggestions.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(i => (i + 1) % suggestions.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(i => (i - 1 + suggestions.length) % suggestions.length); }
+    else if (e.key === 'Enter' && activeIndex >= 0) { e.preventDefault(); go(suggestions[activeIndex].name); }
+    else if (e.key === 'Escape') { setOpen(false); }
+  };
+
+  return (
+    <div ref={boxRef} style={{ position: 'relative', flex: compact ? undefined : 1, width: compact ? '100%' : undefined, maxWidth: compact ? undefined : 640, margin: compact ? undefined : '0 auto' }}>
+      <form onSubmit={e => { e.preventDefault(); go(query.trim()); }} role="search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream-bg)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: compact ? '5px 5px 5px 14px' : '6px 6px 6px 18px', boxShadow: 'var(--shadow-xs)' }}>
+        <Search size={compact ? 17 : 18} color="var(--text-muted)" style={{ flex: 'none' }} />
+        <input
+          autoFocus={autoFocus}
+          name="q"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); setActiveIndex(-1); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={onKeyDown}
+          placeholder="Search cookies, gift tins…"
+          aria-label="Search products"
+          autoComplete="off"
+          role="combobox"
+          aria-expanded={open && suggestions.length > 0}
+          style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: compact ? 'var(--text-sm)' : 'var(--text-base)', color: 'var(--text-strong)' }}
+        />
+        <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: compact ? '8px 14px' : '9px 18px' }}>Search</button>
+      </form>
+      {open && term.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6, background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 16, boxShadow: 'var(--shadow-lg)', overflow: 'hidden', zIndex: 70 }}>
+          {suggestions.length ? suggestions.map((p, i) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => go(p.name)}
+              onMouseEnter={() => setActiveIndex(i)}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 14px', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border-default)', background: activeIndex === i ? 'var(--amber-50)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <Image src={firstImage(p.images)} alt="" width={34} height={34} style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'cover', flex: 'none' }} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', flex: 'none', textTransform: 'uppercase', letterSpacing: '.03em' }}>{p.category === 'TINS' ? 'Gift Tin' : 'Cookie'}</span>
+            </button>
+          )) : (
+            <div style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No products found for &ldquo;{term}&rdquo;</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: boolean }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -83,7 +165,10 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
   }, [revealOnScroll]);
   // Nav dropdown data: cookie/tin products (fetched) and store locations.
   const [products, setProducts] = useState<Product[]>([]);
-  useEffect(() => { getProducts().then(ps => setProducts(ps || [])).catch(() => {}); }, []);
+  useEffect(() => {
+    try { const c = localStorage.getItem('adc_products_cache'); if (c) { const arr = JSON.parse(c); if (Array.isArray(arr) && arr.length) setProducts(arr); } } catch { /* ignore */ }
+    getProducts().then(ps => setProducts(ps || [])).catch(() => {});
+  }, []);
   // Cookies deep-link to that cookie (floats it to the top); tins all jump to the Cookie Tins section.
   const toMenu = (cat: 'COOKIES' | 'TINS') => products.filter(p => p.category === cat && p.isAvailable).map(p => ({ label: p.name, href: cat === 'TINS' ? '/order?cat=tins' : `/order?q=${encodeURIComponent(p.name)}` }));
   const menuFor = (key?: NavLink['menuKey']) =>
@@ -94,12 +179,6 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
             : undefined;
   // Account icon → login modal (or account/admin page if already signed in).
   const accountClick = () => { if (user) router.push(user.role === 'ADMIN' ? '/admin' : '/account'); else setLoginOpen(true); };
-  // Search → the order page, filtered (OrderingApp reads ?q= and maps category words).
-  const onSearch = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const q = String(new FormData(e.currentTarget).get('q') || '').trim();
-    router.push(q ? `/order?q=${encodeURIComponent(q)}` : '/order');
-  };
   const cartButton = (
     <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', flex: 'none' }}>
       <ShoppingBag size={20} />
@@ -119,11 +198,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
             <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
               <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 84, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }} />
             </a>
-            <form onSubmit={onSearch} role="search" style={{ flex: 1, maxWidth: 640, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream-bg)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '6px 6px 6px 18px', boxShadow: 'var(--shadow-xs)' }}>
-              <Search size={18} color="var(--text-muted)" style={{ flex: 'none' }} />
-              <input name="q" placeholder="Search cookies, gift tins…" aria-label="Search products" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)' }} />
-              <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: '9px 18px' }}>Search</button>
-            </form>
+            <SearchBox products={products} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
               <LocationPill />
               {cartButton}
@@ -184,11 +259,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
 
           {/* Search bar only when the icon is tapped */}
           {searchOpen && (
-            <form onSubmit={onSearch} role="search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream-bg)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '5px 5px 5px 14px', boxShadow: 'var(--shadow-xs)' }}>
-              <Search size={17} color="var(--text-muted)" style={{ flex: 'none' }} />
-              <input autoFocus name="q" placeholder="Search cookies, gift tins…" aria-label="Search products" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }} />
-              <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: '8px 14px' }}>Search</button>
-            </form>
+            <SearchBox products={products} compact autoFocus onNavigate={() => setSearchOpen(false)} />
           )}
         </div>
       </div>
