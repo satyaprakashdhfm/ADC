@@ -1,6 +1,6 @@
 'use client';
 import Image from 'next/image';
-import { X, Home, MapPin, Briefcase, Info, Mail, ShoppingBag, ChevronRight, LogOut, User } from 'lucide-react';
+import { X, Home, MapPin, Briefcase, Info, Mail, ShoppingBag, ChevronRight, LogOut, User, Package } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { label: 'Partner with us', icon: <Briefcase size={16} />, href: '/franchise' },
   { label: 'About Us', icon: <Info size={16} />, href: '/about' },
   { label: 'Contact', icon: <Mail size={16} />, href: '/contact' },
+  { label: 'Orders', icon: <Package size={16} />, href: '/account' },
 ];
 
 interface MenuDrawerProps {

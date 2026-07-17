@@ -18,8 +18,8 @@ export default function FooterCookies() {
   return (
     <div>
       <div style={footerHeadingStyle}>Our Cookies</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {cookies.slice(0, 6).map(c => (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {cookies.slice(0, 5).map(c => (
           <Link key={c.id} href={`/order?q=${encodeURIComponent(c.name)}`} className="footer-link" style={linkStyle}>{c.name}</Link>
         ))}
         <Link href="/order?cat=cookies" className="footer-link" style={linkStyle}>All cookies</Link>

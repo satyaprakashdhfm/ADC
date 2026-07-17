@@ -28,6 +28,7 @@ const NAV_DESKTOP: NavLink[] = [
   { label: 'Partner with us', href: '/franchise', menuKey: 'partner' },
   { label: 'About Us', href: '/about' },
   { label: 'Contact', href: '/contact' },
+  { label: 'Orders', href: '/account' },
 ];
 
 const ctaBtn: React.CSSProperties = {

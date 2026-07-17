@@ -737,9 +737,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {lines.map((l, i) => (
           <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < lines.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
-            {l.img ? <div style={{ width: 62, height: 62, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none' }}><Image src={l.img} alt={l.name} width={62} height={62} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div> : <Thumb size={62} seed={i} />}
+            {l.img
+              ? <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} title={`View ${l.name}`} style={{ width: 62, height: 62, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none', cursor: 'pointer' }}><Image src={l.img} alt={l.name} width={62} height={62} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+              : <Thumb size={62} seed={i} />}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</div>
+              <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} role="link" tabIndex={0} title={`View ${l.name}`} style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}>{l.name}</div>
               {l.addOns && l.addOns.length > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 600 }}>+ {l.addOns.join(', ')}</div>}
               {l.note && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', fontStyle: 'italic' }}>&ldquo;{l.note}&rdquo;</div>}
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>₹{l.price}</div>
