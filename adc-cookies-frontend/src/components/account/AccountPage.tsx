@@ -4,12 +4,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { getOrders, getAddresses, addAddress, trackOrderShipment, type DelhiveryTrackResult, type Address, type Order, type OrderItem } from '@/lib/api';
+import { getOrders, getAddresses, addAddress, trackOrderShipment, getSpinStatus, type DelhiveryTrackResult, type Address, type Order, type OrderItem, type SpinClaim } from '@/lib/api';
 import { OrderNextStep } from '@/lib/orderNextStep';
 import {
   ChevronLeft, Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
   Info, LifeBuoy, ChevronRight, LogOut, ShoppingBag, MapPin, Gift,
-  MessageSquare, ReceiptText, PackageCheck, Truck, CreditCard,
+  MessageSquare, ReceiptText, PackageCheck, Truck, CreditCard, Copy, Clock,
 } from 'lucide-react';
 
 const card: React.CSSProperties = {
@@ -444,13 +444,21 @@ export default function AccountPage() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addingAddr, setAddingAddr] = useState(false);
   const [editingAddr, setEditingAddr] = useState<number | null>(null);
+  const [spinClaim, setSpinClaim] = useState<SpinClaim | null | undefined>(undefined); // undefined = loading
+  const [copiedSpin, setCopiedSpin] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     getOrders().then(o => setOrders(o ?? [])).catch(() => setOrders([]));
     // Always reflect THIS user's saved addresses (empty if none) — never show sample/other data.
     getAddresses().then(a => setAddresses(a ?? [])).catch(() => setAddresses([]));
+    // Any Spin & Win reward they claimed (still within its validity window) — see it here too.
+    getSpinStatus().then(r => setSpinClaim(r.active)).catch(() => setSpinClaim(null));
   }, [user]);
+
+  const copySpinCode = async (code: string) => {
+    try { await navigator.clipboard.writeText(code); setCopiedSpin(true); setTimeout(() => setCopiedSpin(false), 1800); } catch { /* ignore */ }
+  };
 
   if (loading || !user) return null;
 
@@ -529,6 +537,24 @@ export default function AccountPage() {
                 </div>
               )}
             </div>
+
+            {spinClaim && (
+              <div style={{ ...card, padding: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+                  <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Gift size={16} color="var(--white)" /></span>
+                  <span style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Your Spin &amp; Win reward</span>
+                </div>
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 10px' }}>{spinClaim.label}</p>
+                <button onClick={() => copySpinCode(spinClaim.code)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer', marginBottom: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-base)', letterSpacing: '.06em', color: 'var(--brand-secondary)' }}>{spinClaim.code}</span>
+                  {copiedSpin ? <Check size={15} color="var(--status-success)" /> : <Copy size={15} color="var(--text-muted)" />}
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
+                  <Clock size={13} /> Valid until {new Date(spinClaim.expiresAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                </div>
+              </div>
+            )}
 
             <div style={{ ...card, padding: '6px 4px' }}>
               {[

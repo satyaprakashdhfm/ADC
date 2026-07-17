@@ -2,10 +2,10 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight } from 'lucide-react';
+import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
-import { getActiveCoupons, type ActiveCoupon } from '@/lib/api';
+import { getActiveCoupons, getSpinStatus, claimSpin, type ActiveCoupon } from '@/lib/api';
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, whatsappLink } from '@/lib/site';
 
 // lucide in this build has no Instagram/YouTube glyphs — use inline brand SVGs (as the footer does).
@@ -13,25 +13,59 @@ const IgIcon = () => (<svg width={18} height={18} viewBox="0 0 24 24" fill="curr
 const YtIcon = () => (<svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>);
 const LiIcon = () => (<svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>);
 
-interface Prize { label: string; code: string; win: boolean }
+interface Prize {
+  label: string; code: string; win: boolean; weight: number;
+  discountType?: string; discountValue?: number;
+  minimumOrderAmount?: number | null; maximumDiscount?: number | null; terms?: string;
+}
 
-// Decorative wheel shown before offers load / before login — purely visual (you can't spin yet).
+// A won reward, either already claimed (server-recorded, logged in) or still pending a login
+// (guest — held in localStorage until they sign in, honoured for CLAIM_WINDOW_HOURS).
+interface ActiveReward {
+  code: string; label: string; discountType?: string; discountValue?: number;
+  minimumOrderAmount?: number | null; maximumDiscount?: number | null; terms?: string;
+  expiresAtMs: number; claimed: boolean;
+}
+
+const PENDING_KEY = 'adc_spin_pending';
+const CLAIM_WINDOW_HOURS = 12; // mirrors the backend — a guest win survives this long awaiting login
+
+// Decorative wheel shown only while offers are still loading — purely visual, not spin-able.
 const DECOR_PRIZES: Prize[] = [
-  { label: '🎁', code: '', win: false }, { label: 'WIN', code: '', win: false },
-  { label: '🍪', code: '', win: false }, { label: 'OFFER', code: '', win: false },
-  { label: '⭐', code: '', win: false }, { label: 'ADC', code: '', win: false },
+  { label: '🎁', code: '', win: false, weight: 1 }, { label: 'WIN', code: '', win: false, weight: 1 },
+  { label: '🍪', code: '', win: false, weight: 1 }, { label: 'OFFER', code: '', win: false, weight: 1 },
+  { label: '⭐', code: '', win: false, weight: 1 }, { label: 'ADC', code: '', win: false, weight: 1 },
 ];
 
-// Build the real wheel from the admin's ACTIVE coupons, so every code the wheel gives out
-// actually works at checkout. No active offers → a full wheel of "better luck next time".
-// 1+ offers → cycle the real codes through the wedges with one honest "Next time!".
+// Build the real wheel from the admin's ACTIVE coupons + one "no reward" slot, whose weight is
+// whatever's left after the real offers' odds — so the admin's weights (e.g. 5% for a rare
+// prize) are honoured exactly, regardless of how many equal-sized wedges are drawn on screen.
 function buildPrizes(coupons: ActiveCoupon[]): Prize[] {
-  if (!coupons.length) return Array.from({ length: 6 }, () => ({ label: 'Better luck next time!', code: '', win: false }));
-  const wins: Prize[] = coupons.map(c => ({ label: c.label, code: c.code, win: true }));
-  const slots = 6;
-  const prizes: Prize[] = Array.from({ length: slots }, (_, i) => wins[i % wins.length]);
-  prizes[slots - 1] = { label: 'Next time!', code: '', win: false };
-  return prizes;
+  const wins: Prize[] = coupons.map(c => ({
+    label: c.label, code: c.code, win: true, weight: c.weight,
+    discountType: c.discountType, discountValue: c.discountValue,
+    minimumOrderAmount: c.minimumOrderAmount, maximumDiscount: c.maximumDiscount, terms: c.terms,
+  }));
+  const totalWinWeight = wins.reduce((s, w) => s + (w.weight || 0), 0);
+  const noReward: Prize = {
+    label: 'Better luck next time!', code: '', win: false,
+    weight: wins.length ? Math.max(1, 100 - totalWinWeight) : 100,
+    terms: 'No reward this spin — but fresh cookies are always worth ordering! Come back for another spin.',
+  };
+  return wins.length ? [...wins, noReward] : [noReward];
+}
+
+// Weighted random pick — visually the wedges are equal-sized, but WHICH one the pointer lands
+// on is chosen here first (then the wheel just rotates to match), so a 5%-weight prize really
+// does land about 1 spin in 20, not 1 in N-wedges.
+function weightedPick(prizes: Prize[]): number {
+  const total = prizes.reduce((s, p) => s + (p.weight || 0), 0) || 1;
+  let r = Math.random() * total;
+  for (let i = 0; i < prizes.length; i++) {
+    r -= prizes[i].weight || 0;
+    if (r <= 0) return i;
+  }
+  return prizes.length - 1;
 }
 
 // Alternating brand wedges — amber / orange, straight from the theme.
@@ -43,6 +77,34 @@ const wheelBg = (prizes: Prize[]) => {
   }).join(',')})`;
 };
 
+function valueSummary(p: Prize): string {
+  if (!p.win) return 'No reward this spin.';
+  const base = p.discountType === 'PERCENTAGE' ? `${p.discountValue}% off` : `₹${p.discountValue} off`;
+  const cap = p.discountType === 'PERCENTAGE' && p.maximumDiscount ? `, capped at ₹${p.maximumDiscount}` : '';
+  const min = p.minimumOrderAmount ? ` · min. order ₹${p.minimumOrderAmount}` : '';
+  return `${base}${cap}${min}`;
+}
+
+function formatRemaining(ms: number): string {
+  if (ms <= 0) return 'Expired';
+  const totalMin = Math.ceil(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function readPending(): ActiveReward | null {
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as ActiveReward;
+    if (!p.expiresAtMs || p.expiresAtMs <= Date.now()) { localStorage.removeItem(PENDING_KEY); return null; }
+    return p;
+  } catch { return null; }
+}
+function savePending(r: ActiveReward) { try { localStorage.setItem(PENDING_KEY, JSON.stringify(r)); } catch { /* ignore */ } }
+function clearPending() { try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ } }
+
 export default function SpinWheel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -52,43 +114,117 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
   const [result, setResult] = useState<Prize | null>(null);
   const [copied, setCopied] = useState(false);
   const [prizes, setPrizes] = useState<Prize[] | null>(null); // null until the admin's active coupons load
+  const [activeReward, setActiveReward] = useState<ActiveReward | null>(null); // an already-won reward (claimed or pending login)
+  const [checkingReward, setCheckingReward] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
+  const [showTerms, setShowTerms] = useState(false);
+  const [termsIndex, setTermsIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  // Once the modal is open and the shopper is logged in, pull the admin's live offers.
-  // Empty / error → treat as "no active offers" (wheel becomes all "better luck next time").
+  // Live countdown tick while the modal is open.
   useEffect(() => {
-    if (!open || !user || prizes !== null) return;
+    if (!open) return;
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [open]);
+
+  // An active reward's window ran out while the modal was open — clear it so a fresh spin is possible.
+  useEffect(() => {
+    if (activeReward && activeReward.expiresAtMs <= now) {
+      clearPending();
+      setActiveReward(null);
+      setResult(null);
+    }
+  }, [activeReward, now]);
+
+  // Load the wheel's offers once the modal opens.
+  useEffect(() => {
+    if (!open || prizes !== null) return;
     let cancelled = false;
     getActiveCoupons()
       .then(cs => { if (!cancelled) setPrizes(buildPrizes(cs)); })
       .catch(() => { if (!cancelled) setPrizes(buildPrizes([])); });
     return () => { cancelled = true; };
-  }, [open, user, prizes]);
+  }, [open, prizes]);
+
+  // Resolve any existing reward: reconcile a guest's pending win the moment they log in
+  // (claiming it for real), otherwise check the server for an already-claimed active reward,
+  // otherwise fall back to a still-pending guest win held locally.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setCheckingReward(true);
+    (async () => {
+      let reward: ActiveReward | null = null;
+      if (user) {
+        const pending = readPending();
+        if (pending) {
+          try {
+            const claimed = await claimSpin(pending.code);
+            reward = { code: claimed.code, label: claimed.label, discountType: claimed.discountType, discountValue: claimed.discountValue, minimumOrderAmount: claimed.minimumOrderAmount, maximumDiscount: claimed.maximumDiscount, terms: claimed.terms, expiresAtMs: new Date(claimed.expiresAt).getTime(), claimed: true };
+          } catch { /* the code may no longer be valid — fall through to a server status check */ }
+          clearPending();
+        }
+        if (!reward) {
+          const status = await getSpinStatus().catch(() => null);
+          if (status?.active) {
+            const a = status.active;
+            reward = { code: a.code, label: a.label, discountType: a.discountType, discountValue: a.discountValue, minimumOrderAmount: a.minimumOrderAmount, maximumDiscount: a.maximumDiscount, terms: a.terms, expiresAtMs: new Date(a.expiresAt).getTime(), claimed: true };
+          }
+        }
+      } else {
+        reward = readPending();
+      }
+      if (!cancelled) { setActiveReward(reward); setCheckingReward(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [open, user]);
 
   const displayPrizes = prizes ?? DECOR_PRIZES;
   const N = displayPrizes.length;
   const SEG = 360 / N;
   const WHEEL_BG = wheelBg(displayPrizes);
   const offersLoaded = prizes !== null;
-  const hasOffers = (prizes || []).some(p => p.win);
 
   const close = onClose;
 
   const spin = () => {
-    if (spinning || result || !prizes) return;
+    if (spinning || result || activeReward || !prizes) return;
     setSpinning(true);
-    const idx = Math.floor(Math.random() * prizes.length);
+    const idx = weightedPick(prizes);
     // Bring segment idx's centre under the top pointer, after 5 full turns.
     const target = 360 * 5 - (idx * SEG + SEG / 2);
     setRot(target);
-    timer.current = setTimeout(() => { setResult(prizes[idx]); setSpinning(false); }, 4300);
+    timer.current = setTimeout(async () => {
+      const p = prizes[idx];
+      setResult(p);
+      setSpinning(false);
+      if (!p.win) return;
+      const expiresAtMs = Date.now() + CLAIM_WINDOW_HOURS * 3600_000;
+      if (user) {
+        try {
+          const claimed = await claimSpin(p.code);
+          setActiveReward({ code: claimed.code, label: claimed.label, discountType: claimed.discountType, discountValue: claimed.discountValue, minimumOrderAmount: claimed.minimumOrderAmount, maximumDiscount: claimed.maximumDiscount, terms: claimed.terms, expiresAtMs: new Date(claimed.expiresAt).getTime(), claimed: true });
+        } catch { /* leave the result showing even if the claim call failed — they can retry via login prompt */ }
+      } else {
+        const pending: ActiveReward = { code: p.code, label: p.label, discountType: p.discountType, discountValue: p.discountValue, minimumOrderAmount: p.minimumOrderAmount, maximumDiscount: p.maximumDiscount, terms: p.terms, expiresAtMs, claimed: false };
+        savePending(pending);
+        setActiveReward(pending);
+      }
+    }, 4300);
   };
 
-  const copyCode = async () => {
-    if (!result?.code) return;
-    try { await navigator.clipboard.writeText(result.code); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* ignore */ }
+  const copyCode = async (code: string) => {
+    try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* ignore */ }
+  };
+
+  // Closing after a MISS resets the in-session result so reopening lets them spin again
+  // (a WIN keeps its state via activeReward, so it can't be re-rolled).
+  const handleClose = () => {
+    if (result && !result.win) setResult(null);
+    close();
   };
 
   if (!open) return null;
@@ -102,13 +238,13 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
 
   return (
     <>
-      <div onClick={close}
+      <div onClick={handleClose}
         style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'var(--espresso-55)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, animation: 'loaderFadeIn .28s ease both' }}>
         <div onClick={e => e.stopPropagation()}
           style={{ position: 'relative', width: 'min(400px,94vw)', maxHeight: '92vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '26px 24px 20px', textAlign: 'center', animation: 'riseIn .4s var(--ease-spring) both' }}
           className="hide-sb">
 
-          <button onClick={close} aria-label="Close" style={{ position: 'absolute', top: 14, right: 14, width: 34, height: 34, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', zIndex: 2 }}>
+          <button onClick={handleClose} aria-label="Close" style={{ position: 'absolute', top: 14, right: 14, width: 34, height: 34, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', zIndex: 2 }}>
             <X size={17} />
           </button>
 
@@ -116,13 +252,13 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
             <Gift size={14} /> Spin &amp; win
           </div>
           <h2 style={{ font: '900 var(--text-h3)/1.05 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 5px', letterSpacing: '-.02em' }}>
-            {result ? (result.win ? 'You won! 🎉' : 'So close!') : 'Spin & win a treat!'}
+            {activeReward ? (activeReward.claimed ? 'You won! 🎉' : 'You won! Sign in to claim 🎉') : result ? (result.win ? 'You won! 🎉' : 'So close!') : 'Spin & win a treat!'}
           </h2>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 auto 16px', maxWidth: 300, lineHeight: 1.5 }}>
-            {result
-              ? (result.win ? 'Here’s your exclusive discount — use it at checkout.' : 'No prize this time, but treats are always fresh. Order away!')
-              : (offersLoaded && !hasOffers)
-                ? 'No live offers right now — check back soon for fresh treats!'
+            {activeReward
+              ? (activeReward.claimed ? 'Here’s your exclusive discount — use it at checkout.' : `Log in within ${formatRemaining(activeReward.expiresAtMs - now)} to claim this reward before it expires.`)
+              : result
+                ? (result.win ? 'Here’s your exclusive discount — use it at checkout.' : 'No prize this time, but treats are always fresh. Order away!')
                 : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
           </p>
 
@@ -148,40 +284,52 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
             </div>
           </div>
 
-          {/* Action area — depends on auth + spin state */}
-          {result ? (
+          {/* Action area */}
+          {activeReward ? (
             <div>
-              {result.win && result.code && (
-                <button onClick={copyCode}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 12px', padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{result.code}</span>
-                  {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
+              <button onClick={() => copyCode(activeReward.code)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 8px', padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{activeReward.code}</span>
+                {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 12 }}>
+                <Clock size={13} /> {activeReward.claimed ? `Valid for ${formatRemaining(activeReward.expiresAtMs - now)}` : `Expires in ${formatRemaining(activeReward.expiresAtMs - now)}`}
+              </div>
+              {activeReward.claimed ? (
+                <button onClick={() => { close(); router.push('/'); }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+                  Order now <ArrowRight size={18} />
+                </button>
+              ) : (
+                <button onClick={() => setLoginOpen(true)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+                  <LogIn size={18} /> Log in to claim
                 </button>
               )}
-              <button onClick={() => { close(); router.push('/'); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
-                Order now <ArrowRight size={18} />
-              </button>
             </div>
-          ) : user ? (
-            <button onClick={spin} disabled={spinning || !offersLoaded}
-              style={{ width: '100%', padding: '15px', borderRadius: 'var(--radius-button)', border: 'none', background: (spinning || !offersLoaded) ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-base)', letterSpacing: '.04em', cursor: spinning ? 'wait' : !offersLoaded ? 'default' : 'pointer', boxShadow: (spinning || !offersLoaded) ? 'none' : 'var(--shadow-brand)' }}>
-              {!offersLoaded ? 'Loading offers…' : spinning ? 'Spinning…' : 'SPIN THE WHEEL'}
+          ) : result ? (
+            <button onClick={() => { close(); router.push('/'); }}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+              Order now <ArrowRight size={18} />
             </button>
           ) : (
-            <>
-              <button onClick={() => setLoginOpen(true)}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '15px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
-                <LogIn size={18} /> Log in to spin
-              </button>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '9px 0 0' }}>Quick sign-in with Google or phone — then spin to win.</p>
-            </>
+            <button onClick={spin} disabled={spinning || !offersLoaded || checkingReward}
+              style={{ width: '100%', padding: '15px', borderRadius: 'var(--radius-button)', border: 'none', background: (spinning || !offersLoaded || checkingReward) ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-base)', letterSpacing: '.04em', cursor: spinning ? 'wait' : (!offersLoaded || checkingReward) ? 'default' : 'pointer', boxShadow: (spinning || !offersLoaded || checkingReward) ? 'none' : 'var(--shadow-brand)' }}>
+              {checkingReward || !offersLoaded ? 'Loading…' : spinning ? 'Spinning…' : 'SPIN THE WHEEL'}
+            </button>
           )}
 
           {/* Cancel */}
-          <button onClick={close} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', marginTop: 12, padding: 6 }}>
+          <button onClick={handleClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', marginTop: 12, padding: 6 }}>
             No thanks, maybe later
           </button>
+
+          {/* Terms & conditions */}
+          {offersLoaded && (
+            <button onClick={() => { setTermsIndex(0); setShowTerms(true); }} style={{ display: 'block', margin: '4px auto 0', background: 'none', border: 'none', color: 'var(--text-subtle)', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 'var(--text-2xs)', textDecoration: 'underline', cursor: 'pointer', padding: 4 }}>
+              Terms &amp; conditions apply
+            </button>
+          )}
 
           {/* Social links */}
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-soft)' }}>
@@ -195,6 +343,31 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
           </div>
         </div>
       </div>
+
+      {/* Terms & Conditions — a small pager explaining every wheel offer, one at a time */}
+      {showTerms && prizes && (
+        <div onClick={() => setShowTerms(false)} style={{ position: 'fixed', inset: 0, zIndex: 97, background: 'var(--espresso-55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, animation: 'loaderFadeIn .2s ease both' }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 'min(360px,92vw)', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '22px 22px 18px', textAlign: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+              <h3 style={{ flex: 1, fontSize: 'var(--text-base)', fontWeight: 800, color: 'var(--text-strong)', textAlign: 'left' }}>Spin & Win — Terms</h3>
+              <button onClick={() => setShowTerms(false)} aria-label="Close" style={{ width: 30, height: 30, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><X size={15} /></button>
+            </div>
+            <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 700, margin: '0 0 12px' }}>Offer {termsIndex + 1} of {prizes.length}</p>
+            <div style={{ minHeight: 130 }}>
+              <h4 style={{ font: '900 var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>{prizes[termsIndex].label}</h4>
+              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--brand-secondary)', margin: '0 0 10px' }}>{valueSummary(prizes[termsIndex])}</p>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55, margin: 0 }}>{prizes[termsIndex].terms || 'No additional terms.'}</p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+              <button onClick={() => setTermsIndex(i => Math.max(0, i - 1))} disabled={termsIndex === 0} aria-label="Previous offer" style={{ width: 38, height: 38, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: termsIndex === 0 ? 'default' : 'pointer', opacity: termsIndex === 0 ? 0.4 : 1, display: 'grid', placeItems: 'center' }}><ChevronLeft size={18} /></button>
+              <div style={{ display: 'flex', gap: 5 }}>
+                {prizes.map((_, i) => <span key={i} aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: i === termsIndex ? 'var(--brand-secondary)' : 'var(--border-default)' }} />)}
+              </div>
+              <button onClick={() => setTermsIndex(i => Math.min(prizes.length - 1, i + 1))} disabled={termsIndex === prizes.length - 1} aria-label="Next offer" style={{ width: 38, height: 38, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: termsIndex === prizes.length - 1 ? 'default' : 'pointer', opacity: termsIndex === prizes.length - 1 ? 0.4 : 1, display: 'grid', placeItems: 'center' }}><ChevronRight size={18} /></button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </>
