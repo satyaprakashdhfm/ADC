@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { getMe, updateMe, sendOtp as apiSendOtp, verifyOtp as apiVerifyOtp, type MeResponse } from '@/lib/api';
+import { getMe, updateMe, logLoginLocation, sendOtp as apiSendOtp, verifyOtp as apiVerifyOtp, type MeResponse } from '@/lib/api';
 
 interface User { name: string; email: string; role: string; initials: string; phone?: string; }
 
@@ -69,6 +69,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refineFromBackend = async () => {
     try { const me = await getMe(); setUser(userFromMe(me)); } catch { /* keep session user */ }
     finally { setProfileLoaded(true); }
+    logLoginLocationOnce();
+  };
+
+  // IP-based location capture, once per browser tab session — refineFromBackend fires on every
+  // page load/token-refresh too, not just fresh logins, so this guards against re-logging that.
+  const logLoginLocationOnce = () => {
+    try {
+      if (sessionStorage.getItem('adc_loc_logged')) return;
+      sessionStorage.setItem('adc_loc_logged', '1');
+    } catch { /* ignore */ }
+    logLoginLocation().catch(() => {});
   };
 
   useEffect(() => {

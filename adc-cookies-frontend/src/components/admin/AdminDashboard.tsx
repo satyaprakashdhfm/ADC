@@ -854,7 +854,7 @@ export default function AdminDashboard() {
           return (
           <Panel title={`Customers${users ? ` (${list.length})` : ''}`} loading={users === null}>
             <FilterBar search={userSearch} onSearch={v => { setUserSearch(v); setPageOf('users', 1); }} placeholder="Search name, email, phone…" active={false} onClear={() => { setUserSearch(''); setPageOf('users', 1); }} />
-            <Table head={['Name', 'Email', 'Phone', 'Address', 'Orders', 'Joined']}>
+            <Table head={['Name', 'Email', 'Phone', 'Address', 'Last login from', 'Orders', 'Joined']}>
               {paginate(list, 'users').map(u => {
                 const addr = u.addresses?.find(a => a.isDefault) || u.addresses?.[0];
                 const addrText = addr ? [addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ') : '';
@@ -871,6 +871,7 @@ export default function AdminDashboard() {
                       </span>
                     ) : '—'}
                   </td>
+                  <td style={td}>{u.lastLoginLocation || '—'}</td>
                   <td style={td}>{u.orderCount}</td>
                   <td style={td}>{fmtDate(u.createdAt)}</td>
                 </tr>

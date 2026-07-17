@@ -6,6 +6,11 @@ import { requireAuth, ApiError } from '../middleware.js';
 import { normalizePhone, sendOtp, validateOtp, messageCentralConfigured } from '../messageCentral.js';
 import { adminClient, anonClient, supabaseConfigured } from '../supabaseAdmin.js';
 
+// Rejects junk like "123@gmail.com" (digits-only local part) — requires a real-looking local
+// part (at least one letter, 2+ characters) and a proper domain/TLD.
+const EMAIL_RE = /^(?=[^\s@]*[a-zA-Z])[^\s@]{2,}@[^\s@]+\.[a-zA-Z]{2,}$/;
+const MIN_NAME_LEN = 5;
+
 // Merge `fromId` (phone-OTP account) into `intoId` (Google/email account).
 // Transfers all data, then deletes the phone account from our DB and Supabase.
 async function mergeAccounts(intoId, fromId) {
@@ -68,7 +73,7 @@ router.patch('/me', requireAuth, async (req, res) => {
 
   if (req.body?.name != null) {
     const name = String(req.body.name).trim();
-    if (!name) throw new ApiError('Name cannot be empty.');
+    if (name.length < MIN_NAME_LEN) throw new ApiError(`Please enter your full name (at least ${MIN_NAME_LEN} characters).`);
     sets.push(`name = $${i++}`); params.push(name);
   }
 
@@ -91,7 +96,7 @@ router.patch('/me', requireAuth, async (req, res) => {
   // users table (their Supabase login stays keyed on the synthetic address) — never fabricated.
   if (req.body?.email != null && String(req.body.email).trim() !== '') {
     const email = String(req.body.email).trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError('Enter a valid email address.');
+    if (!EMAIL_RE.test(email)) throw new ApiError('Enter a proper email address.');
     const taken = await getOne('SELECT id FROM users WHERE email = $1 AND id <> $2', [email, req.user.id]);
     if (taken) throw new ApiError('That email is already linked to another account.');
     sets.push(`email = $${i++}`); params.push(email);
@@ -115,6 +120,25 @@ router.patch('/me', requireAuth, async (req, res) => {
   } catch { /* metadata sync is non-critical */ }
 
   res.json({ email: row.email, name: row.name, role: row.role, phone: row.phone ?? null });
+});
+
+// Best-effort city/region for wherever this login is coming from (IP-based — no browser
+// permission prompt, so it never interrupts the login flow). The frontend calls this once per
+// fresh login, not on every page load. Never throws: a lookup failure just leaves the column
+// as it was.
+router.post('/log-location', requireAuth, async (req, res) => {
+  try {
+    const ip = String(req.ip || '').replace(/^::ffff:/, '');
+    if (ip && ip !== '127.0.0.1' && ip !== '::1') {
+      const r = await fetch(`https://ipapi.co/${ip}/json/`);
+      if (r.ok) {
+        const j = await r.json();
+        const location = [j.city, j.region, j.country_name].filter(Boolean).join(', ');
+        if (location) await query('UPDATE users SET last_login_location = $1 WHERE id = $2', [location, req.user.id]);
+      }
+    }
+  } catch { /* best-effort only */ }
+  res.json({ ok: true });
 });
 
 /* ---------------- Phone OTP login (Message Central + Supabase) ----------------

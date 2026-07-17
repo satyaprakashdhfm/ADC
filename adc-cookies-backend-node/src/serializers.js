@@ -1,6 +1,7 @@
 export function serializeUser(u) {
   if (!u) return null;
   return { id: u.id, name: u.name, email: u.email, phone: u.phone, role: u.role,
+           lastLoginLocation: u.last_login_location ?? null,
            createdAt: u.created_at, updatedAt: u.updated_at };
 }
 

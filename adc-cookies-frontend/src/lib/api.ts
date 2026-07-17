@@ -66,6 +66,11 @@ export async function updateMe(patch: { name?: string; phone?: string; email?: s
   return request('/auth/me', { method: 'PATCH', body: JSON.stringify(patch) });
 }
 
+/** Best-effort: records the city/region this login is coming from (IP-based, no permission prompt). */
+export async function logLoginLocation(): Promise<{ ok: boolean }> {
+  return request('/auth/log-location', { method: 'POST' });
+}
+
 /* ---- Products ---- */
 export interface Product {
   id: number; name: string; category: 'COOKIES' | 'TINS';
@@ -274,7 +279,7 @@ export interface AdminStats {
   ordersByStatus: Record<string, number>;
   topProducts: { name: string; qty: number; revenue: number }[];
 }
-export interface AdminUser { id: number; name: string; email: string | null; phone?: string; role: string; createdAt: string; orderCount: number; addresses?: Address[]; }
+export interface AdminUser { id: number; name: string; email: string | null; phone?: string; role: string; createdAt: string; orderCount: number; addresses?: Address[]; lastLoginLocation?: string | null; }
 export interface AdminCoupon { id: number; code: string; discountType: string; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive: boolean; timesUsed?: number; spinWeight?: number | null; spinLabel?: string | null; terms?: string | null; }
 export interface CouponInput { code: string; discountType: 'PERCENTAGE' | 'FIXED'; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive?: boolean; spinWeight?: number | null; spinLabel?: string | null; terms?: string | null; }
 export interface AdminMessage { id: number; name: string; email: string; phone?: string | null; message: string; handled: boolean; createdAt: string; }

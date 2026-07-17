@@ -249,6 +249,9 @@ export async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_delivery TEXT; -- Shadowfax promised date from the webhook (YYYY-MM-DD HH:MM:SS)
     -- Phone-login users have no email: it stays NULL (we never fabricate a synthetic address).
     ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+    -- Best-effort city/region from the IP they last logged in from (see POST /auth/log-location) —
+    -- for admin visibility into where customers are logging in from, not precise geolocation.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_location TEXT;
 
     -- Spin & Win wheel — 7 real rewards + one "no reward" slot (the 8th, handled client-side).
     -- Odds: Free Cookie Tin is rare (5%); the other 6 real rewards split the remaining 95%
