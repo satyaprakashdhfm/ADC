@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
-import { getActiveCoupons, getSpinStatus, claimSpin, type ActiveCoupon } from '@/lib/api';
+import { getActiveCoupons, claimSpin, type ActiveCoupon } from '@/lib/api';
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, whatsappLink } from '@/lib/site';
+import { type ActiveReward, CLAIM_WINDOW_HOURS, savePending, formatRemaining } from '@/lib/spinReward';
 
 // lucide in this build has no Instagram/YouTube glyphs — use inline brand SVGs (as the footer does).
 const IgIcon = () => (<svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" /></svg>);
@@ -18,17 +19,6 @@ interface Prize {
   discountType?: string; discountValue?: number;
   minimumOrderAmount?: number | null; maximumDiscount?: number | null; terms?: string;
 }
-
-// A won reward, either already claimed (server-recorded, logged in) or still pending a login
-// (guest — held in localStorage until they sign in, honoured for CLAIM_WINDOW_HOURS).
-interface ActiveReward {
-  code: string; label: string; discountType?: string; discountValue?: number;
-  minimumOrderAmount?: number | null; maximumDiscount?: number | null; terms?: string;
-  expiresAtMs: number; claimed: boolean;
-}
-
-const PENDING_KEY = 'adc_spin_pending';
-const CLAIM_WINDOW_HOURS = 12; // mirrors the backend — a guest win survives this long awaiting login
 
 // Decorative wheel shown only while offers are still loading — purely visual, not spin-able.
 const DECOR_PRIZES: Prize[] = [
@@ -85,27 +75,16 @@ function valueSummary(p: Prize): string {
   return `${base}${cap}${min}`;
 }
 
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return 'Expired';
-  const totalMin = Math.ceil(ms / 60_000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+interface SpinWheelProps {
+  open: boolean;
+  onClose: () => void;
+  activeReward: ActiveReward | null;
+  setActiveReward: (r: ActiveReward | null) => void;
+  checkingReward: boolean;
+  now: number;
 }
 
-function readPending(): ActiveReward | null {
-  try {
-    const raw = localStorage.getItem(PENDING_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw) as ActiveReward;
-    if (!p.expiresAtMs || p.expiresAtMs <= Date.now()) { localStorage.removeItem(PENDING_KEY); return null; }
-    return p;
-  } catch { return null; }
-}
-function savePending(r: ActiveReward) { try { localStorage.setItem(PENDING_KEY, JSON.stringify(r)); } catch { /* ignore */ } }
-function clearPending() { try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ } }
-
-export default function SpinWheel({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function SpinWheel({ open, onClose, activeReward, setActiveReward, checkingReward, now }: SpinWheelProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
@@ -114,30 +93,19 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
   const [result, setResult] = useState<Prize | null>(null);
   const [copied, setCopied] = useState(false);
   const [prizes, setPrizes] = useState<Prize[] | null>(null); // null until the admin's active coupons load
-  const [activeReward, setActiveReward] = useState<ActiveReward | null>(null); // an already-won reward (claimed or pending login)
-  const [checkingReward, setCheckingReward] = useState(true);
-  const [now, setNow] = useState(() => Date.now());
   const [showTerms, setShowTerms] = useState(false);
   const [termsIndex, setTermsIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevRewardRef = useRef<ActiveReward | null>(null);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  // Live countdown tick while the modal is open.
+  // The reward prop is cleared (claimed elsewhere, or its window ran out) the moment it disappears
+  // from a real reward — drop any stale in-session result so the idle "spin" state reappears.
   useEffect(() => {
-    if (!open) return;
-    const t = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, [open]);
-
-  // An active reward's window ran out while the modal was open — clear it so a fresh spin is possible.
-  useEffect(() => {
-    if (activeReward && activeReward.expiresAtMs <= now) {
-      clearPending();
-      setActiveReward(null);
-      setResult(null);
-    }
-  }, [activeReward, now]);
+    if (prevRewardRef.current && !activeReward) setResult(null);
+    prevRewardRef.current = activeReward;
+  }, [activeReward]);
 
   // Load the wheel's offers once the modal opens.
   useEffect(() => {
@@ -148,39 +116,6 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
       .catch(() => { if (!cancelled) setPrizes(buildPrizes([])); });
     return () => { cancelled = true; };
   }, [open, prizes]);
-
-  // Resolve any existing reward: reconcile a guest's pending win the moment they log in
-  // (claiming it for real), otherwise check the server for an already-claimed active reward,
-  // otherwise fall back to a still-pending guest win held locally.
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setCheckingReward(true);
-    (async () => {
-      let reward: ActiveReward | null = null;
-      if (user) {
-        const pending = readPending();
-        if (pending) {
-          try {
-            const claimed = await claimSpin(pending.code);
-            reward = { code: claimed.code, label: claimed.label, discountType: claimed.discountType, discountValue: claimed.discountValue, minimumOrderAmount: claimed.minimumOrderAmount, maximumDiscount: claimed.maximumDiscount, terms: claimed.terms, expiresAtMs: new Date(claimed.expiresAt).getTime(), claimed: true };
-          } catch { /* the code may no longer be valid — fall through to a server status check */ }
-          clearPending();
-        }
-        if (!reward) {
-          const status = await getSpinStatus().catch(() => null);
-          if (status?.active) {
-            const a = status.active;
-            reward = { code: a.code, label: a.label, discountType: a.discountType, discountValue: a.discountValue, minimumOrderAmount: a.minimumOrderAmount, maximumDiscount: a.maximumDiscount, terms: a.terms, expiresAtMs: new Date(a.expiresAt).getTime(), claimed: true };
-          }
-        }
-      } else {
-        reward = readPending();
-      }
-      if (!cancelled) { setActiveReward(reward); setCheckingReward(false); }
-    })();
-    return () => { cancelled = true; };
-  }, [open, user]);
 
   const displayPrizes = prizes ?? DECOR_PRIZES;
   const N = displayPrizes.length;

@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Bot } from 'lucide-react';
 import { whatsappLink } from '@/lib/site';
 import { useLocation } from '@/context/LocationContext';
+import { useActiveSpinReward, formatRemainingShort } from '@/lib/spinReward';
 import SpinWheel from './SpinWheel';
 import Chatbot from './Chatbot';
 
@@ -31,6 +32,9 @@ export default function FloatingDock() {
   const [chat, setChat] = useState(false);
   const { store, ready } = useLocation();
   const spinDone = useRef(false);
+  // Lifted here (not inside SpinWheel) so the 12h claim countdown stays visible on the launcher
+  // itself even after the wheel modal is closed — not just while it's open.
+  const { activeReward, setActiveReward, checking: checkingReward, now } = useActiveSpinReward();
 
   // Location goes FIRST: only once the shopper has a location set (chosen now on the first visit,
   // or already known on a return visit) do we pop the spin wheel — a few seconds later, at most once a day.
@@ -51,10 +55,21 @@ export default function FloatingDock() {
   return (
     <>
       <div className="floating-dock" style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-        {/* Spin & win (top) */}
+        {/* Spin & win (top) — a badge stays on the launcher itself while a won reward's 12h
+            claim window is running, so it doesn't just vanish once the modal is closed. */}
         <button onClick={() => setSpin(true)} aria-label="Spin & win a discount" title="Spin & win"
           style={{ ...fab, background: 'var(--white)', border: '1.5px solid var(--border-default)' }}>
           <MiniWheel />
+          {activeReward && (
+            <span aria-hidden style={{
+              position: 'absolute', top: -6, right: -6, minWidth: 30, height: 20, padding: '0 6px',
+              borderRadius: 'var(--radius-pill)', background: activeReward.claimed ? 'var(--status-success)' : 'var(--gradient-warm)',
+              color: 'var(--white)', fontSize: 10, fontWeight: 800, display: 'grid', placeItems: 'center',
+              lineHeight: 1, boxShadow: '0 2px 6px var(--black-18)', fontFamily: 'var(--font-body)',
+            }}>
+              {formatRemainingShort(activeReward.expiresAtMs - now)}
+            </span>
+          )}
         </button>
 
         {/* Chatbot (middle) */}
@@ -73,7 +88,7 @@ export default function FloatingDock() {
         </a>
       </div>
 
-      <SpinWheel open={spin} onClose={() => setSpin(false)} />
+      <SpinWheel open={spin} onClose={() => setSpin(false)} activeReward={activeReward} setActiveReward={setActiveReward} checkingReward={checkingReward} now={now} />
       <Chatbot open={chat} onClose={() => setChat(false)} />
     </>
   );
