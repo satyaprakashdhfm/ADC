@@ -28,6 +28,14 @@ router.get('/promo', async (_req, res) => {
   res.json(product ? serializeProduct(product) : null);
 });
 
+// Public: the admin's current header-banner offer text (or null) — free text, so the admin
+// only ever advertises a real, currently-active offer, never a hardcoded placeholder.
+// Declared before '/:id' so "announcement" isn't captured as an id.
+router.get('/announcement', async (_req, res) => {
+  const setting = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
+  res.json({ text: setting?.value || null });
+});
+
 router.get('/:id', async (req, res) => {
   const row = await getOne('SELECT * FROM products WHERE id = $1', [req.params.id]);
   if (!row) throw new ApiError('Product not found');

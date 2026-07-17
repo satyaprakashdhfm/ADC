@@ -294,10 +294,16 @@ export interface AdminAnalytics {
 }
 
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
-export async function adminGetSettings(): Promise<{ promoProductId: number | null }> { return request('/admin/settings'); }
-export async function adminSetPromoProduct(promoProductId: number | null): Promise<{ promoProductId: number | null }> {
+export async function adminGetSettings(): Promise<{ promoProductId: number | null; headerOffer: string | null }> { return request('/admin/settings'); }
+export async function adminSetPromoProduct(promoProductId: number | null): Promise<{ promoProductId: number | null; headerOffer: string | null }> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ promoProductId }) });
 }
+// Free-text offer shown in the site header banner — e.g. "Get 5% off with code XYZ". null/empty clears it.
+export async function adminSetHeaderOffer(headerOffer: string | null): Promise<{ promoProductId: number | null; headerOffer: string | null }> {
+  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ headerOffer }) });
+}
+// Public: the current header-banner offer text (or null if the admin hasn't set one).
+export async function getAnnouncement(): Promise<{ text: string | null }> { return request('/products/announcement'); }
 export async function adminAnalytics(from?: string, to?: string): Promise<AdminAnalytics> {
   const qs = from && to ? `?from=${from}&to=${to}` : '';
   return request(`/admin/analytics${qs}`);

@@ -212,24 +212,43 @@ router.patch('/contact/:id/handled', async (req, res) => {
   res.json({ id: row.id, handled: !!row.handled });
 });
 
-/* ---------- Site settings (homepage promo popup target) ---------- */
+/* ---------- Site settings (homepage promo popup target + header banner offer) ---------- */
 router.get('/settings', async (_req, res) => {
   const row = await getOne("SELECT value FROM site_settings WHERE key = 'promo_product_id'");
-  res.json({ promoProductId: row?.value ? Number(row.value) : null });
+  const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
+  res.json({ promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null });
 });
 router.put('/settings', async (req, res) => {
-  const raw = req.body?.promoProductId;
-  const val = raw == null || raw === '' ? null : String(Number(raw));
-  if (val === null || Number.isNaN(Number(val))) {
-    await query("DELETE FROM site_settings WHERE key = 'promo_product_id'");
-    return res.json({ promoProductId: null });
+  if (req.body?.promoProductId !== undefined) {
+    const raw = req.body.promoProductId;
+    const val = raw == null || raw === '' ? null : String(Number(raw));
+    if (val === null || Number.isNaN(Number(val))) {
+      await query("DELETE FROM site_settings WHERE key = 'promo_product_id'");
+    } else {
+      await query(
+        `INSERT INTO site_settings (key, value) VALUES ('promo_product_id', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [val]
+      );
+    }
   }
-  await query(
-    `INSERT INTO site_settings (key, value) VALUES ('promo_product_id', $1)
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-    [val]
-  );
-  res.json({ promoProductId: Number(val) });
+  // Free text the admin controls directly — e.g. "Get 5% off with code XYZ" — so the header
+  // banner never advertises a discount that isn't a real, currently-active coupon.
+  if (req.body?.headerOffer !== undefined) {
+    const text = String(req.body.headerOffer || '').trim();
+    if (!text) {
+      await query("DELETE FROM site_settings WHERE key = 'header_offer'");
+    } else {
+      await query(
+        `INSERT INTO site_settings (key, value) VALUES ('header_offer', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [text]
+      );
+    }
+  }
+  const row = await getOne("SELECT value FROM site_settings WHERE key = 'promo_product_id'");
+  const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
+  res.json({ promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null });
 });
 
 /* ---------- Dashboard ---------- */

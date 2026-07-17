@@ -42,11 +42,15 @@ export default function LocationsClient() {
           {list.map((s) => (
             <article key={s.name} style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
               {s.image ? (
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 10' }}>
+                // These illustrations are tall (portrait, ~9:16) with the store name/city/address
+                // baked in at the top and the storefront photo below — a wide 16:10 crop was
+                // showing only the top third and cutting the address + storefront off. 2:3 keeps
+                // almost the whole thing (only the empty pavement at the very bottom is trimmed).
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3' }}>
                   <Image src={s.image} alt={s.name} fill sizes="(max-width:760px) 100vw, 420px" style={{ objectFit: 'cover', objectPosition: 'top' }} />
                 </div>
               ) : (
-                <div style={{ width: '100%', aspectRatio: '16 / 10', background: 'radial-gradient(120% 120% at 35% 28%,var(--amber-300),var(--orange-500))', display: 'grid', placeItems: 'center' }}>
+                <div style={{ width: '100%', aspectRatio: '2 / 3', background: 'radial-gradient(120% 120% at 35% 28%,var(--amber-300),var(--orange-500))', display: 'grid', placeItems: 'center' }}>
                   <MapPin size={34} color="var(--white)" />
                 </div>
               )}

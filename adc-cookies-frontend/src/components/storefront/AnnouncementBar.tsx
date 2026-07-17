@@ -1,22 +1,26 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { getPromoProduct } from '@/lib/api';
+import { getPromoProduct, getAnnouncement } from '@/lib/api';
 
-// Slim top ribbon — rotates between the veg promise, the offer and the login/track-order nudge.
+// Slim top ribbon — rotates between the veg promise and the login/track-order nudge. The offer
+// line is admin-controlled (see AdminDashboard "Header banner offer") so it only ever advertises
+// a real, currently-active discount — never a hardcoded code that doesn't work at checkout.
 const MESSAGES = [
   '🌱 100% Pure Veg · All our cookies are eggless',
-  'Get 20% off your first order — use code FRESH20',
   'Log in to save favourites & track your orders',
 ];
 
 export default function AnnouncementBar() {
   const [i, setI] = useState(0);
-  // Trending product headlines the rotation (was the home popup; now just a ribbon line).
+  // Trending product + the admin's current offer text both prepend onto the base rotation.
   const [messages, setMessages] = useState<string[]>(MESSAGES);
 
   useEffect(() => {
     getPromoProduct()
-      .then(p => { if (p?.name) setMessages([`🔥 Trending now: ${p.name} — freshly baked, order today`, ...MESSAGES]); })
+      .then(p => { if (p?.name) setMessages(m => [`🔥 Trending now: ${p.name} — freshly baked, order today`, ...m]); })
+      .catch(() => {});
+    getAnnouncement()
+      .then(a => { if (a?.text) setMessages(m => [a.text as string, ...m]); })
       .catch(() => {});
   }, []);
 

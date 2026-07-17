@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import {
   adminDashboard, adminAnalytics, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
-  adminGetSettings, adminSetPromoProduct,
+  adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
   adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
@@ -85,6 +85,8 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
   const [promoProductId, setPromoProductId] = useState<number | null>(null);
+  const [headerOffer, setHeaderOffer] = useState('');
+  const [headerOfferSaved, setHeaderOfferSaved] = useState(false);
   const [coupons, setCoupons] = useState<AdminCoupon[] | null>(null);
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [messages, setMessages] = useState<AdminMessage[] | null>(null);
@@ -137,7 +139,7 @@ export default function AdminDashboard() {
   const isAdmin = !!user && user.role === 'ADMIN';
 
   useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
-  useEffect(() => { if (isAdmin) adminGetSettings().then(s => setPromoProductId(s.promoProductId)).catch(() => {}); }, [isAdmin]);
+  useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); }).catch(() => {}); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminAnalytics(range.from, range.to).then(setAnalytics).catch(() => {}); }, [isAdmin, range.from, range.to]);
 
   // Lazy-load each tab's data the first time it's opened.
@@ -432,6 +434,24 @@ export default function AdminDashboard() {
               <option value="">Default (no specific product)</option>
               {(products || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
+          </Panel>
+          <Panel title="Header banner offer">
+            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>Free text shown in the rotating banner at the very top of every page. Only put a real, currently-active coupon code here — leave blank to hide this line entirely (the veg/login lines keep rotating either way).</p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <input
+                value={headerOffer}
+                onChange={e => { setHeaderOffer(e.target.value); setHeaderOfferSaved(false); }}
+                placeholder="e.g. Get 5% off with code SAVE5"
+                style={{ ...inp, flex: '1 1 320px' }}
+              />
+              <button
+                onClick={async () => {
+                  await adminSetHeaderOffer(headerOffer.trim() || null).catch(err => setErr(String(err.message || err)));
+                  setHeaderOfferSaved(true);
+                }}
+                style={addBtn}
+              >{headerOfferSaved ? 'Saved ✓' : 'Save'}</button>
+            </div>
           </Panel>
           {(() => {
             const cats = Array.from(new Set((products || []).map(p => p.category))).sort();
