@@ -996,20 +996,28 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         ) : (
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={card$}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{selected?.label === 'Office' ? <Briefcase size={18} color="var(--brand-secondary)" /> : selected?.label === 'Other' ? <MapPin size={18} color="var(--brand-secondary)" /> : <Home size={18} color="var(--brand-secondary)" />}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 3 }}>Deliver to {selected?.label || 'Home'}</div>
-                  {selected && (
-                    <>
-                      {selected.fullName && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 600 }}>{selected.fullName}</div>}
-                      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>{[selected.addressLine1, selected.addressLine2, selected.city, selected.state, selected.pincode].filter(Boolean).join(', ')}</div>
-                      {selected.phone && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>Phone: {selected.phone}</div>}
-                    </>
-                  )}
+              {head(<MapPin size={18} color="var(--brand-secondary)" />, 'Delivery address')}
+              {selected ? (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 14px', borderRadius: 'var(--radius-card)', background: 'var(--surface-raised)', border: '1px solid var(--border-soft)' }}>
+                  <span style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}>
+                    {selected.label === 'Office' ? <Briefcase size={17} color="var(--white)" /> : selected.label === 'Other' ? <MapPin size={17} color="var(--white)" /> : <Home size={17} color="var(--white)" />}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{selected.label || 'Home'}</span>
+                      {selected.fullName && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600 }}>· {selected.fullName}</span>}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>{[selected.addressLine1, selected.addressLine2, selected.city, selected.state, selected.pincode].filter(Boolean).join(', ')}</div>
+                    {selected.phone && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 4 }}>Phone: {selected.phone}</div>}
+                  </div>
+                  <button onClick={() => router.push('/checkout')} style={{ border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', flex: 'none' }}>Change</button>
                 </div>
-                <button onClick={() => router.push('/checkout')} style={{ border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', flex: 'none' }}>Change</button>
-              </div>
+              ) : (
+                <button onClick={() => router.push('/checkout')} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                  <MapPin size={17} color="var(--brand-secondary)" />
+                  <span style={{ fontWeight: 700, color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Add a delivery address</span>
+                </button>
+              )}
             </div>
 
             <div style={card$}>
