@@ -11,6 +11,8 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   profileLoaded: boolean;  // true once the authoritative /me profile has loaded (or there's no user)
+  authModalOpen: boolean;          // true while a LoginModal instance is open anywhere in the app
+  setAuthModalOpen: (open: boolean) => void;
   login: (email: string, password: string) => Promise<string>;            // returns role
   register: (name: string, email: string, phone: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
@@ -38,6 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  // While any LoginModal is open, ProfileGate stays quiet — the OTP path already runs its own
+  // mandatory name+email step in the same popup, so ProfileGate popping up at the same time
+  // (it reacts to the same user/profileLoaded change) looked like two stacked, fighting popups.
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   // Instant user straight from the Supabase session (no network) so the UI reflects login
   // immediately. We never block the logged-in state on a backend round-trip.
@@ -49,7 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // overwrite the real backend name in mergeSessionUser on every token refresh/tab refocus —
     // which made ProfileGate think the name was missing and pop up again and again. Leaving it
     // empty lets `next.name || prev.name` keep the good name we already have.
-    const name = meta.full_name || meta.name || (email ? email.split('@')[0] : '');
+    // Same issue with the literal 'Guest' placeholder a brand-new phone signup starts with: the
+    // JWT keeps carrying it until the token naturally refreshes (up to ~1h) even after the real
+    // name is saved — treat it as empty too so it can't clobber the saved name via that `||`.
+    const rawName = meta.full_name || meta.name || '';
+    const name = rawName.toLowerCase() === 'guest' ? '' : rawName || (email ? email.split('@')[0] : '');
     return { name, email, role: 'CUSTOMER', initials: initialsOf(name), phone: meta.phone };
   };
 
@@ -179,7 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, profileLoaded, login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
+    <AuthContext.Provider value={{ user, loading, profileLoaded, authModalOpen, setAuthModalOpen, login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

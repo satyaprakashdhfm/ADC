@@ -7,5 +7,10 @@
 export const EMAIL_RE = /^(?=[^\s@]*[a-zA-Z])[^\s@]{2,}@[^\s@]+\.[a-zA-Z]{2,}$/;
 export const MIN_NAME_LEN = 5;
 
-export const isValidName = (name: string | null | undefined) => (name || '').trim().length >= MIN_NAME_LEN;
+// 'guest' is the placeholder name new phone-OTP accounts start with — it's 5 characters, so the
+// length check alone lets it slip through as "valid" and silently skip asking for a real name.
+export const isValidName = (name: string | null | undefined) => {
+  const n = (name || '').trim();
+  return n.length >= MIN_NAME_LEN && n.toLowerCase() !== 'guest';
+};
 export const isValidEmail = (email: string | null | undefined) => EMAIL_RE.test((email || '').trim());

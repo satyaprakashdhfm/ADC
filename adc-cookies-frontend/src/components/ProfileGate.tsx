@@ -12,7 +12,7 @@ import { isValidName, isValidEmail } from '@/lib/profileValidation';
  * ask, so this simply stays quiet for them.
  */
 export default function ProfileGate() {
-  const { user, loading, profileLoaded, updateProfile } = useAuth();
+  const { user, loading, profileLoaded, authModalOpen, updateProfile } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -23,11 +23,15 @@ export default function ProfileGate() {
   useEffect(() => {
     // Wait for the authoritative /me profile before deciding — the instant session-metadata
     // user often lacks the phone/email, and acting on it made the prompt flash up then vanish.
-    if (loading || !profileLoaded || !user) { setNeeds(null); return; }
+    // Also stay quiet while a LoginModal is open: the phone-OTP path runs its own mandatory
+    // name+email step inside that same popup right after verifying, and `user`/`profileLoaded`
+    // update at that exact moment too — without this guard, this gate popped up underneath it
+    // at the same time asking for the same details a second time.
+    if (loading || !profileLoaded || !user || authModalOpen) { setNeeds(null); return; }
     const need = { name: !isValidName(user.name), email: !isValidEmail(user.email), phone: !user.phone };
     setNeeds(need.name || need.email || need.phone ? need : null);
     setName(''); setEmail(''); setPhone(''); setErr('');
-  }, [user, loading, profileLoaded]);
+  }, [user, loading, profileLoaded, authModalOpen]);
 
   if (!needs || !user) return null;
 

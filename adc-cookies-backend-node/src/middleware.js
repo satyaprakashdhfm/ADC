@@ -94,7 +94,7 @@ async function syncUser({ email, phone, name }) {
         `INSERT INTO users (name, email, phone, password, role, created_at, updated_at)
          VALUES ($1, NULL, $2, 'otp-auth', $3, $4, $4)
          ON CONFLICT (phone) DO UPDATE SET updated_at = $4 RETURNING *`,
-        [name || 'Guest', phone, admin ? 'ADMIN' : 'CUSTOMER', ts]
+        [name || '', phone, admin ? 'ADMIN' : 'CUSTOMER', ts]
       );
     } else if (admin && user.role !== 'ADMIN') {
       user = await getOne('UPDATE users SET role = $2, updated_at = $3 WHERE id = $1 RETURNING *', [user.id, 'ADMIN', nowIso()]);
@@ -117,7 +117,7 @@ export async function parseAuth(req, _res, next) {
       // A synthetic phone-login email is NOT a real email — drop it so the phone branch handles it.
       const email = SYNTHETIC_EMAIL.test(rawEmail) ? '' : rawEmail;
       if (email || phone) {
-        const name = meta.full_name || meta.name || (email ? email.split('@')[0] : 'Guest');
+        const name = meta.full_name || meta.name || (email ? email.split('@')[0] : '');
         const user = await syncUser({ email, phone, name });
         if (user) req.user = { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone };
       }

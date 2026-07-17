@@ -229,7 +229,7 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
     const { error } = await admin.auth.admin.createUser({
       email, phone: phone.e164, password,
       email_confirm: true, phone_confirm: true,
-      user_metadata: { phone: phone.digits, full_name: name || 'Guest' },
+      user_metadata: { phone: phone.digits, full_name: name || '' },
     });
     if (error) {
       // Most likely already exists — recover the id and reset the password.

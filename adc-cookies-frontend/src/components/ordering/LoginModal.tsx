@@ -53,7 +53,7 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   const [otpError, setOtpError] = useState('');
   const [resendIn, setResendIn] = useState(0); // seconds until "Resend OTP" re-enables
   const [resetSent, setResetSent] = useState(false);
-  const { login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile } = useAuth();
+  const { login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile, setAuthModalOpen } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -63,6 +63,14 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
       setResetSent(false);
     }
   }, [open]);
+
+  // Tells ProfileGate (a separate, globally-mounted component) to stay quiet while this modal is
+  // open — otherwise it can pop up at the same time as this modal's own mandatory name+email step
+  // (both react to the same user/profileLoaded change right after OTP verification), looking like
+  // two stacked popups fighting over the same job.
+  useEffect(() => {
+    if (open) { setAuthModalOpen(true); return () => setAuthModalOpen(false); }
+  }, [open, setAuthModalOpen]);
 
   // Resend countdown — ticks down to 0, then "Resend OTP" becomes tappable again.
   useEffect(() => {

@@ -276,39 +276,52 @@ router.post('/claim-spin', requireAuth, couponLimiter, async (req, res) => {
   const nowMs = Date.now();
   const nowIsoStr = new Date(nowMs).toISOString();
 
-  const existing = await getOne(
-    `SELECT sc.*, c.discount_type, c.discount_value, c.minimum_order_amount, c.maximum_discount, c.terms
-     FROM spin_claims sc JOIN coupons c ON c.id = sc.coupon_id
-     WHERE sc.user_id = $1 AND sc.expires_at > $2 ORDER BY sc.id DESC LIMIT 1`,
-    [req.user.id, nowIsoStr]
-  );
-  if (existing) return res.json(serializeClaim(existing, existing));
+  // Locked per-user for the whole check-then-insert: the frontend can legitimately fire this
+  // twice in quick succession right after login (the auth state updates a couple of times in a
+  // row, each re-triggering the pending-claim resolver), and without serializing here both calls
+  // can see "no existing claim" before either commits, inserting two spin_claims rows for the
+  // same win. The advisory lock makes the second call wait for the first to finish and commit,
+  // so it then correctly finds and replays the first one's row instead of inserting again.
+  const result = await withTransaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock($1)', [req.user.id]);
 
-  const coupon = await getOne(
-    'SELECT * FROM coupons WHERE code = $1 AND is_active = TRUE AND spin_weight IS NOT NULL',
-    [String(code || '').toUpperCase()]
-  );
-  if (!coupon) throw new ApiError('This reward is no longer available.');
-
-  // The Mystery Cookie Gift is a surprise picked ONCE, right now — a random cookie priced at or
-  // under this coupon's cap, so it's always genuinely free, never a partial discount. Storing it
-  // on the claim (rather than re-rolling on every preview/checkout call) keeps it consistent.
-  let giftProductId = null;
-  if (coupon.gift_kind === 'MYSTERY') {
-    const pick = await getOne(
-      "SELECT id FROM products WHERE category = 'COOKIES' AND is_available = TRUE AND price <= $1 ORDER BY RANDOM() LIMIT 1",
-      [coupon.maximum_discount ?? coupon.discount_value]
+    const { rows: existingRows } = await client.query(
+      `SELECT sc.*, c.discount_type, c.discount_value, c.minimum_order_amount, c.maximum_discount, c.terms
+       FROM spin_claims sc JOIN coupons c ON c.id = sc.coupon_id
+       WHERE sc.user_id = $1 AND sc.expires_at > $2 ORDER BY sc.id DESC LIMIT 1`,
+      [req.user.id, nowIsoStr]
     );
-    giftProductId = pick?.id ?? null;
-  }
+    if (existingRows[0]) return { row: existingRows[0], coupon: existingRows[0], isNew: false };
 
-  const expiresAt = new Date(nowMs + CLAIM_WINDOW_HOURS * 3600_000).toISOString();
-  const row = await getOne(
-    `INSERT INTO spin_claims (user_id, coupon_id, code, label, claimed_at, expires_at, gift_product_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [req.user.id, coupon.id, coupon.code, coupon.spin_label || coupon.code, nowIsoStr, expiresAt, giftProductId]
-  );
-  res.status(201).json(serializeClaim(row, coupon));
+    const { rows: couponRows } = await client.query(
+      'SELECT * FROM coupons WHERE code = $1 AND is_active = TRUE AND spin_weight IS NOT NULL',
+      [String(code || '').toUpperCase()]
+    );
+    const coupon = couponRows[0];
+    if (!coupon) throw new ApiError('This reward is no longer available.');
+
+    // The Mystery Cookie Gift is a surprise picked ONCE, right now — a random cookie priced at or
+    // under this coupon's cap, so it's always genuinely free, never a partial discount. Storing
+    // it on the claim (rather than re-rolling on every preview/checkout call) keeps it consistent.
+    let giftProductId = null;
+    if (coupon.gift_kind === 'MYSTERY') {
+      const { rows: pickRows } = await client.query(
+        "SELECT id FROM products WHERE category = 'COOKIES' AND is_available = TRUE AND price <= $1 ORDER BY RANDOM() LIMIT 1",
+        [coupon.maximum_discount ?? coupon.discount_value]
+      );
+      giftProductId = pickRows[0]?.id ?? null;
+    }
+
+    const expiresAt = new Date(nowMs + CLAIM_WINDOW_HOURS * 3600_000).toISOString();
+    const { rows: inserted } = await client.query(
+      `INSERT INTO spin_claims (user_id, coupon_id, code, label, claimed_at, expires_at, gift_product_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.id, coupon.id, coupon.code, coupon.spin_label || coupon.code, nowIsoStr, expiresAt, giftProductId]
+    );
+    return { row: inserted[0], coupon, isNew: true };
+  });
+
+  res.status(result.isNew ? 201 : 200).json(serializeClaim(result.row, result.coupon));
 });
 
 export default router;
