@@ -513,7 +513,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   }, [chosen?.pincode]);
 
   const lines = Object.values(cart);
-  const delivery = total > 0 ? 100 : 0;                              // flat ₹100 per order
+  // Intra-city (a store-zone pincode → same-day) ships FREE; everywhere else is a flat ₹100.
+  const intracity = !!(delivCheck && delivCheck.serviceable && delivCheck.intracity);
+  const delivery = total > 0 ? (intracity ? 0 : 100) : 0;
   const gstIncl = total > 0 ? Math.round(total - total / 1.05) : 0;  // 5% GST is already inside the prices
   const giftFee = gift ? GIFT_FEE : 0;
   const grand = total + delivery + giftFee - discount;               // GST included in `total`, not added on top
@@ -718,7 +720,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>{icon}<span style={{ font: 'var(--weight-bold) var(--text-base)/1 var(--font-body)', color: 'var(--text-strong)' }}>{label}</span></div>
   );
 
-  if (done) return <OrderSuccessPage show total={paid} orderId={orderId} onBackToMenu={() => router.push('/order')} onViewOrder={() => router.push('/account')} />;
+  // Honest arrival line for the success screen — same-day for intra-city, a real date for courier, else generic.
+  const successEta = intracity ? 'Arriving today' : deliverBy ? `Arriving ${fmtDay(deliverBy)}` : 'On its way — we’ll email tracking updates';
+  if (done) return <OrderSuccessPage show total={paid} orderId={orderId} eta={successEta} onBackToMenu={() => router.push('/')} onViewOrder={() => router.push('/account')} />;
 
   if (placing) return (
     <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32, textAlign: 'center' }}>
@@ -770,7 +774,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           <span>₹{total}</span>
         </div>
         {gift && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>Gift wrap</span><span>₹{giftFee}</span></div>}
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>Delivery fee</span><span>₹{delivery}</span></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+          <span>Delivery fee</span>
+          {intracity
+            ? <span style={{ display: 'inline-flex', gap: 7, alignItems: 'baseline' }}><span style={{ textDecoration: 'line-through', color: 'var(--text-subtle)' }}>₹100</span><span style={{ color: 'var(--green-success)', fontWeight: 800 }}>FREE</span></span>
+            : <span>₹{delivery}</span>}
+        </div>
         {applied && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--green-success)', fontWeight: 700 }}><span>Coupon ({coupon})</span><span>−₹{discount}</span></div>}
         <Dash />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}><span>To pay</span><span>₹{grand}</span></div>
@@ -1052,7 +1061,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 }
 
 /* ---- Order Success Page ---- */
-function OrderSuccessPage({ show, total, orderId, onBackToMenu, onViewOrder }: { show: boolean; total: number; orderId: string; onBackToMenu: () => void; onViewOrder: () => void }) {
+function OrderSuccessPage({ show, total, orderId, eta, onBackToMenu, onViewOrder }: { show: boolean; total: number; orderId: string; eta: string; onBackToMenu: () => void; onViewOrder: () => void }) {
   const steps = [
     { icon: <Check size={18} />, label: 'Placed', done: true },
     { icon: <span style={{ fontSize: 14 }}>🧑‍🍳</span>, label: 'Baking', done: false },
@@ -1072,8 +1081,8 @@ function OrderSuccessPage({ show, total, orderId, onBackToMenu, onViewOrder }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 24px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)', marginBottom: 36 }}>
           <Bike size={22} color="var(--brand-secondary)" />
           <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}>Arriving in ~30 min</div>
-            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Estimated delivery time</div>
+            <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}>{eta}</div>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Freshly baked to order</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, marginBottom: 16 }}>

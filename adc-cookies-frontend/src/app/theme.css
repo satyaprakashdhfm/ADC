@@ -50,7 +50,7 @@
   --peach-400: #FFB76B;       /* announcement ribbon / accents */
   --peach-300: #FFCD90;       /* section bands (peach) */
   --peach-100: #FFF4DF;       /* page background / lightest sections */
-  --navbar-bg: var(--peach-500); /* dark navbar band */
+  --navbar-bg: #F2953C; /* navbar band — a touch darker/warmer than --peach-500 for a bit more contrast */
 
   --gold: var(--peach-100);   /* CREAM (#FFF4DF) bands — products · "Finest Ingredients" · "Get in Touch" · Order/Checkout/Account bg */
   --band-ivory: var(--peach-300); /* LIGHT-ORANGE (#FFCD90) bands — "About Us" · "Our Stores" · reviews strip (alternates with the cream --gold bands) */

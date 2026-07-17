@@ -8,7 +8,7 @@ import FloatingDock from '@/components/storefront/FloatingDock';
 
 export default function Home() {
   return (
-    <main className="adc-pattern-page" style={{ minHeight: '100vh' }}>
+    <main className="adc-pattern-page home-page" style={{ minHeight: '100vh' }}>
       <AnnouncementBar />
       <HomeHero />
       <HomeProducts />

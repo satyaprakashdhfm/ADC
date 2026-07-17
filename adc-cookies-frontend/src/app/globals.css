@@ -125,7 +125,7 @@ body::before {
   /* Warm, non-white surfaces for every page that uses this wrapper (i.e. everything
      except the home page). Cards/inputs become warm ivory, headers a soft amber wash,
      and the page itself sits a touch darker behind the products. */
-  --surface-card: var(--vanilla);          /* cards — vanilla cream (product/ingredient/store/form cards) */
+  --surface-card: var(--peach-300);        /* cards — light orange (#FFCD90) on the cream page background */
   --surface-raised: var(--vanilla-raised);  /* inputs/chips inside cards — a notch darker than the card so fields stand out */
   --surface-glass: var(--cream-bg);         /* header/nav band — very light warm (not pure white) */
 }
@@ -146,7 +146,11 @@ body::before {
 
 /* Order / checkout / account pages — mirror the "Finest Ingredients" look: gold page
    background (--gold) with lighter vanilla cards (--vanilla) on top. */
-.order-cards { background: var(--gold); --surface-card: var(--vanilla); }
+.order-cards { background: var(--gold); --surface-card: var(--peach-300); }
+
+/* Home page keeps its ORIGINAL warm-beige cards (--vanilla) — the FFCD90 card colour above
+   is only for the inner/checkout pages. (Home <main> also carries .adc-pattern-page.) */
+.home-page { --surface-card: var(--vanilla); }
 
 /* Animations */
 @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-18px)} }

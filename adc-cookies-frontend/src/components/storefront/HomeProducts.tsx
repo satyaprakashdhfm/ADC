@@ -85,6 +85,16 @@ export default function HomeProducts() {
     return () => clearTimeout(t);
   }, []);
 
+  // Nav category deep-link (/order?cat=cookies|tins|corporate → redirects here): scroll to that section.
+  useEffect(() => {
+    const cat = new URLSearchParams(window.location.search).get('cat');
+    if (!cat) return;
+    const id = cat === 'tins' ? 'tins-section' : cat === 'corporate' ? 'corporate-section' : 'products';
+    const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+    try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignore */ }
+    return () => clearTimeout(t);
+  }, []);
+
   // Selecting/searching a product floats it to the top but KEEPS every other cookie visible.
   const ql = q.trim().toLowerCase();
   const cookies = products
@@ -94,7 +104,7 @@ export default function HomeProducts() {
 
   return (
     <section ref={sectionRef} id="products" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter)' }}>
+      <div style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter)' }}>
         <div style={{ textAlign: 'center', marginBottom: 'clamp(6px,1.5vw,14px)' }}>
           <p style={eyebrow}>Order online</p>
           <h2 style={{ font: '900 clamp(1.7rem,1.2rem + 2vw,2.6rem)/1 var(--font-display)', letterSpacing: '-.02em', color: 'var(--text-strong)', margin: '0 0 10px' }}>Fresh from the oven</h2>
@@ -113,16 +123,17 @@ export default function HomeProducts() {
 
         {/* Cookie Tins */}
         {tins.length > 0 && (
-          <>
+          <div id="tins-section" style={{ scrollMarginTop: 90 }}>
             <SubHead icon={<Gift size={19} />} title="Cookie Tins" />
             <div className="home-products-grid" style={gridStyle}>
               {tins.map(p => <ProductCard key={p.id} p={p} />)}
             </div>
-          </>
+          </div>
         )}
 
         {/* Corporate & bulk gifting — last, as a wide card */}
         <button
+          id="corporate-section"
           onClick={() => router.push('/contact')}
           style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: 'var(--surface-inverse)', color: 'var(--cream-100)', padding: 'clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
         >

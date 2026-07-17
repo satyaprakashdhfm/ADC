@@ -83,7 +83,8 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
   // Nav dropdown data: cookie/tin products (fetched) and store locations.
   const [products, setProducts] = useState<Product[]>([]);
   useEffect(() => { getProducts().then(ps => setProducts(ps || [])).catch(() => {}); }, []);
-  const toMenu = (cat: 'COOKIES' | 'TINS') => products.filter(p => p.category === cat && p.isAvailable).map(p => ({ label: p.name, href: `/order?q=${encodeURIComponent(p.name)}` }));
+  // Cookies deep-link to that cookie (floats it to the top); tins all jump to the Cookie Tins section.
+  const toMenu = (cat: 'COOKIES' | 'TINS') => products.filter(p => p.category === cat && p.isAvailable).map(p => ({ label: p.name, href: cat === 'TINS' ? '/order?cat=tins' : `/order?q=${encodeURIComponent(p.name)}` }));
   const menuFor = (key?: NavLink['menuKey']) =>
     key === 'cookies' ? toMenu('COOKIES')
       : key === 'tins' ? toMenu('TINS')
@@ -115,7 +116,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
         <nav className="home-nav--desktop">
           <div style={{ maxWidth: 1680, margin: '0 auto', padding: '10px var(--gutter) 6px', display: 'flex', alignItems: 'center', gap: 'clamp(16px,2vw,32px)' }}>
             <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
-              <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 62, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }} />
+              <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 84, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }} />
             </a>
             <form onSubmit={onSearch} role="search" style={{ flex: 1, maxWidth: 640, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream-bg)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '6px 6px 6px 18px', boxShadow: 'var(--shadow-xs)' }}>
               <Search size={18} color="var(--text-muted)" style={{ flex: 'none' }} />
