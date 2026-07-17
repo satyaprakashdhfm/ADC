@@ -167,10 +167,6 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     : result?.win ? result : null;
   const guestWinNeedsLogin = !!result?.win && !user;
 
-  useEffect(() => {
-    if (open && guestWinNeedsLogin) setLoginOpen(true);
-  }, [open, guestWinNeedsLogin]);
-
   const spin = async () => {
     if (spinning || result || activeReward || !prizes) return;
     setSpinning(true);
@@ -204,10 +200,11 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           setActiveReward({ code: claimed.code, label: claimed.label, discountType: claimed.discountType, discountValue: claimed.discountValue, minimumOrderAmount: claimed.minimumOrderAmount, maximumDiscount: claimed.maximumDiscount, terms: claimed.terms, isGift: claimed.isGift, expiresAtMs: new Date(claimed.expiresAt).getTime(), claimed: true });
         } catch { /* leave the result showing even if the claim call failed — they can retry via login prompt */ }
       } else {
+        // Save the win and show it locked behind "Log in to claim" — the login popup itself only
+        // opens when they tap that button, not automatically the moment the wheel stops.
         const pending: ActiveReward = { code: p.code, label: p.label, discountType: p.discountType, discountValue: p.discountValue, minimumOrderAmount: p.minimumOrderAmount, maximumDiscount: p.maximumDiscount, terms: p.terms, isGift: p.isGift, expiresAtMs, claimed: false };
         savePending(pending);
         setActiveReward(pending);
-        setLoginOpen(true);
       }
     }, 4300);
   };
