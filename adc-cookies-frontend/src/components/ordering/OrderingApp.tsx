@@ -461,6 +461,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [detectErr, setDetectErr] = useState('');
   const [placing, setPlacing] = useState(false);
   const [payError, setPayError] = useState('');
+  const [payFailMsg, setPayFailMsg] = useState(''); // shown on the review step after a failed payment redirect
   const [done, setDone] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [paid, setPaid] = useState(0);
@@ -487,6 +488,17 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   // hydration mismatch on first render. Guests are prompted to log in inline / on Pay — no auto-popup.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => { setHydrated(true); }, []);
+
+  // A failed payment bounces back here (/checkout?payment=failed) — surface why, then clean the URL
+  // so a refresh doesn't keep showing it.
+  useEffect(() => {
+    if (step !== 'review' || typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('payment') !== 'failed') return;
+    let msg = 'Your payment didn’t go through — no money was taken. Please review and try again.';
+    try { const s = sessionStorage.getItem('adc_pay_error'); if (s) msg = s; sessionStorage.removeItem('adc_pay_error'); } catch {}
+    setPayFailMsg(msg);
+    window.history.replaceState(null, '', '/checkout');
+  }, [step]);
 
   // Real serviceability + TAT from Delhivery when the selected address pincode changes.
   const chosen = addresses.find(a => a.id === addr);
@@ -596,17 +608,22 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     );
   };
 
+  // Coupons are validated on the backend right here at apply-time — so an invalid code is caught
+  // now, not later at payment. Only genuinely valid, active codes ever set `applied`.
   const applyCoupon = async () => {
+    const code = coupon.trim().toUpperCase();
+    if (!code) return;
+    if (!user) { setCouponErr('Please log in to apply a coupon.'); setApplied(false); setDiscount(0); return; }
     try {
-      const result = await validateCoupon(coupon.trim().toUpperCase(), total);
+      const result = await validateCoupon(code, total);
       if (result.valid) {
         const d = result.discountType === 'PERCENTAGE' ? Math.round(total * result.discountValue / 100) : result.discountValue;
         setDiscount(Math.min(d, result.maximumDiscount || d));
         setApplied(true); setCouponErr('');
-      } else { setCouponErr(result.message || 'Invalid coupon code'); setApplied(false); }
-    } catch {
-      if (coupon.trim().toUpperCase() === 'ADC10') { setDiscount(Math.round(total * 0.1)); setApplied(true); setCouponErr(''); }
-      else { setCouponErr('Invalid code. Try ADC10'); setApplied(false); }
+      } else { setCouponErr(result.message || 'This code isn’t valid.'); setApplied(false); setDiscount(0); }
+    } catch (e) {
+      setCouponErr(e instanceof Error ? e.message : 'This code isn’t valid. Please check and try again.');
+      setApplied(false); setDiscount(0);
     }
   };
 
@@ -684,7 +701,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       });
       rzp.on('payment.failed', (resp) => {
         setPlacing(false);
-        setPayError(resp?.error?.description || 'Payment failed. Please try again.');
+        // Don't strand the shopper on the payment screen — take them back to the cart/checkout
+        // to review and retry. Carry the reason across so we can show it there.
+        try { sessionStorage.setItem('adc_pay_error', resp?.error?.description || 'Payment failed. Please try again.'); } catch {}
+        router.push('/checkout?payment=failed');
       });
       rzp.open();
     } catch (e) {
@@ -777,6 +797,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       <div className="hide-sb" style={{ flex: 1, overflowY: 'auto', padding: '24px var(--gutter) 120px' }}>
         {step === 'review' ? (
           <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {payFailMsg && (
+              <div style={{ flex: '1 1 100%', display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', background: 'var(--red-wash)', border: '1.5px solid var(--status-error)' }}>
+                <span style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--status-error)', fontWeight: 700 }}>{payFailMsg}</span>
+                <button onClick={() => setPayFailMsg('')} aria-label="Dismiss" style={{ border: 'none', background: 'transparent', color: 'var(--status-error)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><X size={16} /></button>
+              </div>
+            )}
             <div style={{ flex: '1 1 340px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
               {orderSummary}
             </div>
@@ -945,7 +971,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       <button onClick={applyCoupon} disabled={!coupon.trim()} style={{ padding: '13px 20px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Apply</button>
                     </div>
                     {couponErr && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--status-error)', marginTop: 6 }}>{couponErr}</div>}
-                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 6, fontWeight: 600 }}>Try: ADC10 for 10% off</div>
+                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 6, fontWeight: 600 }}>Have a coupon or a Spin &amp; Win code? Enter it above.</div>
                   </div>
                 )}
               </div>

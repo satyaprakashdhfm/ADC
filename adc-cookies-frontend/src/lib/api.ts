@@ -154,6 +154,16 @@ export async function validateCoupon(code: string, orderAmount: number): Promise
   return request(`/coupons/validate?code=${encodeURIComponent(code)}&orderAmount=${orderAmount}`);
 }
 
+// Active, currently-usable coupons (admin-controlled) — used by the Spin & Win wheel so it only
+// ever hands out real codes that work at checkout. Empty array = no active offers right now.
+export interface ActiveCoupon {
+  code: string; discountType: string; discountValue: number;
+  minimumOrderAmount?: number | null; label: string;
+}
+export async function getActiveCoupons(): Promise<ActiveCoupon[]> {
+  return request('/coupons/active');
+}
+
 /* ---- Orders ---- */
 export interface OrderPayment { provider: string; transactionId: string | null; status: string; paidAt: string | null; }
 

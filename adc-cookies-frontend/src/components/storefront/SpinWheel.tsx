@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
+import { getActiveCoupons, type ActiveCoupon } from '@/lib/api';
 import { INSTAGRAM_URL, FACEBOOK_URL, whatsappLink } from '@/lib/site';
 
 // lucide in this build has no Instagram/Facebook glyphs — use inline brand SVGs (as the footer does).
@@ -13,25 +14,33 @@ const FbIcon = () => (<svg width={18} height={18} viewBox="0 0 24 24" fill="curr
 
 interface Prize { label: string; code: string; win: boolean }
 
-// Wheel prizes — mostly wins, one "next time" so it's not obviously rigged.
-const PRIZES: Prize[] = [
-  { label: '10% OFF', code: 'SPIN10', win: true },
-  { label: 'Free cookie', code: 'FREEBITE', win: true },
-  { label: '15% OFF', code: 'SPIN15', win: true },
-  { label: '5% OFF', code: 'SPIN5', win: true },
-  { label: '20% OFF', code: 'SPIN20', win: true },
-  { label: 'Next time!', code: '', win: false },
-  { label: '10% OFF', code: 'SPIN10', win: true },
-  { label: '5% OFF', code: 'SPIN5', win: true },
+// Decorative wheel shown before offers load / before login — purely visual (you can't spin yet).
+const DECOR_PRIZES: Prize[] = [
+  { label: '🎁', code: '', win: false }, { label: 'WIN', code: '', win: false },
+  { label: '🍪', code: '', win: false }, { label: 'OFFER', code: '', win: false },
+  { label: '⭐', code: '', win: false }, { label: 'ADC', code: '', win: false },
 ];
-const N = PRIZES.length;
-const SEG = 360 / N;
+
+// Build the real wheel from the admin's ACTIVE coupons, so every code the wheel gives out
+// actually works at checkout. No active offers → a full wheel of "better luck next time".
+// 1+ offers → cycle the real codes through the wedges with one honest "Next time!".
+function buildPrizes(coupons: ActiveCoupon[]): Prize[] {
+  if (!coupons.length) return Array.from({ length: 6 }, () => ({ label: 'Better luck next time!', code: '', win: false }));
+  const wins: Prize[] = coupons.map(c => ({ label: c.label, code: c.code, win: true }));
+  const slots = 6;
+  const prizes: Prize[] = Array.from({ length: slots }, (_, i) => wins[i % wins.length]);
+  prizes[slots - 1] = { label: 'Next time!', code: '', win: false };
+  return prizes;
+}
 
 // Alternating brand wedges — amber / orange, straight from the theme.
-const WHEEL_BG = `conic-gradient(${PRIZES.map((_, i) => {
-  const c = i % 2 === 0 ? 'var(--amber-400)' : 'var(--orange-500)';
-  return `${c} ${i * SEG}deg ${(i + 1) * SEG}deg`;
-}).join(',')})`;
+const wheelBg = (prizes: Prize[]) => {
+  const seg = 360 / prizes.length;
+  return `conic-gradient(${prizes.map((_, i) => {
+    const c = i % 2 === 0 ? 'var(--amber-400)' : 'var(--orange-500)';
+    return `${c} ${i * seg}deg ${(i + 1) * seg}deg`;
+  }).join(',')})`;
+};
 
 export default function SpinWheel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -41,20 +50,39 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<Prize | null>(null);
   const [copied, setCopied] = useState(false);
+  const [prizes, setPrizes] = useState<Prize[] | null>(null); // null until the admin's active coupons load
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
+  // Once the modal is open and the shopper is logged in, pull the admin's live offers.
+  // Empty / error → treat as "no active offers" (wheel becomes all "better luck next time").
+  useEffect(() => {
+    if (!open || !user || prizes !== null) return;
+    let cancelled = false;
+    getActiveCoupons()
+      .then(cs => { if (!cancelled) setPrizes(buildPrizes(cs)); })
+      .catch(() => { if (!cancelled) setPrizes(buildPrizes([])); });
+    return () => { cancelled = true; };
+  }, [open, user, prizes]);
+
+  const displayPrizes = prizes ?? DECOR_PRIZES;
+  const N = displayPrizes.length;
+  const SEG = 360 / N;
+  const WHEEL_BG = wheelBg(displayPrizes);
+  const offersLoaded = prizes !== null;
+  const hasOffers = (prizes || []).some(p => p.win);
+
   const close = onClose;
 
   const spin = () => {
-    if (spinning || result) return;
+    if (spinning || result || !prizes) return;
     setSpinning(true);
-    const idx = Math.floor(Math.random() * N);
+    const idx = Math.floor(Math.random() * prizes.length);
     // Bring segment idx's centre under the top pointer, after 5 full turns.
     const target = 360 * 5 - (idx * SEG + SEG / 2);
     setRot(target);
-    timer.current = setTimeout(() => { setResult(PRIZES[idx]); setSpinning(false); }, 4300);
+    timer.current = setTimeout(() => { setResult(prizes[idx]); setSpinning(false); }, 4300);
   };
 
   const copyCode = async () => {
@@ -92,7 +120,9 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 auto 16px', maxWidth: 300, lineHeight: 1.5 }}>
             {result
               ? (result.win ? 'Here’s your exclusive discount — use it at checkout.' : 'No prize this time, but treats are always fresh. Order away!')
-              : 'Give the wheel a spin for an exclusive discount on your first order.'}
+              : (offersLoaded && !hasOffers)
+                ? 'No live offers right now — check back soon for fresh treats!'
+                : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
           </p>
 
           {/* Wheel */}
@@ -105,7 +135,7 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
               border: '7px solid var(--white)', boxShadow: '0 12px 30px var(--espresso-30), inset 0 0 0 2px var(--amber-600)',
               transform: `rotate(${rot}deg)`, transition: 'transform 4.2s cubic-bezier(.15,.86,.24,1)',
             }}>
-              {PRIZES.map((p, i) => (
+              {displayPrizes.map((p, i) => (
                 <div key={i} style={{ position: 'absolute', inset: 0, transform: `rotate(${i * SEG + SEG / 2}deg)` }}>
                   <span style={{ position: 'absolute', top: '9%', left: '50%', transform: 'translateX(-50%)', width: 66, textAlign: 'center', fontSize: 11, fontWeight: 800, lineHeight: 1.1, color: 'var(--white)', textShadow: '0 1px 2px var(--black-45)', fontFamily: 'var(--font-body)' }}>{p.label}</span>
                 </div>
@@ -127,15 +157,15 @@ export default function SpinWheel({ open, onClose }: { open: boolean; onClose: (
                   {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
                 </button>
               )}
-              <button onClick={() => { close(); router.push('/order?cat=cookies'); }}
+              <button onClick={() => { close(); router.push('/'); }}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
                 Order now <ArrowRight size={18} />
               </button>
             </div>
           ) : user ? (
-            <button onClick={spin} disabled={spinning}
-              style={{ width: '100%', padding: '15px', borderRadius: 'var(--radius-button)', border: 'none', background: spinning ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-base)', letterSpacing: '.04em', cursor: spinning ? 'wait' : 'pointer', boxShadow: spinning ? 'none' : 'var(--shadow-brand)' }}>
-              {spinning ? 'Spinning…' : 'SPIN THE WHEEL'}
+            <button onClick={spin} disabled={spinning || !offersLoaded}
+              style={{ width: '100%', padding: '15px', borderRadius: 'var(--radius-button)', border: 'none', background: (spinning || !offersLoaded) ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-base)', letterSpacing: '.04em', cursor: spinning ? 'wait' : !offersLoaded ? 'default' : 'pointer', boxShadow: (spinning || !offersLoaded) ? 'none' : 'var(--shadow-brand)' }}>
+              {!offersLoaded ? 'Loading offers…' : spinning ? 'Spinning…' : 'SPIN THE WHEEL'}
             </button>
           ) : (
             <>

@@ -73,12 +73,15 @@ export default function HomeProducts() {
     return () => io.disconnect();
   }, []);
 
-  // Deep-link from old /order?q= / nav search: float the match to the top and scroll here.
+  // Deep-link from nav search / product menus (/order?q= → redirects here): float the match to the
+  // top and scroll to it. Then strip ?q= from the address bar so the home URL stays clean — the float
+  // is driven by state, so removing the param doesn't undo it.
   useEffect(() => {
     const query = new URLSearchParams(window.location.search).get('q');
     if (!query) return;
     setQ(query);
     const t = setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }), 300);
+    try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignore */ }
     return () => clearTimeout(t);
   }, []);
 

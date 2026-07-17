@@ -45,13 +45,6 @@ export default function HomeHero() {
             <button onClick={scrollToProducts} style={ctaPrimary}>Order Cookies <ArrowRight size={16} /></button>
             <button onClick={() => router.push('/about')} style={ctaGhost}>Our Story</button>
           </div>
-
-          {/* Trust line — a little more copy under the buttons */}
-          <div style={{ display: 'flex', gap: 'clamp(10px,2.2vw,20px)', justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }}>
-            {['🍪 Eggless options', '🔥 Baked to order', '🚚 Same-day delivery', '⭐ 4.9 / 5 loved'].map(t => (
-              <span key={t} style={{ fontSize: 'clamp(.7rem,.66rem + .2vw,.84rem)', fontWeight: 700, color: 'var(--text-body)', whiteSpace: 'nowrap' }}>{t}</span>
-            ))}
-          </div>
         </motion.div>
 
         {/* Scroll cue */}
