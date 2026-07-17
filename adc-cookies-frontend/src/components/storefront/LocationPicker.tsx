@@ -44,13 +44,13 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
                 const on = store?.pincode === s.pincode;
                 return (
                   <button key={s.pincode} onClick={() => { chooseStore(s); onClose(); }}
-                    style={{ display: 'flex', gap: 12, alignItems: 'center', textAlign: 'left', padding: '11px 13px', borderRadius: 'var(--radius-card)', border: `1.5px solid ${on ? 'var(--brand-secondary)' : 'var(--border-default)'}`, background: on ? 'var(--amber-50)' : 'var(--surface-card)', cursor: 'pointer' }}>
-                    <MapPin size={18} color="var(--brand-secondary)" style={{ flex: 'none' }} />
+                    style={{ display: 'flex', gap: 9, alignItems: 'center', textAlign: 'left', padding: '8px 11px', borderRadius: 'var(--radius-button)', border: `1.5px solid ${on ? 'var(--brand-secondary)' : 'var(--border-default)'}`, background: on ? 'var(--amber-50)' : 'var(--surface-card)', cursor: 'pointer' }}>
+                    <MapPin size={15} color="var(--brand-secondary)" style={{ flex: 'none' }} />
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{storeArea(s)}</span>
-                      <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.address}</span>
+                      <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', lineHeight: 1.25 }}>{storeArea(s)}</span>
+                      <span style={{ display: 'block', fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.address}</span>
                     </span>
-                    {on && <Check size={18} color="var(--brand-secondary)" style={{ flex: 'none' }} />}
+                    {on && <Check size={16} color="var(--brand-secondary)" style={{ flex: 'none' }} />}
                   </button>
                 );
               })}

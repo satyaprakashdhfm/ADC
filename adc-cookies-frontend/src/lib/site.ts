@@ -5,9 +5,10 @@ export const WHATSAPP_NUMBER = '919381502998';
 export const SITE_PHONE = '+91 93815 02998';
 export const SITE_EMAIL = 'satyaprakashreddy6789@gmail.com';
 
-// Real social profiles (launch): only Instagram + YouTube are shown site-wide.
+// Real social profiles (launch): Instagram + YouTube + LinkedIn are shown site-wide.
 export const INSTAGRAM_URL = 'https://www.instagram.com/adoughcookie?igsh=bjFwcnF1amVicXJj';
 export const YOUTUBE_URL = 'https://youtube.com/@adoughcookies?si=1oE39EYWdQIf2rKI';
+export const LINKEDIN_URL = 'https://www.linkedin.com/company/adough-cookie/';
 
 /** Build a WhatsApp deep link with an optional pre-filled message. */
 export function whatsappLink(message = "Hi a dough cookie! I'd like to order some fresh cookies.") {

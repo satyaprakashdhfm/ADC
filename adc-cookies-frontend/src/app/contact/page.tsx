@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { Mail, MapPin, Navigation, Phone, ShoppingBag } from 'lucide-react';
+import { Mail, MapPin, Phone, ShoppingBag } from 'lucide-react';
 import Footer from '@/components/storefront/Footer';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import ContactForm from '@/components/storefront/ContactForm';
+import StoreMap from '@/components/storefront/StoreMap';
 import { STORES } from '@/lib/stores';
 
 export const metadata = {
@@ -28,48 +29,29 @@ export default function ContactPage() {
       </section>
 
       <section style={{ padding: '0 var(--gutter) 96px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr minmax(320px,460px)', gap: 28, alignItems: 'start' }} className="contact-layout">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 18 }} className="store-grid">
+        <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr minmax(320px,460px)', gap: 28, alignItems: 'start' }} className="contact-layout contact-stores">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }} className="store-grid">
             {STORES.map((store) => (
-              <article key={store.name} style={{ background: 'var(--panel-86)', border: '1px solid var(--border-default)', borderRadius: 24, padding: 24, boxShadow: 'var(--shadow-sm)' }}>
-                <p style={{ fontSize: 'var(--text-sm)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>{store.city}</p>
-                <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 10 }}>{store.name}</h2>
-                <p style={{ color: 'var(--text-body)', lineHeight: 1.65, marginBottom: 16 }}>{store.address}</p>
-                <div style={{ display: 'grid', gap: 7, marginBottom: 16, color: 'var(--text-body)', fontSize: 'var(--text-sm)', lineHeight: 1.55 }}>
-                  <span>Fresh cookies and filled cookies available daily.</span>
-                  <span>Gift tins and bulk orders can be coordinated with the store team.</span>
-                  <span>Best for pickup, delivery support, and celebration boxes.</span>
+              <article key={store.name} style={{ background: 'var(--panel-86)', border: '1px solid var(--border-default)', borderRadius: 16, padding: 16, boxShadow: 'var(--shadow-sm)' }}>
+                <p style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>{store.city}</p>
+                <h2 style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', marginBottom: 6 }}>{store.name}</h2>
+                <p style={{ color: 'var(--text-body)', lineHeight: 1.5, marginBottom: 12, fontSize: 'var(--text-xs)' }}>{store.address}</p>
+                <div style={{ display: 'grid', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-xs)', marginBottom: 12 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Phone size={14} /> {store.phone}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Mail size={14} /> {store.email}</span>
                 </div>
-                <div style={{ display: 'grid', gap: 9, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)', marginBottom: 18 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Phone size={16} /> {store.phone}</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Mail size={16} /> {store.email}</span>
-                </div>
-                <Link href={store.map} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--brand-secondary)', fontWeight: 900 }}>
-                  <MapPin size={17} /> Open map
+                <Link href={store.map} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--brand-secondary)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>
+                  <MapPin size={15} /> Open map
                 </Link>
               </article>
             ))}
           </div>
 
-          <aside style={{ position: 'sticky', top: 24, background: 'var(--panel-90)', border: '1px solid var(--border-default)', borderRadius: 26, padding: 22, boxShadow: 'var(--shadow-md)' }}>
-            <h2 style={{ fontSize: 'var(--text-h3)', marginBottom: 14 }}>Find A Dough Cookie on the map</h2>
-            <div style={{ borderRadius: 22, overflow: 'hidden', border: '1px solid var(--border-default)', background: 'var(--surface-sunken)', boxShadow: 'var(--shadow-sm)' }}>
-              <iframe
-                title="A Dough Cookie store locations map"
-                src="https://www.google.com/maps?q=Indiranagar%20Bengaluru%20Bandra%20Mumbai%20Connaught%20Place%20Delhi%20Jubilee%20Hills%20Hyderabad&output=embed"
-                width="100%"
-                height="430"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                style={{ display: 'block', border: 0 }}
-              />
-            </div>
-            <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
-              {STORES.map((store) => (
-                <Link key={store.name} href={store.map} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-strong)', fontWeight: 800 }}>
-                  <Navigation size={16} color="var(--brand-secondary)" /> Directions to {store.city}
-                </Link>
-              ))}
+          <aside style={{ position: 'sticky', top: 24, background: 'var(--panel-90)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 16, boxShadow: 'var(--shadow-md)' }}>
+            <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 12 }}>Find A Dough Cookie on the map</h2>
+            {/* Real interactive map of our 4 stores (Bengaluru ×3 + Chennai) — no wrong pins, no API key */}
+            <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border-default)', minHeight: 360 }}>
+              <StoreMap />
             </div>
           </aside>
         </div>

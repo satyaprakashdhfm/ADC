@@ -4,7 +4,7 @@ import Image from 'next/image';
 
 // Brand video for the About section.
 const VIDEO_ID = 'rEdl2Uetpvo';
-const DEFAULT_POSTER = '/assets/cookies_new_images/cookie-sundae.jpeg';
+const DEFAULT_POSTER = '/assets/cookies_new_images/adc-special.jpeg';
 
 /**
  * About-Us video: shows a poster with a play button, then swaps in the YouTube
@@ -25,6 +25,7 @@ export default function AboutVideo({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
+  const [ready, setReady] = useState(false); // fade the iframe in only after it has had time to paint a frame
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -41,28 +42,41 @@ export default function AboutVideo({
     return () => io.disconnect();
   }, []);
 
+  // Keep the poster showing over the iframe until YouTube has had ~1.2s to render a real frame,
+  // so the section never flashes YouTube's black buffer when it scrolls into view.
+  useEffect(() => {
+    if (!active) { setReady(false); return; }
+    const t = setTimeout(() => setReady(true), 1200);
+    return () => clearTimeout(t);
+  }, [active]);
+
   const src =
     `https://www.youtube-nocookie.com/embed/${VIDEO_ID}` +
     `?autoplay=1&mute=1&controls=1&rel=0&playsinline=1&loop=1&playlist=${VIDEO_ID}&modestbranding=1&start=2`;
 
   return (
     <div ref={wrapRef} style={{ position: 'relative', overflow: 'hidden', background: 'var(--ink-900)', ...style }}>
-      {active ? (
+      {/* Poster is ALWAYS the base layer, so the box shows a real cookie photo immediately — never
+          YouTube's black buffer frame. The iframe fades in on top only once it has painted. */}
+      <Image src={poster} alt={alt} fill sizes={sizes} priority style={{ objectFit: 'cover' }} />
+
+      {active && (
         <iframe
           src={src}
           title="A Dough Cookie"
           allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
           allowFullScreen
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, opacity: ready ? 1 : 0, transition: 'opacity .5s ease' }}
         />
-      ) : (
+      )}
+
+      {!active && (
         <button
           type="button"
           onClick={() => setActive(true)}
           aria-label="Play video"
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', padding: 0, border: 0, background: 'transparent', cursor: 'pointer' }}
         >
-          <Image src={poster} alt={alt} fill sizes={sizes} style={{ objectFit: 'cover' }} />
           <span aria-hidden style={{ position: 'absolute', inset: 0, background: 'var(--espresso-30)' }} />
           <span
             aria-hidden

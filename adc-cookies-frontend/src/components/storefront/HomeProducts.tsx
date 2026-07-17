@@ -62,7 +62,13 @@ export default function HomeProducts() {
   const deepLinkScrolled = useRef(false); // scroll a ?q= deep-link to its section only once, after products load
   const [inView, setInView] = useState(false); // the floating checkout bar only shows while browsing products
 
-  useEffect(() => { getProducts().then(p => setProducts(p || [])).catch(() => {}); }, []);
+  useEffect(() => {
+    // Show cached products instantly on reload (no waiting for the API), then refresh in the background.
+    try { const c = localStorage.getItem('adc_products_cache'); if (c) { const arr = JSON.parse(c); if (Array.isArray(arr) && arr.length) setProducts(arr); } } catch { /* ignore */ }
+    getProducts().then(p => {
+      if (p?.length) { setProducts(p); try { localStorage.setItem('adc_products_cache', JSON.stringify(p)); } catch { /* ignore */ } }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const el = sectionRef.current;

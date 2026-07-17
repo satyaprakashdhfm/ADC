@@ -210,6 +210,8 @@ body::before {
   .blog-grid { grid-template-columns: 1fr !important; }
   .contact-layout { grid-template-columns: 1fr !important; }
   .store-grid { grid-template-columns: 1fr !important; }
+  /* On mobile, show the map first (above the store cards) and don't let it stick */
+  .contact-stores > aside { order: -1; position: static !important; margin-bottom: 4px; }
   .account-layout { grid-template-columns: 1fr !important; }
   .account-sidebar { position: static !important; }
   .account-order-detail-grid { grid-template-columns: 1fr !important; }
