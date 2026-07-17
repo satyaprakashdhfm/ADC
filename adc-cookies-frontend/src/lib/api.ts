@@ -138,7 +138,7 @@ export async function updateAddress(id: number, data: Omit<Address, 'id'>): Prom
 }
 
 /* ---- Contact ---- */
-export interface ContactInput { name: string; email: string; phone?: string; message: string; }
+export interface ContactInput { name: string; email: string; phone?: string; message: string; company?: string; }
 
 export async function submitContact(data: ContactInput): Promise<{ ok: boolean; id: number }> {
   return request('/contact', { method: 'POST', body: JSON.stringify(data) });

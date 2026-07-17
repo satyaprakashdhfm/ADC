@@ -27,6 +27,7 @@ const labelStyle: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight
 
 export default function ContactForm() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
+  const [hp, setHp] = useState(''); // honeypot — real visitors never see/fill this; bots that auto-fill every field do
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
   const [topic, setTopic] = useState('');
@@ -47,7 +48,7 @@ export default function ContactForm() {
     if (!valid || status === 'sending') return;
     setStatus('sending'); setError('');
     try {
-      await submitContact({ name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim() || undefined, message: form.message.trim() });
+      await submitContact({ name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim() || undefined, message: form.message.trim(), company: hp });
       setStatus('done');
       setForm({ name: '', email: '', phone: '', message: '' });
       setTopic('');
@@ -70,6 +71,12 @@ export default function ContactForm() {
 
   return (
     <form onSubmit={submit} style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 26, padding: 24, boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Honeypot — invisible to real visitors, tabIndex -1 so keyboard users never land on it. */}
+      <input
+        type="text" name="company" value={hp} onChange={e => setHp(e.target.value)}
+        tabIndex={-1} autoComplete="off" aria-hidden="true"
+        style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+      />
       <div>
         <label style={labelStyle} htmlFor="cf-name">Your name *</label>
         <input id="cf-name" style={inputStyle} placeholder="e.g. Satya Reddy" value={form.name} onChange={set('name')} />
