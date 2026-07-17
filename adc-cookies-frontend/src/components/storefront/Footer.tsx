@@ -17,18 +17,18 @@ export default function Footer() {
         padding: '40px 0 18px',
       }}
     >
-      {/* Giant ghosted brand mark — the ADC logo shape filled with the warm gradient, centred
-          in the footer box (both axes). Uses a CSS mask so the gradient shows through the
-          logo's own silhouette instead of a flat faded colour. */}
+      {/* Giant ghosted brand mark — the ADC logo, anchored to the bottom and bleeding off the
+          base of the footer (Swish-style), softly blurred with a warm-gradient fill via a CSS
+          mask so the gradient shows through the logo's own silhouette. */}
       <span
         aria-hidden
         style={{
           position: 'absolute',
           left: '50%',
-          top: '50%',
-          transform: 'translate(-50%,-50%)',
-          width: 'clamp(260px, 34vw, 520px)',
-          height: 'clamp(190px, 25vw, 380px)',
+          bottom: 'clamp(-60px, -4vw, -30px)',
+          transform: 'translateX(-50%)',
+          width: 'clamp(340px, 60vw, 760px)',
+          height: 'clamp(200px, 28vw, 420px)',
           background: 'var(--gradient-warm)',
           WebkitMaskImage: 'url(/assets/adc-logo.png)',
           maskImage: 'url(/assets/adc-logo.png)',
@@ -36,9 +36,10 @@ export default function Footer() {
           maskSize: 'contain',
           WebkitMaskRepeat: 'no-repeat',
           maskRepeat: 'no-repeat',
-          WebkitMaskPosition: 'center',
-          maskPosition: 'center',
-          opacity: 0.16,
+          WebkitMaskPosition: 'bottom center',
+          maskPosition: 'bottom center',
+          filter: 'blur(4px)',
+          opacity: 0.18,
           pointerEvents: 'none',
           userSelect: 'none',
           zIndex: 0,

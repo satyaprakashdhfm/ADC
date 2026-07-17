@@ -50,7 +50,7 @@
   --peach-400: #FFB76B;       /* announcement ribbon / accents */
   --peach-300: #FFCD90;       /* section bands (peach) */
   --peach-100: #FFF4DF;       /* page background / lightest sections */
-  --navbar-bg: #F2953C; /* navbar band — a touch darker/warmer than --peach-500 for a bit more contrast */
+  --navbar-bg: #EF7507; /* header band — the main brand orange (#ef7507), white logo/links sit on it */
 
   --gold: var(--peach-100);   /* CREAM (#FFF4DF) bands — products · "Finest Ingredients" · "Get in Touch" · Order/Checkout/Account bg */
   --band-ivory: var(--peach-300); /* LIGHT-ORANGE (#FFCD90) bands — "About Us" · "Our Stores" · reviews strip (alternates with the cream --gold bands) */
@@ -61,7 +61,7 @@
   --cream-lightest: #f5ebd5;  /* Checkout order-summary box fill (OrderingApp) */
 
   /* -- Footer (brand-coloured band — the big orange footer) -- */
-  --footer-bg: linear-gradient(158deg, var(--orange-500) 0%, var(--orange-700) 58%, var(--orange-800) 100%); /* warm brand band behind the whole footer */
+  --footer-bg: linear-gradient(180deg, #EF7507 0%, #D2620A 100%); /* main brand orange (#ef7507), slight depth toward the base */
   --footer-watermark: rgba(255,255,255,.07); /* giant "cookie" wordmark ghosted behind footer content */
 
   /* -- Warm accents -- */

@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Bot } from 'lucide-react';
 import { whatsappLink } from '@/lib/site';
-import { useLocation } from '@/context/LocationContext';
 import { useActiveSpinReward, formatRemainingShort } from '@/lib/spinReward';
 import SpinWheel from './SpinWheel';
 import Chatbot from './Chatbot';
@@ -30,16 +29,16 @@ const fab: React.CSSProperties = {
 export default function FloatingDock() {
   const [spin, setSpin] = useState(false);
   const [chat, setChat] = useState(false);
-  const { store, ready } = useLocation();
   const spinDone = useRef(false);
   // Lifted here (not inside SpinWheel) so the 12h claim countdown stays visible on the launcher
   // itself even after the wheel modal is closed — not just while it's open.
   const { activeReward, setActiveReward, checking: checkingReward, now } = useActiveSpinReward();
 
-  // Location goes FIRST: only once the shopper has a location set (chosen now on the first visit,
-  // or already known on a return visit) do we pop the spin wheel — a few seconds later, at most once a day.
+  // Spin pops on its own a few seconds after load (at most once a day) — location is no longer a
+  // prerequisite; it's collected at checkout via the delivery address, so nothing gates the wheel
+  // on the homepage anymore.
   useEffect(() => {
-    if (typeof window === 'undefined' || !ready || spinDone.current || !store) return;
+    if (typeof window === 'undefined' || spinDone.current) return;
     let last = 0;
     try { last = Number(localStorage.getItem('adc_spin_last') || 0); } catch { /* ignore */ }
     const DAY = 24 * 60 * 60 * 1000;
@@ -50,7 +49,7 @@ export default function FloatingDock() {
       try { localStorage.setItem('adc_spin_last', String(Date.now())); } catch { /* ignore */ }
     }, 3000);
     return () => clearTimeout(t);
-  }, [ready, store]);
+  }, []);
 
   return (
     <>
