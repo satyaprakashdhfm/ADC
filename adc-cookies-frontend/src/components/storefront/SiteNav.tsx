@@ -27,7 +27,6 @@ const NAV_DESKTOP: NavLink[] = [
   { label: 'Locations', href: '/locations', menuKey: 'locations' },
   { label: 'Partner with us', href: '/franchise', menuKey: 'partner' },
   { label: 'About Us', href: '/about' },
-  { label: 'Gallery', href: '/gallery' },
   { label: 'Contact', href: '/contact' },
 ];
 

@@ -127,7 +127,6 @@ export default function Footer() {
           {([
             ['Company', [
               ['Our Story', '/about'],
-              ['Gallery', '/gallery'],
               ['Blog', '/blogs'],
               ['Order Online', '/order'],
             ]],
