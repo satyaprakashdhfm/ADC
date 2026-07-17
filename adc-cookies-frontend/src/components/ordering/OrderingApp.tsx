@@ -1037,14 +1037,21 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       <div style={{ padding: '14px var(--gutter)', borderTop: '1px solid var(--border-soft)', background: 'var(--surface-card)', flex: 'none' }}>
         {step === 'review' ? (
           <>
-            {hydrated && lines.length > 0 && !chosen && (
+            {hydrated && lines.length > 0 && user && !chosen && (
               <div style={{ maxWidth: 720, margin: '0 auto 10px', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', textAlign: 'center', fontWeight: 700 }}>
-                {user ? 'Add & select a delivery address to continue.' : 'Log in and add a delivery address to continue.'}
+                Add &amp; select a delivery address to continue.
               </div>
             )}
-            <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!canProceed} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: canProceed ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: canProceed ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              Proceed to Pay · ₹{grand} <ArrowRight size={18} />
-            </button>
+            {hydrated && !user ? (
+              // Guests: prompt login before anything else (the address card also shows a log-in prompt).
+              <button onClick={() => setLoginOpen(true)} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Lock size={18} /> Log in to continue
+              </button>
+            ) : (
+              <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!canProceed} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: canProceed ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: canProceed ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                Proceed to Pay · ₹{grand} <ArrowRight size={18} />
+              </button>
+            )}
           </>
         ) : (
           <>

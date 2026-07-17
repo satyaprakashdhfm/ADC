@@ -71,6 +71,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
   const { count } = useCart();
   const [menuOpen, setMenuOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false); // mobile: search is an icon that expands, to keep the header short
   // On the home hero, the bar hides until the first scroll, then slides in.
   const [revealed, setRevealed] = useState(!revealOnScroll);
   useEffect(() => {
@@ -89,7 +90,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
     key === 'cookies' ? toMenu('COOKIES')
       : key === 'tins' ? toMenu('TINS')
         : key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/order?store=${encodeURIComponent(s.city.toLowerCase())}` }))
-          : key === 'partner' ? [{ label: 'Corporate & Bulk Order', href: '/order?cat=corporate' }, { label: 'Franchise Enquiry', href: '/franchise' }]
+          : key === 'partner' ? [{ label: 'Corporate & Bulk Order', href: '/contact#get-in-touch' }, { label: 'Franchise Enquiry', href: '/franchise' }]
             : undefined;
   // Account icon → login modal (or account/admin page if already signed in).
   const accountClick = () => { if (user) router.push(user.role === 'ADMIN' ? '/admin' : '/account'); else setLoginOpen(true); };
@@ -159,6 +160,16 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
             <LocationPill compact />
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+              {/* Search is a compact icon that expands the bar — keeps the header short */}
+              <button
+                onClick={() => setSearchOpen(v => !v)}
+                className="nav-round-btn"
+                aria-label={searchOpen ? 'Close search' : 'Search'}
+                aria-expanded={searchOpen}
+                style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: searchOpen ? 'var(--amber-50)' : 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', boxShadow: 'var(--shadow-xs)', flex: 'none' }}
+              >
+                <Search size={20} />
+              </button>
               {cartButton}
               <button
                 onClick={() => setMenuOpen(true)}
@@ -171,11 +182,14 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
             </div>
           </div>
 
-          <form onSubmit={onSearch} role="search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream-bg)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '5px 5px 5px 14px', boxShadow: 'var(--shadow-xs)' }}>
-            <Search size={17} color="var(--text-muted)" style={{ flex: 'none' }} />
-            <input name="q" placeholder="Search cookies, gift tins…" aria-label="Search products" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }} />
-            <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: '8px 14px' }}>Search</button>
-          </form>
+          {/* Search bar only when the icon is tapped */}
+          {searchOpen && (
+            <form onSubmit={onSearch} role="search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--cream-bg)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-pill)', padding: '5px 5px 5px 14px', boxShadow: 'var(--shadow-xs)' }}>
+              <Search size={17} color="var(--text-muted)" style={{ flex: 'none' }} />
+              <input autoFocus name="q" placeholder="Search cookies, gift tins…" aria-label="Search products" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }} />
+              <button type="submit" style={{ ...ctaBtn, flex: 'none', padding: '8px 14px' }}>Search</button>
+            </form>
+          )}
         </div>
       </div>
 

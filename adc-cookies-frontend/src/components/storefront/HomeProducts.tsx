@@ -150,7 +150,7 @@ export default function HomeProducts() {
         {/* Corporate & bulk gifting — last, as a wide card */}
         <button
           id="corporate-section"
-          onClick={() => router.push('/contact')}
+          onClick={() => router.push('/contact#get-in-touch')}
           style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: 'var(--surface-inverse)', color: 'var(--cream-100)', padding: 'clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 260, flex: '1 1 320px' }}>
