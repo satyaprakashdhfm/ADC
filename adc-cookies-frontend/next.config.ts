@@ -15,7 +15,8 @@ const nextConfig: NextConfig = {
   // Add whatever IP `next dev` prints under "Network:" (it can change with DHCP).
   allowedDevOrigins: ['192.168.1.24', '192.168.1.35', '192.168.1.37','192.168.1.42'],
   images: {
-    remotePatterns: [],
+    // The About-Us video's own YouTube thumbnail is used as its pre-play poster (see AboutVideo.tsx).
+    remotePatterns: [{ protocol: 'https', hostname: 'i.ytimg.com' }],
   },
   async rewrites() {
     return [

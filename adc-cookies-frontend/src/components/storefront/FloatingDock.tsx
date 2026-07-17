@@ -62,10 +62,11 @@ export default function FloatingDock() {
           <MiniWheel />
           {activeReward && (
             <span aria-hidden style={{
-              position: 'absolute', top: -6, right: -6, minWidth: 30, height: 20, padding: '0 6px',
+              position: 'absolute', top: -5, right: -5, minWidth: 26, height: 22, padding: '0 6px',
               borderRadius: 'var(--radius-pill)', background: activeReward.claimed ? 'var(--status-success)' : 'var(--gradient-warm)',
-              color: 'var(--white)', fontSize: 10, fontWeight: 800, display: 'grid', placeItems: 'center',
-              lineHeight: 1, boxShadow: '0 2px 6px var(--black-18)', fontFamily: 'var(--font-body)',
+              border: '2px solid var(--white)', color: 'var(--white)', fontSize: 10.5, fontWeight: 800,
+              display: 'grid', placeItems: 'center', lineHeight: 1, letterSpacing: '-.02em',
+              boxShadow: '0 2px 6px var(--black-18)', fontFamily: 'var(--font-body)',
             }}>
               {formatRemainingShort(activeReward.expiresAtMs - now)}
             </span>
