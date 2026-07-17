@@ -14,7 +14,7 @@ interface LoginModalProps {
 
 function Divider({ label }: { label: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 0' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '10px 0' }}>
       <span style={{ flex: 1, height: 1, background: 'var(--border-default)' }} />
       <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</span>
       <span style={{ flex: 1, height: 1, background: 'var(--border-default)' }} />
@@ -175,17 +175,17 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', padding: '13px 15px',
+    width: '100%', boxSizing: 'border-box', padding: '11px 14px',
     borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)',
     fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)',
-    background: 'var(--surface-raised)', outline: 'none', marginBottom: 10,
+    background: 'var(--surface-raised)', outline: 'none', marginBottom: 8,
   };
   const labelStyle: React.CSSProperties = {
     display: 'block', fontSize: 'var(--text-xs)', fontWeight: 700,
-    color: 'var(--text-muted)', letterSpacing: '.02em', margin: '0 0 6px 2px',
+    color: 'var(--text-muted)', letterSpacing: '.02em', margin: '0 0 5px 2px',
   };
   const primaryBtn = (enabled: boolean): React.CSSProperties => ({
-    width: '100%', padding: '14px', borderRadius: 'var(--radius-button)', border: 'none',
+    width: '100%', padding: '12px', borderRadius: 'var(--radius-button)', border: 'none',
     background: enabled ? 'var(--gradient-warm)' : 'var(--border-default)',
     color: enabled ? 'var(--white)' : 'var(--text-subtle)',
     fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)',
@@ -210,38 +210,38 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        zIndex: 121, width: 'min(440px,94vw)', maxHeight: '92vh', background: 'var(--surface-page)',
+        zIndex: 121, width: 'min(420px,92vw)', maxHeight: '88vh', background: 'var(--surface-page)',
         borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)',
         overflow: 'hidden', display: 'flex', flexDirection: 'column',
         animation: 'riseIn .3s var(--ease-spring) both',
       }}>
         {/* Header — cookie photo kept faint in the background, big logo on top */}
-        <div style={{ height: 190, position: 'relative', overflow: 'hidden', background: 'var(--ink-950)', flex: 'none' }}>
-          <Image src="/assets/login-bg.jpg" alt="" fill priority sizes="440px" style={{ objectFit: 'cover', opacity: 0.4 }} />
+        <div style={{ height: 120, position: 'relative', overflow: 'hidden', background: 'var(--ink-950)', flex: 'none' }}>
+          <Image src="/assets/login-bg.jpg" alt="" fill priority sizes="420px" style={{ objectFit: 'cover', opacity: 0.4 }} />
           {dismissible && (
-          <button onClick={dismiss} style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'var(--white-90)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
-            <X size={18} color="var(--text-strong)" />
+          <button onClick={dismiss} style={{ position: 'absolute', top: 10, right: 10, zIndex: 2, width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--white-90)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
+            <X size={16} color="var(--text-strong)" />
           </button>
           )}
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-            <Image src="/assets/adc-logo.png" width={232} height={168} alt="a dough cookie" priority style={{ height: 150, width: 'auto', maxWidth: '82%', objectFit: 'contain', filter: 'drop-shadow(0 4px 16px var(--black-55))' }} />
+            <Image src="/assets/adc-logo.png" width={232} height={168} alt="a dough cookie" priority style={{ height: 90, width: 'auto', maxWidth: '82%', objectFit: 'contain', filter: 'drop-shadow(0 4px 16px var(--black-55))' }} />
           </div>
         </div>
 
-        <div className="hide-sb" style={{ padding: '22px 24px 26px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <div className="hide-sb" style={{ padding: '16px 20px 18px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
           {otpStep === 'name' ? (
             /* Post-verify profile capture — mandatory, no skip: we need a real name + email on
                every account regardless of how they signed in, so this keeps showing until both
                are on file (not just once, for brand-new numbers). */
             <div>
-              <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>Almost there!</h2>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 18px' }}>A couple of details so we can keep you posted on your order.</p>
+              <h2 style={{ font: 'var(--weight-bold) var(--text-h4)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 3px' }}>Almost there!</h2>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>A couple of details so we can keep you posted on your order.</p>
               <label style={labelStyle}>Full name</label>
               <input
                 value={profileName}
                 onChange={e => setProfileName(e.target.value)}
                 placeholder="Your name" autoComplete="name" autoFocus
-                style={{ ...inputStyle, marginBottom: 14 }}
+                style={{ ...inputStyle, marginBottom: 10 }}
               />
               <label style={labelStyle}>Email address</label>
               <input
@@ -249,7 +249,7 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
                 onChange={e => setProfileEmail(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && profileValid) handleSaveProfile(); }}
                 placeholder="you@example.com" type="email" autoComplete="email"
-                style={{ ...inputStyle, marginBottom: 14 }}
+                style={{ ...inputStyle, marginBottom: 10 }}
               />
               <button onClick={handleSaveProfile} disabled={otpLoading || !profileValid} style={primaryBtn(!otpLoading && profileValid)}>
                 {otpLoading ? 'Saving…' : 'Continue'}{!otpLoading && profileValid && <ArrowRight size={18} />}
@@ -260,14 +260,14 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
             </div>
           ) : (
           <>
-          <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>Log in or sign up</h2>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 18px' }}>Order and track your fresh cookies.</p>
+          <h2 style={{ font: 'var(--weight-bold) var(--text-h4)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 3px' }}>Log in or sign up</h2>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>Order and track your fresh cookies.</p>
 
           {/* 1) Phone OTP */}
           {otpStep === 'phone' ? (
             <div>
               <label style={labelStyle}>Mobile number</label>
-              <div style={{ ...inputStyle, marginBottom: 12, padding: '0 14px', height: 50, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ ...inputStyle, marginBottom: 8, padding: '0 14px', height: 46, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Phone size={17} color="var(--text-subtle)" />
                 <span style={{ color: 'var(--text-strong)', fontWeight: 700, fontSize: 'var(--text-base)' }}>+91</span>
                 <span style={{ width: 1, height: 22, background: 'var(--border-default)' }} />
@@ -282,11 +282,11 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
               <button onClick={handleSendOtp} disabled={otpLoading || otpPhone.length !== 10} style={primaryBtn(!otpLoading && otpPhone.length === 10)}>
                 {otpLoading ? 'Sending…' : 'Send OTP'}{!otpLoading && otpPhone.length === 10 && <ArrowRight size={18} />}
               </button>
-              <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '8px 2px 0' }}>We’ll text you a one-time code.</p>
+              <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '6px 2px 0' }}>We’ll text you a one-time code.</p>
             </div>
           ) : (
             <div>
-              <div style={{ textAlign: 'center', marginBottom: 14 }}>
+              <div style={{ textAlign: 'center', marginBottom: 10 }}>
                 <div style={{ fontSize: 'var(--text-base)', fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Enter the code</div>
                 <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 2 }}>
                   Sent to +91 {otpPhone}{' · '}
@@ -298,12 +298,12 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
                 onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 onKeyDown={e => { if (e.key === 'Enter' && code.length >= 4) handleVerifyOtp(); }}
                 placeholder="••••" inputMode="numeric" autoComplete="one-time-code" autoFocus
-                style={{ ...inputStyle, marginBottom: 14, textAlign: 'center', fontSize: '1.55rem', fontWeight: 800, letterSpacing: '.4em', textIndent: '.4em', padding: '12px 15px' }}
+                style={{ ...inputStyle, marginBottom: 10, textAlign: 'center', fontSize: '1.55rem', fontWeight: 800, letterSpacing: '.4em', textIndent: '.4em', padding: '10px 15px' }}
               />
               <button onClick={handleVerifyOtp} disabled={otpLoading || code.length < 4} style={primaryBtn(!otpLoading && code.length >= 4)}>
                 {otpLoading ? 'Verifying…' : 'Verify & continue'}{!otpLoading && code.length >= 4 && <ArrowRight size={18} />}
               </button>
-              <div style={{ textAlign: 'center', marginTop: 12, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+              <div style={{ textAlign: 'center', marginTop: 8, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
                 {resendIn > 0
                   ? <span>Didn’t get it? Resend in {resendIn}s</span>
                   : <button onClick={handleSendOtp} disabled={otpLoading} style={linkBtn}>Didn’t get it? Resend OTP</button>}

@@ -231,20 +231,20 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
       <div onClick={handleClose}
         style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'var(--espresso-55)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, animation: 'loaderFadeIn .28s ease both' }}>
         <div onClick={e => e.stopPropagation()}
-          style={{ position: 'relative', width: 'min(400px,94vw)', maxHeight: '92vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '26px 24px 20px', textAlign: 'center', animation: 'riseIn .4s var(--ease-spring) both' }}
+          style={{ position: 'relative', width: 'min(380px,92vw)', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '18px 20px 14px', textAlign: 'center', animation: 'riseIn .4s var(--ease-spring) both' }}
           className="hide-sb">
 
-          <button onClick={handleClose} aria-label="Close" style={{ position: 'absolute', top: 14, right: 14, width: 34, height: 34, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', zIndex: 2 }}>
-            <X size={17} />
+          <button onClick={handleClose} aria-label="Close" style={{ position: 'absolute', top: 10, right: 10, width: 30, height: 30, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', zIndex: 2 }}>
+            <X size={15} />
           </button>
 
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 10 }}>
-            <Gift size={14} /> Spin &amp; win
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+            <Gift size={13} /> Spin &amp; win
           </div>
-          <h2 style={{ font: '900 var(--text-h3)/1.05 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 5px', letterSpacing: '-.02em' }}>
+          <h2 style={{ font: '900 var(--text-h4)/1.05 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px', letterSpacing: '-.02em' }}>
             {activeReward ? (activeReward.claimed ? 'You won! 🎉' : 'You won! Sign in to claim 🎉') : result ? (result.win ? 'You won! 🎉' : 'So close!') : 'Spin & win a treat!'}
           </h2>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 auto 16px', maxWidth: 300, lineHeight: 1.5 }}>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 auto 10px', maxWidth: 290, lineHeight: 1.4 }}>
             {activeReward
               ? (activeReward.claimed ? 'Here’s your exclusive discount — use it at checkout.' : `Log in within ${formatRemaining(activeReward.expiresAtMs - nowMs)} to claim this reward before it expires.`)
               : result
@@ -255,23 +255,23 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           </p>
 
           {/* Wheel */}
-          <div style={{ position: 'relative', width: 'clamp(230px,72vw,286px)', margin: '0 auto 18px', aspectRatio: '1' }}>
+          <div style={{ position: 'relative', width: 'clamp(180px,54vw,220px)', margin: '0 auto 12px', aspectRatio: '1' }}>
             {/* Pointer */}
-            <div aria-hidden style={{ position: 'absolute', top: -4, left: '50%', transform: 'translateX(-50%)', zIndex: 3, width: 0, height: 0, borderLeft: '11px solid transparent', borderRight: '11px solid transparent', borderTop: '18px solid var(--ink-900)', filter: 'drop-shadow(0 2px 3px var(--black-28))' }} />
+            <div aria-hidden style={{ position: 'absolute', top: -3, left: '50%', transform: 'translateX(-50%)', zIndex: 3, width: 0, height: 0, borderLeft: '9px solid transparent', borderRight: '9px solid transparent', borderTop: '15px solid var(--ink-900)', filter: 'drop-shadow(0 2px 3px var(--black-28))' }} />
             {/* Disc */}
             <div style={{
               position: 'absolute', inset: 0, borderRadius: '50%', background: WHEEL_BG,
-              border: '7px solid var(--white)', boxShadow: '0 12px 30px var(--espresso-30), inset 0 0 0 2px var(--amber-600)',
+              border: '6px solid var(--white)', boxShadow: '0 12px 30px var(--espresso-30), inset 0 0 0 2px var(--amber-600)',
               transform: `rotate(${wheelRot}deg)`, transition: 'transform 4.2s cubic-bezier(.15,.86,.24,1)',
             }}>
               {displayPrizes.map((p, i) => (
                 <div key={i} style={{ position: 'absolute', inset: 0, transform: `rotate(${i * SEG + SEG / 2}deg)` }}>
-                  <span style={{ position: 'absolute', top: '9%', left: '50%', transform: 'translateX(-50%)', width: 66, textAlign: 'center', fontSize: 11, fontWeight: 800, lineHeight: 1.1, color: 'var(--white)', textShadow: '0 1px 2px var(--black-45)', fontFamily: 'var(--font-body)' }}>{p.label}</span>
+                  <span style={{ position: 'absolute', top: '9%', left: '50%', transform: 'translateX(-50%)', width: 54, textAlign: 'center', fontSize: 9.5, fontWeight: 800, lineHeight: 1.1, color: 'var(--white)', textShadow: '0 1px 2px var(--black-45)', fontFamily: 'var(--font-body)' }}>{p.label}</span>
                 </div>
               ))}
             </div>
             {/* Hub — brand logo */}
-            <div aria-hidden style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 60, height: 60, borderRadius: '50%', background: 'var(--white)', boxShadow: '0 3px 10px var(--espresso-30)', display: 'grid', placeItems: 'center', zIndex: 2, padding: 8 }}>
+            <div aria-hidden style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 46, height: 46, borderRadius: '50%', background: 'var(--white)', boxShadow: '0 3px 10px var(--espresso-30)', display: 'grid', placeItems: 'center', zIndex: 2, padding: 6 }}>
               <Image src="/assets/adc-logo.png" width={48} height={35} alt="" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
             </div>
           </div>
@@ -281,29 +281,29 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             <div>
               {activeReward.claimed ? (
                 <button onClick={() => copyCode(activeReward.code)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 8px', padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 6px', padding: '9px 16px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{activeReward.code}</span>
                   {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
                 </button>
               ) : (
                 // The code itself stays hidden until they actually log in and claim it — showing
                 // it early would defeat the point of gating the reward behind a real login.
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 8px', padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--border-strong)', background: 'var(--surface-raised)' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 6px', padding: '9px 16px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--border-strong)', background: 'var(--surface-raised)' }}>
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--text-subtle)' }}>••••••</span>
                   <Lock size={16} color="var(--text-subtle)" />
                 </div>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 8 }}>
                 <Clock size={13} /> {activeReward.claimed ? `Valid for ${formatRemaining(activeReward.expiresAtMs - nowMs)}` : `Expires in ${formatRemaining(activeReward.expiresAtMs - nowMs)}`}
               </div>
               {activeReward.claimed ? (
                 <button onClick={() => { close(); router.push('/'); }}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
                   Order now <ArrowRight size={18} />
                 </button>
               ) : (
                 <button onClick={() => { setShowTerms(false); setLoginOpen(true); }}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
                   <LogIn size={18} /> Log in to claim
                 </button>
               )}
@@ -311,42 +311,42 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           ) : result ? (
             guestWinNeedsLogin ? (
               <button onClick={() => { setShowTerms(false); setLoginOpen(true); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
                 <LogIn size={18} /> Log in to claim
               </button>
             ) : (
               <button onClick={() => { close(); router.push('/'); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
                 Order now <ArrowRight size={18} />
               </button>
             )
           ) : (
             <button onClick={spin} disabled={spinning || !offersLoaded || checkingReward}
-              style={{ width: '100%', padding: '15px', borderRadius: 'var(--radius-button)', border: 'none', background: (spinning || !offersLoaded || checkingReward) ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-base)', letterSpacing: '.04em', cursor: spinning ? 'wait' : (!offersLoaded || checkingReward) ? 'default' : 'pointer', boxShadow: (spinning || !offersLoaded || checkingReward) ? 'none' : 'var(--shadow-brand)' }}>
+              style={{ width: '100%', padding: '13px', borderRadius: 'var(--radius-button)', border: 'none', background: (spinning || !offersLoaded || checkingReward) ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-base)', letterSpacing: '.04em', cursor: spinning ? 'wait' : (!offersLoaded || checkingReward) ? 'default' : 'pointer', boxShadow: (spinning || !offersLoaded || checkingReward) ? 'none' : 'var(--shadow-brand)' }}>
               {checkingReward || !offersLoaded ? 'Loading…' : spinning ? 'Spinning…' : 'SPIN THE WHEEL'}
             </button>
           )}
           {spinError && <div style={{ marginTop: 8, fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, textAlign: 'center' }}>{spinError}</div>}
 
           {/* Cancel */}
-          <button onClick={handleClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', marginTop: 12, padding: 6 }}>
+          <button onClick={handleClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', marginTop: 8, padding: 4 }}>
             No thanks, maybe later
           </button>
 
           {/* Terms for only the reward this shopper got. */}
           {wonPrize && (
-            <div style={{ margin: '12px 0 0', padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-raised)', border: '1px solid var(--border-default)', textAlign: 'left' }}>
-              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 4 }}>Terms</div>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0 }}>{wonPrize.terms || valueSummary(wonPrize)}</p>
-              <button onClick={() => setShowTerms(true)} style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-2xs)', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>
+            <div style={{ margin: '8px 0 0', padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-raised)', border: '1px solid var(--border-default)', textAlign: 'left' }}>
+              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 3 }}>Terms</div>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.4, margin: 0 }}>{wonPrize.terms || valueSummary(wonPrize)}</p>
+              <button onClick={() => setShowTerms(true)} style={{ marginTop: 4, background: 'none', border: 'none', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-2xs)', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>
                 View coupon details
               </button>
             </div>
           )}
 
           {/* Social links */}
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-soft)' }}>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700, margin: '0 0 10px' }}>Follow us for fresh drops &amp; offers</p>
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-soft)' }}>
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700, margin: '0 0 8px' }}>Follow us for fresh drops &amp; offers</p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
               {socialBtn(INSTAGRAM_URL, 'Instagram', <IgIcon />)}
               {socialBtn(YOUTUBE_URL, 'YouTube', <YtIcon />)}

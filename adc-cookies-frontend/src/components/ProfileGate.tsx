@@ -56,26 +56,26 @@ export default function ProfileGate() {
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', padding: '13px 15px', marginBottom: 12,
+    width: '100%', boxSizing: 'border-box', padding: '11px 14px', marginBottom: 8,
     borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)',
     background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)',
     color: 'var(--text-strong)', outline: 'none',
   };
   const labelStyle: React.CSSProperties = {
     display: 'block', fontSize: 'var(--text-xs)', fontWeight: 700,
-    color: 'var(--text-muted)', letterSpacing: '.02em', margin: '0 0 6px 2px',
+    color: 'var(--text-muted)', letterSpacing: '.02em', margin: '0 0 5px 2px',
   };
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'var(--espresso-50)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ width: 'min(420px,94vw)', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '26px 24px', animation: 'riseIn .3s var(--ease-spring) both' }}>
-        <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--amber-50)', display: 'grid', placeItems: 'center', color: 'var(--brand-secondary)', marginBottom: 14 }}>
-          <UserIcon size={24} />
+      <div style={{ width: 'min(400px,92vw)', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '20px 20px 18px', animation: 'riseIn .3s var(--ease-spring) both' }} className="hide-sb">
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--amber-50)', display: 'grid', placeItems: 'center', color: 'var(--brand-secondary)', marginBottom: 10 }}>
+          <UserIcon size={20} />
         </div>
-        <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>
+        <h2 style={{ font: 'var(--weight-bold) var(--text-h4)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 3px' }}>
           Almost there!
         </h2>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 18px' }}>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>
           A couple of details so we can keep you posted on your order.
         </p>
 
@@ -94,7 +94,7 @@ export default function ProfileGate() {
         {needs.phone && (
           <>
             <label style={labelStyle}>Mobile number</label>
-            <div style={{ ...inputStyle, padding: '0 14px', height: 50, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ ...inputStyle, padding: '0 14px', height: 46, display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ color: 'var(--text-strong)', fontWeight: 700, fontSize: 'var(--text-base)' }}>+91</span>
               <span style={{ width: 1, height: 22, background: 'var(--border-default)' }} />
               <input
@@ -110,7 +110,7 @@ export default function ProfileGate() {
         {err && <div style={{ marginBottom: 10, fontSize: 'var(--text-sm)', color: 'var(--status-error)' }}>{err}</div>}
 
         <button onClick={save} disabled={saving || !valid}
-          style={{ width: '100%', padding: '14px', borderRadius: 'var(--radius-button)', border: 'none', background: (saving || !valid) ? 'var(--border-default)' : 'var(--gradient-warm)', color: (saving || !valid) ? 'var(--text-subtle)' : 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: (saving || !valid) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-button)', border: 'none', background: (saving || !valid) ? 'var(--border-default)' : 'var(--gradient-warm)', color: (saving || !valid) ? 'var(--text-subtle)' : 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: (saving || !valid) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           {saving ? 'Saving…' : 'Continue'}{!saving && valid && <ArrowRight size={18} />}
         </button>
       </div>
