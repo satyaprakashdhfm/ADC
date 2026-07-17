@@ -5,6 +5,7 @@ import SiteHeader from '@/components/storefront/SiteHeader';
 import ContactForm from '@/components/storefront/ContactForm';
 import StoreMap from '@/components/storefront/StoreMap';
 import { STORES } from '@/lib/stores';
+import { SITE_EMAIL, SITE_PHONE } from '@/lib/site';
 
 export const metadata = {
   title: 'Contact Us - a dough cookie',
@@ -20,9 +21,13 @@ export default function ContactPage() {
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Contact Us</p>
           <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 22 }}>Four A Dough Cookie stores across India.</h1>
           <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>Visit A Dough Cookie for warm cookies, premium tins, gifting orders, and quick dessert pick-ups. Each store is positioned around busy neighborhoods so customers can order online, collect in person, or coordinate bulk boxes for events and celebrations.</p>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
+          {/* Plain feature tags — not buttons (no card/pill background) */}
+          <div style={{ display: 'flex', gap: 'clamp(14px,3vw,28px)', flexWrap: 'wrap', marginTop: 22, color: 'var(--text-body)' }}>
             {['Store pickup', 'Bulk gifting', 'Fresh delivery', 'Custom notes'].map((item) => (
-              <span key={item} style={{ padding: '10px 16px', borderRadius: 'var(--radius-pill)', background: 'var(--panel-82)', border: '1px solid var(--border-default)', color: 'var(--text-strong)', fontWeight: 800 }}>{item}</span>
+              <span key={item} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 'var(--text-sm)' }}>
+                <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--brand-secondary)', flex: 'none' }} />
+                {item}
+              </span>
             ))}
           </div>
         </div>
@@ -64,8 +69,8 @@ export default function ContactPage() {
             <h2 style={{ font: '900 clamp(2.2rem,1.6rem + 3vw,3.4rem)/1 var(--font-display)', letterSpacing: '-.02em', marginBottom: 16 }}>Leave your details and we&apos;ll reach out.</h2>
             <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, color: 'var(--text-body)', marginBottom: 18 }}>Have a bulk order, a gifting request, or a question about our cookies? Share your details and our team will get back to you.</p>
             <div style={{ display: 'grid', gap: 7, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Mail size={16} /> satyaprakashreddy6789@gmail.com</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Phone size={16} /> +91 93815 02998</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Mail size={16} /> {SITE_EMAIL}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Phone size={16} /> {SITE_PHONE}</span>
             </div>
           </div>
           <ContactForm />

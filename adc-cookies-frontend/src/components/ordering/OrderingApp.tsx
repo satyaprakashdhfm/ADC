@@ -1085,7 +1085,7 @@ function OrderSuccessPage({ show, total, orderId, eta, onBackToMenu, onViewOrder
           <Bike size={22} color="var(--brand-secondary)" />
           <div style={{ textAlign: 'left' }}>
             <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}>{eta}</div>
-            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Freshly baked to order</div>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Estimated delivery</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, marginBottom: 16 }}>

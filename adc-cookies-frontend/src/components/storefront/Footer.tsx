@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import FooterCookies from './FooterCookies';
 import { footerHeadingStyle, footerLinkStyle } from './footerStyles';
-import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL } from '@/lib/site';
+import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, SITE_EMAIL, SITE_PHONE } from '@/lib/site';
 
 export default function Footer() {
   return (
@@ -128,7 +128,7 @@ export default function Footer() {
             ['Company', [
               ['Our Story', '/about'],
               ['Blog', '/blogs'],
-              ['Order Online', '/order'],
+              ['Order Online', '/#products'],
             ]],
             ['Help', [
               ['Track Order', '/account'],
@@ -164,7 +164,7 @@ export default function Footer() {
           }}
         >
           <span>© 2026 a dough cookie. All rights reserved.</span>
-          <span>satyaprakashreddy6789@gmail.com · +91 93815 02998</span>
+          <span>{SITE_EMAIL} · {SITE_PHONE}</span>
         </div>
       </div>
     </footer>

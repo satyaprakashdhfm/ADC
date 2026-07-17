@@ -188,6 +188,9 @@ body::before {
    (rem-based type + spacing shrink proportionally), and trim oversized controls. */
 @media (max-width:680px) {
   html { font-size: 90%; }
+  /* iOS Safari zooms the whole page when you focus a control smaller than 16px. The 90% root above
+     makes rem inputs ~14px, so force real 16px on form fields to stop the zoom-in/out on focus. */
+  input, select, textarea { font-size: 16px !important; }
   .floating-dock { right: 14px !important; bottom: 14px !important; gap: 10px !important; }
   .floating-dock > * { width: 46px !important; height: 46px !important; }
   .nav-round-btn { width: 40px !important; height: 40px !important; }

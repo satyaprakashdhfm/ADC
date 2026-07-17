@@ -18,7 +18,7 @@ export default function AboutPage() {
           <div>
             <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>About Us</p>
             <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 24 }}>Fresh cookies, built with care.</h1>
-            <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.8, maxWidth: 660, color: 'var(--text-body)' }}>a dough cookie is built around warm, soft-center cookies, premium fillings, and gift-ready packaging. The store is made for everyday cravings, celebration boxes, office treats, and late-night dessert runs, with every batch focused on aroma, texture, and freshness.</p>
+            <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.8, maxWidth: 660, color: 'var(--text-body)' }}>A Dough Cookie is built around warm, soft-center cookies, premium fillings, and gift-ready packaging. The store is made for everyday cravings, celebration boxes, office treats, and late-night dessert runs, with every batch focused on aroma, texture, and freshness.</p>
             <div style={{ display: 'grid', gap: 10, marginTop: 24, maxWidth: 620 }}>
               {['Cookies are baked in small batches so the centers stay soft and the edges stay crisp.', 'Filled cookies and tins are packed carefully so they travel well and arrive looking gift-ready.', 'The menu balances classics, premium flavors, gluten-free options, and indulgent filled cookies.'].map((point) => (
                 <p key={point} style={{ color: 'var(--text-body)', lineHeight: 1.65, fontWeight: 700 }}>{point}</p>

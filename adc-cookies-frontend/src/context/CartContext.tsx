@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { addToCart, updateCartItem, removeCartItem, clearCart } from '@/lib/api';
+import { useAuth } from './AuthContext';
 
 export interface CartEntry { id: string; name: string; price: number; qty: number; img?: string; addOns?: string[]; note?: string; }
 
@@ -75,6 +76,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearAll = useCallback(() => { setCart({}); setGift(false); setGiftMessage(''); setGiftOccasion(''); setCoupon(''); setApplied(false); setDiscount(0); }, []);
+
+  // Keep carts independent per user: when a logged-in user LOGS OUT (or a different user signs in),
+  // start a fresh cart so the next person never inherits someone else's items. A guest logging in
+  // (null → user) keeps their cart, so items added before login survive checkout.
+  const { user } = useAuth();
+  const prevUserKey = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const key = user ? String(user.phone || user.email || 'user') : null;
+    if (prevUserKey.current === undefined) { prevUserKey.current = key; return; } // record initial; never clear on first resolve
+    if (prevUserKey.current !== null && prevUserKey.current !== key) {
+      clearAll();
+      try { localStorage.removeItem('adc_cart'); } catch { /* ignore */ }
+    }
+    prevUserKey.current = key;
+  }, [user, clearAll]);
 
   const count = Object.values(cart).reduce((s, e) => s + e.qty, 0);
   const total = Object.values(cart).reduce((s, e) => s + e.price * e.qty, 0);
