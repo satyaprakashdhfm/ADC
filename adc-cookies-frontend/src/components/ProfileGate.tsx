@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { ArrowRight, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { isValidName, isValidEmail } from '@/lib/profileValidation';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 
 /*
  * Catches everyone the OTP flow's own mandatory step doesn't: Google and email/password
@@ -13,6 +14,8 @@ import { isValidName, isValidEmail } from '@/lib/profileValidation';
  */
 export default function ProfileGate() {
   const { user, loading, profileLoaded, authModalOpen, updateProfile } = useAuth();
+  // Compact sizing is for mobile only — desktop gets the roomier layout back.
+  const desktop = useIsDesktop();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -56,7 +59,7 @@ export default function ProfileGate() {
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', padding: '11px 14px', marginBottom: 8,
+    width: '100%', boxSizing: 'border-box', padding: desktop ? '14px 16px' : '11px 14px', marginBottom: desktop ? 12 : 8,
     borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)',
     background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)',
     color: 'var(--text-strong)', outline: 'none',
@@ -68,14 +71,14 @@ export default function ProfileGate() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'var(--espresso-50)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ width: 'min(400px,92vw)', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '20px 20px 18px', animation: 'riseIn .3s var(--ease-spring) both' }} className="hide-sb">
-        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--amber-50)', display: 'grid', placeItems: 'center', color: 'var(--brand-secondary)', marginBottom: 10 }}>
-          <UserIcon size={20} />
+      <div style={{ width: desktop ? '440px' : 'min(400px,92vw)', maxHeight: desktop ? '92vh' : '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: desktop ? '30px 28px' : '20px 20px 18px', animation: 'riseIn .3s var(--ease-spring) both' }} className="hide-sb">
+        <div style={{ width: desktop ? 52 : 44, height: desktop ? 52 : 44, borderRadius: '50%', background: 'var(--amber-50)', display: 'grid', placeItems: 'center', color: 'var(--brand-secondary)', marginBottom: desktop ? 14 : 10 }}>
+          <UserIcon size={desktop ? 24 : 20} />
         </div>
-        <h2 style={{ font: 'var(--weight-bold) var(--text-h4)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 3px' }}>
+        <h2 style={{ font: `var(--weight-bold) var(${desktop ? '--text-h3' : '--text-h4'})/1.1 var(--font-display)`, color: 'var(--text-strong)', margin: '0 0 4px' }}>
           Almost there!
         </h2>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: `0 0 ${desktop ? 18 : 12}px` }}>
           A couple of details so we can keep you posted on your order.
         </p>
 
@@ -94,7 +97,7 @@ export default function ProfileGate() {
         {needs.phone && (
           <>
             <label style={labelStyle}>Mobile number</label>
-            <div style={{ ...inputStyle, padding: '0 14px', height: 46, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ ...inputStyle, padding: '0 14px', height: desktop ? 52 : 46, display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ color: 'var(--text-strong)', fontWeight: 700, fontSize: 'var(--text-base)' }}>+91</span>
               <span style={{ width: 1, height: 22, background: 'var(--border-default)' }} />
               <input
@@ -110,7 +113,7 @@ export default function ProfileGate() {
         {err && <div style={{ marginBottom: 10, fontSize: 'var(--text-sm)', color: 'var(--status-error)' }}>{err}</div>}
 
         <button onClick={save} disabled={saving || !valid}
-          style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius-button)', border: 'none', background: (saving || !valid) ? 'var(--border-default)' : 'var(--gradient-warm)', color: (saving || !valid) ? 'var(--text-subtle)' : 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: (saving || !valid) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          style={{ width: '100%', padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: (saving || !valid) ? 'var(--border-default)' : 'var(--gradient-warm)', color: (saving || !valid) ? 'var(--text-subtle)' : 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: (saving || !valid) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           {saving ? 'Saving…' : 'Continue'}{!saving && valid && <ArrowRight size={18} />}
         </button>
       </div>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { X, ArrowRight, Phone } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { isValidName, isValidEmail } from '@/lib/profileValidation';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 
 interface LoginModalProps {
   open: boolean;
@@ -55,6 +56,8 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   const [resetSent, setResetSent] = useState(false);
   const { login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile, setAuthModalOpen } = useAuth();
   const router = useRouter();
+  // Compact sizing is for mobile only — desktop gets the roomier layout back.
+  const desktop = useIsDesktop();
 
   useEffect(() => {
     if (open) {
@@ -175,17 +178,17 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', padding: '11px 14px',
+    width: '100%', boxSizing: 'border-box', padding: desktop ? '14px 16px' : '11px 14px',
     borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)',
     fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)',
-    background: 'var(--surface-raised)', outline: 'none', marginBottom: 8,
+    background: 'var(--surface-raised)', outline: 'none', marginBottom: desktop ? 12 : 8,
   };
   const labelStyle: React.CSSProperties = {
     display: 'block', fontSize: 'var(--text-xs)', fontWeight: 700,
     color: 'var(--text-muted)', letterSpacing: '.02em', margin: '0 0 5px 2px',
   };
   const primaryBtn = (enabled: boolean): React.CSSProperties => ({
-    width: '100%', padding: '12px', borderRadius: 'var(--radius-button)', border: 'none',
+    width: '100%', padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none',
     background: enabled ? 'var(--gradient-warm)' : 'var(--border-default)',
     color: enabled ? 'var(--white)' : 'var(--text-subtle)',
     fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)',
@@ -210,32 +213,32 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        zIndex: 121, width: 'min(420px,92vw)', maxHeight: '88vh', background: 'var(--surface-page)',
+        zIndex: 121, width: desktop ? '460px' : 'min(420px,92vw)', maxHeight: desktop ? '92vh' : '88vh', background: 'var(--surface-page)',
         borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)',
         overflow: 'hidden', display: 'flex', flexDirection: 'column',
         animation: 'riseIn .3s var(--ease-spring) both',
       }}>
         {/* Header — cookie photo kept faint in the background, big logo on top */}
-        <div style={{ height: 120, position: 'relative', overflow: 'hidden', background: 'var(--ink-950)', flex: 'none' }}>
-          <Image src="/assets/login-bg.jpg" alt="" fill priority sizes="420px" style={{ objectFit: 'cover', opacity: 0.4 }} />
+        <div style={{ height: desktop ? 190 : 120, position: 'relative', overflow: 'hidden', background: 'var(--ink-950)', flex: 'none' }}>
+          <Image src="/assets/login-bg.jpg" alt="" fill priority sizes="460px" style={{ objectFit: 'cover', opacity: 0.4 }} />
           {dismissible && (
-          <button onClick={dismiss} style={{ position: 'absolute', top: 10, right: 10, zIndex: 2, width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--white-90)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
-            <X size={16} color="var(--text-strong)" />
+          <button onClick={dismiss} style={{ position: 'absolute', top: desktop ? 14 : 10, right: desktop ? 14 : 10, zIndex: 2, width: desktop ? 38 : 32, height: desktop ? 38 : 32, borderRadius: '50%', border: 'none', background: 'var(--white-90)', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
+            <X size={desktop ? 18 : 16} color="var(--text-strong)" />
           </button>
           )}
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-            <Image src="/assets/adc-logo.png" width={232} height={168} alt="a dough cookie" priority style={{ height: 90, width: 'auto', maxWidth: '82%', objectFit: 'contain', filter: 'drop-shadow(0 4px 16px var(--black-55))' }} />
+            <Image src="/assets/adc-logo.png" width={232} height={168} alt="a dough cookie" priority style={{ height: desktop ? 150 : 90, width: 'auto', maxWidth: '82%', objectFit: 'contain', filter: 'drop-shadow(0 4px 16px var(--black-55))' }} />
           </div>
         </div>
 
-        <div className="hide-sb" style={{ padding: '16px 20px 18px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <div className="hide-sb" style={{ padding: desktop ? '26px 28px 30px' : '16px 20px 18px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
           {otpStep === 'name' ? (
             /* Post-verify profile capture — mandatory, no skip: we need a real name + email on
                every account regardless of how they signed in, so this keeps showing until both
                are on file (not just once, for brand-new numbers). */
             <div>
-              <h2 style={{ font: 'var(--weight-bold) var(--text-h4)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 3px' }}>Almost there!</h2>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>A couple of details so we can keep you posted on your order.</p>
+              <h2 style={{ font: `var(--weight-bold) var(${desktop ? '--text-h3' : '--text-h4'})/1.1 var(--font-display)`, color: 'var(--text-strong)', margin: '0 0 4px' }}>Almost there!</h2>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: `0 0 ${desktop ? 20 : 12}px` }}>A couple of details so we can keep you posted on your order.</p>
               <label style={labelStyle}>Full name</label>
               <input
                 value={profileName}
@@ -260,8 +263,8 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
             </div>
           ) : (
           <>
-          <h2 style={{ font: 'var(--weight-bold) var(--text-h4)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 3px' }}>Log in or sign up</h2>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>Order and track your fresh cookies.</p>
+          <h2 style={{ font: `var(--weight-bold) var(${desktop ? '--text-h3' : '--text-h4'})/1.1 var(--font-display)`, color: 'var(--text-strong)', margin: '0 0 4px' }}>Log in or sign up</h2>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: `0 0 ${desktop ? 20 : 12}px` }}>Order and track your fresh cookies.</p>
 
           {/* 1) Phone OTP */}
           {otpStep === 'phone' ? (
