@@ -9,6 +9,14 @@ import { useCart } from '@/context/CartContext';
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
 const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'clamp(14px,1.8vw,22px)' };
 
+// One short, precise line about the product — take just the first sentence and trim at a word
+// boundary, so the card never shows a mid-sentence cut ending in "and …".
+function shortDesc(d?: string): string {
+  if (!d) return '';
+  const first = d.trim().split(/(?<=[.!?])\s/)[0].replace(/[.\s]+$/, '');
+  return first.length > 84 ? first.slice(0, 82).replace(/[\s,]+\S*$/, '') + '…' : first;
+}
+
 function ProductCard({ p }: { p: Product }) {
   const { cart, setQty } = useCart();
   const id = String(p.id);
@@ -24,7 +32,7 @@ function ProductCard({ p }: { p: Product }) {
       </div>
       <div style={{ padding: 'clamp(12px,1.4vw,16px)', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
         <h3 style={{ font: 'var(--weight-extra) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>{p.name}</h3>
-        {p.description && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.description}</p>}
+        {p.description && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{shortDesc(p.description)}</p>}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 'auto', paddingTop: 8 }}>
           <span style={{ fontWeight: 900, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}>₹{price}</span>
           {qty === 0 ? (

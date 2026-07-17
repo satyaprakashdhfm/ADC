@@ -1,7 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Bot } from 'lucide-react';
 import { whatsappLink } from '@/lib/site';
+import { useLocation } from '@/context/LocationContext';
 import SpinWheel from './SpinWheel';
 import Chatbot from './Chatbot';
 
@@ -28,25 +29,24 @@ const fab: React.CSSProperties = {
 export default function FloatingDock() {
   const [spin, setSpin] = useState(false);
   const [chat, setChat] = useState(false);
+  const { store, ready } = useLocation();
+  const spinDone = useRef(false);
 
-  // Auto-open the spin wheel — but NOT on the very first visit (the location prompt goes first);
-  // then at most once a day.
+  // Location goes FIRST: only once the shopper has a location set (chosen now on the first visit,
+  // or already known on a return visit) do we pop the spin wheel — a few seconds later, at most once a day.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    let askedLocation = false, last = 0;
-    try {
-      askedLocation = !!localStorage.getItem('adc_location_asked');
-      last = Number(localStorage.getItem('adc_spin_last') || 0);
-    } catch { /* ignore */ }
-    if (!askedLocation) return;              // first visit → let the location modal show instead
+    if (typeof window === 'undefined' || !ready || spinDone.current || !store) return;
+    let last = 0;
+    try { last = Number(localStorage.getItem('adc_spin_last') || 0); } catch { /* ignore */ }
     const DAY = 24 * 60 * 60 * 1000;
-    if (last && Date.now() - last <= DAY) return;
+    if (last && Date.now() - last <= DAY) { spinDone.current = true; return; }
+    spinDone.current = true;
     const t = setTimeout(() => {
       setSpin(true);
       try { localStorage.setItem('adc_spin_last', String(Date.now())); } catch { /* ignore */ }
-    }, 1300);
+    }, 3000);
     return () => clearTimeout(t);
-  }, []);
+  }, [ready, store]);
 
   return (
     <>
