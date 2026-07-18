@@ -9,7 +9,8 @@ import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, createRazorpayOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, getAvailableCoupons, type Product, type Address, type OrderItemInput, type DeliveryCheck, type AvailableCoupon } from '@/lib/api';
+import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, createRazorpayOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, getAvailableCoupons, getStallInfo, getSpinStatus, type Product, type Address, type OrderItemInput, type DeliveryCheck, type AvailableCoupon, type SpinClaim } from '@/lib/api';
+import { formatRemaining } from '@/lib/spinReward';
 import { whatsappLink, SITE_PHONE } from '@/lib/site';
 
 // STALL MODE — temporary, for the pop-up-stall launch: online payment is switched off and the
@@ -17,8 +18,6 @@ import { whatsappLink, SITE_PHONE } from '@/lib/site';
 // deleted — every bit of the real checkout/payment flow still exists, just not rendered while
 // this is true. Flip back to false (and it all comes straight back) once online payment resumes.
 const STALL_MODE = true;
-// Fill in with today's actual stall location/time once known — shown on the payment-replacement panel.
-const TODAYS_STALL = '';
 
 /* ---- Data ---- */
 const CATEGORIES = ['Cookies', 'Cookie Tins', 'Corporate Gifting'];
@@ -464,6 +463,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [couponErr, setCouponErr] = useState('');
   const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
+  const [mySpinReward, setMySpinReward] = useState<SpinClaim | null>(null);
   const [adding, setAdding] = useState(false);
   const [aform, setAform] = useState({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' });
   const [editId, setEditId] = useState<number | null>(null);   // address being edited (null = adding new)
@@ -476,9 +476,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [done, setDone] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [paid, setPaid] = useState(0);
+  const [placedOrderSummary, setPlacedOrderSummary] = useState<{ items: { name: string; qty: number }[]; couponCode: string | null } | null>(null);
+  const [pendingPayment, setPendingPayment] = useState(false); // true when confirmed via stall mode (no Razorpay), not yet actually paid
   const [loginOpen, setLoginOpen] = useState(false);
   const [delivCheck, setDelivCheck] = useState<DeliveryCheck | null>(null);
   const [delivChecking, setDelivChecking] = useState(false);
+  const [todaysStall, setTodaysStall] = useState('');
 
   // Addresses are private to the signed-in user — fetch on login, clear on logout.
   useEffect(() => {
@@ -490,6 +493,21 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   // before login (applying one still requires being logged in, same as typing a code manually).
   useEffect(() => {
     getAvailableCoupons().then(setAvailableCoupons).catch(() => setAvailableCoupons([]));
+  }, []);
+
+  // This shopper's own won-and-claimed spin reward (if any and still unexpired) — shown as a
+  // tappable offer too, so they don't have to go dig the code back out of the spin popup. It's
+  // already account-bound server-side (validateCoupon requires a matching spin_claims row), so
+  // this is purely a convenience surface, not a new way to redeem someone else's code.
+  useEffect(() => {
+    if (!user) { setMySpinReward(null); return; }
+    getSpinStatus().then(r => setMySpinReward(r.active)).catch(() => setMySpinReward(null));
+  }, [user]);
+
+  // Admin-editable stall address (same setting the homepage "Today — please visit" card reads),
+  // shown on the stall-mode payment panel below — one place to update, not a hardcoded constant.
+  useEffect(() => {
+    getStallInfo().then(r => setTodaysStall(r.text || '')).catch(() => {});
   }, []);
 
   // Auto-select an address once they load and nothing valid is selected:
@@ -666,6 +684,31 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     }
   };
 
+  // Resolve cart items to REAL backend product ids. The cart may hold fallback-menu items
+  // whose ids aren't real ids (added before products finished loading) — resolve those by
+  // name (the fallback names match the DB exactly), so the order works regardless. Shared by
+  // both the real Razorpay flow and the stall-mode "confirm order" flow below.
+  const resolveOrderItems = async (): Promise<OrderItemInput[]> => {
+    let catalog: Product[] = [];
+    try { catalog = await getProducts(); } catch {}
+    const idByName = new Map(catalog.map(p => [p.name.trim().toLowerCase(), p.id]));
+    return Object.values(cart)
+      .map((e, index) => {
+        const opts: Record<string, unknown> = {};
+        if (e.addOns && e.addOns.length) opts.addOns = e.addOns;
+        if (index === 0 && gift) { opts.giftWrap = true; opts.giftMessage = giftMessage; if (giftOccasion) opts.giftOccasion = giftOccasion; }
+        const numericId = Number(e.id);
+        const productId = Number.isFinite(numericId) ? numericId : idByName.get(e.name.trim().toLowerCase());
+        return {
+          productId: productId as number,
+          quantity: e.qty,
+          selectedOptions: Object.keys(opts).length ? opts : undefined,
+          specialNotes: e.note || undefined,
+        };
+      })
+      .filter(it => Number.isFinite(it.productId) && it.quantity > 0);
+  };
+
   // Create the order, then open the Razorpay popup. On success the handler verifies the
   // payment on our backend (which marks PAID + auto-creates the Delhivery shipment), then
   // shows the success screen. The user never leaves this page.
@@ -676,29 +719,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     setPayError('');
     setPlacing(true);
     try {
-      // Resolve cart items to REAL backend product ids. The cart may hold fallback-menu items
-      // whose ids aren't real ids (added before products finished loading) — resolve those by
-      // name (the fallback names match the DB exactly), so the order works regardless.
-      let catalog: Product[] = [];
-      try { catalog = await getProducts(); } catch {}
-      const idByName = new Map(catalog.map(p => [p.name.trim().toLowerCase(), p.id]));
-
-      const items: OrderItemInput[] = Object.values(cart)
-        .map((e, index) => {
-          const opts: Record<string, unknown> = {};
-          if (e.addOns && e.addOns.length) opts.addOns = e.addOns;
-          if (index === 0 && gift) { opts.giftWrap = true; opts.giftMessage = giftMessage; if (giftOccasion) opts.giftOccasion = giftOccasion; }
-          const numericId = Number(e.id);
-          const productId = Number.isFinite(numericId) ? numericId : idByName.get(e.name.trim().toLowerCase());
-          return {
-            productId: productId as number,
-            quantity: e.qty,
-            selectedOptions: Object.keys(opts).length ? opts : undefined,
-            specialNotes: e.note || undefined,
-          };
-        })
-        .filter(it => Number.isFinite(it.productId) && it.quantity > 0);
-
+      const items = await resolveOrderItems();
       if (items.length === 0) {
         setPlacing(false);
         setPayError('Could not match your cart items to the menu. Please refresh the page, add them again, and retry.');
@@ -727,6 +748,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               razorpayOrderId: resp.razorpay_order_id,
               razorpaySignature: resp.razorpay_signature,
             });
+            // Snapshot before clearAll() wipes the cart — the success screen still needs to show
+            // what was actually ordered.
+            setPlacedOrderSummary({ items: lines.map(l => ({ name: l.name, qty: l.qty })), couponCode: applied ? coupon : null });
+            setPendingPayment(false);
             setPaid(grand);
             setOrderId(rp.orderNumber);
             clearAll();
@@ -752,6 +777,35 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     }
   };
 
+  // STALL MODE — no Razorpay: registers the order for real (PENDING payment, pay/collect at the
+  // stall) instead of opening the payment window, then shows the same success screen. Untouched
+  // once STALL_MODE flips off — handlePlace above takes back over.
+  const handlePlaceStall = async () => {
+    if (!user) { setLoginOpen(true); return; }
+    if (!addr || !addresses.some(a => a.id === addr)) { setPayError('Please select a delivery address first.'); return; }
+    if (lines.length === 0) { setPayError('Your cart is empty.'); return; }
+    setPayError('');
+    setPlacing(true);
+    try {
+      const items = await resolveOrderItems();
+      if (items.length === 0) {
+        setPlacing(false);
+        setPayError('Could not match your cart items to the menu. Please refresh the page, add them again, and retry.');
+        return;
+      }
+      const order = await createOrder(addr, applied ? coupon : undefined, items);
+      setPlacedOrderSummary({ items: lines.map(l => ({ name: l.name, qty: l.qty })), couponCode: applied ? coupon : null });
+      setPendingPayment(true);
+      setPaid(order.totalAmount);
+      setOrderId(order.orderNumber);
+      clearAll();
+      setDone(true);
+    } catch (e) {
+      setPlacing(false);
+      setPayError(e instanceof Error ? e.message : 'Could not place your order. Please try again, or message us on WhatsApp instead.');
+    }
+  };
+
   const card$: React.CSSProperties = { background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', padding: 24 };
   const head = (icon: React.ReactNode, label: string) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>{icon}<span style={{ font: 'var(--weight-bold) var(--text-base)/1 var(--font-body)', color: 'var(--text-strong)' }}>{label}</span></div>
@@ -759,7 +813,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
   // Honest arrival line for the success screen — same-day for intra-city, a real date for courier, else generic.
   const successEta = intracity ? 'Arriving today' : deliverBy ? `Arriving ${fmtDay(deliverBy)}` : 'On its way — we’ll email tracking updates';
-  if (done) return <OrderSuccessPage show total={paid} orderId={orderId} eta={successEta} onBackToMenu={() => router.push('/')} onViewOrder={() => router.push('/account')} />;
+  if (done) return <OrderSuccessPage show total={paid} orderId={orderId} eta={successEta} summary={placedOrderSummary} pendingPayment={pendingPayment} onBackToMenu={() => router.push('/')} onViewOrder={() => router.push('/account')} />;
 
   if (placing) return (
     <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32, textAlign: 'center' }}>
@@ -1028,6 +1082,29 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     </div>
                     {couponErr && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--status-error)', marginTop: -6, marginBottom: 10 }}>{couponErr}</div>}
 
+                    {/* This shopper's own spin-wheel win — account-bound, only ever applies to them. */}
+                    {mySpinReward && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Your spin &amp; win reward</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--brand-secondary)', background: 'var(--amber-50)' }}>
+                          <Gift size={16} color="var(--brand-secondary)" style={{ flex: 'none' }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-sm)', letterSpacing: '.04em', color: 'var(--brand-secondary)' }}>{mySpinReward.code}</span>
+                              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{mySpinReward.label}</span>
+                            </div>
+                            <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 2 }}>
+                              Expires in {formatRemaining(new Date(mySpinReward.expiresAt).getTime() - Date.now())}
+                            </div>
+                          </div>
+                          <button onClick={() => { setCoupon(mySpinReward.code); setCouponErr(''); void applyCoupon(mySpinReward.code); }}
+                            style={{ flex: 'none', padding: '7px 14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Available offers — Zomato/Swiggy-style tappable list, so shoppers don't have
                         to already know a code to use one. */}
                     {availableCoupons.length > 0 && (
@@ -1107,9 +1184,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       Call {SITE_PHONE}
                     </a>
                   </div>
-                  {TODAYS_STALL && (
+                  {todaysStall && (
                     <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-card)', background: 'var(--amber-50)', border: '1px solid var(--border-default)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 700 }}>
-                      📍 Today&apos;s stall: {TODAYS_STALL}
+                      📍 Today&apos;s stall: {todaysStall}
                     </div>
                   )}
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
@@ -1162,14 +1239,24 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           </>
         ) : STALL_MODE ? (
           // STALL MODE — real payment trigger below (in the `false` branch) is untouched and
-          // ready to come straight back the moment STALL_MODE flips off.
-          <div style={{ display: 'flex', gap: 10, maxWidth: 720, margin: '0 auto' }}>
-            <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '16px', borderRadius: 'var(--radius-button)', background: 'var(--whatsapp-green)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', textDecoration: 'none' }}>
-              WhatsApp us
-            </a>
-            <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '16px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', textDecoration: 'none' }}>
-              Call us
-            </a>
+          // ready to come straight back the moment STALL_MODE flips off. "Confirm order" here
+          // still registers a real order (PENDING payment, pay/collect at the stall) — it just
+          // skips Razorpay — so WhatsApp/Call stay as an alternative, not the only way through.
+          <div style={{ maxWidth: 720, margin: '0 auto' }}>
+            {payError && (
+              <div style={{ margin: '0 auto 10px', padding: '10px 14px', borderRadius: 'var(--radius-button)', background: 'var(--red-wash)', border: '1.5px solid var(--status-error)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', fontWeight: 700, textAlign: 'center' }}>{payError}</div>
+            )}
+            <button onClick={() => user ? handlePlaceStall() : setLoginOpen(true)} disabled={placing} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: placing ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: placing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 }}>
+              {placing ? 'Placing your order…' : user ? <>Confirm order <Check size={18} /></> : <>Log in to confirm order <Lock size={18} /></>}
+            </button>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-button)', background: 'var(--whatsapp-green)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
+                WhatsApp us
+              </a>
+              <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
+                Call us
+              </a>
+            </div>
           </div>
         ) : (
           <>
@@ -1191,7 +1278,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 }
 
 /* ---- Order Success Page ---- */
-function OrderSuccessPage({ show, total, orderId, eta, onBackToMenu, onViewOrder }: { show: boolean; total: number; orderId: string; eta: string; onBackToMenu: () => void; onViewOrder: () => void }) {
+function OrderSuccessPage({ show, total, orderId, eta, summary, pendingPayment, onBackToMenu, onViewOrder }: {
+  show: boolean; total: number; orderId: string; eta: string;
+  summary: { items: { name: string; qty: number }[]; couponCode: string | null } | null;
+  pendingPayment?: boolean;
+  onBackToMenu: () => void; onViewOrder: () => void;
+}) {
   const steps = [
     { icon: <Check size={18} />, label: 'Placed', done: true },
     { icon: <span style={{ fontSize: 14 }}>🧑‍🍳</span>, label: 'Baking', done: false },
@@ -1204,10 +1296,26 @@ function OrderSuccessPage({ show, total, orderId, eta, onBackToMenu, onViewOrder
         <div style={{ width: 120, height: 120, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', boxShadow: '0 20px 60px var(--amber-500-38)', animation: 'riseIn .5s var(--ease-spring) both', marginBottom: 28 }}>
           <Check size={62} strokeWidth={3} style={{ color: 'var(--white)' }} />
         </div>
-        <div style={{ display: 'inline-block', background: 'var(--green-wash)', color: 'var(--green-success)', fontWeight: 800, fontSize: 'var(--text-sm)', padding: '5px 14px', borderRadius: 'var(--radius-pill)', marginBottom: 16 }}>Payment Successful</div>
+        <div style={{ display: 'inline-block', background: 'var(--green-wash)', color: 'var(--green-success)', fontWeight: 800, fontSize: 'var(--text-sm)', padding: '5px 14px', borderRadius: 'var(--radius-pill)', marginBottom: 16 }}>{pendingPayment ? 'Order Confirmed' : 'Payment Successful'}</div>
         <h1 style={{ font: 'var(--weight-extra) var(--text-h1)/1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 10px' }}>Order Placed!</h1>
-        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '0 0 6px' }}>Your cookies are being baked fresh.</p>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-subtle)', margin: '0 0 32px' }}>Order <strong style={{ color: 'var(--text-strong)' }}>{orderId}</strong> · ₹{total}</p>
+        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '0 0 6px' }}>{pendingPayment ? 'Pay when you collect at the stall — see you soon!' : 'Your cookies are being baked fresh.'}</p>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-subtle)', margin: '0 0 24px' }}>Order <strong style={{ color: 'var(--text-strong)' }}>{orderId}</strong> · ₹{total}</p>
+        {summary && summary.items.length > 0 && (
+          <div style={{ width: '100%', maxWidth: 340, background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', padding: '16px 18px', marginBottom: 24, textAlign: 'left' }}>
+            <div style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, color: 'var(--text-subtle)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Order summary</div>
+            {summary.items.map((it, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 'var(--text-sm)', color: 'var(--text-body)', padding: '4px 0' }}>
+                <span>{it.name}</span>
+                <span style={{ color: 'var(--text-muted)', flex: 'none' }}>× {it.qty}</span>
+              </div>
+            ))}
+            {summary.couponCode && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-default)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--brand-secondary)' }}>
+                <Tag size={13} /> Coupon applied: {summary.couponCode}
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 24px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)', marginBottom: 36 }}>
           <Bike size={22} color="var(--brand-secondary)" />
           <div style={{ textAlign: 'left' }}>
