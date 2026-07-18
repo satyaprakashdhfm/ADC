@@ -190,6 +190,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
       }
     : result?.win ? result : null;
   const guestWinNeedsLogin = !!result?.win && !user;
+  const guestMissNeedsLogin = !!result && !result.win && !user;
 
   const spin = async () => {
     if (spinning || result || activeReward || cooldown?.completed || !prizes) return;
@@ -276,7 +277,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             <Gift size={desktop ? 14 : 13} /> Spin &amp; win
           </div>
           <h2 style={{ font: `900 var(${desktop ? '--text-h3' : '--text-h4'})/1.05 var(--font-display)`, color: 'var(--text-strong)', margin: '0 0 5px', letterSpacing: '-.02em' }}>
-            {activeReward ? (activeReward.claimed ? 'You won! 🎉' : 'You won! Sign in to claim 🎉') : result ? (result.win ? 'You won! 🎉' : 'So close!') : cooldown?.completed ? 'Spin completed ✅' : 'Spin & win a treat!'}
+            {activeReward ? (activeReward.claimed ? 'You won! 🎉' : 'You won! Sign in to claim 🎉') : result ? (result.win ? 'You won! 🎉' : (guestMissNeedsLogin ? 'Sorry! 😔' : 'So close!')) : cooldown?.completed ? 'Spin completed ✅' : 'Spin & win a treat!'}
           </h2>
           <p style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-muted)', margin: `0 auto ${desktop ? 18 : 10}px`, maxWidth: desktop ? 320 : 290, lineHeight: 1.45 }}>
             {activeReward
@@ -349,6 +350,11 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
               <button onClick={() => { setShowTerms(false); setLoginOpen(true); }}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
                 <LogIn size={18} /> Log in to claim
+              </button>
+            ) : guestMissNeedsLogin ? (
+              <button onClick={() => { setShowTerms(false); setLoginOpen(true); }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+                <LogIn size={18} /> Login to check more
               </button>
             ) : (
               <button onClick={() => { close(); router.push('/'); }}

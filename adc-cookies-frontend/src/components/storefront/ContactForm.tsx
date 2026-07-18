@@ -79,7 +79,7 @@ export default function ContactForm() {
       />
       <div>
         <label style={labelStyle} htmlFor="cf-name">Your name *</label>
-        <input id="cf-name" style={inputStyle} placeholder="e.g. Satya Reddy" value={form.name} onChange={set('name')} />
+        <input id="cf-name" style={inputStyle} placeholder="Your full name" value={form.name} onChange={set('name')} />
       </div>
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 200px' }}>
