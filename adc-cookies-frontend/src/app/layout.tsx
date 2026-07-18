@@ -27,6 +27,9 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     images: ["/assets/hero-cookies.jpg"],
   },
+  verification: {
+    google: "p9NGcYrukr4Fn19_ONF9Ny5NRTF0VQ3BlvPvEas9swU",
+  },
 };
 
 // Tells Google what kind of business this is (name, contact, socials) — the structured-data half
