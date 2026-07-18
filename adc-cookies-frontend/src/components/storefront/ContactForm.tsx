@@ -20,7 +20,7 @@ const TOPICS = Object.keys(TOPIC_STARTERS);
 
 const inputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box', padding: '13px 16px', borderRadius: 'var(--radius-input)',
-  border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)',
+  border: '1.5px solid var(--border-default)', background: '#FFF4DF',
   fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)',
 };
 const labelStyle: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 };
@@ -104,7 +104,7 @@ export default function ContactForm() {
                 style={{
                   padding: '7px 13px', borderRadius: 'var(--radius-pill)', cursor: 'pointer',
                   border: `1.5px solid ${on ? 'var(--brand-secondary)' : 'var(--border-default)'}`,
-                  background: on ? 'var(--gradient-warm)' : 'var(--surface-raised)',
+                  background: on ? 'var(--gradient-warm)' : '#FFF4DF',
                   color: on ? 'var(--white)' : 'var(--text-body)',
                   fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-xs)',
                   boxShadow: on ? 'var(--shadow-brand)' : 'none', transition: 'all .15s ease',

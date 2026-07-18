@@ -1,8 +1,10 @@
+'use client';
 import Image from 'next/image';
 import Link from 'next/link';
 import FooterCookies from './FooterCookies';
 import { footerHeadingStyle, footerLinkStyle } from './footerStyles';
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, SITE_EMAIL, SITE_PHONE } from '@/lib/site';
+import { openChatbot } from '@/lib/chatEvents';
 
 export default function Footer() {
   return (
@@ -145,7 +147,9 @@ export default function Footer() {
             <div key={h}>
               <div style={footerHeadingStyle}>{h}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                {items.map(([it, href]) => (
+                {items.map(([it, href]) => it === 'FAQs' ? (
+                  <button key={it} onClick={openChatbot} className="footer-link" style={{ ...footerLinkStyle, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>{it}</button>
+                ) : (
                   <Link key={it} href={href} className="footer-link" style={footerLinkStyle}>{it}</Link>
                 ))}
               </div>

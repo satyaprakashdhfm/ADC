@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Bot, Clock } from 'lucide-react';
 import { whatsappLink } from '@/lib/site';
 import { useActiveSpinReward, formatRemainingShort } from '@/lib/spinReward';
+import { OPEN_CHAT_EVENT } from '@/lib/chatEvents';
 import SpinWheel from './SpinWheel';
 import Chatbot from './Chatbot';
 
@@ -49,6 +50,13 @@ export default function FloatingDock() {
       try { localStorage.setItem('adc_spin_last', String(Date.now())); } catch { /* ignore */ }
     }, 3000);
     return () => clearTimeout(t);
+  }, []);
+
+  // Lets other parts of the site (e.g. the footer's "FAQs" link) open this same chatbot instance.
+  useEffect(() => {
+    const open = () => setChat(true);
+    window.addEventListener(OPEN_CHAT_EVENT, open);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, open);
   }, []);
 
   return (
