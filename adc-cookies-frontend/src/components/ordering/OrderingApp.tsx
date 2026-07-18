@@ -1030,6 +1030,15 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     </div>
                   )
                 )}
+                {todaysStall && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--border-default)', background: 'var(--amber-50)' }}>
+                    <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><MapPin size={16} style={{ color: 'var(--white)' }} /></span>
+                    <div>
+                      <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Prefer to visit? Our stall</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{todaysStall}</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div style={card$}>
