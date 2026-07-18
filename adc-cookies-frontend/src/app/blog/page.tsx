@@ -26,6 +26,9 @@ const POSTS = [
 export const metadata = {
   title: 'Blog - a dough cookie',
   description: 'Stories, baking notes, and gifting ideas from a dough cookie.',
+  // /blogs re-exports this same page — canonical points there since that's the URL the site's
+  // own nav links to, so Google treats the two as one page instead of duplicate content.
+  alternates: { canonical: '/blogs' },
 };
 
 export default function BlogPage() {
