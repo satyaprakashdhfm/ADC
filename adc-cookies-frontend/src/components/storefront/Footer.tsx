@@ -47,6 +47,23 @@ export default function Footer() {
           zIndex: 0,
         }}
       />
+      {/* Fade the bottom of the watermark into the footer's own background colour (Swish-style
+          sink-into-the-page effect) — a plain gradient overlay is more reliable cross-browser
+          than stacking a second CSS mask on top of the logo silhouette mask. */}
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: '65%',
+          background: 'linear-gradient(to bottom, transparent, var(--orange-600) 88%)',
+          pointerEvents: 'none',
+          userSelect: 'none',
+          zIndex: 1,
+        }}
+      />
 
       <div style={{ position: 'relative', zIndex: 2 }}>
         <div

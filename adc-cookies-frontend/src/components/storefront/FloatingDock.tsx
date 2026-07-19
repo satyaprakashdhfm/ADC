@@ -82,10 +82,12 @@ export default function FloatingDock() {
           )}
         </button>
 
-        {/* Chatbot (middle) — Doughie, the support mascot */}
+        {/* Chatbot (middle) — Doughie, the support mascot. No button chrome — the sticker itself
+            (transparent PNG) floats directly over the page, like the other dock items' own art. */}
         <button onClick={() => setChat(o => !o)} aria-label="Help & support" title="Help & support"
-          style={{ ...fab, background: 'var(--white)', border: '1.5px solid var(--border-default)', padding: 4 }}>
-          <Image src="/assets/mascots/doughie-support.png" alt="" width={56} height={56} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          style={{ ...fab, width: 64, height: 64, background: 'none', border: 'none', boxShadow: 'none', padding: 0 }}>
+          <Image src="/assets/mascots/doughie-support.png" alt="" width={64} height={64}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 8px 16px var(--black-18))' }} />
         </button>
 
         {/* WhatsApp (bottom) */}

@@ -173,8 +173,8 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
     >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 16px', background: 'var(--gradient-warm)', color: 'var(--white)', flex: 'none' }}>
-        <span style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--white)', display: 'grid', placeItems: 'center', flex: 'none', overflow: 'hidden' }}>
-          <Image src="/assets/mascots/doughie-support.png" alt="" width={38} height={38} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        <span style={{ width: 40, height: 40, display: 'grid', placeItems: 'center', flex: 'none' }}>
+          <Image src="/assets/mascots/doughie-support.png" alt="" width={40} height={40} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-base)', lineHeight: 1.1 }}>Doughie</div>
