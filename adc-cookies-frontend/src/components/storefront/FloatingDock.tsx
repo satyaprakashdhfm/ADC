@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Bot, Clock } from 'lucide-react';
+import Image from 'next/image';
+import { Clock } from 'lucide-react';
 import { whatsappLink } from '@/lib/site';
 import { useActiveSpinReward, formatRemainingShort } from '@/lib/spinReward';
 import { OPEN_CHAT_EVENT } from '@/lib/chatEvents';
@@ -81,10 +82,10 @@ export default function FloatingDock() {
           )}
         </button>
 
-        {/* Chatbot (middle) */}
+        {/* Chatbot (middle) — Doughie, the support mascot */}
         <button onClick={() => setChat(o => !o)} aria-label="Help & support" title="Help & support"
-          style={{ ...fab, background: 'var(--ink-900)', color: 'var(--white)' }}>
-          <Bot size={25} />
+          style={{ ...fab, background: 'var(--white)', border: '1.5px solid var(--border-default)', padding: 4 }}>
+          <Image src="/assets/mascots/doughie-support.png" alt="" width={56} height={56} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </button>
 
         {/* WhatsApp (bottom) */}

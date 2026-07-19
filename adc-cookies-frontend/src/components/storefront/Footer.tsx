@@ -20,16 +20,17 @@ export default function Footer() {
     >
       {/* Giant ghosted brand mark — the ADC logo, anchored to the bottom and bleeding off the
           base of the footer (Swish-style), softly blurred with a warm-gradient fill via a CSS
-          mask so the gradient shows through the logo's own silhouette. */}
+          mask so the gradient shows through the logo's own silhouette. Sized big enough that it
+          reads clearly as the dominant background element, not a subtle watermark. */}
       <span
         aria-hidden
         style={{
           position: 'absolute',
           left: '50%',
-          bottom: 'clamp(-60px, -4vw, -30px)',
+          bottom: 'clamp(-90px, -6vw, -50px)',
           transform: 'translateX(-50%)',
-          width: 'clamp(420px, 92vw, 760px)',
-          height: 'clamp(250px, 42vw, 420px)',
+          width: 'clamp(560px, 120vw, 1040px)',
+          height: 'clamp(330px, 55vw, 570px)',
           background: 'var(--gradient-warm)',
           WebkitMaskImage: 'url(/assets/adc-logo.png)',
           maskImage: 'url(/assets/adc-logo.png)',
@@ -39,29 +40,8 @@ export default function Footer() {
           maskRepeat: 'no-repeat',
           WebkitMaskPosition: 'bottom center',
           maskPosition: 'bottom center',
-          filter: 'blur(4px)',
-          opacity: 0.18,
-          pointerEvents: 'none',
-          userSelect: 'none',
-          zIndex: 0,
-        }}
-      />
-
-      {/* Waving cookie mascot — bottom-left, near the logo/social where there's open space */}
-      <Image
-        aria-hidden
-        src="/assets/mascots/mascot-4.png"
-        alt=""
-        width={170}
-        height={210}
-        className="footer-mascot"
-        style={{
-          position: 'absolute',
-          left: 'clamp(0px, 2vw, 40px)',
-          bottom: 0,
-          width: 'clamp(120px, 15vw, 190px)',
-          height: 'auto',
-          opacity: 0.5,
+          filter: 'blur(9px)',
+          opacity: 0.24,
           pointerEvents: 'none',
           userSelect: 'none',
           zIndex: 0,
@@ -157,7 +137,7 @@ export default function Footer() {
           ))}
         </div>
 
-        {/* Baseline bar — left-aligned so the corner stays clear for the mascot */}
+        {/* Baseline bar */}
         <div
           style={{
             maxWidth: 1180,

@@ -226,10 +226,8 @@ body::before {
   .footer-grid > div:first-child { grid-column: 1 / -1 !important; }
   /* Tighter link lists so the footer stays short on phones */
   .footer-grid > div > div:last-child { gap: 6px !important; }
-  /* Mascot would collide with stacked columns on phones — hide it there. */
-  .footer-mascot { display: none !important; }
   /* Shorter footer on phones */
-  .site-footer { padding-top: 16px !important; padding-bottom: 10px !important; border-radius: 20px 20px 0 0 !important; }
+  .site-footer { padding-top: 16px !important; padding-bottom: 10px !important; }
 }
 
 /* Home promo popup — portrait card on mobile, larger landscape card on desktop */

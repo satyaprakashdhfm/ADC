@@ -86,19 +86,19 @@ const PAIRINGS = [
 ];
 
 const FALLBACK_MENU = [
-  { id: 'choc', name: 'Chocolate Chip', price: 60, cat: 'Cookies', rec: true, rating: 4.6, rc: '3.4k', veg: true, img: '/assets/products/blueberry.jpg', desc: 'The original. Buttery dough, dark chocolate chips, soft centre.' },
-  { id: 'double', name: 'Double Choc Chip', price: 65, cat: 'Cookies', best: true, rating: 4.7, rc: '1.2k', veg: true, img: '/assets/products/triple-choc.jpg', desc: 'Rich cocoa dough loaded with dark chocolate chunks.' },
-  { id: 'raagi', name: 'Raagi (Gluten Free)', price: 60, cat: 'Cookies', rating: 4.4, rc: '820', veg: true, img: '/assets/products/oatmeal-raisin.jpg', desc: 'Wholesome finger-millet cookie, naturally gluten free.' },
-  { id: 'matcha', name: 'Matcha', price: 90, cat: 'Cookies', rec: true, rating: 4.5, rc: '640', veg: true, img: '/assets/products/matcha.jpg', desc: 'Stone-ground matcha folded into buttery white-chocolate dough.' },
-  { id: 'special', name: 'A Dough Cookie Special', price: 90, cat: 'Cookies', best: true, rating: 4.8, rc: '2.1k', veg: true, img: '/assets/products/adc-special.jpg', desc: 'Our signature — browned butter, sea salt, three chocolates.' },
-  { id: 'redvelvet', name: 'Red Velvet With Cheese', price: 90, cat: 'Cookies', rating: 4.6, rc: '910', veg: true, img: '/assets/products/red-velvet.jpg', desc: 'Cocoa-red velvet cookie with a cream-cheese filled core.' },
-  { id: 'biscoff', name: 'Biscoff Filled', price: 110, cat: 'Cookies', best: true, rating: 4.9, rc: '4.0k', veg: true, img: '/assets/products/peanut-butter.jpg', desc: 'Molten Biscoff spread inside a caramelised cookie shell.' },
-  { id: 'nutella', name: 'Nutella Filled', price: 90, cat: 'Cookies', rec: true, rating: 4.7, rc: '2.6k', veg: true, img: '/assets/products/caramel-cashew.jpg', desc: 'Gooey Nutella centre in a soft chocolate cookie.' },
+  { id: 'choc', name: 'Chocolate Chip Cookie', price: 60, cat: 'Cookies', rec: true, rating: 4.6, rc: '3.4k', veg: true, img: '/assets/products/blueberry.jpg', desc: 'Golden-baked cookie loaded with premium chocolate chips, perfectly crisp outside and soft, chewy inside.' },
+  { id: 'double', name: 'Double Choco Chip Cookie', price: 65, cat: 'Cookies', best: true, rating: 4.7, rc: '1.2k', veg: true, img: '/assets/products/triple-choc.jpg', desc: 'A rich chocolate cookie packed with double chocolate chips for an intensely fudgy, chocolate-loaded experience.' },
+  { id: 'raagi', name: 'Ragi Cookie (Gluten-Free)', price: 60, cat: 'Cookies', rating: 4.4, rc: '820', veg: true, img: '/assets/products/oatmeal-raisin.jpg', desc: 'Wholesome gluten-free ragi cookie with a hearty bite, balanced sweetness, and satisfying crunch.' },
+  { id: 'matcha', name: 'Matcha Cookie', price: 90, cat: 'Cookies', rec: true, rating: 4.5, rc: '640', veg: true, img: '/assets/products/matcha.jpg', desc: 'Buttery cookie infused with premium matcha, delivering earthy notes balanced with subtle sweetness.' },
+  { id: 'special', name: 'ADC Special Cookie', price: 90, cat: 'Cookies', best: true, rating: 4.8, rc: '2.1k', veg: true, img: '/assets/products/adc-special.jpg', desc: 'Our signature brownie-inspired cookie with a rich chocolatey center, crisp edges, and irresistibly gooey bites.' },
+  { id: 'redvelvet', name: 'Red Velvet Filled Cookie', price: 90, cat: 'Cookies', rating: 4.6, rc: '910', veg: true, img: '/assets/products/red-velvet.jpg', desc: 'Soft red velvet cookie with a luscious cream cheese filling for the perfect sweet balance.' },
+  { id: 'biscoff', name: 'Biscoff Filled Cookie', price: 110, cat: 'Cookies', best: true, rating: 4.9, rc: '4.0k', veg: true, img: '/assets/products/peanut-butter.jpg', desc: 'Warm cookie filled with creamy Biscoff spread and crunchy Lotus Biscoff biscuit piece.' },
+  { id: 'nutella', name: 'Nutella Filled Cookie', price: 90, cat: 'Cookies', rec: true, rating: 4.7, rc: '2.6k', veg: true, img: '/assets/products/caramel-cashew.jpg', desc: 'Freshly baked cookie overflowing with rich, molten Nutella in every indulgent bite.' },
 ];
 
 const FALLBACK_TINS = [
-  { id: 'nutella-tin', name: 'Nutella Tin', price: 600, count: 6, img: '/assets/products/coffee-almond.jpg', desc: 'Six premium cookies in a keepsake tin.' },
-  { id: 'biscoff-tin', name: 'Biscoff Tin', price: 850, count: 9, img: '/assets/products/m-and-m.jpg', desc: 'Nine Biscoff-filled cookies, gift-ready.' },
+  { id: 'nutella-tin', name: 'Nutella Cookie Tin', price: 600, count: 6, img: '/assets/products/coffee-almond.jpg', desc: 'Soft-baked cookies generously filled with creamy Nutella for an irresistible chocolate indulgence.' },
+  { id: 'biscoff-tin', name: 'Biscoff Cookie Tin', price: 850, count: 9, img: '/assets/products/m-and-m.jpg', desc: 'Freshly baked Biscoff cookies layered with creamy Biscoff spread and crunchy biscuit crumbles.' },
 ];
 
 // Search box with a live product-suggestions dropdown. Typing shows matching cookies; an empty,
@@ -266,16 +266,16 @@ function QStepper({ value, onChange, size = 'md' }: { value: number; onChange: (
 // Short, precise card blurbs (shown in full on the cards) keyed by product name —
 // falls back to the product's own description for anything not listed here.
 const SHORT_DESC: Record<string, string> = {
-  'Chocolate Chip': 'Buttery dough, dark chocolate chips, soft centre.',
-  'Double Choc Chip': 'Cocoa dough loaded with dark chocolate chunks.',
-  'Raagi (Gluten Free)': 'Wholesome finger-millet cookie, naturally gluten-free.',
-  'Matcha': 'Stone-ground matcha with white-chocolate chips.',
-  'A Dough Cookie Special': 'Browned butter, sea salt, three chocolates.',
-  'Red Velvet With Cheese': 'Cocoa-red velvet with a cream-cheese centre.',
-  'Biscoff Filled': 'Molten Biscoff inside a caramelised shell.',
-  'Nutella Filled': 'Gooey Nutella centre in a soft chocolate cookie.',
-  'Nutella Tin': 'Six Nutella-filled cookies in a gift tin.',
-  'Biscoff Tin': 'Nine Biscoff-filled cookies, gift-ready.',
+  'Chocolate Chip Cookie': 'Buttery dough, dark chocolate chips, soft centre.',
+  'Double Choco Chip Cookie': 'Cocoa dough loaded with dark chocolate chunks.',
+  'Ragi Cookie (Gluten-Free)': 'Wholesome finger-millet cookie, naturally gluten-free.',
+  'Matcha Cookie': 'Stone-ground matcha with white-chocolate chips.',
+  'ADC Special Cookie': 'Browned butter, sea salt, three chocolates.',
+  'Red Velvet Filled Cookie': 'Cocoa-red velvet with a cream-cheese centre.',
+  'Biscoff Filled Cookie': 'Molten Biscoff inside a caramelised shell.',
+  'Nutella Filled Cookie': 'Gooey Nutella centre in a soft chocolate cookie.',
+  'Nutella Cookie Tin': 'Six Nutella-filled cookies in a gift tin.',
+  'Biscoff Cookie Tin': 'Nine Biscoff-filled cookies, gift-ready.',
 };
 
 /* ---- Compact mobile product card — two-up grid, no ratings, ADD goes straight to cart ---- */
