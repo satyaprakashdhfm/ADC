@@ -9,7 +9,7 @@ import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, createRazorpayOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, getAvailableCoupons, getStallInfo, getSpinStatus, type Product, type Address, type OrderItemInput, type DeliveryCheck, type AvailableCoupon, type SpinClaim } from '@/lib/api';
+import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, createRazorpayOrder, verifyPayment, submitContact, firstImage, checkDeliveryPin, getAvailableCoupons, getSpinStatus, type Product, type Address, type OrderItemInput, type DeliveryCheck, type AvailableCoupon, type SpinClaim } from '@/lib/api';
 import { formatRemaining } from '@/lib/spinReward';
 import { whatsappLink, SITE_PHONE } from '@/lib/site';
 
@@ -481,7 +481,6 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [loginOpen, setLoginOpen] = useState(false);
   const [delivCheck, setDelivCheck] = useState<DeliveryCheck | null>(null);
   const [delivChecking, setDelivChecking] = useState(false);
-  const [todaysStall, setTodaysStall] = useState('');
 
   // Addresses are private to the signed-in user — fetch on login, clear on logout.
   useEffect(() => {
@@ -503,12 +502,6 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     if (!user) { setMySpinReward(null); return; }
     getSpinStatus().then(r => setMySpinReward(r.active)).catch(() => setMySpinReward(null));
   }, [user]);
-
-  // Admin-editable stall address (same setting the homepage "Today — please visit" card reads),
-  // shown on the stall-mode payment panel below — one place to update, not a hardcoded constant.
-  useEffect(() => {
-    getStallInfo().then(r => setTodaysStall(r.text || '')).catch(() => {});
-  }, []);
 
   // Auto-select an address once they load and nothing valid is selected:
   // prefer the default, else fall back to the first address (so users without a
@@ -777,35 +770,6 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     }
   };
 
-  // STALL MODE — no Razorpay: registers the order for real (PENDING payment, pay/collect at the
-  // stall) instead of opening the payment window, then shows the same success screen. Untouched
-  // once STALL_MODE flips off — handlePlace above takes back over.
-  const handlePlaceStall = async () => {
-    if (!user) { setLoginOpen(true); return; }
-    if (!addr || !addresses.some(a => a.id === addr)) { setPayError('Please select a delivery address first.'); return; }
-    if (lines.length === 0) { setPayError('Your cart is empty.'); return; }
-    setPayError('');
-    setPlacing(true);
-    try {
-      const items = await resolveOrderItems();
-      if (items.length === 0) {
-        setPlacing(false);
-        setPayError('Could not match your cart items to the menu. Please refresh the page, add them again, and retry.');
-        return;
-      }
-      const order = await createOrder(addr, applied ? coupon : undefined, items);
-      setPlacedOrderSummary({ items: lines.map(l => ({ name: l.name, qty: l.qty })), couponCode: applied ? coupon : null });
-      setPendingPayment(true);
-      setPaid(order.totalAmount);
-      setOrderId(order.orderNumber);
-      clearAll();
-      setDone(true);
-    } catch (e) {
-      setPlacing(false);
-      setPayError(e instanceof Error ? e.message : 'Could not place your order. Please try again, or message us on WhatsApp instead.');
-    }
-  };
-
   const card$: React.CSSProperties = { background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', padding: 24 };
   const head = (icon: React.ReactNode, label: string) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>{icon}<span style={{ font: 'var(--weight-bold) var(--text-base)/1 var(--font-body)', color: 'var(--text-strong)' }}>{label}</span></div>
@@ -1030,15 +994,6 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     </div>
                   )
                 )}
-                {todaysStall && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--border-default)', background: 'var(--amber-50)' }}>
-                    <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><MapPin size={16} style={{ color: 'var(--white)' }} /></span>
-                    <div>
-                      <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Prefer to visit? Our stall</div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{todaysStall}</div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div style={card$}>
@@ -1183,7 +1138,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 {head(<ShoppingBag size={18} color="var(--brand-secondary)" />, 'How to get your order')}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                    We&apos;re not taking online payment just yet — message us on WhatsApp or give us a call to place this order, or come find us in person.
+                    Online payments and delivery are launching soon — about a week away. Meanwhile, please visit our store, or message us on WhatsApp / give us a call to place this order.
                   </div>
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 160px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 'var(--radius-button)', background: 'var(--whatsapp-green)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
@@ -1193,11 +1148,6 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       Call {SITE_PHONE}
                     </a>
                   </div>
-                  {todaysStall && (
-                    <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-card)', background: 'var(--amber-50)', border: '1px solid var(--border-default)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', fontWeight: 700 }}>
-                      📍 Today&apos;s stall: {todaysStall}
-                    </div>
-                  )}
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
                     Or visit any of our stores — see all locations on the <a href="/locations" style={{ color: 'var(--text-link)', fontWeight: 700 }}>Locations page</a>.
                   </div>
@@ -1247,22 +1197,18 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             )}
           </>
         ) : STALL_MODE ? (
-          // STALL MODE — real payment trigger below (in the `false` branch) is untouched and
-          // ready to come straight back the moment STALL_MODE flips off. "Confirm order" here
-          // still registers a real order (PENDING payment, pay/collect at the stall) — it just
-          // skips Razorpay — so WhatsApp/Call stay as an alternative, not the only way through.
+          // STALL MODE, no order-placement path — online payments/delivery aren't live yet, so
+          // this step is just a handoff to WhatsApp/Call/in-person. Untouched real payment trigger
+          // is in the `false` branch below, ready to come straight back once STALL_MODE flips off.
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
-            {payError && (
-              <div style={{ margin: '0 auto 10px', padding: '10px 14px', borderRadius: 'var(--radius-button)', background: 'var(--red-wash)', border: '1.5px solid var(--status-error)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', fontWeight: 700, textAlign: 'center' }}>{payError}</div>
-            )}
-            <button onClick={() => user ? handlePlaceStall() : setLoginOpen(true)} disabled={placing} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: placing ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: placing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 }}>
-              {placing ? 'Placing your order…' : user ? <>Confirm order <Check size={18} /></> : <>Log in to confirm order <Lock size={18} /></>}
-            </button>
+            <div style={{ textAlign: 'center', marginBottom: 12, fontSize: 'var(--text-sm)', color: 'var(--text-muted)', fontWeight: 700, lineHeight: 1.5 }}>
+              Online payments &amp; delivery launch in about a week. Please visit our store meanwhile, or reach us below to place this order.
+            </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-button)', background: 'var(--whatsapp-green)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
+              <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 'var(--radius-button)', background: 'var(--whatsapp-green)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
                 WhatsApp us
               </a>
-              <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
+              <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
                 Call us
               </a>
             </div>
