@@ -17,7 +17,7 @@ import { whatsappLink, SITE_PHONE } from '@/lib/site';
 // payment step instead points people at WhatsApp/call/in-person ordering. Nothing below this is
 // deleted — every bit of the real checkout/payment flow still exists, just not rendered while
 // this is true. Flip back to false (and it all comes straight back) once online payment resumes.
-const STALL_MODE = true;
+const STALL_MODE = false;
 
 /* ---- Data ---- */
 const CATEGORIES = ['Cookies', 'Cookie Tins', 'Corporate Gifting'];
