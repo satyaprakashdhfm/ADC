@@ -40,7 +40,7 @@ export async function paymentWebhook(req, res) {
   if ((type === 'payment.captured' || type === 'order.paid') && rzpOrderId) {
     const order = await getOne('SELECT id, order_number FROM orders WHERE razorpay_order_id = $1', [rzpOrderId]);
     if (order) {
-      const r = await finalizePaidOrder(order.id, paymentId);
+      const r = await finalizePaidOrder(order.id, paymentId, paymentEntity);
       console.log(`[PAYMENT] webhook | order=${order.order_number} | ${r.alreadyPaid ? 'already_paid (handler beat us)' : 'marked PAID + shipment'}`);
     } else {
       console.log(`[PAYMENT] webhook | no local order matches rzpOrder=${rzpOrderId}`);
@@ -84,7 +84,13 @@ export async function paymentWebhook(req, res) {
       if (payment) {
         const STATUS_MAP = { 'refund.created': 'REFUND_INITIATED', 'refund.processed': 'REFUNDED', 'refund.failed': 'REFUND_FAILED' };
         const newStatus = STATUS_MAP[type];
-        await query('UPDATE payments SET status = $1 WHERE id = $2', [newStatus, payment.id]);
+        // Only record the refunded amount once the refund actually completes — 'created' is
+        // just the request being accepted, and a 'failed' one never moved any money.
+        if (type === 'refund.processed' && refundEntity?.amount != null) {
+          await query('UPDATE payments SET status = $1, amount_refunded = $2 WHERE id = $3', [newStatus, refundEntity.amount / 100, payment.id]);
+        } else {
+          await query('UPDATE payments SET status = $1 WHERE id = $2', [newStatus, payment.id]);
+        }
         const amount = refundEntity?.amount != null ? (refundEntity.amount / 100).toFixed(2) : '?';
         await query(
           'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
