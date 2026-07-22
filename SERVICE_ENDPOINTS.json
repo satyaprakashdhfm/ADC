@@ -11,6 +11,7 @@
     "auth": "HTTP Basic — base64(key_id:key_secret)",
     "codeFile": "src/razorpay.js, src/routes/orders.js, src/routes/paymentsWebhook.js",
     "realOrderUsedThroughout": "ADC20260722104807 (order id 63) — a genuine order you placed and paid for during this session. Every 'liveCaptured' sample below is the actual request/response for THIS real order, pulled straight from logs/razorpay-2026-07-22.log — not synthetic test data.",
+    "feeTaxMethodNowPersisted": "Added 2026-07-23: payments table gained razorpay_fee, razorpay_tax, method, card_network, card_last4, vpa, bank, amount_refunded columns. finalizePaidOrder() now pulls these straight out of the Razorpay payment object (already fetched for the status check above) on every new payment — no extra API call needed. NOT yet live-verified in our own DB — order 68/ADC20260722211553/pay_TGh3KrrOHwBks7 (fee=₹3.60, tax=₹0, method=card debit, network=Visa, last4=1111, seen on the Razorpay dashboard) was paid BEFORE this migration+code landed, so its payments row still has these columns NULL. Will confirm with the next real order placed after this deploys.",
     "endpoints": [
       {
         "purpose": "Create the Razorpay Order the Checkout popup attaches the payment to (best practice #2: Integrate Orders API)",
@@ -345,23 +346,23 @@
     ]
   },
 
-  "mailer_smtp": {
-    "docs": "SMTP protocol via Nodemailer — not a REST API",
+  "mailer": {
+    "docs": "https://resend.com/docs/api-reference/emails/send-email",
     "codeFile": "src/mailer.js",
-    "provider": "Zoho SMTP (smtp.zoho.in:465) in production, falls back to Gmail's service preset if MAIL_HOST unset",
+    "provider": "Resend (HTTPS API) — switched from Zoho SMTP on 2026-07-22",
+    "baseUrl": "https://api.resend.com",
+    "auth": "Authorization: Bearer <RESEND_API_KEY>",
+    "whySwitchedFromSmtp": "Railway's Hobby plan blocks ALL outbound SMTP (ports 25/465/587) — every send via Zoho SMTP was silently failing with a 10s connection timeout (confirmed: 100% failure rate across every real order placed, e.g. ADC20260722202856, ADC20260722203817, ADC20260722203833 — Railway support KB confirms SMTP is Pro-plan+ only). Resend's API is plain HTTPS, which Railway doesn't restrict. Old SMTP/nodemailer implementation kept commented out at the bottom of mailer.js (not deleted) as the fallback if this project ever moves to a Railway plan that allows SMTP again.",
+    "domainVerification": "adoughcookie.com verified in Resend via a dedicated 'send.' subdomain (MX + SPF + DKIM records scoped to send.adoughcookie.com) — deliberately does not touch the root domain's existing Zoho MX/SPF/DKIM, so Zoho Mail's inbox/webmail keeps working untouched. Emails still send FROM info@adoughcookie.com despite the verification living on the subdomain (Resend/SES support this pattern).",
     "endpoints": [
       {
-        "purpose": "Notify the business of a new contact-form enquiry",
+        "purpose": "Send an email (used for both contact-form notifications and order confirmations)",
         "used": true,
-        "ourEndpoint": "POST /api/contact",
-        "protocolNote": "SMTP SEND command, not a REST endpoint — 'from' is always \"a dough cookie\" <MAIL_USER>",
-        "sampleData_constructed": { "to": "info@adoughcookie.com", "replyTo": "customer@example.com", "subject": "New enquiry from Robert", "bodyFields": ["name", "email", "phone", "message"] }
-      },
-      {
-        "purpose": "Order confirmation to the customer + a copy to the business",
-        "used": true,
-        "ourEndpoint": "internal — finalizePaidOrder() in orders.js, called from /payment/verify and the Razorpay webhook",
-        "sampleData_liveCaptured": { "to": "satyaprakashreddy6789@gmail.com", "subject": "Your order ADC20260722104807 is placed 🍪" }
+        "ourEndpoint": "POST /api/contact  (business notification)  and  internal finalizePaidOrder() → sendOrderEmails() (order confirmation + business copy)",
+        "theirEndpoint": "POST https://api.resend.com/emails",
+        "sampleRequest_liveCaptured": { "from": "a dough cookie <info@adoughcookie.com>", "to": "pitchireddykummitha@gmail.com", "subject": "Your order ADC20260722211553 is placed 🍪" },
+        "sampleResponse_liveCaptured": { "id": "7a05d482-b83f-4e05-9d78-14c4975c25a0" },
+        "note": "Live-captured 2026-07-22 21:15:58 UTC — both the customer email (id 7a05d482…) and the business copy to info@adoughcookie.com (id b33cbe25…) sent successfully for real order ADC20260722211553. The immediately-prior order (ADC20260722210454, 21:04) failed with 'The adoughcookie.com domain is not verified' — domain verification finished in the ~11 minutes between the two, so this is a genuine before/after comparison, not a guess."
       }
     ]
   },
@@ -377,7 +378,12 @@
         "ourEndpoint": "POST /api/auth/log-location",
         "theirEndpoint": "GET https://ipapi.co/<ip>/json/",
         "sampleResponse_constructed": { "city": "Bengaluru", "region": "Karnataka", "country_name": "India" },
-        "note": "Never throws — a failed lookup just leaves the column unchanged; never blocks or delays login"
+        "note": "Never throws — a failed lookup just leaves the column unchanged; never blocks or delays login",
+        "realFinding_liveCaptured_2026-07-22": {
+          "xffParsedCorrectly": "user=7 | xff=\"13.234.202.9, 152.233.68.97\" | resolved_ip=13.234.202.9 — leftmost (real client) IP correctly extracted from the X-Forwarded-For chain, not Railway's proxy IP",
+          "butIpapiRateLimited": "user=7 | ✗ ipapi.co status=429 | {\"error\":true,\"reason\":\"RateLimited\",\"message\":\"Visit https://ipapi.co/ratelimited/ for details\"} — the free tier got rate-limited on a real request, so last_login_location stayed unset for this login",
+          "implication": "The XFF-parsing fix itself works correctly; the remaining gap is ipapi.co's free-tier rate limit, which is a real, observed failure mode (not hypothetical) — a busier login volume will hit this regularly. Not fixed yet — flagging for a decision (paid tier, a different free geolocation API, or accept the gaps) rather than silently living with it."
+        }
       }
     ]
   }
