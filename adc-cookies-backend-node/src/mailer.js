@@ -1,52 +1,55 @@
-import nodemailer from 'nodemailer';
+// import nodemailer from 'nodemailer'; // kept for the old SMTP path below — see note
 
 /*
- * Email via SMTP (Nodemailer). Works with Gmail OR any SMTP host (Zoho, etc.). Env vars:
- *   MAIL_USER          = the address that sends mail (e.g. info@adoughcookie.com)
- *   MAIL_APP_PASSWORD  = its app password (Gmail App password, or a Zoho app-specific password)
- *   BUSINESS_EMAIL     = where enquiries / order copies go (defaults to MAIL_USER)
- *   MAIL_HOST          = SMTP host — set for Zoho: smtp.zoho.in (India) or smtp.zoho.com
- *   MAIL_PORT          = SMTP port (default 465, SSL). MAIL_SECURE=false for STARTTLS on 587.
- *   (If MAIL_HOST is unset, it falls back to Gmail's service preset.)
+ * Email via Resend (HTTPS API) — https://resend.com
  *
- * If MAIL_USER / MAIL_APP_PASSWORD are not set, email is simply skipped (logged) — the
- * API keeps working. Sending never throws, so it can't break a request.
+ * Switched from SMTP/nodemailer because Railway's Hobby plan blocks outbound SMTP entirely
+ * (ports 25/465/587) — every send was failing with a silent 10s "Connection timeout". Resend's
+ * API runs over plain HTTPS, which Railway doesn't restrict, so it isn't affected.
+ *
+ * Env vars:
+ *   RESEND_API_KEY     = Resend API key
+ *   MAIL_USER          = the address that sends mail (e.g. info@adoughcookie.com) — must be on
+ *                        a domain verified in Resend
+ *   BUSINESS_EMAIL     = where enquiries / order copies go (defaults to MAIL_USER)
+ *
+ * If RESEND_API_KEY is not set, email is simply skipped (logged) — the API keeps working.
+ * Sending never throws, so it can't break a request.
+ *
+ * The old SMTP/nodemailer implementation is kept commented out at the bottom of this file —
+ * Railway's outbound SMTP block only lifts on the Pro plan and above, so that's the fallback
+ * to restore if this project ever moves off Hobby and back to SMTP.
  */
 
 function cfg() {
   return {
     user: process.env.MAIL_USER || '',
-    pass: (process.env.MAIL_APP_PASSWORD || '').replace(/\s+/g, ''), // app passwords are shown with spaces
     business: process.env.BUSINESS_EMAIL || process.env.MAIL_USER || '',
   };
 }
 
-let transporter = null;
-function transport() {
-  const { user, pass } = cfg();
-  if (!user || !pass) return null;
-  if (!transporter) {
-    const host = process.env.MAIL_HOST || '';
-    // Custom host (e.g. Zoho) if MAIL_HOST is set; otherwise Gmail's service preset.
-    const base = host
-      ? { host, port: Number(process.env.MAIL_PORT || 465), secure: String(process.env.MAIL_SECURE ?? 'true') !== 'false' }
-      : { service: 'gmail' };
-    transporter = nodemailer.createTransport({
-      ...base,
-      auth: { user, pass },
-      connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
-    });
-  }
-  return transporter;
-}
-
 async function send({ to, subject, html, replyTo }) {
   if (!to) return;
-  const t = transport();
-  if (!t) { console.warn('[mailer] disabled (set MAIL_USER & MAIL_APP_PASSWORD). Skipped:', subject); return; }
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) { console.warn('[mailer] disabled (set RESEND_API_KEY). Skipped:', subject); return; }
   try {
-    await t.sendMail({ from: `"a dough cookie" <${cfg().user}>`, to, subject, html, replyTo });
-    console.log('[mailer] sent:', subject, '→', to);
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: `a dough cookie <${cfg().user}>`,
+        to,
+        subject,
+        html,
+        ...(replyTo ? { reply_to: replyTo } : {}),
+      }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      console.error('[mailer] send failed:', subject, '-', body?.message || `HTTP ${res.status}`);
+      return;
+    }
+    console.log('[mailer] sent:', subject, '→', to, '(id:', (body?.id || '?') + ')');
   } catch (e) {
     console.error('[mailer] send failed:', subject, '-', e.message);
   }
@@ -120,3 +123,52 @@ export async function sendOrderEmails(o) {
     await send({ to: business, subject: `New order ${o.orderNumber} — ${rupee(o.total)}`, html: shell('New order received', orderBody(o, true)) });
   }
 }
+
+/* ---- Previous SMTP/nodemailer implementation (kept for reference/fallback) ----
+ * Works with Gmail OR any SMTP host (Zoho, etc.). Env vars it used:
+ *   MAIL_USER          = the address that sends mail (e.g. info@adoughcookie.com)
+ *   MAIL_APP_PASSWORD  = its app password (Gmail App password, or a Zoho app-specific password)
+ *   BUSINESS_EMAIL     = where enquiries / order copies go (defaults to MAIL_USER)
+ *   MAIL_HOST          = SMTP host — set for Zoho: smtp.zoho.in (India) or smtp.zoho.com
+ *   MAIL_PORT          = SMTP port (default 465, SSL). MAIL_SECURE=false for STARTTLS on 587.
+ *   (If MAIL_HOST is unset, it falls back to Gmail's service preset.)
+ *
+function cfgSmtp() {
+  return {
+    user: process.env.MAIL_USER || '',
+    pass: (process.env.MAIL_APP_PASSWORD || '').replace(/\s+/g, ''), // app passwords are shown with spaces
+    business: process.env.BUSINESS_EMAIL || process.env.MAIL_USER || '',
+  };
+}
+
+let transporter = null;
+function transport() {
+  const { user, pass } = cfgSmtp();
+  if (!user || !pass) return null;
+  if (!transporter) {
+    const host = process.env.MAIL_HOST || '';
+    // Custom host (e.g. Zoho) if MAIL_HOST is set; otherwise Gmail's service preset.
+    const base = host
+      ? { host, port: Number(process.env.MAIL_PORT || 465), secure: String(process.env.MAIL_SECURE ?? 'true') !== 'false' }
+      : { service: 'gmail' };
+    transporter = nodemailer.createTransport({
+      ...base,
+      auth: { user, pass },
+      connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
+    });
+  }
+  return transporter;
+}
+
+async function sendSmtp({ to, subject, html, replyTo }) {
+  if (!to) return;
+  const t = transport();
+  if (!t) { console.warn('[mailer] disabled (set MAIL_USER & MAIL_APP_PASSWORD). Skipped:', subject); return; }
+  try {
+    await t.sendMail({ from: `"a dough cookie" <${cfgSmtp().user}>`, to, subject, html, replyTo });
+    console.log('[mailer] sent:', subject, '→', to);
+  } catch (e) {
+    console.error('[mailer] send failed:', subject, '-', e.message);
+  }
+}
+---- end previous implementation ---- */
