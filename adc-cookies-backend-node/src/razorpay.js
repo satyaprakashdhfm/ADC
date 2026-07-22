@@ -86,6 +86,35 @@ export async function createRefund(paymentId, { amountPaise, notes, speed = 'nor
   }
 }
 
+// Fetch a payment's actual server-side status/amount directly from Razorpay — per Razorpay's
+// own Third Party Validation best-practices doc: "Check Payment/Order Status Before Providing
+// Services". Signature verification proves the data wasn't tampered with in transit, but this
+// is the separate, additional confirmation that the payment is genuinely `captured` (not just
+// `authorized`/`failed`) before we mark the order PAID and dispatch a shipment.
+export async function fetchPayment(paymentId) {
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${BASE}/payments/${paymentId}`, {
+      method: 'GET',
+      headers: { Authorization: authHeader() },
+    });
+    const data = await res.json().catch(() => null);
+    const durationMs = Date.now() - t0;
+    if (!res.ok) {
+      console.log(`[RAZORPAY] payment-fetch | ✗ payment=${paymentId} | status=${res.status}`);
+      logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/payments/${paymentId}`, response: data, status: res.status, ok: false, durationMs });
+      return { ok: false, reason: data?.error?.description || `api_error_${res.status}` };
+    }
+    console.log(`[RAZORPAY] payment-fetch | ✓ payment=${paymentId} | status=${data.status} | amount=${data.amount}`);
+    logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/payments/${paymentId}`, response: data, status: res.status, ok: true, durationMs });
+    return { ok: true, payment: data };
+  } catch (err) {
+    console.log(`[RAZORPAY] payment-fetch | ✗ network_error: ${err.message}`);
+    logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/payments/${paymentId}`, ok: false, durationMs: Date.now() - t0, error: err.message });
+    return { ok: false, reason: 'network_error' };
+  }
+}
+
 // Verify the Checkout signature: HMAC_SHA256(order_id|payment_id, secret) === signature.
 export function verifyPaymentSignature({ orderId, paymentId, signature }) {
   const ok = !!(KEY_SECRET && orderId && paymentId && signature) &&
