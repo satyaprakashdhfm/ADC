@@ -10,9 +10,9 @@ import {
   adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
-  adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument, adminFetchShadowfaxDoc,
+  adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument, adminFetchShadowfaxDoc, adminGetShadowfaxStores,
   type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type CouponInput, type AdminMessage,
-  type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput, type ShadowfaxDocResult,
+  type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput, type ShadowfaxDocResult, type ShadowfaxStore,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
@@ -135,6 +135,7 @@ export default function AdminDashboard() {
   const [shipmentWeights, setShipmentWeights] = useState<Record<number, string>>({});
   const [delivSub, setDelivSub] = useState<'main' | 'shadowfax' | 'delhivery'>('main');
   const [sfxDoc, setSfxDoc] = useState<Record<number, ShadowfaxDocResult | { error: string }>>({});
+  const [sfxStores, setSfxStores] = useState<ShadowfaxStore[] | null>(null);
 
   const EMPTY_WH: WarehouseInput = { name: '', registeredName: '', pickupLocation: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', returnPincode: '', phone: '', email: '', isDefault: false, skipDelhivery: false };
 
@@ -155,8 +156,9 @@ export default function AdminDashboard() {
     if (tab === 'delivery') {
       if (warehouses === null) adminGetWarehouses().then(setWarehouses).catch(() => setWarehouses([]));
       if (orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
+      if (sfxStores === null) adminGetShadowfaxStores().then(setSfxStores).catch(() => setSfxStores([]));
     }
-  }, [tab, isAdmin, orders, products, coupons, users, messages]);
+  }, [tab, isAdmin, orders, products, coupons, users, messages, sfxStores]);
 
   const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); adminDashboard().then(setStats).catch(() => {}); }, []);
 
@@ -705,6 +707,30 @@ export default function AdminDashboard() {
             </>)}
 
             {delivSub === 'shadowfax' && (
+              <>
+              <Panel title="Shadowfax — pickup stores" loading={sfxStores === null}
+                action={sfxStores === null ? undefined : <button onClick={() => adminGetShadowfaxStores().then(setSfxStores).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+                {sfxStores && (
+                  <>
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                      Our real stores that can act as a Shadowfax pickup point. &quot;Not serviceable&quot; means Shadowfax doesn&apos;t currently service that store&apos;s pincode on the connected environment — orders will automatically fall back to the next in-zone store, or to Delhivery if none work. Checked live against Shadowfax just now, not cached.
+                    </p>
+                    <Table head={['Store', 'City', 'Pincode', 'Status', 'Services']}>
+                      {sfxStores.map((s) => (
+                        <tr key={s.pincode} style={{ opacity: s.serviceable === false ? 0.45 : 1 }}>
+                          <td style={td}><strong style={{ color: 'var(--text-strong)' }}>{s.name}</strong></td>
+                          <td style={td}>{s.city}, {s.state}</td>
+                          <td style={td}><span style={{ fontFamily: 'monospace' }}>{s.pincode}</span></td>
+                          <td style={td}>
+                            {s.serviceable === null ? <Badge text="Unknown" /> : s.serviceable ? <Badge text="Serviceable" ok /> : <Badge text="Not serviceable" />}
+                          </td>
+                          <td style={td}>{s.services.length ? s.services.join(' / ') : '—'}</td>
+                        </tr>
+                      ))}
+                    </Table>
+                  </>
+                )}
+              </Panel>
               <Panel title="Shadowfax — intracity orders" loading={orders === null}
                 action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
                 {orders && (() => {
@@ -772,6 +798,7 @@ export default function AdminDashboard() {
                 })()}
                 {orders === null && <button onClick={() => adminGetOrders().then(setOrders).catch(() => setOrders([]))} style={addBtn}>Load orders</button>}
               </Panel>
+              </>
             )}
           </div>
         )}

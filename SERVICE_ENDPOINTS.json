@@ -1,6 +1,6 @@
 {
   "_readme": "One entry per third-party integration. 'ourEndpoint' = the route on OUR backend that triggers the call (or receives their webhook). 'theirEndpoint' = the real third-party REST endpoint we hit. 'sampleRequest'/'sampleResponse' marked (live-captured) are REAL payloads captured this session via logs/<service>-*.log or a direct safe test call; everything else is (constructed) — built from the exact field names our own code reads/writes, not guessed. 'used: false' entries are real endpoints this provider offers that our code does NOT call today — candidates for 'better handling' work.",
-  "generatedAt": "2026-07-22 (razorpay section refreshed 2026-07-23 with real order data, no more placeholder samples)",
+  "generatedAt": "2026-07-22 (refreshed 2026-07-23: razorpay fee/tax/method persistence + real order data, mailer switched SMTP→Resend, auth ipapi.co rate-limit finding, shadowfax real production data + dead-serviceability-check gap)",
   "codeFile": "adc-cookies-backend-node/src/",
 
   "razorpay": {
@@ -187,18 +187,36 @@
   },
 
   "shadowfax": {
-    "docs": "Shadowfax Unified API (client-provided PDF docs, adc-cookies-backend-node/documentations/shadowfax.md)",
+    "docs": "Shadowfax's official Apiary-hosted API docs (full reference read 2026-07-23, cross-checked against our code — see findings below); also adc-cookies-backend-node/documentations/shadowfax.md",
     "mode": "staging (https://dale.staging.shadowfax.in/api) — used as the INTRACITY/same-day carrier for orders delivering to a city where we have a store (Bengaluru, Chennai)",
     "codeFile": "src/shadowfax.js",
     "auth": "Authorization: Token <SHADOWFAX_API>",
     "prepaidOnly": "cod_amount is always '0' / payment_mode 'Prepaid' — ADC never accepts COD",
+    "officialStagingTestPincodes_confirmedLive_2026-07-23": {
+      "note": "Shadowfax's own docs list these 3 as sample serviceable pincodes for testing order creation on staging. Confirmed directly against the real serviceability API (not assumed from docs) — all 3 genuinely serviceable right now.",
+      "110009": { "serviceable": true, "services": ["Large", "Regular", "Surface"] },
+      "560077": { "serviceable": true, "services": ["Regular"] },
+      "560007": { "serviceable": true, "services": ["Large", "Regular", "Surface"] }
+    },
+    "ourRealStorePincodes_serviceabilityConfirmedLive_2026-07-23": {
+      "note": "Checked our 3 Bengaluru store pincodes (the ones zoneStores()/nearestStore() in src/shadowfax.js actually route pickups to) against the same live API. Now also surfaced in Admin → Delivery → Shadowfax tab as a 'pickup stores' panel, dulled/greyed out when not serviceable, live-checked on every page load (not cached).",
+      "560100": { "store": "A Dough Cookie — Electronic City", "serviceable": true, "services": ["Regular"] },
+      "560029": { "store": "A Dough Cookie — S.G. Palya", "serviceable": true, "services": ["Regular"] },
+      "560041": { "store": "A Dough Cookie — Jayanagar", "serviceable": false, "services": [] }
+    },
+    "dbCheck_2026-07-23": "Queried all 9 orders with carrier=SHADOWFAX — all consistent (waybill + tracking_url correctly populated, no nulls where data is expected). One universal-but-harmless gap found, NOT Shadowfax-specific: delhivery_waybill/tracking_url are set correctly on every order regardless of carrier, but delhivery_shipment_id and estimated_delivery are NULL on 100% of orders (checked both SHADOWFAX and DELHIVERY carriers) — the shipment-creation code never writes to either column for any carrier. Not corrupted data, just two schema columns nothing currently populates.",
+    "invoiceGeneration_answeredDirectly_2026-07-23": "NO — read Shadowfax's complete official API reference (Serviceability, AWB Generation, Order Creation x2, Order Details, Update Order, Order Cancellation, Escalation, POD, QR Code) end to end: there is no invoice-generation or invoice-download endpoint anywhere in their API. The closest thing is 'Generate QR Code' (below) — but that only creates a payment QR code referencing an invoice number/GSTIN/amount YOU already have, it doesn't generate the invoice document itself, and it's explicitly COD-only ('QR Code can only be generated for COD') so it can never apply to ADC anyway (prepaid-only). Confirms what was already suspected earlier this project, now backed by the full official docs rather than a partial read.",
+    "statusLabelCrossCheck_2026-07-23": "Compared src/shadowfax.js's SFX_STATUS_LABELS/SFX_STATUS_RANK against the official Marketplace order-states table. One real mismatch: our webhook handler was live-tested earlier this project with event 'seller_pickup_done' (see the webhook entry below) and our code recognizes it — but the official docs' Marketplace tracking AND Push-callback state tables both use 'picked' for that meaning, not 'seller_pickup_done'. Not a functional bug (sfxStatusLabel() gracefully title-cases any unrecognized status instead of crashing), but worth knowing Shadowfax's real webhook payloads may use event names slightly off from their own published docs.",
     "endpoints": [
       {
         "purpose": "Check if a pincode is serviceable for customer delivery",
-        "used": true,
-        "ourEndpoint": "internal — not directly exposed as its own route; used defensively before order creation",
+        "used": false,
+        "ourEndpoint": "NONE — sfxServiceability() is fully implemented in src/shadowfax.js but is DEAD CODE, never called from anywhere in the backend",
         "theirEndpoint": "GET /v1/clients/serviceability/?service=customer_delivery&pincodes=<pin>&count=5",
-        "sampleResponse_constructed": [{ "code": "560041", "services": ["customer_delivery"] }]
+        "sampleRequest_liveCaptured": { "query": { "service": "customer_delivery", "pincodes": "560041", "count": 5 } },
+        "sampleResponse_liveCaptured": [],
+        "note_realResult": "560041 (our Jayanagar store) returns an EMPTY array — genuinely not serviceable on staging right now, confirmed live 2026-07-23, not a guess.",
+        "realGapFound_2026-07-23": "Checked src/routes/delivery.js /check route (what the checkout page calls to decide 'same-day Shadowfax' vs 'Pan-India Delhivery' and show the customer a delivery promise) — it ONLY does a local pincode-prefix match against the hardcoded SFX_STORES list (nearestStore()), it never calls this real serviceability API. Confirmed this caused a live mismatch: order ADC20260722210454 (id 68, dest pincode 560087) was told at checkout 'same-day from A Dough Cookie — Electronic City' via SHADOWFAX, but when the real shipment-creation call ran after payment, Shadowfax rejected all 3 in-zone pickup attempts with 'Invalid Delivery Pincode. Pincode 560087 is not serviceble' and the order silently fell back to Delhivery Pan-India instead. The order's OWN data ended up correct (order.carrier=DELHIVERY, and the customer's order confirmation correctly showed 'Pan-India · Delhivery' — verified from the user's own screenshot), so nothing is corrupted — but the checkout-time promise was wrong, and the switch to a slower carrier was never explicitly surfaced to the customer as a change. Wiring sfxServiceability() into /check would fix this at the source, but that's a product decision, not yet made."
       },
       {
         "purpose": "Create a forward (marketplace) intracity order — pickup from our store, deliver to customer",
@@ -206,7 +224,12 @@
         "ourEndpoint": "internal — order auto-shipment flow, tries each in-zone store nearest-first",
         "theirEndpoint": "POST /v3/clients/orders/",
         "sampleRequest_constructed": { "order_type": "marketplace", "order_details": { "client_order_id": "ADC20260722104807", "actual_weight": 500, "product_value": 130, "payment_mode": "Prepaid", "cod_amount": "0", "total_amount": 130, "order_service": "regular" }, "customer_details": { "name": "Satya Prakash", "contact": "9381502998", "address_line_1": "…", "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 }, "pickup_details": { "name": "A Dough Cookie — Electronic City", "contact": "9381502998", "address_line_1": "…", "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 }, "product_details": [{ "sku_name": "Double Choco Chip Cookie", "price": 65, "category": "Food" }] },
-        "sampleResponse_constructed": { "message": "Success", "data": { "awb_number": "SF1784684342DOF" } }
+        "sampleResponse_constructed": { "message": "Success", "data": { "awb_number": "SF1784684342DOF" } },
+        "realCallsConfirmed_viaRailwayLogs": [
+          "2026-07-22T20:29:36Z — order ADC20260722202856 (id 64), dest=560100 → ✓ awb=SF1788389792DOF (pickup override 560007 used, real store pin 560100 — staging sandbox only services a handful of pickup pins, see SHADOWFAX_TEST_PICKUP_PIN note below)",
+          "2026-07-22T21:05:27Z — order ADC20260722210454 (id 68), dest=560087 → ✗ all 3 in-zone pickups rejected 'Invalid Delivery Pincode. Pincode 560087 is not serviceble', auto-fell-back to Delhivery (waybill 85582010000302) — see the dead-serviceability-check gap noted above"
+        ],
+        "sandboxNote": "SHADOWFAX_TEST_PICKUP_PIN env var overrides our real store pincode (560100/560041/560029) with a staging-accepted one (560007) for the PICKUP side only — the destination pincode is always the real customer address. Must be left UNSET in production."
       },
       {
         "purpose": "Live tracking for an AWB",
@@ -231,10 +254,28 @@
         "sampleRequest_realWorldTested": { "awb_number": "SF1770170860DOF", "event": "seller_pickup_done", "status": "Picked up from store", "comments": "Rider collected the order", "event_timestamp": "2026-07-17T00:00:00+05:30" }
       },
       {
-        "purpose": "COD UPI-QR generator",
+        "purpose": "COD UPI-QR generator (closest thing to 'invoicing' Shadowfax offers — see invoiceGeneration note above; does NOT generate an invoice document, just a payment QR referencing one)",
         "used": false,
-        "theirEndpoint": "POST /api/v2/clients/qr_code/generate/",
-        "whyNotUsed": "COD-only feature — ADC is prepaid-only, so this endpoint can never apply"
+        "theirEndpoint": "POST https://saruman.staging.shadowfax.in/api/v2/clients/qr_code/generate/  (note: different subdomain — saruman, not dale — from every other Shadowfax endpoint we use)",
+        "whyNotUsed": "COD-only feature ('QR Code can only be generated for COD' per their own error message) — ADC is prepaid-only, so this endpoint can never apply"
+      },
+      {
+        "purpose": "Cancel an order (by AWB or client_order_id)",
+        "used": false,
+        "theirEndpoint": "not given as a concrete URL in the docs snapshot we have — only documented behavior (successful cancel: 200 'Request has been marked as cancelled'; queued for certain in-flight statuses: 304; already-delivered: 400 'Order cannot be cancelled. Invalid state.')",
+        "whyNotUsed": "Never implemented for Shadowfax — Delhivery has a cancel-shipment route (DELETE /api/admin/orders/:id/shipment) but there's no Shadowfax equivalent in admin.js today. Candidate for 'better handling' if a customer needs to cancel an intracity order after it's created."
+      },
+      {
+        "purpose": "Update order data (edit delivery_details/pickup_details/return_details, or transition status to rts/rto/reopen_ndr from on_hold/cancelled_by_customer)",
+        "used": false,
+        "theirEndpoint": "POST https://dale.staging.shadowfax.in/api/v3/clients/order_update/",
+        "whyNotUsed": "Never implemented — no current admin flow to correct a wrong address or re-open a stuck Shadowfax order after creation."
+      },
+      {
+        "purpose": "Escalation API — raise a support ticket for delayed delivery, expedite pickup, status mismatch, or delivery dispute",
+        "used": false,
+        "theirEndpoint": "not given as a concrete URL in the docs snapshot we have — only the issue-category codes (1=Delayed Delivery, 2=Expedite Pickup-Customer, 3=Expedite Pickup-Seller, 4=Status Mismatch, 5=Delivery Dispute)",
+        "whyNotUsed": "Never implemented — currently any Shadowfax delivery problem would have to be escalated manually outside the app (email/dashboard), not through this API."
       },
       {
         "purpose": "Printable shipping label",
@@ -244,7 +285,7 @@
       {
         "purpose": "Order/tax invoice",
         "used": false,
-        "whyNotUsed": "Confirmed earlier this project: Shadowfax's API has no invoice-generation endpoint at all"
+        "whyNotUsed": "See invoiceGeneration_answeredDirectly_2026-07-23 note at the top of this section — now confirmed against Shadowfax's complete official API reference, not a partial read: no invoice-generation endpoint exists anywhere in their API."
       }
     ]
   },

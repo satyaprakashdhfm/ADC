@@ -434,6 +434,15 @@ export async function adminToggleWarehouse(id: number): Promise<Warehouse> {
   return request(`/admin/delivery/warehouses/${id}/toggle`, { method: 'PATCH' });
 }
 
+/* ---- Admin: Delivery — Shadowfax stores ---- */
+export interface ShadowfaxStore {
+  name: string; city: string; state: string; pincode: number;
+  serviceable: boolean | null; // null = couldn't check (Shadowfax not configured)
+  services: string[];
+}
+/** All Shadowfax pickup stores, each live-checked against Shadowfax's serviceability API. */
+export async function adminGetShadowfaxStores(): Promise<ShadowfaxStore[]> { return request('/admin/delivery/shadowfax-stores'); }
+
 /* ---- Admin: Delivery — Shipping cost ---- */
 export interface ShippingCostResult { ok: boolean; data?: unknown; reason?: string; }
 export async function adminGetShippingCost(destPin: string, weight = 0.5): Promise<ShippingCostResult> {
