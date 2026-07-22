@@ -71,6 +71,52 @@ export async function paymentWebhook(req, res) {
     }
   }
 
+  // Refunds — issued either via our own admin action or directly in the Razorpay dashboard.
+  // Either way, THIS webhook is the only authoritative confirmation a refund actually completed
+  // (refunds process async on Razorpay's side, so a refund-create API call succeeding doesn't
+  // mean the money has moved yet). We key off payment_id since the refund entity doesn't carry
+  // our order id directly.
+  if (type === 'refund.created' || type === 'refund.processed' || type === 'refund.failed') {
+    const refundEntity = event?.payload?.refund?.entity;
+    const rzpPaymentId = refundEntity?.payment_id;
+    if (rzpPaymentId) {
+      const payment = await getOne('SELECT id, order_id FROM payments WHERE transaction_id = $1', [rzpPaymentId]);
+      if (payment) {
+        const STATUS_MAP = { 'refund.created': 'REFUND_INITIATED', 'refund.processed': 'REFUNDED', 'refund.failed': 'REFUND_FAILED' };
+        const newStatus = STATUS_MAP[type];
+        await query('UPDATE payments SET status = $1 WHERE id = $2', [newStatus, payment.id]);
+        const amount = refundEntity?.amount != null ? (refundEntity.amount / 100).toFixed(2) : '?';
+        await query(
+          'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+          [payment.order_id, newStatus, `Refund ${refundEntity?.id || ''} — ₹${amount} — ${type}`, nowIso()]
+        );
+        console.log(`[PAYMENT] webhook | ${type} | order_id=${payment.order_id} | refund=${refundEntity?.id} | ₹${amount}`);
+      } else {
+        console.log(`[PAYMENT] webhook | ${type} | no local payment matches rzpPayment=${rzpPaymentId}`);
+      }
+    }
+  }
+
+  // Chargeback / dispute — rare, but money-at-risk, so it must never be silently invisible.
+  if (type === 'payment.dispute.created') {
+    const disputeEntity = event?.payload?.dispute?.entity;
+    const rzpPaymentId = disputeEntity?.payment_id;
+    if (rzpPaymentId) {
+      const payment = await getOne('SELECT id, order_id FROM payments WHERE transaction_id = $1', [rzpPaymentId]);
+      if (payment) {
+        const amount = disputeEntity?.amount != null ? (disputeEntity.amount / 100).toFixed(2) : '?';
+        const respondBy = disputeEntity?.respond_by ? new Date(disputeEntity.respond_by * 1000).toISOString() : 'ASAP';
+        await query(
+          'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+          [payment.order_id, 'DISPUTE_OPENED', `⚠ Chargeback/dispute opened — ₹${amount} — reason=${disputeEntity?.reason_code || 'unknown'} — respond by ${respondBy}`, nowIso()]
+        );
+        console.log(`[PAYMENT] webhook | ⚠ DISPUTE opened | order_id=${payment.order_id} | payment=${rzpPaymentId}`);
+      } else {
+        console.log(`[PAYMENT] webhook | payment.dispute.created | no local payment matches rzpPayment=${rzpPaymentId}`);
+      }
+    }
+  }
+
   // Always 200 once received & verified, so Razorpay stops retrying.
   res.json({ ok: true });
 }

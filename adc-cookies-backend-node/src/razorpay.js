@@ -56,6 +56,36 @@ export async function createRazorpayOrder({ amountPaise, receipt, notes } = {}) 
   }
 }
 
+// Refund a captured payment (full refund if amountPaise is omitted). Safe to call in TEST
+// mode — no real money moves. Used by the admin "refund" action; the actual confirmation of
+// a refund completing comes back later via the refund.processed webhook (Razorpay processes
+// refunds async), not from this call's response alone.
+export async function createRefund(paymentId, { amountPaise, notes, speed = 'normal' } = {}) {
+  const requestBody = { speed, ...(amountPaise != null ? { amount: amountPaise } : {}), ...(notes ? { notes } : {}) };
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${BASE}/payments/${paymentId}/refund`, {
+      method: 'POST',
+      headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+    const data = await res.json().catch(() => null);
+    const durationMs = Date.now() - t0;
+    if (!res.ok) {
+      console.log(`[RAZORPAY] refund-create | ✗ payment=${paymentId} | status=${res.status} | ${JSON.stringify(data).slice(0, 200)}`);
+      logApiCall({ service: 'razorpay', method: 'POST', endpoint: `/v1/payments/${paymentId}/refund`, request: requestBody, response: data, status: res.status, ok: false, durationMs });
+      return { ok: false, reason: data?.error?.description || `api_error_${res.status}` };
+    }
+    console.log(`[RAZORPAY] refund-create | ✓ payment=${paymentId} | refund=${data.id} | amount=${data.amount}`);
+    logApiCall({ service: 'razorpay', method: 'POST', endpoint: `/v1/payments/${paymentId}/refund`, request: requestBody, response: data, status: res.status, ok: true, durationMs });
+    return { ok: true, refund: data };
+  } catch (err) {
+    console.log(`[RAZORPAY] refund-create | ✗ network_error: ${err.message}`);
+    logApiCall({ service: 'razorpay', method: 'POST', endpoint: `/v1/payments/${paymentId}/refund`, request: requestBody, ok: false, durationMs: Date.now() - t0, error: err.message });
+    return { ok: false, reason: 'network_error' };
+  }
+}
+
 // Verify the Checkout signature: HMAC_SHA256(order_id|payment_id, secret) === signature.
 export function verifyPaymentSignature({ orderId, paymentId, signature }) {
   const ok = !!(KEY_SECRET && orderId && paymentId && signature) &&
