@@ -20,6 +20,7 @@ import contactRoutes from './routes/contact.js';
 import deliveryRoutes from './routes/delivery.js';
 import shadowfaxWebhookRoutes from './routes/shadowfax.js';
 import { paymentWebhook } from './routes/paymentsWebhook.js';
+import { paymentCallback } from './routes/orders.js';
 
 const PORT = Number(process.env.PORT || 8080);
 
@@ -56,6 +57,11 @@ app.use(cors({
 // Razorpay webhook needs the RAW body for signature verification, so mount it with a raw
 // parser BEFORE the JSON parser (and before parseAuth — it's authenticated by signature).
 app.post('/api/payments/webhook', express.raw({ type: '*/*' }), paymentWebhook);
+
+// Razorpay's redirect callback (browser form POST, not server-to-server) — for in-app browsers
+// (Instagram/FB Messenger, Opera Mini, UC) that can't run the normal iframe/popup Checkout.
+// Public by design: mounted directly here, NOT through the auth-gated /api/orders router.
+app.post('/api/payment-callback/:orderId', express.urlencoded({ extended: false }), paymentCallback);
 
 app.use(express.json({ limit: '64kb' }));
 

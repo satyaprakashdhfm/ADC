@@ -154,6 +154,9 @@ interface RazorpayOptions {
   theme?: { color?: string };
   handler: (resp: RazorpayResponse) => void;
   modal?: { ondismiss?: () => void };
+  // Fallback for browsers that can't run the iframe/popup flow (Instagram/FB Messenger in-app
+  // browser, Opera Mini, UC Browser) — Checkout redirects there instead of calling `handler`.
+  callback_url?: string;
 }
 interface RazorpayInstance { open: () => void; on: (event: string, cb: (resp: { error?: { description?: string } }) => void) => void; }
 declare global { interface Window { Razorpay?: new (opts: RazorpayOptions) => RazorpayInstance; } }
@@ -734,6 +737,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         description: `Order ${rp.orderNumber}`,
         prefill: { name: user.name || '', email: user.email || '', contact: chosen?.phone || '' },
         theme: { color: 'var(--orange-cta)' },
+        // Fallback path for Instagram/FB Messenger/Opera Mini/UC in-app browsers, which can't run
+        // the iframe/popup flow below — Checkout redirects there instead of calling `handler`.
+        // It's a browser navigation (not server-to-server), so `/api/...` works via the same
+        // Next.js rewrite proxy every other API call already uses.
+        callback_url: `${window.location.origin}/api/payment-callback/${order.id}?return=${encodeURIComponent(window.location.origin)}`,
         handler: async (resp) => {
           try {
             await verifyPayment(order.id, {

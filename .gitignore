@@ -23,3 +23,7 @@ coverage/
 next-env.d.ts
 .vercel
 .mcp.json
+
+# local ngrok binary + download artifact (for tunneling the local backend to test webhooks)
+/ngrok.exe
+/ngrok.zip

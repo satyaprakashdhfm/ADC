@@ -7,7 +7,7 @@ import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct 
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
 import { shadowfaxConfigured, createShadowfaxOrder, zoneStores, trackShadowfax, sfxStatusLabel, sfxStatusRank } from '../shadowfax.js';
-import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from '../razorpay.js';
+import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment } from '../razorpay.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -421,10 +421,74 @@ router.post('/:id/payment/verify', async (req, res) => {
     console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ bad_signature`);
     throw new ApiError('Payment signature verification failed', 400);
   }
-  console.log(`[PAYMENT] verify | order=${order.order_number} | ✓ signature_ok → marking PAID`);
+  console.log(`[PAYMENT] verify | order=${order.order_number} | ✓ signature_ok`);
+
+  // Razorpay's Third Party Validation best practice: don't just trust the signature — confirm
+  // the payment's actual status and amount server-side via a direct API call before providing
+  // services. The signature only proves the fields weren't tampered with in transit; this
+  // proves the payment is genuinely `captured` (not `authorized`/`failed`) for the right amount.
+  const pf = await fetchPayment(razorpayPaymentId);
+  if (!pf.ok) {
+    console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ could not confirm status with Razorpay: ${pf.reason}`);
+    throw new ApiError('Could not confirm your payment status with Razorpay. Please contact us with your order number.', 502);
+  }
+  if (pf.payment.status !== 'captured') {
+    console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ status=${pf.payment.status} (not captured)`);
+    throw new ApiError(`Payment is not yet captured (status: ${pf.payment.status}). Please contact us if money was deducted.`, 402);
+  }
+  const expectedPaise = Math.round(Number(order.total_amount) * 100);
+  if (pf.payment.order_id !== razorpayOrderId || Number(pf.payment.amount) !== expectedPaise) {
+    console.log(`[PAYMENT] verify | order=${order.order_number} | ✗ amount/order mismatch | expected order=${razorpayOrderId} amount=${expectedPaise} | got order=${pf.payment.order_id} amount=${pf.payment.amount}`);
+    throw new ApiError('Payment details do not match this order. Please contact us.', 400);
+  }
+  console.log(`[PAYMENT] verify | order=${order.order_number} | ✓ status_confirmed_captured → marking PAID`);
 
   await finalizePaidOrder(order.id, razorpayPaymentId);
   res.json(await fullOrder(order.id));
 });
+
+// Public — Razorpay's redirect callback for browsers that can't run the iframe/popup Checkout
+// flow (Instagram/Facebook Messenger in-app browser, Opera Mini, UC Browser). Checkout submits
+// razorpay_payment_id/order_id/signature as a browser FORM POST (not a server-to-server call,
+// so this works in local dev too — it's the customer's own browser navigating here, same as
+// clicking a link). Mounted directly on `app` in server.js (NOT this router) so it bypasses
+// `requireAuth` — Razorpay's redirect carries no Bearer token.
+function isAllowedReturnOrigin(url) {
+  try {
+    const u = new URL(url);
+    const allowed = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+    return allowed.includes(u.origin) || /^https?:\/\/localhost(:\d+)?$/.test(u.origin);
+  } catch { return false; }
+}
+
+export async function paymentCallback(req, res) {
+  const orderId = req.params.orderId;
+  const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body || {};
+  const returnParam = String(req.query.return || '');
+  const returnBase = isAllowedReturnOrigin(returnParam) ? returnParam.replace(/\/$/, '') : '';
+
+  const fail = (reason) => {
+    console.log(`[PAYMENT] callback | order=${orderId} | ✗ ${reason}`);
+    res.redirect(303, `${returnBase}/checkout?payment=failed`);
+  };
+
+  const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
+  if (!order) return fail('order_not_found');
+  if (order.payment_status === 'PAID') {
+    return res.redirect(303, `${returnBase}/account?payment=success&order=${encodeURIComponent(order.order_number)}`);
+  }
+  if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) return fail('missing_fields');
+  if (order.razorpay_order_id && order.razorpay_order_id !== razorpay_order_id) return fail('order_mismatch');
+  if (!verifyPaymentSignature({ orderId: razorpay_order_id, paymentId: razorpay_payment_id, signature: razorpay_signature })) return fail('bad_signature');
+
+  const pf = await fetchPayment(razorpay_payment_id);
+  if (!pf.ok || pf.payment.status !== 'captured') return fail(`not_captured (${pf.ok ? pf.payment.status : pf.reason})`);
+  const expectedPaise = Math.round(Number(order.total_amount) * 100);
+  if (pf.payment.order_id !== razorpay_order_id || Number(pf.payment.amount) !== expectedPaise) return fail('amount_mismatch');
+
+  await finalizePaidOrder(order.id, razorpay_payment_id);
+  console.log(`[PAYMENT] callback | order=${order.order_number} | ✓ marked PAID via redirect callback`);
+  res.redirect(303, `${returnBase}/account?payment=success&order=${encodeURIComponent(order.order_number)}`);
+}
 
 export default router;
