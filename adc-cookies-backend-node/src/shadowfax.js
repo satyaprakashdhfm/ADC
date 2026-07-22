@@ -10,6 +10,8 @@
  * Every exported function returns a structured result and never throws — callers check `.ok`.
  */
 
+import { logApiCall } from './apiLogger.js';
+
 const BASE_URL = (process.env.SHADOWFAX_URL || '').trim().replace(/\/$/, '');
 const TOKEN = (process.env.SHADOWFAX_API || '').trim();
 
@@ -118,6 +120,7 @@ async function sfxRequest(path, { method = 'GET', query, body, timeoutMs = 15_00
   if (query) for (const [k, v] of Object.entries(query)) if (v != null && v !== '') url.searchParams.set(k, String(v));
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const t0 = Date.now();
   try {
     const res = await fetch(url, {
       method,
@@ -128,8 +131,10 @@ async function sfxRequest(path, { method = 'GET', query, body, timeoutMs = 15_00
     const text = await res.text();
     let data;
     try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    logApiCall({ service: 'shadowfax', method, endpoint: path, request: { query, body }, response: data, status: res.status, ok: res.ok, durationMs: Date.now() - t0 });
     return { status: res.status, ok: res.ok, data };
   } catch (err) {
+    logApiCall({ service: 'shadowfax', method, endpoint: path, request: { query, body }, ok: false, durationMs: Date.now() - t0, error: err.message });
     return { status: 0, ok: false, data: null, error: err.message };
   } finally {
     clearTimeout(timer);

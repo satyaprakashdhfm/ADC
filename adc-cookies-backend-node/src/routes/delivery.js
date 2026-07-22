@@ -43,17 +43,17 @@ router.get('/check', async (req, res) => {
   // the real Shadowfax serviceability is verified at order time, falling back to Delhivery if needed.
   const pickup = nearestStore(pin);
   if (pickup) {
-    console.log(`[DELIVERY] check | pin=${pin} | intracity zone → same-day from ${pickup.name}`);
+    console.log(`[DELIVERY] check | pin=${pin} | carrier=SHADOWFAX | intracity zone → same-day from ${pickup.name}`);
     return res.json({ serviceable: true, intracity: true, carrier: 'SHADOWFAX', store: pickup.name, city: pickup.city, sameDay: true, tat: null, expectedDeliveryDate: null, pincode: pin });
   }
 
   if (!delhiveryConfigured()) {
-    console.log(`[DELIVERY] check | pin=${pin} | delhivery=unconfigured → returning serviceable=true`);
+    console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | delhivery=unconfigured → returning serviceable=true`);
     return res.json({ serviceable: true, reason: 'unconfigured', tat: null, expectedDeliveryDate: null });
   }
 
   const origin = await getOriginPin();
-  console.log(`[DELIVERY] check | pin=${pin} | origin=${origin || 'MISSING'}`);
+  console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | origin=${origin || 'MISSING'}`);
 
   const [svc, tat] = await Promise.all([
     checkServiceability(pin),
@@ -63,13 +63,14 @@ router.get('/check', async (req, res) => {
     })(),
   ]);
 
-  console.log(`[DELIVERY] check result | pin=${pin} | serviceable=${svc.serviceable} | reason=${svc.reason} | tat=${tat.ok ? tat.tat : tat.reason}`);
+  console.log(`[DELIVERY] check result | pin=${pin} | carrier=DELHIVERY | serviceable=${svc.serviceable} | reason=${svc.reason} | tat=${tat.ok ? tat.tat : tat.reason}`);
 
   res.json({
     serviceable: svc.serviceable,
     embargo: svc.embargo || false,
     reason: svc.reason,
     cod: svc.cod,
+    carrier: 'DELHIVERY',
     pincode: pin,
     tat: tat.ok ? tat.tat : null,
     expectedDeliveryDate: tat.ok ? tat.expectedDeliveryDate : null,
