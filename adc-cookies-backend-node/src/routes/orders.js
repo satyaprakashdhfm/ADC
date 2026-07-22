@@ -128,17 +128,29 @@ async function autoCreateShipment(orderId, addressArg) {
 
 // Mark a PAID order: record the payment, log tracking, and auto-create the Delhivery shipment.
 // Idempotent — safe to call from BOTH the verify route and the webhook (whichever lands first).
-export async function finalizePaidOrder(orderId, razorpayPaymentId) {
+// `paymentEntity` is Razorpay's payment object (from fetchPayment or the webhook payload) —
+// optional, but when present we pull the platform fee/tax/method/instrument details out of it
+// so that data isn't only visible in the Razorpay dashboard.
+export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntity) {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
   if (!order) return { ok: false, reason: 'order_not_found' };
   if (order.payment_status === 'PAID') return { ok: true, alreadyPaid: true };
 
   const ts = nowIso();
+  const p = paymentEntity || {};
+  const razorpayFee = p.fee != null ? p.fee / 100 : null;
+  const razorpayTax = p.tax != null ? p.tax / 100 : null;
+  const method = p.method ?? null;
+  const cardNetwork = p.card?.network ?? null;
+  const cardLast4 = p.card?.last4 ?? null;
+  const vpa = p.vpa ?? null;
+  const bank = p.bank ?? null;
+
   await query(`UPDATE orders SET payment_status='PAID', order_status='CONFIRMED', updated_at=$1 WHERE id=$2`, [ts, orderId]);
   await query(
-    `INSERT INTO payments (order_id, provider, transaction_id, amount, status, paid_at, created_at)
-     VALUES ($1,'RAZORPAY',$2,$3,'PAID',$4,$5)`,
-    [orderId, razorpayPaymentId ?? null, order.total_amount, ts, ts]
+    `INSERT INTO payments (order_id, provider, transaction_id, amount, status, paid_at, created_at, razorpay_fee, razorpay_tax, method, card_network, card_last4, vpa, bank)
+     VALUES ($1,'RAZORPAY',$2,$3,'PAID',$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    [orderId, razorpayPaymentId ?? null, order.total_amount, ts, ts, razorpayFee, razorpayTax, method, cardNetwork, cardLast4, vpa, bank]
   );
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [orderId, 'CONFIRMED', 'Payment received via Razorpay', ts]);
@@ -443,7 +455,7 @@ router.post('/:id/payment/verify', async (req, res) => {
   }
   console.log(`[PAYMENT] verify | order=${order.order_number} | ✓ status_confirmed_captured → marking PAID`);
 
-  await finalizePaidOrder(order.id, razorpayPaymentId);
+  await finalizePaidOrder(order.id, razorpayPaymentId, pf.payment);
   await checkForDuplicateCharge(order, razorpayOrderId);
   res.json(await fullOrder(order.id));
 });
@@ -503,7 +515,7 @@ export async function paymentCallback(req, res) {
   const expectedPaise = Math.round(Number(order.total_amount) * 100);
   if (pf.payment.order_id !== razorpay_order_id || Number(pf.payment.amount) !== expectedPaise) return fail('amount_mismatch');
 
-  await finalizePaidOrder(order.id, razorpay_payment_id);
+  await finalizePaidOrder(order.id, razorpay_payment_id, pf.payment);
   await checkForDuplicateCharge(order, razorpay_order_id);
   console.log(`[PAYMENT] callback | order=${order.order_number} | ✓ marked PAID via redirect callback`);
   res.redirect(303, `${returnBase}/account?payment=success&order=${encodeURIComponent(order.order_number)}`);
