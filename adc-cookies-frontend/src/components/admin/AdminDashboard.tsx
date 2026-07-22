@@ -402,7 +402,14 @@ export default function AdminDashboard() {
                     <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{(o.items || []).length} item{(o.items || []).length !== 1 ? 's' : ''} · tap for details</span></td>
                     <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city || ''}</span></td>
                     <td style={td}>{money(o.totalAmount)}</td>
-                    <td style={td}><Badge text={o.paymentStatus} ok={o.paymentStatus === 'PAID'} /></td>
+                    <td style={td}>
+                      <Badge text={o.paymentStatus} ok={o.paymentStatus === 'PAID'} />
+                      {o.warningFlags?.includes('DUPLICATE_CHARGE') && (
+                        <div title="More than one captured payment was found against this order's Razorpay order — review in the Razorpay dashboard before refunding/shipping." style={{ marginTop: 4, fontSize: 'var(--text-2xs)', fontWeight: 800, color: 'var(--status-danger, #C0392B)' }}>
+                          ⚠ Possible duplicate charge
+                        </div>
+                      )}
+                    </td>
                     <td style={td}><Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} /></td>
                     <td style={td} onClick={e => e.stopPropagation()}>
                       <select value={o.orderStatus} onChange={e => changeOrderStatus(o.id, e.target.value)} style={{ padding: '7px 10px', borderRadius: 10, border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', cursor: 'pointer' }}>
@@ -1096,9 +1103,14 @@ export default function AdminDashboard() {
                 </div>
                 <button onClick={() => setViewOrder(null)} style={iconBtn}><X size={18} /></button>
               </div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                 <Badge text={o.orderStatus} />
                 <Badge text={o.paymentStatus} ok={o.paymentStatus === 'PAID'} />
+                {o.warningFlags?.includes('DUPLICATE_CHARGE') && (
+                  <span style={{ padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--status-danger-bg, #FCEBEA)', color: 'var(--status-danger, #C0392B)', fontSize: 'var(--text-xs)', fontWeight: 800 }}>
+                    ⚠ Possible duplicate charge — check Razorpay
+                  </span>
+                )}
               </div>
 
               <div style={{ ...card, padding: 14, marginBottom: 14, display: 'flex', gap: 12, alignItems: 'flex-start' }}>

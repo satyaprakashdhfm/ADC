@@ -88,10 +88,11 @@ router.get('/orders', async (req, res) => {
   // session pooler (~15 client cap) -> EMAXCONNSESSION -> 500 (empty admin shipments table).
   const orderIds = rows.map((o) => o.id);
   const addrIds = [...new Set(rows.map((o) => o.address_id).filter(Boolean))];
-  const [items, payments, addresses] = await Promise.all([
+  const [items, payments, addresses, warnings] = await Promise.all([
     orderIds.length ? getAll('SELECT * FROM order_items WHERE order_id = ANY($1) ORDER BY id', [orderIds]) : [],
     orderIds.length ? getAll('SELECT DISTINCT ON (order_id) order_id, provider, transaction_id, status, paid_at FROM payments WHERE order_id = ANY($1) ORDER BY order_id, id DESC', [orderIds]) : [],
     addrIds.length ? getAll('SELECT * FROM addresses WHERE id = ANY($1)', [addrIds]) : [],
+    orderIds.length ? getAll("SELECT DISTINCT order_id FROM order_tracking WHERE order_id = ANY($1) AND status = 'DUPLICATE_CHARGE_WARNING'", [orderIds]) : [],
   ]);
   const itemsByOrder = new Map();
   for (const it of items) {
@@ -100,8 +101,10 @@ router.get('/orders', async (req, res) => {
   }
   const payByOrder = new Map(payments.map((p) => [p.order_id, p]));
   const addrById = new Map(addresses.map((a) => [a.id, a]));
+  const duplicateChargeOrderIds = new Set(warnings.map((w) => w.order_id));
   const serialized = rows.map((o) =>
-    serializeOrder(o, itemsByOrder.get(o.id) || [], o.address_id ? addrById.get(o.address_id) || null : null, payByOrder.get(o.id) || null)
+    serializeOrder(o, itemsByOrder.get(o.id) || [], o.address_id ? addrById.get(o.address_id) || null : null, payByOrder.get(o.id) || null,
+      duplicateChargeOrderIds.has(o.id) ? ['DUPLICATE_CHARGE'] : [])
   );
   res.json(serialized);
 });
@@ -112,7 +115,8 @@ router.get('/orders/:id', async (req, res) => {
   const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order.id]);
   const address = order.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null;
   const payment = await getOne(PAYMENT_SELECT, [order.id]);
-  res.json(serializeOrder(order, items, address, payment));
+  const hasDuplicateCharge = await getOne("SELECT 1 FROM order_tracking WHERE order_id = $1 AND status = 'DUPLICATE_CHARGE_WARNING' LIMIT 1", [order.id]);
+  res.json(serializeOrder(order, items, address, payment, hasDuplicateCharge ? ['DUPLICATE_CHARGE'] : []));
 });
 
 router.patch('/orders/:id/status', async (req, res) => {

@@ -75,8 +75,10 @@ export function serializeOrderItem(oi) {
   };
 }
 
-// items, address and payment are pre-loaded by the caller
-export function serializeOrder(order, items = [], address = null, payment = null) {
+// items, address and payment are pre-loaded by the caller. `warningFlags` is an optional array
+// of short codes (e.g. 'DUPLICATE_CHARGE') the caller pre-computed from order_tracking rows —
+// admin-facing alerts that don't affect order/payment status itself.
+export function serializeOrder(order, items = [], address = null, payment = null, warningFlags = []) {
   if (!order) return null;
   return {
     id: order.id, orderNumber: order.order_number,
@@ -92,6 +94,7 @@ export function serializeOrder(order, items = [], address = null, payment = null
       ? { provider: payment.provider, transactionId: payment.transaction_id, status: payment.status, paidAt: payment.paid_at }
       : null,
     address: serializeAddress(address), items: items.map(serializeOrderItem),
+    warningFlags,
     createdAt: order.created_at, updatedAt: order.updated_at,
   };
 }

@@ -252,6 +252,7 @@ export interface Order {
   estimatedDelivery?: string | null; // Shadowfax promised date from webhook (YYYY-MM-DD HH:MM:SS)
   payment?: OrderPayment | null;
   address?: Address | null; items?: OrderItem[];
+  warningFlags?: string[]; // e.g. 'DUPLICATE_CHARGE' — admin-facing alerts, doesn't affect order status
 }
 
 export interface OrderItem {

@@ -88,9 +88,13 @@
         }
       },
       {
-        "purpose": "List all payments against one Order — useful to catch a duplicate charge from a retried payment",
-        "used": false,
-        "theirEndpoint": "GET https://api.razorpay.com/v1/orders/:id/payments"
+        "purpose": "List all payments against one Order — catches a duplicate CAPTURED charge from a retried payment (best practice #4's third check, alongside Fetch Payment above). Added 2026-07-23.",
+        "used": true,
+        "ourEndpoint": "internal — checkForDuplicateCharge() in src/routes/orders.js, called right after finalizePaidOrder() in both POST /api/orders/:id/payment/verify and POST /api/payment-callback/:orderId",
+        "theirEndpoint": "GET https://api.razorpay.com/v1/orders/:id/payments",
+        "sampleRequest_liveCaptured": { "razorpayOrderId": "order_TGQjKi7QG5RlIX" },
+        "sampleResponse_liveCaptured": { "count": 1, "items": [{ "id": "pay_TGQjlDWBr9vzHl", "amount": 13000, "currency": "INR", "status": "captured", "order_id": "order_TGQjKi7QG5RlIX", "method": "card", "description": "Order ADC20260722104807", "notes": { "orderId": "63", "orderNumber": "ADC20260722104807" }, "fee": 390 }] },
+        "note": "Real result for ADC20260722104807: exactly 1 captured payment (count:1) — no duplicate. If count of captured items were ever >1, we insert an order_tracking row (status=DUPLICATE_CHARGE_WARNING) and it now shows as a red '⚠ Possible duplicate charge' badge directly in Admin → Orders (both the list table and the order detail modal) — never auto-refunds, just surfaces it for a human to check in the Razorpay dashboard."
       }
     ]
   },
