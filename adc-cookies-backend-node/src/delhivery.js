@@ -15,6 +15,8 @@
  * `.serviceable`. Field names are copied verbatim from the Delhivery spec (fidelity matters).
  */
 
+import { logApiCall } from './apiLogger.js';
+
 const BASE_URL = (process.env.DELHIVERY_BASE_URL || 'https://track.delhivery.com').replace(/\/$/, '');
 const TOKEN = process.env.DELIVERY_API_TOKEN || process.env.DELHIVERY_API_TOKEN || '';
 
@@ -39,6 +41,7 @@ async function dhRequest(path, { method = 'GET', query, body, headers = {}, time
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const t0 = Date.now();
+  const requestLog = { query, body: typeof body === 'string' ? tryParseJson(body) : body };
   try {
     const res = await fetch(url, { method, headers: authHeaders(headers), body, signal: ctrl.signal });
     const text = await res.text();
@@ -50,13 +53,19 @@ async function dhRequest(path, { method = 'GET', query, body, headers = {}, time
     } else {
       log(`${method} ${path}`, `status=${res.status} | ${ms}ms`);
     }
+    logApiCall({ service: 'delhivery', method, endpoint: path, request: requestLog, response: data, status: res.status, ok: res.ok, durationMs: ms });
     return { ok: res.ok, status: res.status, data };
   } catch (err) {
     log(`${method} ${path} TIMEOUT/NET`, `err=${err.message} | ${Date.now() - t0}ms`);
+    logApiCall({ service: 'delhivery', method, endpoint: path, request: requestLog, ok: false, durationMs: Date.now() - t0, error: err.message });
     throw err;
   } finally {
     clearTimeout(timer);
   }
+}
+
+function tryParseJson(text) {
+  try { return JSON.parse(text); } catch { return text; }
 }
 
 /* ------------------------------------------------------------------ */
