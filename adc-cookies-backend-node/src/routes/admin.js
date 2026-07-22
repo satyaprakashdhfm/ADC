@@ -16,7 +16,7 @@ import {
   fetchDocument,
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
-import { shadowfaxConfigured, trackShadowfax, getShadowfaxPod, sfxStatusLabel } from '../shadowfax.js';
+import { shadowfaxConfigured, trackShadowfax, getShadowfaxPod, sfxStatusLabel, SFX_STORES, sfxServiceability } from '../shadowfax.js';
 
 const router = Router();
 router.use(requireAdmin);
@@ -363,6 +363,20 @@ router.get('/analytics', async (req, res) => {
 /* ======================================================================
    Delivery — Warehouses
    ====================================================================== */
+
+// All Shadowfax pickup stores + whether each one's pincode is CURRENTLY serviceable on the
+// connected Shadowfax environment (staging today) — so admin can see at a glance which stores
+// actually work as an intracity pickup point right now vs which ones are only real-store
+// listings that the sandbox doesn't service yet. Live-checked on every call (cheap, no caching)
+// so this reflects reality immediately, not a stale snapshot.
+router.get('/delivery/shadowfax-stores', async (_req, res) => {
+  if (!shadowfaxConfigured()) return res.json(SFX_STORES.map((s) => ({ ...s, serviceable: null, services: [] })));
+  const results = await Promise.all(SFX_STORES.map(async (s) => {
+    const r = await sfxServiceability(s.pincode);
+    return { ...s, serviceable: r.ok ? r.serviceable : null, services: r.services || [] };
+  }));
+  res.json(results);
+});
 
 router.get('/delivery/warehouses', async (_req, res) => {
   const rows = await getAll('SELECT * FROM warehouses ORDER BY is_default DESC, id ASC');
