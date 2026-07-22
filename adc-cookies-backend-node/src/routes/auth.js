@@ -134,16 +134,35 @@ router.patch('/me', requireAuth, async (req, res) => {
 // as it was.
 router.post('/log-location', requireAuth, async (req, res) => {
   try {
-    const ip = String(req.ip || '').replace(/^::ffff:/, '');
+    // The LEFTMOST address in X-Forwarded-For is the original client — each proxy hop appends
+    // its own address to the right, per HTTP convention. This is more reliable here than req.ip,
+    // which depends on exactly how many hops `trust proxy` is configured to peel back — and we
+    // don't want to raise that globally just to fix this, since it also governs per-IP rate
+    // limiting (trusting too many hops there would let X-Forwarded-For be spoofed to bypass it).
+    const xff = String(req.headers['x-forwarded-for'] || '');
+    const ip = (xff.split(',')[0] || req.ip || '').trim().replace(/^::ffff:/, '');
+    console.log(`[AUTH] log-location | user=${req.user.id} | xff="${xff}" | resolved_ip=${ip || 'none'}`);
+
     if (ip && ip !== '127.0.0.1' && ip !== '::1') {
       const r = await fetch(`https://ipapi.co/${ip}/json/`);
-      if (r.ok) {
-        const j = await r.json();
-        const location = [j.city, j.region, j.country_name].filter(Boolean).join(', ');
-        if (location) await query('UPDATE users SET last_login_location = $1 WHERE id = $2', [location, req.user.id]);
+      const j = await r.json().catch(() => null);
+      if (!r.ok) {
+        console.log(`[AUTH] log-location | user=${req.user.id} | ✗ ipapi.co status=${r.status} | ${JSON.stringify(j).slice(0, 200)}`);
+      } else {
+        const location = [j?.city, j?.region, j?.country_name].filter(Boolean).join(', ');
+        if (location) {
+          await query('UPDATE users SET last_login_location = $1 WHERE id = $2', [location, req.user.id]);
+          console.log(`[AUTH] log-location | user=${req.user.id} | ✓ ${location}`);
+        } else {
+          console.log(`[AUTH] log-location | user=${req.user.id} | ✗ no usable location in response | ${JSON.stringify(j).slice(0, 200)}`);
+        }
       }
+    } else {
+      console.log(`[AUTH] log-location | user=${req.user.id} | skip — no usable ip`);
     }
-  } catch { /* best-effort only */ }
+  } catch (e) {
+    console.log(`[AUTH] log-location | user=${req.user?.id} | ✗ ${e.message}`);
+  }
   res.json({ ok: true });
 });
 
