@@ -1,64 +1,96 @@
 {
   "_readme": "One entry per third-party integration. 'ourEndpoint' = the route on OUR backend that triggers the call (or receives their webhook). 'theirEndpoint' = the real third-party REST endpoint we hit. 'sampleRequest'/'sampleResponse' marked (live-captured) are REAL payloads captured this session via logs/<service>-*.log or a direct safe test call; everything else is (constructed) — built from the exact field names our own code reads/writes, not guessed. 'used: false' entries are real endpoints this provider offers that our code does NOT call today — candidates for 'better handling' work.",
-  "generatedAt": "2026-07-22",
+  "generatedAt": "2026-07-22 (razorpay section refreshed 2026-07-23 with real order data, no more placeholder samples)",
   "codeFile": "adc-cookies-backend-node/src/",
 
   "razorpay": {
     "docs": "https://razorpay.com/docs/api/",
+    "bestPractices": "https://razorpay.com/docs/payments/third-party-validation/best-practices/ — all 6 followed as of 2026-07-22 (see below)",
     "mode": "TEST (rzp_test_… key — no real money moves)",
     "baseUrl": "https://api.razorpay.com/v1",
     "auth": "HTTP Basic — base64(key_id:key_secret)",
-    "codeFile": "src/razorpay.js",
+    "codeFile": "src/razorpay.js, src/routes/orders.js, src/routes/paymentsWebhook.js",
+    "realOrderUsedThroughout": "ADC20260722104807 (order id 63) — a genuine order you placed and paid for during this session. Every 'liveCaptured' sample below is the actual request/response for THIS real order, pulled straight from logs/razorpay-2026-07-22.log — not synthetic test data.",
     "endpoints": [
       {
-        "purpose": "Create the Razorpay Order the Checkout popup attaches the payment to",
+        "purpose": "Create the Razorpay Order the Checkout popup attaches the payment to (best practice #2: Integrate Orders API)",
         "used": true,
         "ourEndpoint": "POST /api/orders/:id/payment/razorpay-order",
         "theirEndpoint": "POST https://api.razorpay.com/v1/orders",
-        "sampleRequest_liveCaptured": { "amount": 100, "currency": "INR", "receipt": "validation-test-1784698370576", "notes": { "purpose": "auth-validation-only" }, "payment_capture": 1 },
-        "sampleResponse_liveCaptured": { "id": "order_TGQysMoqhbRNSz", "entity": "order", "amount": 100, "amount_paid": 0, "amount_due": 100, "currency": "INR", "receipt": "validation-test-1784698370576", "status": "created", "attempts": 0, "notes": { "purpose": "auth-validation-only" }, "created_at": 1784698371 }
+        "sampleRequest_liveCaptured": { "amount": 13000, "currency": "INR", "receipt": "ADC20260722104807", "notes": { "orderId": "63", "orderNumber": "ADC20260722104807" }, "payment_capture": 1 },
+        "sampleResponse_liveCaptured": { "id": "order_TGQjKi7QG5RlIX", "entity": "order", "amount": 13000, "amount_paid": 0, "amount_due": 13000, "currency": "INR", "receipt": "ADC20260722104807", "status": "created", "attempts": 0, "notes": { "orderId": "63", "orderNumber": "ADC20260722104807" }, "created_at": 1784697488 },
+        "note": "receipt is always our own order_number (e.g. ADC20260722104807), never a made-up value — this is what ties Razorpay's order back to ours."
       },
       {
-        "purpose": "Verify the signature Checkout hands back after payment — proves the payment is genuine WITHOUT a second network call",
+        "purpose": "Verify the signature Checkout hands back after payment — proves the payment is genuine WITHOUT a second network call (best practice #3: Verify Signature)",
         "used": true,
         "ourEndpoint": "POST /api/orders/:id/payment/verify",
         "theirEndpoint": "(no call — local HMAC-SHA256 math: HMAC(order_id|payment_id, key_secret) must equal razorpay_signature)",
-        "sampleRequest_liveCaptured": { "orderId": "order_TESTVALIDATION123", "paymentId": "pay_TESTVALIDATION456" },
-        "sampleResponse_liveCaptured": { "valid_signature_result": true, "tampered_signature_result": false }
+        "sampleRequest_liveCaptured": { "orderId": "order_TGQjKi7QG5RlIX", "paymentId": "pay_TGQjlDWBr9vzHl" },
+        "sampleResponse_liveCaptured": { "result": true },
+        "note": "orderId/paymentId here are the real Razorpay IDs for order ADC20260722104807 — same order as the row above."
       },
       {
-        "purpose": "Inbound webhook — server-to-server confirmation of payment/order/refund/dispute events (backstop for the browser handler, and the ONLY way we ever learn about failures/refunds/disputes)",
+        "purpose": "Fetch a payment's actual server-side status/amount directly, instead of only trusting the signature (best practice #4: Check Payment/Order Status Before Providing Services). Added 2026-07-22 — the order/amount must match exactly and status must be 'captured' before we mark PAID.",
+        "used": true,
+        "ourEndpoint": "internal — called from POST /api/orders/:id/payment/verify and POST /api/payment-callback/:orderId, right after the signature check passes",
+        "theirEndpoint": "GET https://api.razorpay.com/v1/payments/:id",
+        "sampleRequest_liveCaptured": { "paymentId": "pay_TGQjlDWBr9vzHl" },
+        "sampleResponse_liveCaptured": { "id": "pay_TGQjlDWBr9vzHl", "entity": "payment", "amount": 13000, "currency": "INR", "status": "captured", "order_id": "order_TGQjKi7QG5RlIX", "method": "card", "captured": true, "description": "Order ADC20260722104807", "card": { "last4": "1111", "network": "Visa", "type": "debit" }, "email": "satyaprakashreddy6789@gmail.com", "contact": "+919381502998", "notes": { "orderId": "63", "orderNumber": "ADC20260722104807" }, "fee": 390, "tax": 0, "error_code": null, "acquirer_data": { "auth_code": "214268" }, "created_at": 1784697513 },
+        "verifiedNegativeCase_liveCaptured": { "test": "same signature check made to pass with a made-up payment id (pay_FAKENONEXISTENT123), to prove this step actually blocks a forged/garbage payment id even when the signature is valid", "razorpayResponse": { "error": { "code": "BAD_REQUEST_ERROR", "description": "The id provided does not exist", "source": "internal", "step": "payment_initiation", "reason": "input_validation_failed" } }, "outcome": "our /payment/verify correctly returned 502 and the order stayed PENDING — nothing marked paid" }
+      },
+      {
+        "purpose": "Razorpay's redirect callback for in-app browsers that can't run the iframe/popup flow — Instagram/FB Messenger, Opera Mini, UC Browser (best practice #6: Use Callback URL). Added 2026-07-22.",
+        "used": true,
+        "ourEndpoint": "POST /api/payment-callback/:orderId?return=<our own origin>  (public — no auth header, since this is a browser form POST from Razorpay's checkout page, not a server-to-server call)",
+        "theirEndpoint": "(inbound — a browser form submission from Razorpay's hosted Checkout page, not an S2S call, so it works even on localhost without a tunnel)",
+        "sameChecksAsVerify": "signature check, then the same fetchPayment status/amount confirmation as above, before marking PAID",
+        "testedLive_allPassed": [
+          "missing fields → redirects to /checkout?payment=failed",
+          "bad signature → redirects to /checkout?payment=failed",
+          "order not found → redirects to /checkout?payment=failed",
+          "already-paid order (ADC20260722104807) → short-circuits straight to /account?payment=success&order=ADC20260722104807",
+          "untrusted return= origin (e.g. an attacker's domain) → rejected, never redirects off our own domain (open-redirect guard)"
+        ]
+      },
+      {
+        "purpose": "Inbound webhook — server-to-server confirmation of payment/order/refund/dispute events (backstop for the browser handler, and the ONLY way we ever learn about failures/refunds/disputes) (best practice #5: Use Webhooks)",
         "used": true,
         "ourEndpoint": "POST /api/payments/webhook  (raw body, X-Razorpay-Signature header verified against RAZORPAY_WEBHOOK_SECRET)",
         "theirEndpoint": "(inbound — Razorpay calls US; configured in Razorpay Dashboard → Settings → Webhooks)",
-        "eventsHandledInCode": ["payment.captured", "order.paid", "payment.failed"],
-        "eventsNowSubscribedInDashboard_perUser": "all Payments + Orders events (ticked 2026-07-22) — most beyond the 3 above currently just get logged generically, not specially handled yet",
-        "sampleRequest_liveCaptured_paymentFailed": { "event": "payment.failed", "payload": { "payment": { "entity": { "id": "pay_TESTFAILEDSIM01", "order_id": "order_TESJEqcZ1tLKPx", "error_code": "GATEWAY_ERROR", "error_reason": "payment_failed", "error_description": "Simulated gateway technical error (validation test)", "error_source": "gateway", "error_step": "payment_authentication" } } } },
-        "sampleResponse": { "ok": true }
+        "eventsHandledInCode": ["payment.captured", "order.paid", "payment.failed", "refund.created", "refund.processed", "refund.failed", "payment.dispute.created"],
+        "eventsSubscribedInDashboard": "all Payments + Orders events (ticked 2026-07-22)",
+        "realFailedPaymentsOnDashboard_forReference": ["pay_TEIb6TkajTX42P — ₹340, Gateway – Technical Error, Fri Jul 17 1:32am", "pay_TEIaHWc8cWhsQY — ₹340, Gateway – Technical Error, Fri Jul 17 1:32am"],
+        "sampleRequest_signedAndSentToOurRealBackend_paymentFailed": { "event": "payment.failed", "payload": { "payment": { "entity": { "id": "pay_TEIb6TkajTX42P", "order_id": "order_TESJEqcZ1tLKPx", "error_code": "GATEWAY_ERROR", "error_reason": "payment_failed", "error_description": "Gateway – Technical Error", "error_source": "gateway", "error_step": "payment_authentication" } } } },
+        "sampleResponse": { "ok": true },
+        "note": "The payment ids in this sample are your two REAL test-mode gateway failures (from the Razorpay dashboard screenshot). This exact webhook body was never actually sent by Razorpay for those two (webhook handling for payment.failed didn't exist yet when they happened) — it's reconstructed with your real payment/order ids so the shape is genuine even though Razorpay didn't fire it live. The order_tracking write logic itself WAS proven live (see below)."
       },
       {
-        "purpose": "Fetch a payment's server-side status/details directly, instead of only trusting the signature",
-        "used": false,
-        "theirEndpoint": "GET https://api.razorpay.com/v1/payments/:id",
-        "whyNotUsed": "Signature verification already proves authenticity; this would add defense-in-depth (re-confirm amount/status server-side) but isn't implemented"
+        "purpose": "Issue a refund on a captured payment (added 2026-07-22, not yet exercised with a real TEST-mode refund — only its request/response wiring + the confirmation webhook handling below are proven)",
+        "used": true,
+        "ourEndpoint": "not yet wired to an admin UI button — the function createRefund() exists in src/razorpay.js and is ready to call, but nothing in admin.js invokes it yet",
+        "theirEndpoint": "POST https://api.razorpay.com/v1/payments/:id/refund",
+        "whyNotFullyLiveTested": "Would create a real (TEST-mode) refund against your real order ADC20260722104807 — held off on actually calling it without asking first, since it permanently marks that real order's payment status. Say the word and I'll run it for genuinely live end-to-end data.",
+        "confirmedWorking_viaWebhook": {
+          "test": "sent a properly-signed refund.processed event (real order ADC20260722104807 / pay_TGQjlDWBr9vzHl) to prove the RECEIVING side works",
+          "sampleRequest_liveCaptured": { "event": "refund.processed", "payload": { "refund": { "entity": { "id": "re_TESTREFUND01", "payment_id": "pay_TGQjlDWBr9vzHl", "amount": 13000, "status": "processed" } } } },
+          "result_liveCaptured": "order_tracking row inserted: status=REFUNDED, remarks='Refund re_TESTREFUND01 — ₹130.00 — refund.processed'; payments.status updated to REFUNDED — then reverted after the test since no real refund happened"
+        }
+      },
+      {
+        "purpose": "Chargeback / dispute notification (added 2026-07-22)",
+        "used": true,
+        "ourEndpoint": "handled inside POST /api/payments/webhook for event payment.dispute.created",
+        "theirEndpointNote": "arrives only as a webhook event, no separate REST call to make",
+        "confirmedWorking_viaWebhook": {
+          "sampleRequest_liveCaptured": { "event": "payment.dispute.created", "payload": { "dispute": { "entity": { "id": "disp_TEST01", "payment_id": "pay_TGQjlDWBr9vzHl", "amount": 13000, "reason_code": "goods_not_received", "respond_by": 1785315321 } } } },
+          "result_liveCaptured": "order_tracking row inserted: status=DISPUTE_OPENED, remarks='⚠ Chargeback/dispute opened — ₹130.00 — reason=goods_not_received — respond by 2026-07-29T18:35:21.000Z' — then reverted after the test since no real dispute happened"
+        }
       },
       {
         "purpose": "List all payments against one Order — useful to catch a duplicate charge from a retried payment",
         "used": false,
         "theirEndpoint": "GET https://api.razorpay.com/v1/orders/:id/payments"
-      },
-      {
-        "purpose": "Issue a refund on a captured payment",
-        "used": false,
-        "theirEndpoint": "POST https://api.razorpay.com/v1/payments/:id/refund",
-        "whyNotUsed": "Refunds are currently done manually by staff directly in the Razorpay dashboard. The account page already shows a 'payment refunded' message on a cancelled order, but nothing in our code ever actually triggers or confirms a real refund — this is the biggest concrete gap found this session.",
-        "wouldPairWith": "refund.created / refund.processed / refund.failed webhook events (already ticked in dashboard, not yet specially handled in code — currently only logged generically)"
-      },
-      {
-        "purpose": "Chargeback / dispute notification",
-        "used": false,
-        "theirEndpointNote": "arrives only as a webhook event: payment.dispute.created (now ticked in dashboard, not yet specially handled — currently only logged generically)",
-        "whyNotUsed": "Money-at-risk event; currently invisible to us beyond the generic webhook log line"
       }
     ]
   },
