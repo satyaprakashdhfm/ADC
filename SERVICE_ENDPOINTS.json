@@ -1,0 +1,348 @@
+{
+  "_readme": "One entry per third-party integration. 'ourEndpoint' = the route on OUR backend that triggers the call (or receives their webhook). 'theirEndpoint' = the real third-party REST endpoint we hit. 'sampleRequest'/'sampleResponse' marked (live-captured) are REAL payloads captured this session via logs/<service>-*.log or a direct safe test call; everything else is (constructed) — built from the exact field names our own code reads/writes, not guessed. 'used: false' entries are real endpoints this provider offers that our code does NOT call today — candidates for 'better handling' work.",
+  "generatedAt": "2026-07-22",
+  "codeFile": "adc-cookies-backend-node/src/",
+
+  "razorpay": {
+    "docs": "https://razorpay.com/docs/api/",
+    "mode": "TEST (rzp_test_… key — no real money moves)",
+    "baseUrl": "https://api.razorpay.com/v1",
+    "auth": "HTTP Basic — base64(key_id:key_secret)",
+    "codeFile": "src/razorpay.js",
+    "endpoints": [
+      {
+        "purpose": "Create the Razorpay Order the Checkout popup attaches the payment to",
+        "used": true,
+        "ourEndpoint": "POST /api/orders/:id/payment/razorpay-order",
+        "theirEndpoint": "POST https://api.razorpay.com/v1/orders",
+        "sampleRequest_liveCaptured": { "amount": 100, "currency": "INR", "receipt": "validation-test-1784698370576", "notes": { "purpose": "auth-validation-only" }, "payment_capture": 1 },
+        "sampleResponse_liveCaptured": { "id": "order_TGQysMoqhbRNSz", "entity": "order", "amount": 100, "amount_paid": 0, "amount_due": 100, "currency": "INR", "receipt": "validation-test-1784698370576", "status": "created", "attempts": 0, "notes": { "purpose": "auth-validation-only" }, "created_at": 1784698371 }
+      },
+      {
+        "purpose": "Verify the signature Checkout hands back after payment — proves the payment is genuine WITHOUT a second network call",
+        "used": true,
+        "ourEndpoint": "POST /api/orders/:id/payment/verify",
+        "theirEndpoint": "(no call — local HMAC-SHA256 math: HMAC(order_id|payment_id, key_secret) must equal razorpay_signature)",
+        "sampleRequest_liveCaptured": { "orderId": "order_TESTVALIDATION123", "paymentId": "pay_TESTVALIDATION456" },
+        "sampleResponse_liveCaptured": { "valid_signature_result": true, "tampered_signature_result": false }
+      },
+      {
+        "purpose": "Inbound webhook — server-to-server confirmation of payment/order/refund/dispute events (backstop for the browser handler, and the ONLY way we ever learn about failures/refunds/disputes)",
+        "used": true,
+        "ourEndpoint": "POST /api/payments/webhook  (raw body, X-Razorpay-Signature header verified against RAZORPAY_WEBHOOK_SECRET)",
+        "theirEndpoint": "(inbound — Razorpay calls US; configured in Razorpay Dashboard → Settings → Webhooks)",
+        "eventsHandledInCode": ["payment.captured", "order.paid", "payment.failed"],
+        "eventsNowSubscribedInDashboard_perUser": "all Payments + Orders events (ticked 2026-07-22) — most beyond the 3 above currently just get logged generically, not specially handled yet",
+        "sampleRequest_liveCaptured_paymentFailed": { "event": "payment.failed", "payload": { "payment": { "entity": { "id": "pay_TESTFAILEDSIM01", "order_id": "order_TESJEqcZ1tLKPx", "error_code": "GATEWAY_ERROR", "error_reason": "payment_failed", "error_description": "Simulated gateway technical error (validation test)", "error_source": "gateway", "error_step": "payment_authentication" } } } },
+        "sampleResponse": { "ok": true }
+      },
+      {
+        "purpose": "Fetch a payment's server-side status/details directly, instead of only trusting the signature",
+        "used": false,
+        "theirEndpoint": "GET https://api.razorpay.com/v1/payments/:id",
+        "whyNotUsed": "Signature verification already proves authenticity; this would add defense-in-depth (re-confirm amount/status server-side) but isn't implemented"
+      },
+      {
+        "purpose": "List all payments against one Order — useful to catch a duplicate charge from a retried payment",
+        "used": false,
+        "theirEndpoint": "GET https://api.razorpay.com/v1/orders/:id/payments"
+      },
+      {
+        "purpose": "Issue a refund on a captured payment",
+        "used": false,
+        "theirEndpoint": "POST https://api.razorpay.com/v1/payments/:id/refund",
+        "whyNotUsed": "Refunds are currently done manually by staff directly in the Razorpay dashboard. The account page already shows a 'payment refunded' message on a cancelled order, but nothing in our code ever actually triggers or confirms a real refund — this is the biggest concrete gap found this session.",
+        "wouldPairWith": "refund.created / refund.processed / refund.failed webhook events (already ticked in dashboard, not yet specially handled in code — currently only logged generically)"
+      },
+      {
+        "purpose": "Chargeback / dispute notification",
+        "used": false,
+        "theirEndpointNote": "arrives only as a webhook event: payment.dispute.created (now ticked in dashboard, not yet specially handled — currently only logged generically)",
+        "whyNotUsed": "Money-at-risk event; currently invisible to us beyond the generic webhook log line"
+      }
+    ]
+  },
+
+  "delhivery": {
+    "docs": "Delhivery One Panel → Settings → API Setup / B2C API docs",
+    "mode": "staging (https://staging-express.delhivery.com) — used as the outstation/inter-city carrier fallback when a pincode isn't in a Shadowfax store zone",
+    "codeFile": "src/delhivery.js",
+    "auth": "Authorization: Token <DELIVERY_API_TOKEN>  (note: NOT 'Bearer')",
+    "endpoints": [
+      {
+        "purpose": "Check whether a destination pincode is serviceable + COD/prepaid support",
+        "used": true,
+        "ourEndpoint": "GET /api/delivery/serviceability?pincode=…  and internally by GET /api/delivery/check",
+        "theirEndpoint": "GET /c/api/pin-codes/json/?filter_codes=<pin>",
+        "sampleRequest_liveCaptured": { "query": { "filter_codes": "110001" } },
+        "sampleResponse_liveCaptured_truncated": { "delivery_codes": [{ "postal_code": { "remarks": "", "pin": 110001, "cod": "Y", "pre_paid": "Y", "district": "New Delhi", "city": "Delhi" } }] }
+      },
+      {
+        "purpose": "Expected delivery date / transit time (TAT) between two pincodes",
+        "used": true,
+        "ourEndpoint": "GET /api/delivery/tat  and internally by GET /api/delivery/check",
+        "theirEndpoint": "GET /api/dc/expected_tat?origin_pin=…&destination_pin=…&mot=…&pdt=B2C",
+        "sampleRequest_liveCaptured": { "query": { "origin_pin": "560041", "destination_pin": "110001", "mot": "E", "pdt": "B2C" } },
+        "sampleResponse_liveCaptured": { "success": true, "msg": "", "data": { "tat": 2 } }
+      },
+      {
+        "purpose": "Pre-assign a waybill (AWB) number before creating a shipment",
+        "used": true,
+        "ourEndpoint": "internal — called from order auto-shipment flow (POST /api/orders/:id/… ) and admin manual shipment create",
+        "theirEndpoint": "GET /waybill/api/fetch/json/?count=1",
+        "sampleResponse_constructed": { "waybill_response": ["37760310000123"] }
+      },
+      {
+        "purpose": "Register a pickup warehouse (name must exactly match pickup_location used at shipment creation)",
+        "used": true,
+        "ourEndpoint": "POST /api/admin/warehouses (admin creates/edits a store's pickup location)",
+        "theirEndpoint": "POST /api/backend/clientwarehouse/create/   (edit: /api/backend/clientwarehouse/edit/)",
+        "sampleRequest_constructed": { "name": "A Dough Cookie — Jayanagar", "registered_name": "ADOORA FOODS", "email": "info@adoughcookie.com", "phone": "9381502998", "address": "Jain University, 1314, 24th Main Rd, Jayanagar 9th Block", "city": "Bengaluru", "country": "India", "pin": 560041, "return_address": "…", "return_pin": 560041, "return_city": "Bengaluru", "return_state": "Karnataka", "return_country": "India" }
+      },
+      {
+        "purpose": "Estimate shipping cost for a given weight/route (admin-only cost calculator)",
+        "used": true,
+        "note": "Backend route still live, but the admin UI panel for this was removed earlier this project — orphaned-but-functional endpoint",
+        "ourEndpoint": "GET /api/admin/delivery/shipping-cost?destPin=…&weight=…",
+        "theirEndpoint": "GET /api/kinko/v1/invoice/charges/.json?md=S&cgm=<weight>&o_pin=…&d_pin=…&ss=Delivered&c_flag=P&cod=0",
+        "sampleResponse_constructed": [{ "zone": "d", "charged_weight": "0.50", "total_amount": "42.00" }]
+      },
+      {
+        "purpose": "Create the actual outstation shipment (assigns final waybill, sort code)",
+        "used": true,
+        "ourEndpoint": "internal — order auto-shipment flow after payment, and admin manual create (POST /api/admin/orders/:id/shipment)",
+        "theirEndpoint": "POST /api/cmu/create.json   (form-encoded: format=json&data=<json>)",
+        "sampleRequest_constructed": { "shipments": [{ "waybill": "37760310000123", "order": "ADC20260722104807", "client_name": "ADOORA FOODS", "consignee": "Satya Prakash", "phone": "9381502998", "address": "…", "city": "Delhi", "state": "Delhi", "pin": "110001", "cod_amount": "0", "total_amount": "130", "payment_mode": "Prepaid" }], "pickup_location": { "name": "A Dough Cookie — Jayanagar" } },
+        "sampleResponse_constructed": { "packages": [{ "waybill": "37760310000123", "status": "Success", "sort_code": "KCF/MDL", "remarks": [] }], "success": true }
+      },
+      {
+        "purpose": "Cancel a shipment",
+        "used": true,
+        "ourEndpoint": "DELETE /api/admin/orders/:id/shipment",
+        "theirEndpoint": "POST /api/p/edit   (form-encoded: shipments:[{waybill, cancellation:'true'}])"
+      },
+      {
+        "purpose": "Book a courier pickup request at a warehouse",
+        "used": true,
+        "ourEndpoint": "admin 'Create pickup request' panel",
+        "theirEndpoint": "POST /fm/request/new/",
+        "sampleRequest_constructed": { "pickup_date": "2026-07-23", "pickup_time": "14:00:00", "pickup_location": "A Dough Cookie — Jayanagar", "expected_package_count": 4 }
+      },
+      {
+        "purpose": "Get a printable shipping label PDF (pre-signed URL)",
+        "used": true,
+        "ourEndpoint": "GET /api/admin/delivery/label?waybills=…",
+        "theirEndpoint": "GET /api/p/packing_slip?wbns=<comma-sep waybills>&pdf=true"
+      },
+      {
+        "purpose": "Live tracking / current status of a shipment",
+        "used": true,
+        "ourEndpoint": "GET /api/orders/:id/delhivery-track   and  GET /api/admin/orders/:id/track",
+        "theirEndpoint": "GET /api/v1/packages/json/?waybill=<wbn>"
+      },
+      {
+        "purpose": "Fetch delivery proof documents — signature, EPOD, return QC images",
+        "used": true,
+        "ourEndpoint": "GET /api/admin/orders/:id/document?docType=…",
+        "theirEndpoint": "GET /api/rest/fetch/pkg/document/?doc_type=<SIGNATURE_URL|RVP_QC_IMAGE|EPOD|SELLER_RETURN_IMAGE>&waybill=<wbn>"
+      }
+    ]
+  },
+
+  "shadowfax": {
+    "docs": "Shadowfax Unified API (client-provided PDF docs, adc-cookies-backend-node/documentations/shadowfax.md)",
+    "mode": "staging (https://dale.staging.shadowfax.in/api) — used as the INTRACITY/same-day carrier for orders delivering to a city where we have a store (Bengaluru, Chennai)",
+    "codeFile": "src/shadowfax.js",
+    "auth": "Authorization: Token <SHADOWFAX_API>",
+    "prepaidOnly": "cod_amount is always '0' / payment_mode 'Prepaid' — ADC never accepts COD",
+    "endpoints": [
+      {
+        "purpose": "Check if a pincode is serviceable for customer delivery",
+        "used": true,
+        "ourEndpoint": "internal — not directly exposed as its own route; used defensively before order creation",
+        "theirEndpoint": "GET /v1/clients/serviceability/?service=customer_delivery&pincodes=<pin>&count=5",
+        "sampleResponse_constructed": [{ "code": "560041", "services": ["customer_delivery"] }]
+      },
+      {
+        "purpose": "Create a forward (marketplace) intracity order — pickup from our store, deliver to customer",
+        "used": true,
+        "ourEndpoint": "internal — order auto-shipment flow, tries each in-zone store nearest-first",
+        "theirEndpoint": "POST /v3/clients/orders/",
+        "sampleRequest_constructed": { "order_type": "marketplace", "order_details": { "client_order_id": "ADC20260722104807", "actual_weight": 500, "product_value": 130, "payment_mode": "Prepaid", "cod_amount": "0", "total_amount": 130, "order_service": "regular" }, "customer_details": { "name": "Satya Prakash", "contact": "9381502998", "address_line_1": "…", "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 }, "pickup_details": { "name": "A Dough Cookie — Electronic City", "contact": "9381502998", "address_line_1": "…", "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 }, "product_details": [{ "sku_name": "Double Choco Chip Cookie", "price": 65, "category": "Food" }] },
+        "sampleResponse_constructed": { "message": "Success", "data": { "awb_number": "SF1784684342DOF" } }
+      },
+      {
+        "purpose": "Live tracking for an AWB",
+        "used": true,
+        "ourEndpoint": "GET /api/orders/:id/delhivery-track (branches to Shadowfax when carrier=SHADOWFAX)  and  GET /api/admin/orders/:id/track",
+        "theirEndpoint": "GET /v4/clients/orders/<awb>/track/",
+        "sampleRequest_liveCaptured": {},
+        "sampleResponse_liveCaptured": { "message": "Success", "order_details": { "id": 4212176, "client_name": "ADOORA FOODS", "client_order_id": "ADC20260722104807", "awb_number": "SF1784684342DOF", "product_value": 130, "cod_amount": 0, "payment_mode": "prepaid", "status_display": "New", "status": "new", "delivery_details": { "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 } }, "tracking_details": [{ "created": "2026-07-22T05:18:41Z", "location": "BLR_Domlur", "status_id": "new", "status": "New", "remarks": "Item New at BLR_Domlur" }] }
+      },
+      {
+        "purpose": "Proof of delivery — recipient's signature sheet (S3 PDF) once delivered/rts_d",
+        "used": true,
+        "ourEndpoint": "GET /api/admin/orders/:id/shadowfax-doc",
+        "theirEndpoint": "POST /v1/clients/pod_details/  (body: {awb_numbers:[awb]})",
+        "sampleResponse_constructed": { "message": "Success", "pod_details": { "SF1784684342DOF": { "recipient_name": "Satya Prakash", "recipient_signature": "['https://shadowfax-pod.s3.amazonaws.com/report.pdf']" } } }
+      },
+      {
+        "purpose": "Status update webhook — Shadowfax pushes rider/delivery status changes to us",
+        "used": true,
+        "ourEndpoint": "POST /api/shadowfax/webhook  (Authorization header must match SHADOWFAX_WEBHOOK_SECRET)",
+        "theirEndpoint": "(inbound — Shadowfax calls US, configured in their dashboard)",
+        "sampleRequest_realWorldTested": { "awb_number": "SF1770170860DOF", "event": "seller_pickup_done", "status": "Picked up from store", "comments": "Rider collected the order", "event_timestamp": "2026-07-17T00:00:00+05:30" }
+      },
+      {
+        "purpose": "COD UPI-QR generator",
+        "used": false,
+        "theirEndpoint": "POST /api/v2/clients/qr_code/generate/",
+        "whyNotUsed": "COD-only feature — ADC is prepaid-only, so this endpoint can never apply"
+      },
+      {
+        "purpose": "Printable shipping label",
+        "used": false,
+        "whyNotUsed": "Shadowfax has no printable label API — the rider physically collects from the store, so there's nothing to print (unlike Delhivery)"
+      },
+      {
+        "purpose": "Order/tax invoice",
+        "used": false,
+        "whyNotUsed": "Confirmed earlier this project: Shadowfax's API has no invoice-generation endpoint at all"
+      }
+    ]
+  },
+
+  "messageCentral": {
+    "docs": "https://www.messagecentral.com (VerifyNow OTP product)",
+    "mode": "live account, SMS flow only",
+    "codeFile": "src/messageCentral.js",
+    "baseUrl": "https://cpaas.messagecentral.com",
+    "auth": "authToken header — either a static dashboard token (AUTH_KEY) or generated on demand from CUSTOMER_ID + MC_PASSWORD",
+    "endpoints": [
+      {
+        "purpose": "Generate an auth token (only used if AUTH_KEY isn't set — we use the static-token path)",
+        "used": true,
+        "theirEndpoint": "GET /auth/v1/authentication/token?customerId=…&key=<base64 password>&scope=NEW&country=91",
+        "sampleResponse_constructed": { "token": "eyJhbGciOi…(JWT)" }
+      },
+      {
+        "purpose": "Send an OTP SMS",
+        "used": true,
+        "ourEndpoint": "POST /api/auth/otp/send",
+        "theirEndpoint": "POST /verification/v3/send?countryCode=91&flowType=SMS&mobileNumber=<10digit>&otpLength=4",
+        "sampleResponse_constructed": { "responseCode": 200, "data": { "verificationId": "4739201", "timeout": 60, "responseCode": "200" } }
+      },
+      {
+        "purpose": "Validate the code the user typed",
+        "used": true,
+        "ourEndpoint": "POST /api/auth/otp/verify",
+        "theirEndpoint": "GET /verification/v3/validateOtp?verificationId=…&code=…   (note: their docs say POST, but only GET actually works — documented as a gotcha in our own code comment)",
+        "sampleResponse_constructed": { "responseCode": 200, "data": { "verificationStatus": "VERIFICATION_COMPLETED", "responseCode": "200", "mobileNumber": "9381502998" } }
+      },
+      {
+        "purpose": "WhatsApp or Email OTP delivery channel (flowType alternatives to SMS)",
+        "used": false,
+        "whyNotUsed": "flowType is hardcoded to 'SMS' in sendOtp() — Message Central's VerifyNow supports other channels but we've never wired them in"
+      },
+      {
+        "purpose": "Voice OTP (call instead of SMS)",
+        "used": false
+      },
+      {
+        "purpose": "Custom branded sender ID / SMS template (\"A Dough Cookie\" in the message text)",
+        "used": false,
+        "whyNotUsed": "Investigated earlier this project: VerifyNow's SMS template is fixed/pre-approved globally, no per-customer branding via API. Only real options: ask Message Central support for a DLT-registered custom template, or migrate to their separate 'MessageNow' product (different API, own OTP generation/validation needed)."
+      }
+    ]
+  },
+
+  "supabase": {
+    "docs": "https://supabase.com/docs/reference/javascript (via @supabase/supabase-js) — GoTrue Admin REST under the hood",
+    "codeFile": "src/supabaseAdmin.js, src/routes/auth.js, src/middleware.js",
+    "auth": "Service role key (admin client, backend-only) / anon key (frontend + anonClient signInWithPassword)",
+    "endpoints": [
+      {
+        "purpose": "Create a new auth user (new phone-OTP signup)",
+        "used": true,
+        "ourEndpoint": "POST /api/auth/otp/verify (new number path)",
+        "theirEndpoint": "SDK: admin.auth.admin.createUser()  →  REST: POST /auth/v1/admin/users",
+        "sampleRequest_constructed": { "email": "phone_919381502998@phone.adccookies.app", "phone": "+919381502998", "password": "<random 24-byte>", "email_confirm": true, "phone_confirm": true, "user_metadata": { "phone": "919381502998", "full_name": "Satya Prakash" } }
+      },
+      {
+        "purpose": "Update an existing auth user (reset one-time password each OTP login, sync display name/phone)",
+        "used": true,
+        "ourEndpoint": "POST /api/auth/otp/verify (existing number),  PATCH /api/auth/me (name/phone sync)",
+        "theirEndpoint": "SDK: admin.auth.admin.updateUserById()  →  REST: PUT /auth/v1/admin/users/:id"
+      },
+      {
+        "purpose": "Delete an auth user (cleanup after merging a duplicate phone/email account into one)",
+        "used": true,
+        "ourEndpoint": "internal — mergeAccounts() in auth.js and middleware.js",
+        "theirEndpoint": "SDK: admin.auth.admin.deleteUser()  →  REST: DELETE /auth/v1/admin/users/:id"
+      },
+      {
+        "purpose": "Exchange email+password for a real session (mint tokens after OTP verify)",
+        "used": true,
+        "ourEndpoint": "POST /api/auth/otp/verify (final step)",
+        "theirEndpoint": "SDK: anonClient().auth.signInWithPassword()  →  REST: POST /auth/v1/token?grant_type=password"
+      },
+      {
+        "purpose": "Google OAuth sign-in (entirely client-side, no backend endpoint at all)",
+        "used": true,
+        "ourEndpoint": "none — frontend only",
+        "theirEndpoint": "SDK (frontend): supabase.auth.signInWithOAuth({ provider:'google' })  →  REST: GET /auth/v1/authorize?provider=google",
+        "note": "Backend only gets involved AFTER login, via parseAuth/syncUser reading the resulting JWT to create/sync the users row and assign role from ADMIN_EMAILS/ADMIN_PHONES"
+      },
+      {
+        "purpose": "Direct SQL read of the auth.users table (NOT the SDK) — used to look up an existing Supabase user by synthetic email/phone before deciding create vs update",
+        "used": true,
+        "ourEndpoint": "internal, auth.js / middleware.js",
+        "theirEndpoint": "raw Postgres: SELECT id, raw_user_meta_data->>'full_name' AS full_name FROM auth.users WHERE email = $1 OR phone = $2",
+        "note": "Bypasses the GoTrue REST API entirely — direct DB access to Supabase's own auth schema via our existing Postgres connection. Best-effort (wrapped in try/catch since we may not always have schema access)."
+      },
+      {
+        "purpose": "List all users / generate magic links / manage MFA factors",
+        "used": false,
+        "theirEndpoint": "admin.auth.admin.listUsers(), admin.auth.admin.generateLink(), MFA admin endpoints",
+        "whyNotUsed": "Never needed — our own users table + role column is the source of truth for admin listing"
+      }
+    ]
+  },
+
+  "mailer_smtp": {
+    "docs": "SMTP protocol via Nodemailer — not a REST API",
+    "codeFile": "src/mailer.js",
+    "provider": "Zoho SMTP (smtp.zoho.in:465) in production, falls back to Gmail's service preset if MAIL_HOST unset",
+    "endpoints": [
+      {
+        "purpose": "Notify the business of a new contact-form enquiry",
+        "used": true,
+        "ourEndpoint": "POST /api/contact",
+        "protocolNote": "SMTP SEND command, not a REST endpoint — 'from' is always \"a dough cookie\" <MAIL_USER>",
+        "sampleData_constructed": { "to": "info@adoughcookie.com", "replyTo": "customer@example.com", "subject": "New enquiry from Robert", "bodyFields": ["name", "email", "phone", "message"] }
+      },
+      {
+        "purpose": "Order confirmation to the customer + a copy to the business",
+        "used": true,
+        "ourEndpoint": "internal — finalizePaidOrder() in orders.js, called from /payment/verify and the Razorpay webhook",
+        "sampleData_liveCaptured": { "to": "satyaprakashreddy6789@gmail.com", "subject": "Your order ADC20260722104807 is placed 🍪" }
+      }
+    ]
+  },
+
+  "ipapi_login_location": {
+    "docs": "https://ipapi.co/api/",
+    "mode": "free tier, no API key",
+    "codeFile": "src/routes/auth.js",
+    "endpoints": [
+      {
+        "purpose": "Best-effort city/region lookup for wherever a login came from (fills users.last_login_location, once per fresh session)",
+        "used": true,
+        "ourEndpoint": "POST /api/auth/log-location",
+        "theirEndpoint": "GET https://ipapi.co/<ip>/json/",
+        "sampleResponse_constructed": { "city": "Bengaluru", "region": "Karnataka", "country_name": "India" },
+        "note": "Never throws — a failed lookup just leaves the column unchanged; never blocks or delays login"
+      }
+    ]
+  }
+}
