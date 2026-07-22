@@ -115,6 +115,34 @@ export async function fetchPayment(paymentId) {
   }
 }
 
+// List every payment attempt against one Razorpay Order — used to catch a duplicate CAPTURED
+// charge (e.g. a retried payment that somehow both succeeded), which the Orders API is designed
+// to prevent but is still worth actively checking for, per Razorpay's Third Party Validation
+// best practices ("Fetch All Payments for an Order API").
+export async function fetchOrderPayments(razorpayOrderId) {
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${BASE}/orders/${razorpayOrderId}/payments`, {
+      method: 'GET',
+      headers: { Authorization: authHeader() },
+    });
+    const data = await res.json().catch(() => null);
+    const durationMs = Date.now() - t0;
+    if (!res.ok) {
+      console.log(`[RAZORPAY] order-payments-fetch | ✗ order=${razorpayOrderId} | status=${res.status}`);
+      logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/orders/${razorpayOrderId}/payments`, response: data, status: res.status, ok: false, durationMs });
+      return { ok: false, reason: data?.error?.description || `api_error_${res.status}` };
+    }
+    console.log(`[RAZORPAY] order-payments-fetch | ✓ order=${razorpayOrderId} | count=${data.count}`);
+    logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/orders/${razorpayOrderId}/payments`, response: data, status: res.status, ok: true, durationMs });
+    return { ok: true, count: data.count, items: data.items || [] };
+  } catch (err) {
+    console.log(`[RAZORPAY] order-payments-fetch | ✗ network_error: ${err.message}`);
+    logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/orders/${razorpayOrderId}/payments`, ok: false, durationMs: Date.now() - t0, error: err.message });
+    return { ok: false, reason: 'network_error' };
+  }
+}
+
 // Verify the Checkout signature: HMAC_SHA256(order_id|payment_id, secret) === signature.
 export function verifyPaymentSignature({ orderId, paymentId, signature }) {
   const ok = !!(KEY_SECRET && orderId && paymentId && signature) &&

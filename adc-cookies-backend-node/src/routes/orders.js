@@ -7,7 +7,7 @@ import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct 
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
 import { shadowfaxConfigured, createShadowfaxOrder, zoneStores, trackShadowfax, sfxStatusLabel, sfxStatusRank } from '../shadowfax.js';
-import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment } from '../razorpay.js';
+import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -444,8 +444,25 @@ router.post('/:id/payment/verify', async (req, res) => {
   console.log(`[PAYMENT] verify | order=${order.order_number} | ✓ status_confirmed_captured → marking PAID`);
 
   await finalizePaidOrder(order.id, razorpayPaymentId);
+  await checkForDuplicateCharge(order, razorpayOrderId);
   res.json(await fullOrder(order.id));
 });
+
+// Fetch every payment attempt against the Razorpay order and flag it for admin review if more
+// than one actually got CAPTURED (a rare double-charge from a race condition/retry). Never
+// blocks or reverses anything automatically — just makes it visible instead of invisible.
+async function checkForDuplicateCharge(order, razorpayOrderId) {
+  const op = await fetchOrderPayments(razorpayOrderId);
+  if (!op.ok) return;
+  const capturedCount = op.items.filter((p) => p.status === 'captured').length;
+  if (capturedCount > 1) {
+    console.log(`[PAYMENT] verify | order=${order.order_number} | ⚠ DUPLICATE CHARGE — ${capturedCount} captured payments against this Razorpay order`);
+    await query(
+      'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+      [order.id, 'DUPLICATE_CHARGE_WARNING', `⚠ ${capturedCount} captured payments found against this order — possible duplicate charge, review in Razorpay dashboard`, nowIso()]
+    );
+  }
+}
 
 // Public — Razorpay's redirect callback for browsers that can't run the iframe/popup Checkout
 // flow (Instagram/Facebook Messenger in-app browser, Opera Mini, UC Browser). Checkout submits
@@ -487,6 +504,7 @@ export async function paymentCallback(req, res) {
   if (pf.payment.order_id !== razorpay_order_id || Number(pf.payment.amount) !== expectedPaise) return fail('amount_mismatch');
 
   await finalizePaidOrder(order.id, razorpay_payment_id);
+  await checkForDuplicateCharge(order, razorpay_order_id);
   console.log(`[PAYMENT] callback | order=${order.order_number} | ✓ marked PAID via redirect callback`);
   res.redirect(303, `${returnBase}/account?payment=success&order=${encodeURIComponent(order.order_number)}`);
 }
