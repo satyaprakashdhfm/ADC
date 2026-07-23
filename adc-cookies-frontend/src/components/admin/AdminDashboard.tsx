@@ -22,6 +22,45 @@ import {
 } from 'lucide-react';
 
 const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+
+// Shadowfax's official Marketplace order-lifecycle states (forward flow only — we don't use
+// COD/reverse) verbatim from their API docs, for admin reference. Customers only ever see the
+// small friendly set from sfxStatusLabel() in src/shadowfax.js — this full table is admin-only,
+// so admin can make sense of whatever raw status_id a tracking poll or webhook actually reports.
+const SFX_ORDER_STATES: { id: string; status: string; description: string }[] = [
+  { id: 'new', status: 'New', description: 'When the delivery request is new at Shadowfax facility.' },
+  { id: 'assigned_for_seller_pickup', status: 'Assigned For Pickup', description: 'Order is assigned to a Shadowfax rider for seller (store) pickup.' },
+  { id: 'ofp', status: 'Out For Pickup', description: 'Order is out for seller pickup — rider is on the way to the store.' },
+  { id: 'picked', status: 'Picked', description: 'Order was picked up successfully from the store.' },
+  { id: 'recd_at_rev_hub', status: 'Received At Reverse Hub', description: 'Order was picked and received at the pickup hub.' },
+  { id: 'item_manifested', status: 'Item Added To Bag', description: 'Order was added to a bag (manifest) at a Shadowfax facility.' },
+  { id: 'bag_in_transit', status: 'Bag In Transit', description: 'The bag (master manifest) containing this order is in forward transit.' },
+  { id: 'bag_received_at_via', status: 'Bag Received At Via', description: 'The bag was received at an intermediate facility.' },
+  { id: 'bag_received', status: 'Bag Received', description: 'The bag was received at the destination facility.' },
+  { id: 'recd_at_fwd_hub', status: 'Received At Forward Hub', description: 'Order was received at the destination hub.' },
+  { id: 'recd_at_fwd_dc', status: 'Received At DC', description: 'Order was received at the destination city DC.' },
+  { id: 'assigned_for_delivery', status: 'Assigned For Customer Delivery', description: 'Order is assigned to a Shadowfax rider for customer delivery.' },
+  { id: 'ofd', status: 'Out For Delivery', description: 'Order is out for customer delivery — rider_name/rider_contact are shared at this point.' },
+  { id: 'delivered', status: 'Delivered', description: 'Order has been delivered to the customer. POD (proof of delivery) becomes available.' },
+  { id: 'cid', status: 'Cid (Customer Initiated Delay)', description: 'Customer requested delivery on another day.' },
+  { id: 'seller_initiated_delay', status: 'Seller Initiated Delay', description: 'Seller (us) requested pickup on another day.' },
+  { id: 'nc', status: 'Not Contactable', description: 'Customer is not contactable for delivery — see Shadowfax’s On Hold/Not Contactable remarks appendix for the specific reason.' },
+  { id: 'na', status: 'Not Attempted', description: 'Customer delivery was not attempted by the rider this cycle — see appendix for the specific reason.' },
+  { id: 'pickup_not_attempted', status: 'Pickup Not Attempted', description: 'Seller pickup was not attempted this cycle.' },
+  { id: 'cancelled_by_customer', status: 'Cancelled (by customer)', description: 'Delivery request was cancelled by the customer.' },
+  { id: 'cancelled_by_seller', status: 'Cancelled (by seller)', description: 'We (the seller) requested to cancel the pickup.' },
+  { id: 'on_hold', status: 'On Hold', description: 'Order is on hold due to client/operational concerns — see appendix for the specific reason.' },
+  { id: 'pickup_on_hold', status: 'Pickup On Hold', description: 'Pickup specifically is on hold (marketplace-only status) — see appendix for the specific reason.' },
+  { id: 'reopen_ndr', status: 'Require Delivery (NDR)', description: 'Customer delivery will be reattempted per the customer’s request.' },
+  { id: 'lost', status: 'Lost', description: 'Order was lost in transit.' },
+  { id: 'item_misrouted', status: 'Item Misrouted', description: 'The shipment reached the wrong Shadowfax facility.' },
+  { id: 'pincode_updated', status: 'Pincode Updated', description: 'The destination pincode on this order was updated.' },
+  { id: 'rts', status: 'Return To Seller — initiated', description: 'Order return-to-seller has been initiated (only relevant if we ever accept returns — we currently don’t).' },
+  { id: 'rts_in_process', status: 'RTS In Progress', description: 'Return to seller is in progress.' },
+  { id: 'rts_ofd', status: 'Out For Delivery (RTS)', description: 'Item is out for delivery back to the seller.' },
+  { id: 'rts_d', status: 'Returned To Client', description: 'Order was successfully returned to the seller.' },
+  { id: 'rts_nd', status: 'Undelivered (RTS)', description: 'Order was not successfully returned to the seller.' },
+];
 const PAGE_SIZE = 12; // rows per page in admin list tables
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -136,6 +175,7 @@ export default function AdminDashboard() {
   const [delivSub, setDelivSub] = useState<'main' | 'shadowfax' | 'delhivery'>('main');
   const [sfxDoc, setSfxDoc] = useState<Record<number, ShadowfaxDocResult | { error: string }>>({});
   const [sfxStores, setSfxStores] = useState<ShadowfaxStore[] | null>(null);
+  const [sfxStatesOpen, setSfxStatesOpen] = useState(false);
 
   const EMPTY_WH: WarehouseInput = { name: '', registeredName: '', pickupLocation: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', returnPincode: '', phone: '', email: '', isDefault: false, skipDelhivery: false };
 
@@ -729,6 +769,27 @@ export default function AdminDashboard() {
                       ))}
                     </Table>
                   </>
+                )}
+              </Panel>
+              <Panel title="Shadowfax — order status reference (admin only)"
+                action={<button onClick={() => setSfxStatesOpen(v => !v)} style={{ ...iconBtn, width: 'auto', padding: '4px 10px', fontSize: 'var(--text-xs)', fontWeight: 700 }}>{sfxStatesOpen ? 'Hide' : 'Show'}</button>}>
+                {sfxStatesOpen ? (
+                  <>
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                      Every raw status Shadowfax can report for a marketplace (forward) order, straight from their official docs. Customers only ever see a small friendly subset (New / Confirmed / Out for delivery / Delivered) — this full list is for admin so a raw status_id from a tracking poll or webhook always makes sense.
+                    </p>
+                    <Table head={['status_id', 'Label', 'What it means']}>
+                      {SFX_ORDER_STATES.map((s) => (
+                        <tr key={s.id}>
+                          <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{s.id}</span></td>
+                          <td style={td}><strong>{s.status}</strong></td>
+                          <td style={{ ...td, color: 'var(--text-muted)' }}>{s.description}</td>
+                        </tr>
+                      ))}
+                    </Table>
+                  </>
+                ) : (
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>{SFX_ORDER_STATES.length} known statuses — click Show to view the full reference.</p>
                 )}
               </Panel>
               <Panel title="Shadowfax — intracity orders" loading={orders === null}

@@ -1,6 +1,6 @@
 {
   "_readme": "One entry per third-party integration. 'ourEndpoint' = the route on OUR backend that triggers the call (or receives their webhook). 'theirEndpoint' = the real third-party REST endpoint we hit. 'sampleRequest'/'sampleResponse' marked (live-captured) are REAL payloads captured this session via logs/<service>-*.log or a direct safe test call; everything else is (constructed) — built from the exact field names our own code reads/writes, not guessed. 'used: false' entries are real endpoints this provider offers that our code does NOT call today — candidates for 'better handling' work.",
-  "generatedAt": "2026-07-22 (refreshed 2026-07-23: razorpay fee/tax/method persistence + real order data, mailer switched SMTP→Resend, auth ipapi.co rate-limit finding, shadowfax real production data + dead-serviceability-check gap)",
+  "generatedAt": "2026-07-22 (refreshed 2026-07-23: razorpay fee/tax/method persistence + real order data, mailer switched SMTP→Resend, auth ipapi.co rate-limit finding, shadowfax real production data + dead-serviceability-check gap, delhivery every endpoint now explicitly marked liveTested:true/false so it's unambiguous which ones are proven vs implemented-but-never-called)",
   "codeFile": "adc-cookies-backend-node/src/",
 
   "razorpay": {
@@ -105,41 +105,55 @@
     "mode": "staging (https://staging-express.delhivery.com) — used as the outstation/inter-city carrier fallback when a pincode isn't in a Shadowfax store zone",
     "codeFile": "src/delhivery.js",
     "auth": "Authorization: Token <DELIVERY_API_TOKEN>  (note: NOT 'Bearer')",
+    "dbCheck_2026-07-23": "6 real orders with carrier=DELHIVERY, all label_generated=true, all consistent — no bad data found. Unlike Shadowfax, checkServiceability()/expectedTat() ARE genuinely wired into the /api/delivery/check checkout route (confirmed by reading delivery.js) — no dead-code gap here; the checkout-time promise is real.",
+    "liveTestedSummary_2026-07-23": "4 of 10 endpoints below are proven live via real Railway logs across 6 real orders (serviceability, TAT, waybill pre-assign, shipment create). The other 6 (cancel, pickup-request, label PDF, live-tracking, fetch-documents, warehouse-register, shipping-cost) are implemented and should work per the code, but have NEVER actually been called against a real order in this project — no log evidence either way. Each entry below says explicitly which bucket it's in — nothing here is guessed or assumed to work.",
     "endpoints": [
       {
         "purpose": "Check whether a destination pincode is serviceable + COD/prepaid support",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "GET /api/delivery/serviceability?pincode=…  and internally by GET /api/delivery/check",
         "theirEndpoint": "GET /c/api/pin-codes/json/?filter_codes=<pin>",
         "sampleRequest_liveCaptured": { "query": { "filter_codes": "110001" } },
-        "sampleResponse_liveCaptured_truncated": { "delivery_codes": [{ "postal_code": { "remarks": "", "pin": 110001, "cod": "Y", "pre_paid": "Y", "district": "New Delhi", "city": "Delhi" } }] }
+        "sampleResponse_liveCaptured_truncated": { "delivery_codes": [{ "postal_code": { "remarks": "", "pin": 110001, "cod": "Y", "pre_paid": "Y", "district": "New Delhi", "city": "Delhi" } }] },
+        "realCallConfirmed_viaRailwayLogs": "2026-07-23T05:21:50Z — pincode 523226 → ✓ serviceable, cod=true (fresh, real production traffic, not a synthetic test)"
       },
       {
         "purpose": "Expected delivery date / transit time (TAT) between two pincodes",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "GET /api/delivery/tat  and internally by GET /api/delivery/check",
         "theirEndpoint": "GET /api/dc/expected_tat?origin_pin=…&destination_pin=…&mot=…&pdt=B2C",
         "sampleRequest_liveCaptured": { "query": { "origin_pin": "560041", "destination_pin": "110001", "mot": "E", "pdt": "B2C" } },
-        "sampleResponse_liveCaptured": { "success": true, "msg": "", "data": { "tat": 2 } }
+        "sampleResponse_liveCaptured": { "success": true, "msg": "", "data": { "tat": 2 } },
+        "realCallConfirmed_viaRailwayLogs": "2026-07-23T05:21:50Z — 560041→523226 → ✓ tat=3 days (same real production traffic as the serviceability check above)"
       },
       {
         "purpose": "Pre-assign a waybill (AWB) number before creating a shipment",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "internal — called from order auto-shipment flow (POST /api/orders/:id/… ) and admin manual shipment create",
         "theirEndpoint": "GET /waybill/api/fetch/json/?count=1",
-        "sampleResponse_constructed": { "waybill_response": ["37760310000123"] }
+        "sampleResponse_constructed": { "waybill_response": ["37760310000123"] },
+        "realCallsConfirmed_viaRailwayLogs": [
+          "2026-07-22T21:05:27Z — order ADC20260722210454 → ✓ waybill=85582010000302",
+          "2026-07-22T21:16:19Z — order ADC20260722211553 → ✓ waybill=85582010000313"
+        ]
       },
       {
         "purpose": "Register a pickup warehouse (name must exactly match pickup_location used at shipment creation)",
         "used": true,
+        "liveTested": false,
         "ourEndpoint": "POST /api/admin/warehouses (admin creates/edits a store's pickup location)",
         "theirEndpoint": "POST /api/backend/clientwarehouse/create/   (edit: /api/backend/clientwarehouse/edit/)",
-        "sampleRequest_constructed": { "name": "A Dough Cookie — Jayanagar", "registered_name": "ADOORA FOODS", "email": "info@adoughcookie.com", "phone": "9381502998", "address": "Jain University, 1314, 24th Main Rd, Jayanagar 9th Block", "city": "Bengaluru", "country": "India", "pin": 560041, "return_address": "…", "return_pin": 560041, "return_city": "Bengaluru", "return_state": "Karnataka", "return_country": "India" }
+        "sampleRequest_constructed": { "name": "A Dough Cookie — Jayanagar", "registered_name": "ADOORA FOODS", "email": "info@adoughcookie.com", "phone": "9381502998", "address": "Jain University, 1314, 24th Main Rd, Jayanagar 9th Block", "city": "Bengaluru", "country": "India", "pin": 560041, "return_address": "…", "return_pin": 560041, "return_city": "Bengaluru", "return_state": "Karnataka", "return_country": "India" },
+        "note": "No log evidence this has ever actually been called against Delhivery's real API in this project — our 4 stores in the DB may have been added before file-logging existed, or added with skipDelhivery. Not confirmed either way."
       },
       {
         "purpose": "Estimate shipping cost for a given weight/route (admin-only cost calculator)",
         "used": true,
-        "note": "Backend route still live, but the admin UI panel for this was removed earlier this project — orphaned-but-functional endpoint",
+        "liveTested": false,
+        "note": "Backend route still live, but the admin UI panel for this was removed earlier this project — orphaned-but-functional endpoint, never confirmed live",
         "ourEndpoint": "GET /api/admin/delivery/shipping-cost?destPin=…&weight=…",
         "theirEndpoint": "GET /api/kinko/v1/invoice/charges/.json?md=S&cgm=<weight>&o_pin=…&d_pin=…&ss=Delivered&c_flag=P&cod=0",
         "sampleResponse_constructed": [{ "zone": "d", "charged_weight": "0.50", "total_amount": "42.00" }]
@@ -147,41 +161,57 @@
       {
         "purpose": "Create the actual outstation shipment (assigns final waybill, sort code)",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "internal — order auto-shipment flow after payment, and admin manual create (POST /api/admin/orders/:id/shipment)",
         "theirEndpoint": "POST /api/cmu/create.json   (form-encoded: format=json&data=<json>)",
         "sampleRequest_constructed": { "shipments": [{ "waybill": "37760310000123", "order": "ADC20260722104807", "client_name": "ADOORA FOODS", "consignee": "Satya Prakash", "phone": "9381502998", "address": "…", "city": "Delhi", "state": "Delhi", "pin": "110001", "cod_amount": "0", "total_amount": "130", "payment_mode": "Prepaid" }], "pickup_location": { "name": "A Dough Cookie — Jayanagar" } },
-        "sampleResponse_constructed": { "packages": [{ "waybill": "37760310000123", "status": "Success", "sort_code": "KCF/MDL", "remarks": [] }], "success": true }
+        "sampleResponse_constructed": { "packages": [{ "waybill": "37760310000123", "status": "Success", "sort_code": "KCF/MDL", "remarks": [] }], "success": true },
+        "realCallsConfirmed_viaRailwayLogs": [
+          "2026-07-22T21:05:28Z — order ADC20260722210454 → ✓ waybill=85582010000302, sort=null, label=ready",
+          "2026-07-22T21:16:19Z — order ADC20260722211553 → ✓ waybill=85582010000313, sort=null, label=ready"
+        ],
+        "note": "Real responses came back with sort=null both times (not a fake KCF/MDL sort code like the constructed sample) — real Delhivery staging behavior, worth knowing before assuming sort codes are always populated."
       },
       {
         "purpose": "Cancel a shipment",
         "used": true,
+        "liveTested": false,
         "ourEndpoint": "DELETE /api/admin/orders/:id/shipment",
-        "theirEndpoint": "POST /api/p/edit   (form-encoded: shipments:[{waybill, cancellation:'true'}])"
+        "theirEndpoint": "POST /api/p/edit   (form-encoded: shipments:[{waybill, cancellation:'true'}])",
+        "note": "Never confirmed against Delhivery's real API — no order in this project has ever been cancelled."
       },
       {
         "purpose": "Book a courier pickup request at a warehouse",
         "used": true,
+        "liveTested": false,
         "ourEndpoint": "admin 'Create pickup request' panel",
         "theirEndpoint": "POST /fm/request/new/",
-        "sampleRequest_constructed": { "pickup_date": "2026-07-23", "pickup_time": "14:00:00", "pickup_location": "A Dough Cookie — Jayanagar", "expected_package_count": 4 }
+        "sampleRequest_constructed": { "pickup_date": "2026-07-23", "pickup_time": "14:00:00", "pickup_location": "A Dough Cookie — Jayanagar", "expected_package_count": 4 },
+        "note": "Never confirmed live — no evidence a real pickup request has been booked."
       },
       {
         "purpose": "Get a printable shipping label PDF (pre-signed URL)",
         "used": true,
+        "liveTested": false,
         "ourEndpoint": "GET /api/admin/delivery/label?waybills=…",
-        "theirEndpoint": "GET /api/p/packing_slip?wbns=<comma-sep waybills>&pdf=true"
+        "theirEndpoint": "GET /api/p/packing_slip?wbns=<comma-sep waybills>&pdf=true",
+        "note": "Never confirmed live, despite label_generated=true on all 6 real orders — that flag is just set by our own code after shipment-create succeeds, it doesn't mean this specific label-fetch endpoint has ever actually been called."
       },
       {
         "purpose": "Live tracking / current status of a shipment",
         "used": true,
+        "liveTested": false,
         "ourEndpoint": "GET /api/orders/:id/delhivery-track   and  GET /api/admin/orders/:id/track",
-        "theirEndpoint": "GET /api/v1/packages/json/?waybill=<wbn>"
+        "theirEndpoint": "GET /api/v1/packages/json/?waybill=<wbn>",
+        "note": "Never confirmed live for a real Delhivery waybill in this project — no log evidence this has been called, unlike Shadowfax tracking which has (repeatedly, always returning status=new)."
       },
       {
         "purpose": "Fetch delivery proof documents — signature, EPOD, return QC images",
         "used": true,
+        "liveTested": false,
         "ourEndpoint": "GET /api/admin/orders/:id/document?docType=…",
-        "theirEndpoint": "GET /api/rest/fetch/pkg/document/?doc_type=<SIGNATURE_URL|RVP_QC_IMAGE|EPOD|SELLER_RETURN_IMAGE>&waybill=<wbn>"
+        "theirEndpoint": "GET /api/rest/fetch/pkg/document/?doc_type=<SIGNATURE_URL|RVP_QC_IMAGE|EPOD|SELLER_RETURN_IMAGE>&waybill=<wbn>",
+        "note": "Never confirmed live — no order has reached a status where these documents would even exist yet (would need to be delivered/RTS first)."
       }
     ]
   },
@@ -211,6 +241,8 @@
       {
         "purpose": "Check if a pincode is serviceable for customer delivery",
         "used": false,
+        "liveTested": true,
+        "liveTestedNote": "The API call itself works and was confirmed live (I called it directly, not through any product code) — 'used: false' means our checkout flow never actually calls it, not that it's broken.",
         "ourEndpoint": "NONE — sfxServiceability() is fully implemented in src/shadowfax.js but is DEAD CODE, never called from anywhere in the backend",
         "theirEndpoint": "GET /v1/clients/serviceability/?service=customer_delivery&pincodes=<pin>&count=5",
         "sampleRequest_liveCaptured": { "query": { "service": "customer_delivery", "pincodes": "560041", "count": 5 } },
@@ -221,6 +253,7 @@
       {
         "purpose": "Create a forward (marketplace) intracity order — pickup from our store, deliver to customer",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "internal — order auto-shipment flow, tries each in-zone store nearest-first",
         "theirEndpoint": "POST /v3/clients/orders/",
         "sampleRequest_constructed": { "order_type": "marketplace", "order_details": { "client_order_id": "ADC20260722104807", "actual_weight": 500, "product_value": 130, "payment_mode": "Prepaid", "cod_amount": "0", "total_amount": 130, "order_service": "regular" }, "customer_details": { "name": "Satya Prakash", "contact": "9381502998", "address_line_1": "…", "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 }, "pickup_details": { "name": "A Dough Cookie — Electronic City", "contact": "9381502998", "address_line_1": "…", "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 }, "product_details": [{ "sku_name": "Double Choco Chip Cookie", "price": 65, "category": "Food" }] },
@@ -234,14 +267,19 @@
       {
         "purpose": "Live tracking for an AWB",
         "used": true,
+        "liveTested": true,
+        "liveTestedNote": "Confirmed repeatedly (order 63, 64, and a fresh test order SF1789127573DOF created 2026-07-23) — always returns status=new, never further. See statusLabelCrossCheck note above re: why nothing has ever progressed past 'new' on staging (asked Shadowfax in the email sent 2026-07-23).",
         "ourEndpoint": "GET /api/orders/:id/delhivery-track (branches to Shadowfax when carrier=SHADOWFAX)  and  GET /api/admin/orders/:id/track",
         "theirEndpoint": "GET /v4/clients/orders/<awb>/track/",
         "sampleRequest_liveCaptured": {},
-        "sampleResponse_liveCaptured": { "message": "Success", "order_details": { "id": 4212176, "client_name": "ADOORA FOODS", "client_order_id": "ADC20260722104807", "awb_number": "SF1784684342DOF", "product_value": 130, "cod_amount": 0, "payment_mode": "prepaid", "status_display": "New", "status": "new", "delivery_details": { "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 } }, "tracking_details": [{ "created": "2026-07-22T05:18:41Z", "location": "BLR_Domlur", "status_id": "new", "status": "New", "remarks": "Item New at BLR_Domlur" }] }
+        "sampleResponse_liveCaptured": { "message": "Success", "order_details": { "id": 4212176, "client_name": "ADOORA FOODS", "client_order_id": "ADC20260722104807", "awb_number": "SF1784684342DOF", "product_value": 130, "cod_amount": 0, "payment_mode": "prepaid", "status_display": "New", "status": "new", "delivery_details": { "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 } }, "tracking_details": [{ "created": "2026-07-22T05:18:41Z", "location": "BLR_Domlur", "status_id": "new", "status": "New", "remarks": "Item New at BLR_Domlur" }] },
+        "riderInfo": "rider_name/rider_contact fields exist in this API's response shape (confirmed from the real order_details object) and get populated once status reaches 'ofd' (Out For Delivery) per Shadowfax's own docs — but since no real order has ever progressed past 'new' on staging, these fields have never actually been observed populated. Not fabricated, not assumed — genuinely untested because nothing has reached that state yet."
       },
       {
         "purpose": "Proof of delivery — recipient's signature sheet (S3 PDF) once delivered/rts_d",
         "used": true,
+        "liveTested": false,
+        "liveTestedNote": "Never actually called against a real AWB — no order has ever reached delivered/rts_d status on staging, so there's nothing real to fetch yet. Sample below is constructed from the documented response shape, not a real capture.",
         "ourEndpoint": "GET /api/admin/orders/:id/shadowfax-doc",
         "theirEndpoint": "POST /v1/clients/pod_details/  (body: {awb_numbers:[awb]})",
         "sampleResponse_constructed": { "message": "Success", "pod_details": { "SF1784684342DOF": { "recipient_name": "Satya Prakash", "recipient_signature": "['https://shadowfax-pod.s3.amazonaws.com/report.pdf']" } } }
@@ -249,6 +287,7 @@
       {
         "purpose": "Status update webhook — Shadowfax pushes rider/delivery status changes to us",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "POST /api/shadowfax/webhook  (Authorization header must match SHADOWFAX_WEBHOOK_SECRET)",
         "theirEndpoint": "(inbound — Shadowfax calls US, configured in their dashboard)",
         "sampleRequest_realWorldTested": { "awb_number": "SF1770170860DOF", "event": "seller_pickup_done", "status": "Picked up from store", "comments": "Rider collected the order", "event_timestamp": "2026-07-17T00:00:00+05:30" }
@@ -256,26 +295,30 @@
       {
         "purpose": "COD UPI-QR generator (closest thing to 'invoicing' Shadowfax offers — see invoiceGeneration note above; does NOT generate an invoice document, just a payment QR referencing one)",
         "used": false,
+        "liveTested": false,
         "theirEndpoint": "POST https://saruman.staging.shadowfax.in/api/v2/clients/qr_code/generate/  (note: different subdomain — saruman, not dale — from every other Shadowfax endpoint we use)",
-        "whyNotUsed": "COD-only feature ('QR Code can only be generated for COD' per their own error message) — ADC is prepaid-only, so this endpoint can never apply"
+        "whyNotUsed": "COD-only feature ('QR Code can only be generated for COD' per their own error message) — ADC is prepaid-only, so this endpoint can never apply. Deliberately staying unimplemented, per explicit instruction."
       },
       {
-        "purpose": "Cancel an order (by AWB or client_order_id)",
+        "purpose": "Cancel an order (by AWB or client_order_id) — WANTED: admin-only control (normal users can never cancel a placed order — that stays strict)",
         "used": false,
-        "theirEndpoint": "not given as a concrete URL in the docs snapshot we have — only documented behavior (successful cancel: 200 'Request has been marked as cancelled'; queued for certain in-flight statuses: 304; already-delivered: 400 'Order cannot be cancelled. Invalid state.')",
-        "whyNotUsed": "Never implemented for Shadowfax — Delhivery has a cancel-shipment route (DELETE /api/admin/orders/:id/shipment) but there's no Shadowfax equivalent in admin.js today. Candidate for 'better handling' if a customer needs to cancel an intracity order after it's created."
+        "liveTested": false,
+        "theirEndpoint": "BLOCKED — not given as a concrete URL/body in the docs we have, only documented behavior (successful cancel: 200 'Request has been marked as cancelled'; queued for certain in-flight statuses: 304; already-delivered: 400 'Order cannot be cancelled. Invalid state.'). Asked Shadowfax for the exact spec in the email sent 2026-07-23 — implementation deferred until they answer, deliberately not guessed.",
+        "whyNotUsed": "Not implemented yet — waiting on Shadowfax's reply for the real endpoint/body before wiring an admin cancel button."
       },
       {
-        "purpose": "Update order data (edit delivery_details/pickup_details/return_details, or transition status to rts/rto/reopen_ndr from on_hold/cancelled_by_customer)",
+        "purpose": "Update order data (edit delivery_details/pickup_details/return_details, or transition status to rts/rto/reopen_ndr from on_hold/cancelled_by_customer — only allowed from those two states) — WANTED: admin-only control",
         "used": false,
-        "theirEndpoint": "POST https://dale.staging.shadowfax.in/api/v3/clients/order_update/",
-        "whyNotUsed": "Never implemented — no current admin flow to correct a wrong address or re-open a stuck Shadowfax order after creation."
+        "liveTested": false,
+        "theirEndpoint": "POST https://dale.staging.shadowfax.in/api/v3/clients/order_update/  — URL confirmed from docs, but no example request body was given anywhere in the docs we have (only the behavioral rules). Asked Shadowfax for a sample payload in the email sent 2026-07-23 — implementation deferred until they answer, deliberately not guessed.",
+        "whyNotUsed": "Not implemented yet — don't have a confirmed request body schema to build against."
       },
       {
-        "purpose": "Escalation API — raise a support ticket for delayed delivery, expedite pickup, status mismatch, or delivery dispute",
+        "purpose": "Escalation API — raise a support ticket for delayed delivery, expedite pickup, status mismatch, or delivery dispute — WANTED: admin-only control, forward + reverse issue categories both",
         "used": false,
-        "theirEndpoint": "not given as a concrete URL in the docs snapshot we have — only the issue-category codes (1=Delayed Delivery, 2=Expedite Pickup-Customer, 3=Expedite Pickup-Seller, 4=Status Mismatch, 5=Delivery Dispute)",
-        "whyNotUsed": "Never implemented — currently any Shadowfax delivery problem would have to be escalated manually outside the app (email/dashboard), not through this API."
+        "liveTested": false,
+        "theirEndpoint": "BLOCKED — not given as a concrete URL in the docs we have, only the issue-category codes (1=Delayed Delivery, 2=Expedite Pickup-Customer, 3=Expedite Pickup-Seller, 4=Status Mismatch, 5=Delivery Dispute). Asked Shadowfax for the exact spec in the email sent 2026-07-23 — implementation deferred until they answer, deliberately not guessed.",
+        "whyNotUsed": "Not implemented yet — waiting on Shadowfax's reply for the real endpoint before wiring an admin escalation form."
       },
       {
         "purpose": "Printable shipping label",
