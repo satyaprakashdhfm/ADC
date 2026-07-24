@@ -113,7 +113,15 @@ export default app;
 if (!process.env.VERCEL) {
   (async () => {
     await initSchema();
-    await seedIfEmpty();
+    // SKIP_SEED=true disables the auto-seed entirely — used by the isolated final_deploy test
+    // environment, whose DB is provisioned separately (schema + curated reference data) and must
+    // NOT be auto-seeded (the seed keys off an empty users table and would clash with pre-loaded
+    // reference data / omit the warehouse row Delhivery needs).
+    if (process.env.SKIP_SEED === 'true') {
+      console.log('[CONFIG] SKIP_SEED=true — auto-seed disabled');
+    } else {
+      await seedIfEmpty();
+    }
     app.listen(PORT, () => {
       console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
       console.log(`[CONFIG] DB=${process.env.DATABASE_URL ? 'supabase-pooler' : 'local-pg'}`);
