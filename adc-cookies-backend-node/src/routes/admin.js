@@ -565,7 +565,11 @@ router.get('/orders/:id/track', async (req, res) => {
     if (!shadowfaxConfigured()) throw new ApiError('Shadowfax not configured', 503);
     const result = await trackShadowfax(order.delhivery_waybill);
     if (result.ok && result.status) {
-      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [result.status, nowIso(), order.id]);
+      // Store the friendly label, not the raw status_id — the customer-facing track route
+      // (routes/orders.js) stores sfxStatusLabel(result.status) here too; storing the raw slug
+      // instead would leave shipment_status inconsistently formatted depending on which route
+      // last touched it.
+      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [sfxStatusLabel(result.status), nowIso(), order.id]);
     }
     const scans = (result.data?.tracking_details || [])
       .map(t => ({ time: t.created, event: sfxStatusLabel(t.status_id) || t.status || t.remarks }))
@@ -578,9 +582,12 @@ router.get('/orders/:id/track', async (req, res) => {
   const result = await trackShipment(order.delhivery_waybill);
   if (result.ok && result.data) {
     const pkg = Array.isArray(result.data?.ShipmentData) ? result.data.ShipmentData[0]?.Shipment : null;
-    if (pkg?.Status?.Status) {
+    // Same Status + Instructions join as the customer-facing route (routes/orders.js) — keeps
+    // shipment_status consistently formatted regardless of which route last updated it.
+    const latestStatus = [pkg?.Status?.Status, pkg?.Status?.Instructions].filter(Boolean).join(' — ') || null;
+    if (latestStatus) {
       await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3',
-        [pkg.Status.Status, nowIso(), order.id]);
+        [latestStatus, nowIso(), order.id]);
     }
   }
   res.json({ ...result, carrier: 'DELHIVERY' });
