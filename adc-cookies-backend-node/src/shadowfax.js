@@ -198,8 +198,9 @@ export async function sfxServiceability(pincode, service = 'customer_delivery') 
 }
 
 // Create a forward (marketplace) order. Returns { ok, awb?, reason?, detail }.
-// `pickup` = our store in the customer's city; prepaid only.
-export async function createShadowfaxOrder({ order, address, items = [], pickup }) {
+// `pickup` = our store in the customer's city; prepaid only. `weightGrams` defaults to 500 (the
+// same fixed weight every real order has used so far) but can be overridden per-order.
+export async function createShadowfaxOrder({ order, address, items = [], pickup, weightGrams = 500 }) {
   if (!shadowfaxConfigured()) return { ok: false, reason: 'not_configured' };
   const contact = String(address.phone || pickup.contact || '').replace(/\D/g, '').slice(-10);
   const destPin = Number(String(address.pincode).replace(/\D/g, ''));
@@ -212,7 +213,7 @@ export async function createShadowfaxOrder({ order, address, items = [], pickup 
     order_type: 'marketplace',
     order_details: {
       client_order_id: order.order_number,
-      actual_weight: 500,
+      actual_weight: weightGrams,
       product_value: Number(order.subtotal ?? order.total_amount ?? 0),
       payment_mode: 'Prepaid',
       cod_amount: '0',
@@ -264,6 +265,144 @@ export async function createShadowfaxOrder({ order, address, items = [], pickup 
   return { ok: false, reason: String(reason).slice(0, 200), detail: r.data };
 }
 
+// Create a Warehouse-model order — the correct model for ADC (we own all 4 stores outright; the
+// Marketplace model above is for platforms coordinating pickups from independent third-party
+// sellers, which doesn't apply to us). Same POST /v3/clients/orders/ endpoint as marketplace, but
+// order_type:'warehouse' and a different body shape: pickup_details/rto_details take a
+// `unique_code` (our own reference tag, sent inline alongside the full address — no separate
+// pre-registration required), and rto_details is mandatory (defaults to the pickup address/store
+// if no separate RTO location is given, since an undeliverable item just goes back to the store).
+// Request schema confirmed 2026-07-24 via Shadowfax's own Apiary Specification (their rendered
+// docs never showed this shape at all).
+export async function createShadowfaxWarehouseOrder({ order, address, items = [], pickup, rto, weightGrams = 500 }) {
+  if (!shadowfaxConfigured()) return { ok: false, reason: 'not_configured' };
+  const contact = String(address.phone || '').replace(/\D/g, '').slice(-10);
+  const destPin = Number(String(address.pincode).replace(/\D/g, ''));
+  const pickupPin = Number(String(pickup.pincode).replace(/\D/g, ''));
+  const pickupCode = pickup.unique_code || `adc-${String(pickup.name).replace(/\s+/g, '-').toLowerCase()}`;
+  const rtoSrc = rto || pickup;
+  const rtoPin = Number(String(rtoSrc.pincode).replace(/\D/g, ''));
+  const payload = {
+    order_type: 'warehouse',
+    order_details: {
+      client_order_id: order.order_number,
+      actual_weight: weightGrams,
+      volumetric_weight: weightGrams,
+      product_value: Number(order.subtotal ?? order.total_amount ?? 0),
+      payment_mode: 'Prepaid',
+      cod_amount: '0',
+      total_amount: Number(order.total_amount ?? 0),
+      order_service: 'regular',
+    },
+    customer_details: {
+      name: address.full_name || 'Customer',
+      contact,
+      address_line_1: [address.address_line1, address.address_line2].filter(Boolean).join(', ') || address.city,
+      city: address.city,
+      state: address.state || '',
+      pincode: destPin,
+    },
+    pickup_details: {
+      name: pickup.name,
+      contact: pickup.contact,
+      address_line_1: pickup.address_line_1,
+      city: pickup.city,
+      state: pickup.state,
+      pincode: pickupPin,
+      unique_code: pickupCode,
+    },
+    rto_details: {
+      name: rtoSrc.name,
+      contact: rtoSrc.contact,
+      address_line_1: rtoSrc.address_line_1,
+      city: rtoSrc.city,
+      state: rtoSrc.state,
+      pincode: rtoPin,
+      unique_code: rtoSrc.unique_code || pickupCode,
+    },
+    product_details: (items.length ? items : [{ product_name: 'Cookies', unit_price: order.total_amount }]).map((i) => ({
+      sku_name: i.product_name || 'Cookies',
+      price: Number(i.unit_price ?? i.price ?? 0),
+      category: 'Food',
+    })),
+  };
+
+  log('create-warehouse', `HIT /v3/clients/orders/ (warehouse) | order=${order.order_number} | pickup=${pickupPin} | dest=${destPin} | creating…`);
+  const r = await sfxRequest('/v3/clients/orders/', { method: 'POST', body: payload });
+  if (r.ok && r.data?.message === 'Success' && r.data?.data?.awb_number) {
+    const awb = r.data.data.awb_number;
+    log('create-warehouse', `order=${order.order_number} | ✓ awb=${awb}`);
+    return { ok: true, awb, detail: r.data.data };
+  }
+  const reason = r.data?.errors || r.data?.message || `status_${r.status}`;
+  log('create-warehouse', `order=${order.order_number} | ✗ ${JSON.stringify(reason).slice(0, 180)}`);
+  return { ok: false, reason: String(reason).slice(0, 200), detail: r.data };
+}
+
+// Cancel an order by AWB. Request schema confirmed 2026-07-24 via Shadowfax's own Apiary
+// "Specification" example (their rendered docs never showed this) — field is `request_id`, NOT
+// `awb_number`, despite the value being the AWB. Returns { ok, reason?, detail }.
+export async function cancelShadowfaxOrder(awb, remarks = 'Cancelled by seller') {
+  if (!shadowfaxConfigured()) return { ok: false, reason: 'not_configured' };
+  log('cancel', `HIT /v3/clients/orders/cancel/ | awb=${awb} | cancelling…`);
+  const r = await sfxRequest('/v3/clients/orders/cancel/', {
+    method: 'POST',
+    body: { request_id: awb, cancel_remarks: remarks },
+  });
+  // 200 = cancelled immediately; 304 = queued (courier already past a certain stage); anything
+  // else is a real failure (e.g. already delivered).
+  if (r.status === 200 || r.status === 304) {
+    log('cancel', `awb=${awb} | ✓ ${r.data?.responseMsg || 'cancelled'}${r.status === 304 ? ' (queued)' : ''}`);
+    return { ok: true, queued: r.status === 304, detail: r.data };
+  }
+  log('cancel', `awb=${awb} | ✗ status_${r.status} | ${JSON.stringify(r.data ?? '').slice(0, 140)}`);
+  return { ok: false, reason: r.data?.responseMsg || `status_${r.status}`, detail: r.data };
+}
+
+// Raise a support escalation for an AWB. issueCategory: 1=Delayed Delivery, 2=Expedite
+// Pickup-Customer, 3=Expedite Pickup-Seller, 4=Status Mismatch, 5=Delivery Dispute (per Shadowfax's
+// docs). Request schema confirmed 2026-07-24 via Apiary Specification.
+export async function escalateShadowfaxIssue(awb, issueCategory) {
+  if (!shadowfaxConfigured()) return { ok: false, reason: 'not_configured' };
+  log('escalate', `HIT /v1/clients/support/issue/ | awb=${awb} | category=${issueCategory} | raising…`);
+  const r = await sfxRequest('/v1/clients/support/issue/', {
+    method: 'POST',
+    body: { awb_number: awb, issue_category: Number(issueCategory) },
+  });
+  if (r.ok && r.data?.status === 'SUCCESS') {
+    log('escalate', `awb=${awb} | ✓ ${r.data?.message || 'received'}`);
+    return { ok: true, detail: r.data };
+  }
+  log('escalate', `awb=${awb} | ✗ status_${r.status} | ${JSON.stringify(r.data ?? '').slice(0, 140)}`);
+  return { ok: false, reason: r.data?.message || `status_${r.status}`, detail: r.data };
+}
+
+// Update order data (partial update). Request schema confirmed 2026-07-24 via Apiary
+// Specification. Per Shadowfax's docs: (1) status can only be set to rts/rto/reopen_ndr while
+// current status is on_hold or cancelled_by_customer; (2) pincode inside delivery_details can be
+// changed at most twice, intracity only; (3) weight can only change once, while status is new;
+// (4) omit any section you're not touching — only the sections you include get applied.
+// `updates` may contain any of: deliveryDetails, pickupDetails, returnDetails, orderDetails
+// (cod_amount/eway_bill_number/invoice_number/return_eway_bill_number/actual_weight/
+// volumetric_weight), status (one of rts/rto/reopen_ndr).
+export async function updateShadowfaxOrder(awb, updates = {}) {
+  if (!shadowfaxConfigured()) return { ok: false, reason: 'not_configured' };
+  const body = { awb_number: awb };
+  if (updates.deliveryDetails) body.delivery_details = updates.deliveryDetails;
+  if (updates.pickupDetails) body.pickup_details = updates.pickupDetails;
+  if (updates.returnDetails) body.return_details = updates.returnDetails;
+  if (updates.orderDetails) body.order_details = updates.orderDetails;
+  if (updates.status) body.status_update = { status: updates.status };
+  log('update-order', `HIT /v3/clients/order_update/ | awb=${awb} | sections=${Object.keys(body).filter((k) => k !== 'awb_number').join(',')}`);
+  const r = await sfxRequest('/v3/clients/order_update/', { method: 'POST', body });
+  if (r.ok) {
+    log('update-order', `awb=${awb} | ✓ ${r.data?.message || 'accepted'}`);
+    return { ok: true, detail: r.data };
+  }
+  log('update-order', `awb=${awb} | ✗ status_${r.status} | ${JSON.stringify(r.data ?? '').slice(0, 140)}`);
+  return { ok: false, reason: r.data?.message || `status_${r.status}`, detail: r.data };
+}
+
 // Live tracking for an AWB. Returns { ok, status?, trackUrl?, data }.
 export async function trackShadowfax(awb) {
   if (!shadowfaxConfigured()) return { ok: false, reason: 'not_configured' };
@@ -273,6 +412,20 @@ export async function trackShadowfax(awb) {
     return { ok: false, reason: `status_${r.status}`, data: r.data };
   }
   return { ok: true, status: r.data?.order_details?.status, trackUrl: r.data?.order_details?.customer_track_url || null, data: r.data };
+}
+
+// Track up to 50 AWBs in a single call. Returns { ok, results: [{ awb, status, data }] }.
+export async function bulkTrackShadowfax(awbs = []) {
+  if (!shadowfaxConfigured()) return { ok: false, reason: 'not_configured' };
+  const list = awbs.slice(0, 50);
+  log('bulk-track', `HIT /v4/clients/bulk_track/ | count=${list.length}`);
+  const r = await sfxRequest('/v4/clients/bulk_track/', { method: 'POST', body: { awb_numbers: list } });
+  if (!r.ok) {
+    log('bulk-track', `✗ status_${r.status}`);
+    return { ok: false, reason: `status_${r.status}`, detail: r.data };
+  }
+  log('bulk-track', `✓ ${JSON.stringify(r.data).slice(0, 140)}`);
+  return { ok: true, detail: r.data };
 }
 
 // Proof of Delivery — recipient's signature sheet (S3 PDF) + name. Only after the shipment is
