@@ -545,8 +545,13 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
   const lines = Object.values(cart);
   // Intra-city (a store-zone pincode → same-day) ships FREE; everywhere else is a flat ₹100.
+  // Both amounts are env-overridable so the separate test deployment can show ₹1; production keeps
+  // the real defaults (0 / 100). NEXT_PUBLIC_* is baked in at build time, so these come from the
+  // Vercel env of whichever branch built this bundle — the test env sets them to 1.
+  const feeIntracity = Number(process.env.NEXT_PUBLIC_DELIVERY_FEE_INTRACITY ?? 0) || 0;
+  const feeOutstation = Number(process.env.NEXT_PUBLIC_DELIVERY_FEE_OUTSTATION ?? 100) || 100;
   const intracity = !!(delivCheck && delivCheck.serviceable && delivCheck.intracity);
-  const delivery = total > 0 ? (intracity ? 0 : 100) : 0;
+  const delivery = total > 0 ? (intracity ? feeIntracity : feeOutstation) : 0;
   const gstIncl = total > 0 ? Math.round(total - total / 1.05) : 0;  // 5% GST is already inside the prices
   const giftFee = gift ? GIFT_FEE : 0;
   const grand = total + delivery + giftFee - discount;               // GST included in `total`, not added on top

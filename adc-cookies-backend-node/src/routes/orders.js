@@ -254,9 +254,13 @@ router.post('/', async (req, res) => {
   }
 
   // Intra-city orders (a pincode inside one of our store zones → same-day Shadowfax) ship FREE;
-  // everywhere else is the flat ₹100 courier fee. Mirrors the storefront bill.
+  // everywhere else is the flat courier fee. Mirrors the storefront bill. Both amounts are
+  // env-overridable (DELIVERY_FEE_INTRACITY / DELIVERY_FEE_OUTSTATION) so a test environment can
+  // set them to ₹1 for cheap live testing; production keeps the real defaults (0 / 100).
+  const feeIntracity = Number(process.env.DELIVERY_FEE_INTRACITY ?? 0);
+  const feeOutstation = Number(process.env.DELIVERY_FEE_OUTSTATION ?? 100);
   const intracity = zoneStores(String(address.pincode || '').replace(/\D/g, '')).length > 0;
-  const deliveryFee = subtotal > 0 ? (intracity ? 0 : 100) : 0;
+  const deliveryFee = subtotal > 0 ? (intracity ? feeIntracity : feeOutstation) : 0;
   const total = subtotal - discount + deliveryFee;
   const ts = nowIso();
   const orderNumber = await genOrderNumber();
