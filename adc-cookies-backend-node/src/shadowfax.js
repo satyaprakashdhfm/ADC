@@ -50,27 +50,52 @@ function log(label, extra = '') {
   console.log(`[SHADOWFAX] ${label}${extra ? ' | ' + extra : ''}`);
 }
 
-// Shadowfax's raw status codes → short, customer-friendly labels for our UI.
+// Shadowfax's raw status codes → short, customer-friendly labels for our UI. Covers every real
+// status_id from their official Marketplace order-states docs (2026-07-23 full read), not just the
+// handful we'd happened to see live — 'picked' in particular was missing before this pass, which
+// meant a genuine forward-progress update from Shadowfax would have silently failed to register
+// (see sfxStatusRank below for why that matters). seller_pickup_done/pickup_done are kept as extra
+// aliases for 'picked' — seller_pickup_done is a real event name we've seen on a live webhook test
+// that doesn't actually appear in Shadowfax's own published docs (see documentations note).
 const SFX_STATUS_LABELS = {
   new: 'Order placed',
   assigned_for_seller_pickup: 'Pickup assigned',
   ofp: 'Out for pickup',
+  picked: 'Picked up from store',
   seller_pickup_done: 'Picked up from store',
   pickup_done: 'Picked up from store',
+  recd_at_rev_hub: 'At pickup hub',
   item_manifested: 'Packed',
   bag_in_transit: 'In transit',
   bag_received: 'At delivery hub',
-  recd_at_rev_hub: 'At hub',
+  bag_received_at_via: 'In transit (via hub)',
+  recd_at_fwd_hub: 'At destination hub',
+  recd_at_fwd_dc: 'At destination facility',
+  assigned_for_delivery: 'Delivery assigned',
   ofd: 'Out for delivery',
   delivered: 'Delivered',
-  rts_nd: 'Delivery attempted',
-  rts: 'Returning to store',
-  rts_d: 'Returned to store',
-  rto: 'Returned to store',
-  cancelled: 'Cancelled',
+  cid: 'Delivery rescheduled',
+  seller_initiated_delay: 'Pickup rescheduled',
+  seller_not_contactable: 'Store not reachable',
+  nc: 'Not reachable',
+  pickup_not_attempted: 'Pickup not attempted',
+  na: 'Delivery not attempted',
   cancelled_by_customer: 'Cancelled',
-  lost: 'Lost in transit',
+  cancelled_by_seller: 'Cancelled',
+  cancelled: 'Cancelled',
   on_hold: 'On hold',
+  pickup_on_hold: 'Pickup on hold',
+  reopen_ndr: 'Delivery reattempt requested',
+  pincode_updated: 'Address updated',
+  item_misrouted: 'Misrouted',
+  lost: 'Lost in transit',
+  in_transit_return: 'Return in transit',
+  rts: 'Returning to store',
+  rts_in_process: 'Return in progress',
+  rts_ofd: 'Out for delivery (return)',
+  rts_d: 'Returned to store',
+  rts_nd: 'Return delivery attempt failed',
+  rto: 'Returned to store',
 };
 export function sfxStatusLabel(status) {
   const key = String(status || '').toLowerCase().trim();
@@ -78,24 +103,41 @@ export function sfxStatusLabel(status) {
   return SFX_STATUS_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// Forward-progression rank for Shadowfax statuses (higher = later in the lifecycle). Used to stop a
-// live-tracking poll from DOWNGRADING a status a webhook already advanced — e.g. the staging API
-// returning `new` must not wipe a webhook-delivered "Out for delivery"/"Delivered". Return/cancel/lost
-// are terminal, so they rank high enough to stick once reached.
+// Forward-progression rank for Shadowfax statuses (higher = later in the lifecycle). Used ONLY by
+// the customer-facing live-tracking POLL (GET /api/orders/:id/track) to stop a stale poll result
+// from downgrading a status the webhook already advanced further — e.g. staging returning `new`
+// must not wipe a webhook-delivered "Out for delivery"/"Delivered". The webhook itself (routes/
+// shadowfax.js) does NOT use this — it stores whatever Shadowfax sends unconditionally, since a
+// push event is never stale by definition.
+//
+// OPEN QUESTION, not resolved here: on_hold/pickup_on_hold/cid/seller_initiated_delay/nc/na/
+// pickup_not_attempted/reopen_ndr/pincode_updated/item_misrouted/cancelled_by_seller are real
+// exceptions that can interrupt normal forward progress at ANY point in the lifecycle — there's no
+// single correct rank for them in a strictly-increasing scale. Ranking one of them low would let a
+// later real forward-progress poll correctly override it (fine); ranking it high would let it block
+// a later real forward-progress update from registering (probably wrong). Left them OUT of this
+// table entirely for now (rank 0, same as unrecognized input) rather than guess — flagging this as
+// a genuine design question, not quietly picking one.
 const SFX_STATUS_RANK = {
   new: 1,
-  on_hold: 1,
   assigned_for_seller_pickup: 2,
   ofp: 3,
+  picked: 4,
   seller_pickup_done: 4,
   pickup_done: 4,
-  item_manifested: 5,
-  bag_in_transit: 6,
-  bag_received: 7,
-  recd_at_rev_hub: 7,
-  ofd: 8,
-  rts_nd: 9,
+  recd_at_rev_hub: 5,
+  item_manifested: 6,
+  bag_in_transit: 7,
+  bag_received: 8,
+  bag_received_at_via: 8,
+  recd_at_fwd_hub: 8,
+  recd_at_fwd_dc: 8,
+  assigned_for_delivery: 9,
+  ofd: 10,
   rts: 90,
+  rts_in_process: 91,
+  rts_ofd: 92,
+  rts_nd: 93,
   rts_d: 95,
   rto: 95,
   cancelled: 100,

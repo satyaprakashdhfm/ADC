@@ -367,7 +367,10 @@ router.get('/:id/delhivery-track', async (req, res) => {
   const result = await trackShipment(order.delhivery_waybill);
   if (!result.ok) return res.json({ tracked: false, reason: result.reason });
   const pkg = Array.isArray(result.data?.ShipmentData) ? result.data.ShipmentData[0]?.Shipment : null;
-  const latestStatus = pkg?.Status?.Status || null;
+  // Status.Status alone is a terse word ("Manifested"); Status.Instructions is Delhivery's own
+  // human-readable detail for the same event ("Pickup not attempted") — join them like the Scans
+  // list below already does, so the customer sees more than a bare status word when one exists.
+  const latestStatus = [pkg?.Status?.Status, pkg?.Status?.Instructions].filter(Boolean).join(' — ') || null;
   if (latestStatus) {
     await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [latestStatus, nowIso(), order.id]);
   }

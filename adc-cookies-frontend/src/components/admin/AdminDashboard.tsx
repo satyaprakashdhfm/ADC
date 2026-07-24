@@ -842,7 +842,9 @@ export default function AdminDashboard() {
                                       <span style={{ color: 'var(--status-error)', fontWeight: 700 }}>{doc.error}</span>
                                     ) : (
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                        {doc.trackUrl && <a href={doc.trackUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--text-link)', fontWeight: 700 }}>↗ Live tracking link</a>}
+                                        {/* Shadowfax's customer_track_url has never once come back non-null in real testing, so
+                                            we don't know what it actually shows — not surfacing it until confirmed. Status/scans
+                                            (rendered by the Track button above) are the only tracking info we show for now. */}
                                         {doc.pod?.urls?.length ? doc.pod.urls.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ color: 'var(--text-link)', fontWeight: 700 }}>↗ Proof of delivery (PDF)</a>) : <span style={{ color: 'var(--text-muted)' }}>POD available after delivery.</span>}
                                         {doc.pod?.recipient && <span style={{ color: 'var(--text-muted)' }}>Received by {doc.pod.recipient}</span>}
                                       </div>
