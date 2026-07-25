@@ -270,6 +270,11 @@ router.post('/', async (req, res) => {
   // Intra-city orders (a pincode inside one of our store zones → same-day Shadowfax) ship FREE;
   // everywhere else is the flat ₹100 courier fee. Mirrors the storefront bill.
   const intracity = zoneStores(String(address.pincode || '').replace(/\D/g, '')).length > 0;
+  // Shadowfax is paused (see SHADOWFAX_DISABLED in delivery.js) — reject intracity orders
+  // server-side too, not just via the frontend's disabled "Proceed to pay" button.
+  if (intracity && SHADOWFAX_DISABLED) {
+    throw new ApiError('Same-day delivery is temporarily down. Please wait and try again shortly.', 503);
+  }
   const deliveryFee = subtotal > 0 ? (intracity ? 0 : 100) : 0;
   const total = subtotal - discount + deliveryFee;
   const ts = nowIso();

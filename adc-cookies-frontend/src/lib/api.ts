@@ -304,12 +304,11 @@ export interface DeliveryCheck {
   tat?: number | null;
   expectedDeliveryDate?: string | null;
   intracity?: boolean;          // near one of our stores → ships same-day via Shadowfax
-  carrier?: string;             // 'SHADOWFAX' when intracity, 'STORE_PICKUP' while Shadowfax is paused
+  carrier?: string;             // 'SHADOWFAX' when intracity
   store?: string;               // nearest store name (intracity)
   city?: string;
   sameDay?: boolean;
-  pickupOnly?: boolean;         // Shadowfax paused — customer collects from `store` instead of home delivery
-  maintenanceMessage?: string;  // customer-facing reason, shown in place of the delivery promise
+  maintenanceMessage?: string;  // shown when reason === 'shadowfax_paused' — Shadowfax is down, checkout blocked
 }
 
 /** Combined serviceability + TAT check — used at checkout when an address is selected. */

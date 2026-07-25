@@ -776,9 +776,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   );
 
   // Honest arrival line for the success screen — same-day for intra-city, a real date for courier, else generic.
-  const successEta = delivCheck?.pickupOnly
-    ? `Ready to collect from ${delivCheck.store || 'our store'}`
-    : intracity ? 'Arriving today' : deliverBy ? `Arriving ${fmtDay(deliverBy)}` : 'On its way — we’ll email tracking updates';
+  const successEta = intracity ? 'Arriving today' : deliverBy ? `Arriving ${fmtDay(deliverBy)}` : 'On its way — we’ll email tracking updates';
   if (done) return <OrderSuccessPage show total={paid} orderId={orderId} eta={successEta} summary={placedOrderSummary} pendingPayment={pendingPayment} onBackToMenu={() => router.push('/')} onViewOrder={() => router.push('/account')} />;
 
   if (placing) return (
@@ -813,14 +811,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       {lines.length > 0 && delivCheck && delivCheck.serviceable && (delivCheck.intracity || deliverBy) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-soft)' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 800, fontSize: 'var(--text-2xs)', letterSpacing: '.05em', flex: 'none' }}>
-            <Truck size={13} /> {delivCheck.pickupOnly ? 'STORE PICKUP' : delivCheck.intracity ? 'SAME-DAY' : 'EXPRESS'}
+            <Truck size={13} /> {delivCheck.intracity ? 'SAME-DAY' : 'EXPRESS'}
           </span>
           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>
-            {delivCheck.pickupOnly
-              ? `Collect from ${delivCheck.store || 'our store'}`
-              : delivCheck.intracity
-                ? `Delivery today, ${fmtDay(new Date())}`
-                : `Delivery ${delivCheck.tat != null ? `in ${delivCheck.tat} day${delivCheck.tat !== 1 ? 's' : ''}, ` : 'by '}${_WD[deliverBy!.getDay()]}`}
+            {delivCheck.intracity
+              ? `Delivery today, ${fmtDay(new Date())}`
+              : `Delivery ${delivCheck.tat != null ? `in ${delivCheck.tat} day${delivCheck.tat !== 1 ? 's' : ''}, ` : 'by '}${_WD[deliverBy!.getDay()]}`}
           </span>
         </div>
       )}
@@ -980,18 +976,20 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
                       <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} style={{ color: 'var(--white)' }} /></span>
                       <div>
-                        {delivCheck.pickupOnly
-                          ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Collect from {delivCheck.store || 'our store'} — same-day delivery paused</div>
-                          : delivCheck.intracity
-                            ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Same-day delivery — arrives today, {fmtDay(new Date())}</div>
-                            : deliverBy
-                              ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Arrives {fmtDay(deliverBy)}{delivCheck.tat != null ? ` · in ${delivCheck.tat} day${delivCheck.tat !== 1 ? 's' : ''}` : ''}</div>
-                              : <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Delivery available{delivCheck.embargo ? ' — minor delays possible' : ''}</div>}
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>
-                          {delivCheck.pickupOnly
-                            ? delivCheck.maintenanceMessage || `Pincode ${chosen?.pincode}`
-                            : delivCheck.intracity && delivCheck.store ? `Ordering from ${delivCheck.store} · Pincode ${chosen?.pincode}` : `Express delivery (all India) · Pincode ${chosen?.pincode}`}
-                        </div>
+                        {delivCheck.intracity
+                          ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Same-day delivery — arrives today, {fmtDay(new Date())}</div>
+                          : deliverBy
+                            ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Arrives {fmtDay(deliverBy)}{delivCheck.tat != null ? ` · in ${delivCheck.tat} day${delivCheck.tat !== 1 ? 's' : ''}` : ''}</div>
+                            : <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Delivery available{delivCheck.embargo ? ' — minor delays possible' : ''}</div>}
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.intracity && delivCheck.store ? `Ordering from ${delivCheck.store} · Pincode ${chosen?.pincode}` : `Express delivery (all India) · Pincode ${chosen?.pincode}`}</div>
+                      </div>
+                    </div>
+                  ) : delivCheck.reason === 'shadowfax_paused' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
+                      <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Clock size={16} style={{ color: 'var(--white)' }} /></span>
+                      <div>
+                        <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Shadowfax is down — please wait</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.maintenanceMessage || 'Same-day delivery to this area is temporarily paused.'}</div>
                       </div>
                     </div>
                   ) : (
