@@ -2,12 +2,6 @@
 
 import { useEffect, useState } from 'react';
 
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
-
 const SATYA_KEY = process.env.NEXT_PUBLIC_SATYA_KEY || '';
 
 export default function SatyaLiveTestPage() {
@@ -33,7 +27,7 @@ export default function SatyaLiveTestPage() {
     if (!r.ok) { setStatus('order failed'); setResult(data); return; }
 
     setStatus('opening checkout…');
-    const rzp = new window.Razorpay({
+    const rzp = new (window as any).Razorpay({
       key: data.keyId,
       order_id: data.orderId,
       amount: data.amount,
