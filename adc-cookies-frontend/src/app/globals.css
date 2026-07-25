@@ -222,6 +222,8 @@ body::before {
   .contact-stores > aside { order: -1; position: static !important; margin-bottom: 4px; }
   /* Locations page: same idea — map above the list, not sticky, and shorter */
   .locations-map { order: -1; position: static !important; height: clamp(260px,52vw,320px) !important; }
+  /* Reels rail: swiping is the gesture on a phone, so drop the arrows and keep just Follow */
+  .reels-controls > button { display: none !important; }
   .account-layout { grid-template-columns: 1fr !important; }
   .account-sidebar { position: static !important; }
   .account-order-detail-grid { grid-template-columns: 1fr !important; }
