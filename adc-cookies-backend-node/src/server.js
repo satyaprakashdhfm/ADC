@@ -19,7 +19,6 @@ import adminRoutes from './routes/admin.js';
 import contactRoutes from './routes/contact.js';
 import deliveryRoutes from './routes/delivery.js';
 import shadowfaxWebhookRoutes from './routes/shadowfax.js';
-import satyaRoutes from './routes/satya.js';
 import { paymentWebhook } from './routes/paymentsWebhook.js';
 import { paymentCallback } from './routes/orders.js';
 
@@ -90,7 +89,6 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api/shadowfax', shadowfaxWebhookRoutes);
-app.use('/api/satya', satyaRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found', message: 'Resource not found' }));
 
