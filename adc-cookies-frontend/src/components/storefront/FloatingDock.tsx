@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 import { Clock } from 'lucide-react';
 import { whatsappLink } from '@/lib/site';
 import { useActiveSpinReward, formatRemainingShort } from '@/lib/spinReward';
@@ -32,6 +33,7 @@ export default function FloatingDock() {
   const [spin, setSpin] = useState(false);
   const [chat, setChat] = useState(false);
   const spinDone = useRef(false);
+  const pathname = usePathname();
   // Lifted here (not inside SpinWheel) so the 12h claim countdown stays visible on the launcher
   // itself even after the wheel modal is closed — not just while it's open.
   const { activeReward, setActiveReward, checking: checkingReward, now, refresh } = useActiveSpinReward();
@@ -39,8 +41,10 @@ export default function FloatingDock() {
   // Spin pops on its own a few seconds after load (at most once a day) — location is no longer a
   // prerequisite; it's collected at checkout via the delivery address, so nothing gates the wheel
   // on the homepage anymore.
+  // The dock is mounted app-wide (support has to be reachable from every page), but the wheel
+  // should still only ambush people on the homepage — not mid-checkout or on a contact form.
   useEffect(() => {
-    if (typeof window === 'undefined' || spinDone.current) return;
+    if (typeof window === 'undefined' || spinDone.current || pathname !== '/') return;
     let last = 0;
     try { last = Number(localStorage.getItem('adc_spin_last') || 0); } catch { /* ignore */ }
     const DAY = 24 * 60 * 60 * 1000;
@@ -51,7 +55,7 @@ export default function FloatingDock() {
       try { localStorage.setItem('adc_spin_last', String(Date.now())); } catch { /* ignore */ }
     }, 3000);
     return () => clearTimeout(t);
-  }, []);
+  }, [pathname]);
 
   // Lets other parts of the site (e.g. the footer's "FAQs" link) open this same chatbot instance.
   useEffect(() => {

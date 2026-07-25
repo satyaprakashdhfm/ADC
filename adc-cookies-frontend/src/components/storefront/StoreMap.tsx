@@ -52,5 +52,7 @@ export default function StoreMap() {
     };
   }, []);
 
-  return <div ref={el} style={{ width: '100%', height: '100%', minHeight: 420, borderRadius: 'var(--radius-card)', overflow: 'hidden', border: '1px solid var(--border-default)', zIndex: 0 }} />;
+  // No minHeight: the caller sizes the map (the locations page gives it a fixed, sticky height;
+  // the contact page a smaller aside). A minHeight here would override both.
+  return <div ref={el} style={{ width: '100%', height: '100%', borderRadius: 'var(--radius-card)', overflow: 'hidden', border: '1px solid var(--border-default)', zIndex: 0 }} />;
 }

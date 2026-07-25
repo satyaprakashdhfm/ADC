@@ -1,11 +1,11 @@
 import Link from 'next/link';
-import { Mail, MapPin, Phone, ShoppingBag } from 'lucide-react';
+import { Mail, MapPin, Phone, ShoppingBag, MessageCircle } from 'lucide-react';
 import Footer from '@/components/storefront/Footer';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import ContactForm from '@/components/storefront/ContactForm';
 import StoreMap from '@/components/storefront/StoreMap';
 import { STORES } from '@/lib/stores';
-import { SITE_EMAIL, SITE_PHONE } from '@/lib/site';
+import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 
 export const metadata = {
   title: 'Contact Us - a dough cookie',
@@ -55,7 +55,7 @@ export default function ContactPage() {
           <aside style={{ position: 'sticky', top: 24, background: 'var(--panel-90)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 16, boxShadow: 'var(--shadow-md)' }}>
             <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 12 }}>Find A Dough Cookie on the map</h2>
             {/* Real interactive map of our 4 stores (Bengaluru ×3 + Chennai) — no wrong pins, no API key */}
-            <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border-default)', minHeight: 360 }}>
+            <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border-default)', height: 360 }}>
               <StoreMap />
             </div>
           </aside>
@@ -68,9 +68,10 @@ export default function ContactPage() {
             <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Get in Touch</p>
             <h2 style={{ font: '900 clamp(2.2rem,1.6rem + 3vw,3.4rem)/1 var(--font-display)', letterSpacing: '-.02em', marginBottom: 16 }}>Leave your details and we&apos;ll reach out.</h2>
             <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, color: 'var(--text-body)', marginBottom: 18 }}>Have a bulk order, a gifting request, or a question about our cookies? Share your details and our team will get back to you.</p>
-            <div style={{ display: 'grid', gap: 7, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Mail size={16} /> {SITE_EMAIL}</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Phone size={16} /> {SITE_PHONE}</span>
+            <div style={{ display: 'grid', gap: 10, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
+              <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--whatsapp-green)', fontWeight: 800 }}><MessageCircle size={16} /> WhatsApp us</a>
+              <a href={`mailto:${SITE_EMAIL}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit' }}><Mail size={16} /> {SITE_EMAIL}</a>
+              <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit' }}><Phone size={16} /> {SITE_PHONE}</a>
             </div>
           </div>
           <ContactForm />

@@ -25,18 +25,52 @@ type Msg =
   | { kind: 'yesno'; usedKeys: string[] }
   | { kind: 'closed' };
 
-const GREETING = 'Hey there! I’m Doughie, your friendly ADC support cookie. Whether you have a question, need help with an order, or just want to know more about our cookies, I’m here to help. What can I do for you today?';
-const ANYTHING_ELSE = 'Is there anything else I can help you with today? I’m just a message away!';
-const GOODBYE = 'Alright, looks like we’ve covered everything! Thanks for chatting with me. Have a sweet day, and see you again soon. Goodbye! 👋';
+const GREETING = 'Hi! I’m ADC Support 🍪 What can I help you with?';
+const WELCOME_BACK = 'Welcome back! 👋 What can I help you with now?';
+const ANYTHING_ELSE = 'Anything else I can help with?';
+const GOODBYE = 'Glad I could help! Have a sweet day 👋';
+
+const HISTORY_KEY = 'adc_chat_history';
+const HISTORY_MAX = 60; // keep the transcript bounded so localStorage can't grow forever
 
 const initialMsgs = (): Msg[] => [
   { kind: 'text', from: 'bot', text: GREETING },
   { kind: 'categories', usedKeys: [] },
 ];
 
+// A finished conversation is reopened as: the old transcript (read-only), then a fresh
+// welcome-back + topic menu. Anything still mid-flow is resumed exactly where it was left.
+function restore(saved: Msg[]): Msg[] {
+  const ended = saved[saved.length - 1]?.kind === 'closed';
+  if (!ended) return saved;
+  return [
+    ...saved.slice(0, -1),
+    { kind: 'text', from: 'bot', text: WELCOME_BACK },
+    { kind: 'categories', usedKeys: [] },
+  ];
+}
+
 export default function Chatbot({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [msgs, setMsgs] = useState<Msg[]>(initialMsgs);
+  const [loaded, setLoaded] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // Load the saved transcript once, on the client only (localStorage doesn't exist during SSR).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      const saved = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(saved) && saved.length) setMsgs(restore(saved));
+    } catch { /* corrupt or unavailable — just start fresh */ }
+    setLoaded(true);
+  }, []);
+
+  // Persist after every turn, but never before the initial load or we'd overwrite the history
+  // with the default greeting.
+  useEffect(() => {
+    if (!loaded) return;
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(msgs.slice(-HISTORY_MAX))); } catch { /* quota/private mode */ }
+  }, [msgs, loaded]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs]);
 
@@ -73,7 +107,12 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
   const answerNo = () => {
     resolve('No', { kind: 'text', from: 'bot', text: GOODBYE }, { kind: 'closed' });
   };
-  const startOver = () => setMsgs(initialMsgs());
+  // A deliberate fresh start wipes the saved transcript too — otherwise the next open would
+  // resurrect the very conversation the user just cleared.
+  const startOver = () => {
+    try { localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+    setMsgs(initialMsgs());
+  };
 
   const chip = (label: string, onClick: () => void, key?: string) => (
     <button key={key ?? label} onClick={onClick}
@@ -167,6 +206,7 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
         position: 'fixed', right: 22, bottom: 22, zIndex: 60,
         width: 'min(360px, calc(100vw - 32px))', height: 'min(560px, calc(100vh - 120px))',
         background: 'var(--surface-page)', borderRadius: 'var(--radius-sheet)',
+        border: '1.5px solid var(--border-default)',
         boxShadow: 'var(--shadow-xl)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
         animation: 'riseIn .3s var(--ease-spring) both',
       }}
@@ -177,7 +217,7 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
           <Image src="/assets/mascots/doughie-support.png" alt="" width={40} height={40} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-base)', lineHeight: 1.1 }}>Doughie</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-base)', lineHeight: 1.1 }}>ADC Support</div>
           <div style={{ fontSize: 'var(--text-2xs)', opacity: 0.9, display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green-500)', display: 'inline-block' }} /> Online · replies instantly
           </div>

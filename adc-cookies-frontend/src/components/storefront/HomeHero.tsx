@@ -8,6 +8,17 @@ import SiteNav from './SiteNav';
 const ctaPrimary: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 20px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' };
 const ctaGhost: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 20px', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--surface-card)', border: '1.5px solid var(--border-strong)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)' };
 
+/*
+ * Art-directed hero backdrop. A single landscape photo gets its sides cropped away on a
+ * portrait phone (the hero is a tall centred block), so desktop and mobile each get their own
+ * crop via <picture>/media. Drop a portrait file at HERO_MOBILE to switch it on — until then
+ * both breakpoints fall back to the landscape image, so nothing breaks if it's missing.
+ *   HERO_DESKTOP  2400×1200 (2:1 landscape)
+ *   HERO_MOBILE   1200×1600 (3:4 portrait)
+ */
+const HERO_DESKTOP = '/assets/hero-cookies.jpg';
+const HERO_MOBILE = '/assets/hero-cookies.jpg';
+
 export default function HomeHero() {
   const router = useRouter();
   const scrollToProducts = () => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
@@ -17,14 +28,21 @@ export default function HomeHero() {
       {/* Full nav (with cart + account) is hidden at the top and slides in after the first scroll */}
       <SiteNav revealOnScroll />
 
-      <section style={{ position: 'relative', minHeight: '78svh', overflow: 'hidden', display: 'grid', placeItems: 'center', padding: 'clamp(56px,8vw,96px) 0' }}>
-        {/* Background photo — starts zoomed in, then eases out so the edge cookies drift into frame */}
+      <section className="home-hero" style={{ position: 'relative', overflow: 'hidden', display: 'grid', placeItems: 'center', padding: 'clamp(56px,8vw,96px) 0' }}>
+        {/* Background photo — starts zoomed in, then eases out so the edge cookies drift into frame.
+            Plain <picture>/<img> rather than next/image: art direction needs two sources behind a
+            media query, which next/image's single-src API can't express. */}
         <motion.div aria-hidden
           initial={{ scale: 1.18 }}
           animate={{ scale: 1 }}
           transition={{ duration: 2, ease: [0.16, 1, 0.3, 1] }}
           style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-          <Image src="/assets/hero-cookies.jpg" alt="" fill priority sizes="100vw" style={{ objectFit: 'cover', objectPosition: 'center' }} />
+          <picture>
+            <source media="(max-width: 680px)" srcSet={HERO_MOBILE} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={HERO_DESKTOP} alt="" fetchPriority="high" decoding="async"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+          </picture>
         </motion.div>
 
         {/* Soft light wash in the centre so the text always reads over the marble */}
