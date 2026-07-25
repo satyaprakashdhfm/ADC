@@ -110,10 +110,10 @@ export default function Footer() {
                 it: crush to black, then invert to a solid white silhouette. */}
             <Image
               src="/assets/adc-logo.png"
-              height={64}
-              width={108}
+              height={104}
+              width={176}
               alt="a dough cookie"
-              style={{ height: 64, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }}
+              style={{ height: 104, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }}
             />
             <p
               style={{
