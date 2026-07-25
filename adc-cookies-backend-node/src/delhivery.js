@@ -322,18 +322,22 @@ export async function createShipment(shipmentData, pickupLocation) {
 /* ------------------------------------------------------------------ */
 export async function cancelShipment(waybill) {
   try {
-    const payload = JSON.stringify({ shipments: [{ waybill, cancellation: 'true' }] });
-    const body = `format=json&data=${encodeURIComponent(payload)}`;
+    // The Shipment Edit endpoint takes a FLAT JSON body ({waybill, ...}), NOT a
+    // {shipments:[{...}]} wrapper — the wrapper form silently fails with an empty echoed waybill
+    // ("Enter Waybill/OrderID, please try again"). Confirmed against Delhivery's own docs 2026-07-25.
     const { ok, status, data } = await dhRequest('/api/p/edit', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ waybill, cancellation: 'true' }),
     });
-    if (!ok) {
-      log('shipment-cancel', `waybill=${waybill} | ✗ api_error_${status}`);
-      return { ok: false, reason: `api_error_${status}`, detail: data };
+    // Delhivery returns HTTP 200 even on a business-level failure — success is signalled by
+    // data.status === true, and the human message is in data.remark.
+    if (!ok || data?.status !== true) {
+      const reason = data?.error || data?.remark || `api_error_${status}`;
+      log('shipment-cancel', `waybill=${waybill} | ✗ ${JSON.stringify(reason).slice(0, 120)}`);
+      return { ok: false, reason, detail: data };
     }
-    log('shipment-cancel', `waybill=${waybill} | ✓`);
+    log('shipment-cancel', `waybill=${waybill} | ✓ ${data.remark || 'cancelled'}`);
     return { ok: true, data };
   } catch (err) {
     log('shipment-cancel', `waybill=${waybill} | ✗ network_error: ${err.message}`);
