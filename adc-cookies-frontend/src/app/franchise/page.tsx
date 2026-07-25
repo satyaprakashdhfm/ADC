@@ -98,7 +98,7 @@ export default function FranchisePage() {
               <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}><Phone size={15} /> {SITE_PHONE}</a>
             </div>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '18px 0 0' }}>
-              Looking for a large one-off order instead? <Link href="/contact#get-in-touch" style={{ color: 'var(--brand-secondary)', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>Corporate &amp; bulk gifting <ArrowRight size={14} /></Link>
+              Looking for a large one-off order instead? <Link href="/corporate" style={{ color: 'var(--brand-secondary)', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>Corporate &amp; bulk gifting <ArrowRight size={14} /></Link>
             </p>
           </div>
 
