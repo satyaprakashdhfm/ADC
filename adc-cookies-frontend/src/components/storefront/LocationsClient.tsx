@@ -50,20 +50,20 @@ export default function LocationsClient() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(16px,2vw,22px)' }}>
           {list.map((s) => (
-            <article key={s.name} id={`store-${s.pincode}`} style={{ scrollMarginTop: 120, background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+            <article key={s.name} id={`store-${s.pincode}`} className="store-card" style={{ scrollMarginTop: 120, background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', display: 'flex', alignItems: 'stretch' }}>
+              {/* The store illustrations are tall portraits (name/city/address baked in), so they get
+                  their own portrait column at the matching 2:3 ratio — `cover` then fills it with no
+                  letterboxing, and the details sit alongside instead of under a band of empty space. */}
               {s.image ? (
-                // The store illustrations are tall portraits with the name/city/address baked in.
-                // `contain` on a fixed, moderate height shows the WHOLE artwork (a cover crop cut
-                // the address off) without the card running absurdly tall on a wide screen.
-                <div style={{ position: 'relative', width: '100%', height: 'clamp(260px,34vw,400px)', background: 'var(--surface-sunken)' }}>
-                  <Image src={s.image} alt={s.name} fill sizes="(max-width:760px) 100vw, 680px" style={{ objectFit: 'contain' }} />
+                <div className="store-card-img" style={{ position: 'relative', flex: 'none', width: 'clamp(150px,22vw,208px)', aspectRatio: '2 / 3', background: 'var(--surface-sunken)' }}>
+                  <Image src={s.image} alt={s.name} fill sizes="(max-width:680px) 100vw, 208px" style={{ objectFit: 'cover', objectPosition: 'top' }} />
                 </div>
               ) : (
-                <div style={{ width: '100%', height: 'clamp(260px,34vw,400px)', background: 'radial-gradient(120% 120% at 35% 28%,var(--amber-300),var(--orange-500))', display: 'grid', placeItems: 'center' }}>
+                <div className="store-card-img" style={{ flex: 'none', width: 'clamp(150px,22vw,208px)', aspectRatio: '2 / 3', background: 'radial-gradient(120% 120% at 35% 28%,var(--amber-300),var(--orange-500))', display: 'grid', placeItems: 'center' }}>
                   <MapPin size={34} color="var(--white)" />
                 </div>
               )}
-              <div style={{ padding: 'clamp(16px,2vw,24px)' }}>
+              <div className="store-card-body" style={{ flex: 1, minWidth: 0, padding: 'clamp(16px,2vw,24px)', display: 'flex', flexDirection: 'column' }}>
                 <p style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', margin: '0 0 5px' }}>{s.city}</p>
                 <h3 style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 8px' }}>{s.name}</h3>
                 <p style={{ color: 'var(--text-body)', lineHeight: 1.55, margin: '0 0 14px', fontSize: 'var(--text-sm)' }}>{s.address}</p>
@@ -73,7 +73,9 @@ export default function LocationsClient() {
                   {s.email && <a href={`mailto:${s.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}><Mail size={14} /> Email</a>}
                   <Link href={s.map} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--brand-secondary)', fontWeight: 800, fontSize: 'var(--text-sm)' }}><Navigation size={14} /> Directions</Link>
                 </div>
-                <button onClick={() => orderFrom(s)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', boxSizing: 'border-box', padding: '12px 16px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}><ShoppingBag size={15} /> Order from this store</button>
+                {/* auto top-margin pins the CTA to the card's base, so cards of differing address
+                    lengths still line their buttons up. */}
+                <button onClick={() => orderFrom(s)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, alignSelf: 'flex-start', marginTop: 'auto', padding: '12px 22px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}><ShoppingBag size={15} /> Order from this store</button>
               </div>
             </article>
           ))}

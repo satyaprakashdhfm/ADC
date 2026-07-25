@@ -222,6 +222,11 @@ body::before {
   .contact-stores > aside { order: -1; position: static !important; margin-bottom: 4px; }
   /* Locations page: same idea — map above the list, not sticky, and shorter */
   .locations-map { order: -1; position: static !important; height: clamp(260px,52vw,320px) !important; }
+  /* Store cards go image-on-top on phones — side-by-side leaves the text column too narrow.
+     Kept portrait-ish (4:5) and top-anchored: the illustrations carry the store name and address
+     in their upper half, which a landscape crop would slice off. */
+  .store-card { flex-direction: column !important; }
+  .store-card-img { width: 100% !important; aspect-ratio: 4 / 5 !important; }
   /* Reels rail: swiping is the gesture on a phone, so drop the arrows and keep just Follow */
   .reels-controls > button { display: none !important; }
   .account-layout { grid-template-columns: 1fr !important; }

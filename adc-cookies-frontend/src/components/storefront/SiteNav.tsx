@@ -175,7 +175,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
     key === 'cookies' ? toMenu('COOKIES')
       : key === 'tins' ? toMenu('TINS')
         : key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))
-          : key === 'partner' ? [{ label: 'Corporate & Bulk Order', href: '/#corporate-section' }, { label: 'Franchise Enquiry', href: '/franchise' }]
+          : key === 'partner' ? [{ label: 'Corporate & Bulk Order', href: '/about' }, { label: 'Franchise Enquiry', href: '/franchise' }]
             : undefined;
   // Account icon → login modal (or account/admin page if already signed in).
   const accountClick = () => { if (user) router.push(user.role === 'ADMIN' ? '/admin' : '/account'); else setLoginOpen(true); };
