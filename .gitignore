@@ -27,3 +27,6 @@ next-env.d.ts
 # local ngrok binary + download artifact (for tunneling the local backend to test webhooks)
 /ngrok.exe
 /ngrok.zip
+
+# Production data exports (real customer PII — never commit)
+/backup-prod-*/

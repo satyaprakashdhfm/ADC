@@ -5,17 +5,10 @@ import { useRouter } from 'next/navigation';
 import { ShoppingBag, Plus, Minus, ArrowRight, Cookie, Gift, Briefcase } from 'lucide-react';
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
+import BulkOrderModal from './BulkOrderModal';
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
 const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'clamp(14px,1.8vw,22px)' };
-
-// One short, precise line about the product — take just the first sentence and trim at a word
-// boundary, so the card never shows a mid-sentence cut ending in "and …".
-function shortDesc(d?: string): string {
-  if (!d) return '';
-  const first = d.trim().split(/(?<=[.!?])\s/)[0].replace(/[.\s]+$/, '');
-  return first.length > 84 ? first.slice(0, 82).replace(/[\s,]+\S*$/, '') + '…' : first;
-}
 
 function ProductCard({ p }: { p: Product }) {
   const { cart, setQty } = useCart();
@@ -32,7 +25,7 @@ function ProductCard({ p }: { p: Product }) {
       </div>
       <div style={{ padding: 'clamp(12px,1.4vw,16px)', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
         <h3 style={{ font: 'var(--weight-extra) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>{p.name}</h3>
-        {p.description && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{shortDesc(p.description)}</p>}
+        {p.description && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0, overflowWrap: 'anywhere' }}>{p.description}</p>}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 'auto', paddingTop: 8 }}>
           <span style={{ fontWeight: 900, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}>₹{price}</span>
           {qty === 0 ? (
@@ -69,6 +62,7 @@ export default function HomeProducts() {
   const sectionRef = useRef<HTMLElement>(null);
   const deepLinkScrolled = useRef(false); // scroll a ?q= deep-link to its section only once, after products load
   const [inView, setInView] = useState(false); // the floating checkout bar only shows while browsing products
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   useEffect(() => {
     // Show cached products instantly on reload (no waiting for the API), then refresh in the background.
@@ -158,7 +152,7 @@ export default function HomeProducts() {
         {/* Corporate & bulk gifting — last, as a wide card */}
         <button
           id="corporate-section"
-          onClick={() => router.push('/contact#get-in-touch')}
+          onClick={() => setBulkOpen(true)}
           style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: 'var(--surface-inverse)', color: 'var(--cream-100)', padding: 'clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 260, flex: '1 1 320px' }}>
@@ -171,6 +165,8 @@ export default function HomeProducts() {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '13px 22px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', flex: 'none', boxShadow: 'var(--shadow-brand)' }}>Enquire / Order in bulk <ArrowRight size={16} /></span>
         </button>
       </div>
+
+      <BulkOrderModal open={bulkOpen} onClose={() => setBulkOpen(false)} />
 
       {/* Floating checkout bar — only while the products section is on screen */}
       {count > 0 && inView && (

@@ -9,19 +9,32 @@ const ASKED_KEY = 'adc_location_asked';
 /* ---- Modal: detect location or pick a store ---- */
 function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { store, detect, detecting, error, chooseStore } = useLocation();
+
+  // Escape closes it, and the page behind is locked from scrolling while it's open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [open, onClose]);
+
   if (!open) return null;
   const cities = [...new Set(STORES.map(s => s.city))];
   const onDetect = async () => { const s = await detect(); if (s) onClose(); };
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 96, background: 'var(--espresso-50)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} className="hide-sb" style={{ width: 'min(440px,94vw)', maxHeight: '82vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '22px 22px 24px', animation: 'riseIn .3s var(--ease-spring) both' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 6 }}>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>Choose your location</h2>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0 }}>We bake &amp; deliver fresh from your nearest A Dough Cookie store.</p>
-          </div>
-          <button onClick={onClose} aria-label="Close" style={{ width: 34, height: 34, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><X size={17} /></button>
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label="Choose your location"
+      style={{ position: 'fixed', inset: 0, zIndex: 96, background: 'var(--espresso-50)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16, overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} className="hide-sb" style={{ position: 'relative', width: 'min(440px,94vw)', maxHeight: 'min(76svh, 640px)', overflowY: 'auto', margin: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '22px 22px 24px', animation: 'riseIn .3s var(--ease-spring) both' }}>
+        {/* Close sits in the card's own top-right corner, out of the heading's flow */}
+        <button onClick={onClose} aria-label="Close"
+          style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 34, height: 34, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><X size={17} /></button>
+
+        <div style={{ marginBottom: 6, paddingRight: 42 }}>
+          <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>Choose your location</h2>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0 }}>We bake &amp; deliver fresh from your nearest A Dough Cookie store.</p>
         </div>
 
         <button onClick={onDetect} disabled={detecting}

@@ -85,6 +85,7 @@
   --surface-card: var(--ivory-card); /* warm ivory — never stark white (root-level modals/drawers) */
   --surface-raised: var(--cream-50);
   --surface-sunken: var(--cream-200);
+  --surface-field: var(--peach-100); /* form inputs & unselected topic chips — the cream that used to be hardcoded #FFF4DF */
   --surface-inverse: var(--ink-900);
   --surface-overlay: rgba(43,29,18,.42);
   --surface-glass: rgba(255,252,248,.72); /* Frosted nav/panel surface — pop-up modals & drawers. NOTE: on .adc-pattern-page pages this is remapped to --cream-bg (globals.css), which is the HOME/INNER-PAGE STICKY HEADER background you see */

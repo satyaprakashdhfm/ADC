@@ -1,64 +1,115 @@
 {
   "_readme": "One entry per third-party integration. 'ourEndpoint' = the route on OUR backend that triggers the call (or receives their webhook). 'theirEndpoint' = the real third-party REST endpoint we hit. 'sampleRequest'/'sampleResponse' marked (live-captured) are REAL payloads captured this session via logs/<service>-*.log or a direct safe test call; everything else is (constructed) — built from the exact field names our own code reads/writes, not guessed. 'used: false' entries are real endpoints this provider offers that our code does NOT call today — candidates for 'better handling' work.",
-  "generatedAt": "2026-07-22",
+  "generatedAt": "2026-07-22 (refreshed 2026-07-23…07-24 as noted; refreshed 2026-07-25: both carriers fully tested on REAL PRODUCTION — Delhivery cancelShipment bug FIXED (flat body, not shipments-wrapper), pickup-request booking + wallet mechanics confirmed, NDR endpoint documented as not-yet-used, and a top-level goLiveGaps_whatWeCannotDoViaApi section added summarizing the two real remaining blockers: Delhivery pickup-attachment, and Shadowfax rider-never-assigned)",
   "codeFile": "adc-cookies-backend-node/src/",
+
+  "goLiveGaps_whatWeCannotDoViaApi_2026-07-25": {
+    "_summary": "The genuine can't-do-yet list after full real-production testing of both carriers. Everything NOT listed here is confirmed working. Ordered by go-live impact.",
+    "delhivery": {
+      "BLOCKER_pickupAttachment": "Creating a pickup request (POST /fm/request/new/) books an empty slot against a WAREHOUSE LOCATION — it has NO waybill parameter, so it does not attach any specific shipment. Confirmed real: API-created pickup 307860158 showed 'Order Details: No Data Found' in the portal, and the shipment's tracker still showed 'Add to Pickup' as an incomplete action. There is a separate 'Add to Pickup' step (visible in the One Panel UI) whose API we do NOT have. Without it: shipment created + pickup booked, but NOT linked → rider never collects. This is the single real blocker between Delhivery and a working end-to-end flow. Fix path: (a) capture the portal's 'Add to Pickup' network call via browser devtools, (b) use the Delhivery MCP, or (c) enable account-level auto-pickup via the Delhivery POC (may remove the need entirely).",
+      "minor_pickupRequestCancel": "We have createPickupRequest() but no confirmed API to CANCEL a scheduled pickup request (the pickup_id, e.g. 307860158). The portal has a 'Cancel pickup' button so an API exists; we just haven't found its URL/shape and won't guess. Lower priority — individual SHIPMENT cancellation works, which covers most real needs."
+    },
+    "shadowfax": {
+      "BLOCKER_riderNeverAssigned": "The real, fundamental unknown: both real production Warehouse-model orders (SF3625058129DOF, SF36986267659) sat at status 'new' indefinitely — no rider ever assigned, never collected — then were cancelled. We have NEVER observed Shadowfax actually pick up and deliver anything. Root cause unconfirmed; may be linked to the pickup_details bug below. Not fixable from our side — needs Shadowfax support. Until resolved, Shadowfax is NOT safe to enable for real customers (an order could be created, charged, and never collected).",
+      "confirmedBug_pickupDetailsBlank": "Warehouse-model orders show blank pickup name/contact/address in Shadowfax's own portal Update-Order view, regardless of whether the pickup unique_code is pre-registered (tested both ways, identical blank result). And updateShadowfaxOrder() is explicitly rejected for pickup edits: 'Pickup details cannot be updated for this shipment'. So we can neither get pickup details to display nor fix them after creation.",
+      "doesNotExist_notOurGap": "Invoice generation and printable shipping labels simply do NOT exist anywhere in Shadowfax's API (confirmed from full official docs) — nothing to build, not a gap in our code. (Rider physically collects from the store, so there's no label to print.)"
+    },
+    "verdict": "Delhivery: one real fix away (pickup attachment) from fully go-live-ready — everything else confirmed working. Shadowfax: fundamentally unproven end-to-end, blocker not in our hands (needs Shadowfax support). Recommend launching Delhivery-first once pickup attachment is solved, and holding Shadowfax until support clarifies the rider/pickup issue."
+  },
 
   "razorpay": {
     "docs": "https://razorpay.com/docs/api/",
+    "bestPractices": "https://razorpay.com/docs/payments/third-party-validation/best-practices/ — all 6 followed as of 2026-07-22 (see below)",
     "mode": "TEST (rzp_test_… key — no real money moves)",
     "baseUrl": "https://api.razorpay.com/v1",
     "auth": "HTTP Basic — base64(key_id:key_secret)",
-    "codeFile": "src/razorpay.js",
+    "codeFile": "src/razorpay.js, src/routes/orders.js, src/routes/paymentsWebhook.js",
+    "realOrderUsedThroughout": "ADC20260722104807 (order id 63) — a genuine order you placed and paid for during this session. Every 'liveCaptured' sample below is the actual request/response for THIS real order, pulled straight from logs/razorpay-2026-07-22.log — not synthetic test data.",
+    "feeTaxMethodNowPersisted": "Added 2026-07-23: payments table gained razorpay_fee, razorpay_tax, method, card_network, card_last4, vpa, bank, amount_refunded columns. finalizePaidOrder() now pulls these straight out of the Razorpay payment object (already fetched for the status check above) on every new payment — no extra API call needed. NOT yet live-verified in our own DB — order 68/ADC20260722211553/pay_TGh3KrrOHwBks7 (fee=₹3.60, tax=₹0, method=card debit, network=Visa, last4=1111, seen on the Razorpay dashboard) was paid BEFORE this migration+code landed, so its payments row still has these columns NULL. Will confirm with the next real order placed after this deploys.",
     "endpoints": [
       {
-        "purpose": "Create the Razorpay Order the Checkout popup attaches the payment to",
+        "purpose": "Create the Razorpay Order the Checkout popup attaches the payment to (best practice #2: Integrate Orders API)",
         "used": true,
         "ourEndpoint": "POST /api/orders/:id/payment/razorpay-order",
         "theirEndpoint": "POST https://api.razorpay.com/v1/orders",
-        "sampleRequest_liveCaptured": { "amount": 100, "currency": "INR", "receipt": "validation-test-1784698370576", "notes": { "purpose": "auth-validation-only" }, "payment_capture": 1 },
-        "sampleResponse_liveCaptured": { "id": "order_TGQysMoqhbRNSz", "entity": "order", "amount": 100, "amount_paid": 0, "amount_due": 100, "currency": "INR", "receipt": "validation-test-1784698370576", "status": "created", "attempts": 0, "notes": { "purpose": "auth-validation-only" }, "created_at": 1784698371 }
+        "sampleRequest_liveCaptured": { "amount": 13000, "currency": "INR", "receipt": "ADC20260722104807", "notes": { "orderId": "63", "orderNumber": "ADC20260722104807" }, "payment_capture": 1 },
+        "sampleResponse_liveCaptured": { "id": "order_TGQjKi7QG5RlIX", "entity": "order", "amount": 13000, "amount_paid": 0, "amount_due": 13000, "currency": "INR", "receipt": "ADC20260722104807", "status": "created", "attempts": 0, "notes": { "orderId": "63", "orderNumber": "ADC20260722104807" }, "created_at": 1784697488 },
+        "note": "receipt is always our own order_number (e.g. ADC20260722104807), never a made-up value — this is what ties Razorpay's order back to ours."
       },
       {
-        "purpose": "Verify the signature Checkout hands back after payment — proves the payment is genuine WITHOUT a second network call",
+        "purpose": "Verify the signature Checkout hands back after payment — proves the payment is genuine WITHOUT a second network call (best practice #3: Verify Signature)",
         "used": true,
         "ourEndpoint": "POST /api/orders/:id/payment/verify",
         "theirEndpoint": "(no call — local HMAC-SHA256 math: HMAC(order_id|payment_id, key_secret) must equal razorpay_signature)",
-        "sampleRequest_liveCaptured": { "orderId": "order_TESTVALIDATION123", "paymentId": "pay_TESTVALIDATION456" },
-        "sampleResponse_liveCaptured": { "valid_signature_result": true, "tampered_signature_result": false }
+        "sampleRequest_liveCaptured": { "orderId": "order_TGQjKi7QG5RlIX", "paymentId": "pay_TGQjlDWBr9vzHl" },
+        "sampleResponse_liveCaptured": { "result": true },
+        "note": "orderId/paymentId here are the real Razorpay IDs for order ADC20260722104807 — same order as the row above."
       },
       {
-        "purpose": "Inbound webhook — server-to-server confirmation of payment/order/refund/dispute events (backstop for the browser handler, and the ONLY way we ever learn about failures/refunds/disputes)",
+        "purpose": "Fetch a payment's actual server-side status/amount directly, instead of only trusting the signature (best practice #4: Check Payment/Order Status Before Providing Services). Added 2026-07-22 — the order/amount must match exactly and status must be 'captured' before we mark PAID.",
+        "used": true,
+        "ourEndpoint": "internal — called from POST /api/orders/:id/payment/verify and POST /api/payment-callback/:orderId, right after the signature check passes",
+        "theirEndpoint": "GET https://api.razorpay.com/v1/payments/:id",
+        "sampleRequest_liveCaptured": { "paymentId": "pay_TGQjlDWBr9vzHl" },
+        "sampleResponse_liveCaptured": { "id": "pay_TGQjlDWBr9vzHl", "entity": "payment", "amount": 13000, "currency": "INR", "status": "captured", "order_id": "order_TGQjKi7QG5RlIX", "method": "card", "captured": true, "description": "Order ADC20260722104807", "card": { "last4": "1111", "network": "Visa", "type": "debit" }, "email": "satyaprakashreddy6789@gmail.com", "contact": "+919381502998", "notes": { "orderId": "63", "orderNumber": "ADC20260722104807" }, "fee": 390, "tax": 0, "error_code": null, "acquirer_data": { "auth_code": "214268" }, "created_at": 1784697513 },
+        "verifiedNegativeCase_liveCaptured": { "test": "same signature check made to pass with a made-up payment id (pay_FAKENONEXISTENT123), to prove this step actually blocks a forged/garbage payment id even when the signature is valid", "razorpayResponse": { "error": { "code": "BAD_REQUEST_ERROR", "description": "The id provided does not exist", "source": "internal", "step": "payment_initiation", "reason": "input_validation_failed" } }, "outcome": "our /payment/verify correctly returned 502 and the order stayed PENDING — nothing marked paid" }
+      },
+      {
+        "purpose": "Razorpay's redirect callback for in-app browsers that can't run the iframe/popup flow — Instagram/FB Messenger, Opera Mini, UC Browser (best practice #6: Use Callback URL). Added 2026-07-22.",
+        "used": true,
+        "ourEndpoint": "POST /api/payment-callback/:orderId?return=<our own origin>  (public — no auth header, since this is a browser form POST from Razorpay's checkout page, not a server-to-server call)",
+        "theirEndpoint": "(inbound — a browser form submission from Razorpay's hosted Checkout page, not an S2S call, so it works even on localhost without a tunnel)",
+        "sameChecksAsVerify": "signature check, then the same fetchPayment status/amount confirmation as above, before marking PAID",
+        "testedLive_allPassed": [
+          "missing fields → redirects to /checkout?payment=failed",
+          "bad signature → redirects to /checkout?payment=failed",
+          "order not found → redirects to /checkout?payment=failed",
+          "already-paid order (ADC20260722104807) → short-circuits straight to /account?payment=success&order=ADC20260722104807",
+          "untrusted return= origin (e.g. an attacker's domain) → rejected, never redirects off our own domain (open-redirect guard)"
+        ]
+      },
+      {
+        "purpose": "Inbound webhook — server-to-server confirmation of payment/order/refund/dispute events (backstop for the browser handler, and the ONLY way we ever learn about failures/refunds/disputes) (best practice #5: Use Webhooks)",
         "used": true,
         "ourEndpoint": "POST /api/payments/webhook  (raw body, X-Razorpay-Signature header verified against RAZORPAY_WEBHOOK_SECRET)",
         "theirEndpoint": "(inbound — Razorpay calls US; configured in Razorpay Dashboard → Settings → Webhooks)",
-        "eventsHandledInCode": ["payment.captured", "order.paid", "payment.failed"],
-        "eventsNowSubscribedInDashboard_perUser": "all Payments + Orders events (ticked 2026-07-22) — most beyond the 3 above currently just get logged generically, not specially handled yet",
-        "sampleRequest_liveCaptured_paymentFailed": { "event": "payment.failed", "payload": { "payment": { "entity": { "id": "pay_TESTFAILEDSIM01", "order_id": "order_TESJEqcZ1tLKPx", "error_code": "GATEWAY_ERROR", "error_reason": "payment_failed", "error_description": "Simulated gateway technical error (validation test)", "error_source": "gateway", "error_step": "payment_authentication" } } } },
-        "sampleResponse": { "ok": true }
+        "eventsHandledInCode": ["payment.captured", "order.paid", "payment.failed", "refund.created", "refund.processed", "refund.failed", "payment.dispute.created"],
+        "eventsSubscribedInDashboard": "all Payments + Orders events (ticked 2026-07-22)",
+        "realFailedPaymentsOnDashboard_forReference": ["pay_TEIb6TkajTX42P — ₹340, Gateway – Technical Error, Fri Jul 17 1:32am", "pay_TEIaHWc8cWhsQY — ₹340, Gateway – Technical Error, Fri Jul 17 1:32am"],
+        "sampleRequest_signedAndSentToOurRealBackend_paymentFailed": { "event": "payment.failed", "payload": { "payment": { "entity": { "id": "pay_TEIb6TkajTX42P", "order_id": "order_TESJEqcZ1tLKPx", "error_code": "GATEWAY_ERROR", "error_reason": "payment_failed", "error_description": "Gateway – Technical Error", "error_source": "gateway", "error_step": "payment_authentication" } } } },
+        "sampleResponse": { "ok": true },
+        "note": "The payment ids in this sample are your two REAL test-mode gateway failures (from the Razorpay dashboard screenshot). This exact webhook body was never actually sent by Razorpay for those two (webhook handling for payment.failed didn't exist yet when they happened) — it's reconstructed with your real payment/order ids so the shape is genuine even though Razorpay didn't fire it live. The order_tracking write logic itself WAS proven live (see below)."
       },
       {
-        "purpose": "Fetch a payment's server-side status/details directly, instead of only trusting the signature",
-        "used": false,
-        "theirEndpoint": "GET https://api.razorpay.com/v1/payments/:id",
-        "whyNotUsed": "Signature verification already proves authenticity; this would add defense-in-depth (re-confirm amount/status server-side) but isn't implemented"
-      },
-      {
-        "purpose": "List all payments against one Order — useful to catch a duplicate charge from a retried payment",
-        "used": false,
-        "theirEndpoint": "GET https://api.razorpay.com/v1/orders/:id/payments"
-      },
-      {
-        "purpose": "Issue a refund on a captured payment",
-        "used": false,
+        "purpose": "Issue a refund on a captured payment (added 2026-07-22, not yet exercised with a real TEST-mode refund — only its request/response wiring + the confirmation webhook handling below are proven)",
+        "used": true,
+        "ourEndpoint": "not yet wired to an admin UI button — the function createRefund() exists in src/razorpay.js and is ready to call, but nothing in admin.js invokes it yet",
         "theirEndpoint": "POST https://api.razorpay.com/v1/payments/:id/refund",
-        "whyNotUsed": "Refunds are currently done manually by staff directly in the Razorpay dashboard. The account page already shows a 'payment refunded' message on a cancelled order, but nothing in our code ever actually triggers or confirms a real refund — this is the biggest concrete gap found this session.",
-        "wouldPairWith": "refund.created / refund.processed / refund.failed webhook events (already ticked in dashboard, not yet specially handled in code — currently only logged generically)"
+        "whyNotFullyLiveTested": "Would create a real (TEST-mode) refund against your real order ADC20260722104807 — held off on actually calling it without asking first, since it permanently marks that real order's payment status. Say the word and I'll run it for genuinely live end-to-end data.",
+        "confirmedWorking_viaWebhook": {
+          "test": "sent a properly-signed refund.processed event (real order ADC20260722104807 / pay_TGQjlDWBr9vzHl) to prove the RECEIVING side works",
+          "sampleRequest_liveCaptured": { "event": "refund.processed", "payload": { "refund": { "entity": { "id": "re_TESTREFUND01", "payment_id": "pay_TGQjlDWBr9vzHl", "amount": 13000, "status": "processed" } } } },
+          "result_liveCaptured": "order_tracking row inserted: status=REFUNDED, remarks='Refund re_TESTREFUND01 — ₹130.00 — refund.processed'; payments.status updated to REFUNDED — then reverted after the test since no real refund happened"
+        }
       },
       {
-        "purpose": "Chargeback / dispute notification",
-        "used": false,
-        "theirEndpointNote": "arrives only as a webhook event: payment.dispute.created (now ticked in dashboard, not yet specially handled — currently only logged generically)",
-        "whyNotUsed": "Money-at-risk event; currently invisible to us beyond the generic webhook log line"
+        "purpose": "Chargeback / dispute notification (added 2026-07-22)",
+        "used": true,
+        "ourEndpoint": "handled inside POST /api/payments/webhook for event payment.dispute.created",
+        "theirEndpointNote": "arrives only as a webhook event, no separate REST call to make",
+        "confirmedWorking_viaWebhook": {
+          "sampleRequest_liveCaptured": { "event": "payment.dispute.created", "payload": { "dispute": { "entity": { "id": "disp_TEST01", "payment_id": "pay_TGQjlDWBr9vzHl", "amount": 13000, "reason_code": "goods_not_received", "respond_by": 1785315321 } } } },
+          "result_liveCaptured": "order_tracking row inserted: status=DISPUTE_OPENED, remarks='⚠ Chargeback/dispute opened — ₹130.00 — reason=goods_not_received — respond by 2026-07-29T18:35:21.000Z' — then reverted after the test since no real dispute happened"
+        }
+      },
+      {
+        "purpose": "List all payments against one Order — catches a duplicate CAPTURED charge from a retried payment (best practice #4's third check, alongside Fetch Payment above). Added 2026-07-23.",
+        "used": true,
+        "ourEndpoint": "internal — checkForDuplicateCharge() in src/routes/orders.js, called right after finalizePaidOrder() in both POST /api/orders/:id/payment/verify and POST /api/payment-callback/:orderId",
+        "theirEndpoint": "GET https://api.razorpay.com/v1/orders/:id/payments",
+        "sampleRequest_liveCaptured": { "razorpayOrderId": "order_TGQjKi7QG5RlIX" },
+        "sampleResponse_liveCaptured": { "count": 1, "items": [{ "id": "pay_TGQjlDWBr9vzHl", "amount": 13000, "currency": "INR", "status": "captured", "order_id": "order_TGQjKi7QG5RlIX", "method": "card", "description": "Order ADC20260722104807", "notes": { "orderId": "63", "orderNumber": "ADC20260722104807" }, "fee": 390 }] },
+        "note": "Real result for ADC20260722104807: exactly 1 captured payment (count:1) — no duplicate. If count of captured items were ever >1, we insert an order_tracking row (status=DUPLICATE_CHARGE_WARNING) and it now shows as a red '⚠ Possible duplicate charge' badge directly in Admin → Orders (both the list table and the order detail modal) — never auto-refunds, just surfaces it for a human to check in the Razorpay dashboard."
       }
     ]
   },
@@ -68,120 +119,249 @@
     "mode": "staging (https://staging-express.delhivery.com) — used as the outstation/inter-city carrier fallback when a pincode isn't in a Shadowfax store zone",
     "codeFile": "src/delhivery.js",
     "auth": "Authorization: Token <DELIVERY_API_TOKEN>  (note: NOT 'Bearer')",
+    "dbCheck_2026-07-23": "6 real orders with carrier=DELHIVERY, all label_generated=true, all consistent — no bad data found. Unlike Shadowfax, checkServiceability()/expectedTat() ARE genuinely wired into the /api/delivery/check checkout route (confirmed by reading delivery.js) — no dead-code gap here; the checkout-time promise is real.",
+    "liveTestedSummary_2026-07-23_SUPERSEDED": "Original note (2026-07-23): only 4 of 10 endpoints were proven live. SUPERSEDED 2026-07-24 — see liveTestedSummary_2026-07-24 below for the current, much more complete picture after switching to real production credentials and testing every endpoint directly.",
+    "liveTestedSummary_2026-07-24": {
+      "productionSwitchConfirmed": "DELHIVERY_BASE_URL switched from staging to production (https://track.delhivery.com), DELIVERY_API_TOKEN replaced with a real production token. Confirmed via Delhivery's own docs for 2 endpoints (Serviceability, Document Download) before switching — not assumed.",
+      "confirmedWorkingOnRealProduction": ["Serviceability", "Expected TAT", "Waybill pre-assign", "Warehouse register", "Warehouse edit", "Shipping cost", "Shipment create (both Prepaid and COD)", "Pickup request booking (2026-07-25: fully confirmed, including a clean success response after a wallet top-up — see that endpoint's entry)", "Live tracking", "Shipping label PDF (full real PDF verified, %PDF-1.7 header)", "Fetch document (confirmed real expected-rejection behavior for an undelivered shipment)"],
+      "confirmedBrokenOnRealProduction_RESOLVED_2026-07-25": "Cancel shipment WAS failing, now FIXED. Root cause found via Delhivery's official Shipment Edit API docs: /api/p/edit takes a FLAT JSON body ({waybill, cancellation:'true'}), NOT the {shipments:[{...}]} wrapper our code used (nor form-encoded format=json&data=). The wrapper silently failed with an empty echoed waybill. Fixed cancelShipment() in delhivery.js and confirmed a real live cancellation: {\"status\":true,\"waybill\":\"57064410000136\",\"remark\":\"Shipment has been cancelled.\"}. ALL Delhivery endpoints are now confirmed working on real production.",
+      "criticalGapFound_pickupAttachment_2026-07-25": "MAJOR real finding: creating a pickup request (POST /fm/request/new/) does NOT attach any specific shipment to it — the pickup request is raised against the WAREHOUSE LOCATION only (it has no waybill parameter, just expected_package_count). Confirmed via the One Panel portal: our API-created pickup 307860158 showed 'Order Details: No Data Found' — zero shipments attached. The shipment's own tracker still showed 'Scheduled for Pickup → Add to Pickup' as an incomplete, clickable action. So there is a SEPARATE required step to link a specific shipment to a pickup request ('Add to Pickup' in the portal), and we do NOT yet have that API endpoint in our code. THIS likely explains why earlier real orders sat uncollected. Per Delhivery's docs, a pickup request covers all ready shipments at a location for that day/slot — but the exact API to attach/associate a specific waybill still needs to be found (check the Delhivery MCP, or capture the portal's 'Add to Pickup' call via browser devtools). This is a real go-live blocker for the auto-pickup flow until resolved. NOTE: Delhivery docs also mention 'you can enable auto-pickup for your account with assistance from your account POC' — enabling account-level auto-pickup may make the per-shipment attachment step unnecessary entirely; worth asking the Delhivery POC.",
+      "correctedFinding_2026-07-25": "Retracting the earlier 2026-07-24 claim that 'COD bypasses the pickup-request wallet-balance check' — that was wrong, based on incomplete evidence. Retested cleanly: COD hits the exact same ≥₹500 balance requirement as Prepaid. The earlier apparent bypass was actually a different validation (a duplicate-pickup-slot conflict) short-circuiting before the balance check ran that one time.",
+      "realTestArtifacts_2026-07-24": {
+        "testWarehouse": "ADC-Test-Satya-Pickup — Satya's real address (24-18-03, Green Fields Layout, Mullur, 560035), registered + edited successfully on real production Delhivery, client code 26f42e-ADC-do confirmed.",
+        "prepaidTestOrder": "waybill 57064410000125 — Satya → Surya (Srinivasa Lavish PG, Gachibowli, Hyderabad, 500032), ₹60 Chocolate Chip Cookie. Real progression observed: Manifested → Pickup scheduled → Not Picked (after manual portal cancellation) — the first time ANY carrier's shipment has shown real status progression beyond initial creation this whole project.",
+        "codTestOrder": "waybill 57064410000136 — same route, payment_mode='COD' instead of 'Prepaid', cod_amount=60. Created specifically to test whether COD bypasses Delhivery's ₹500 minimum-wallet-balance requirement for pickup requests — confirmed it does (see pickup-request endpoint entry). This is a TEST-ONLY technique — ADC's real orders stay prepaid-only, COD was never used for an actual customer order."
+      },
+      "walletBalanceFinding": "Delhivery's real account wallet showed ₹442.04 at test time — booking a pickup request for a Prepaid shipment via the API requires ≥₹500 and was rejected with a real error: {\"prepaid\":\"Client wallet balance is 442.04 which is less than 500.0\"}. Confirmed real, not guessed. Booking the SAME pickup manually through the One Panel portal succeeded anyway (no balance complaint) — so the ₹500 check may only apply to Prepaid shipments specifically, or to the API path specifically, not universally to all pickup-booking. Not fully resolved — flagging as a nuance, not a contradiction we've explained."
+    },
+    "statusCodeCheck_2026-07-24": "Hit the real live-tracking endpoint directly on 3 real waybills (85582010000313, 85582010000302, 85582010000280) — actually calling it, same rigor as the Shadowfax status-code test. All 3 show status='Manifested'. Waybill 85582010000313 (order 57, created 2026-07-17) is STILL 'Manifested' a full WEEK later, with Instructions='Pickup not attempted' — this is strong, repeated evidence that Delhivery's staging sandbox ALSO doesn't self-progress orders through pickup/transit/delivery, same finding as Shadowfax, just with even longer elapsed time. No architectural bug on the Delhivery side (unlike Shadowfax): Delhivery has NO webhook at all in this codebase — tracking only ever comes from polling, so there's no push-vs-pull race for a rank system to protect against.",
+    "bugsFoundAndFixed_2026-07-24": [
+      "Customer-facing track route (routes/orders.js) was showing Delhivery's bare Status.Status word ('Manifested') and silently discarding the much more informative Status.Instructions field ('Pickup not attempted') that's sitting right next to it in the same real response. Fixed to join both — real data joined together, nothing invented.",
+      "Admin's Shadowfax track route (routes/admin.js /orders/:id/track) was writing the RAW status_id (e.g. 'new') straight into orders.shipment_status, while the customer-facing route (routes/orders.js) correctly writes the friendly label (sfxStatusLabel(result.status), e.g. 'Order placed') into the exact same column. Depending on which route ran last, the same field held two different formats. Fixed admin's route to use sfxStatusLabel() too, matching the customer route.",
+      "Admin's Delhivery track route had the same missing-Instructions gap as the customer route above — fixed identically."
+    ],
     "endpoints": [
       {
         "purpose": "Check whether a destination pincode is serviceable + COD/prepaid support",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "GET /api/delivery/serviceability?pincode=…  and internally by GET /api/delivery/check",
         "theirEndpoint": "GET /c/api/pin-codes/json/?filter_codes=<pin>",
         "sampleRequest_liveCaptured": { "query": { "filter_codes": "110001" } },
-        "sampleResponse_liveCaptured_truncated": { "delivery_codes": [{ "postal_code": { "remarks": "", "pin": 110001, "cod": "Y", "pre_paid": "Y", "district": "New Delhi", "city": "Delhi" } }] }
+        "sampleResponse_liveCaptured_truncated": { "delivery_codes": [{ "postal_code": { "remarks": "", "pin": 110001, "cod": "Y", "pre_paid": "Y", "district": "New Delhi", "city": "Delhi" } }] },
+        "realCallConfirmed_viaRailwayLogs": "2026-07-23T05:21:50Z — pincode 523226 → ✓ serviceable, cod=true (fresh, real production traffic, not a synthetic test)",
+        "productionBaseUrlConfirmed_2026-07-24": "DELHIVERY_BASE_URL switched from staging (https://staging-express.delhivery.com) to production (https://track.delhivery.com) — confirmed correct via Delhivery's own official docs for 2 separate endpoints (this one, and the Document Download API), not assumed. Tested locally with the new production DELIVERY_API_TOKEN against 3 real pincodes: 560067 (Jaya's), 560035 (Satya's), 560041 (our Jayanagar store) — all serviceable=true, embargo=false. Also tested 110001 (New Delhi) as a sanity check — came back embargo=true (a real Delhivery-side regional restriction, not a bug). Unlike Shadowfax, no evidence yet of a split production domain across endpoints, but not fully verified for every one — watch for mismatches as each is tested."
       },
       {
         "purpose": "Expected delivery date / transit time (TAT) between two pincodes",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "GET /api/delivery/tat  and internally by GET /api/delivery/check",
         "theirEndpoint": "GET /api/dc/expected_tat?origin_pin=…&destination_pin=…&mot=…&pdt=B2C",
         "sampleRequest_liveCaptured": { "query": { "origin_pin": "560041", "destination_pin": "110001", "mot": "E", "pdt": "B2C" } },
-        "sampleResponse_liveCaptured": { "success": true, "msg": "", "data": { "tat": 2 } }
+        "sampleResponse_liveCaptured": { "success": true, "msg": "", "data": { "tat": 2 } },
+        "realCallConfirmed_viaRailwayLogs": "2026-07-23T05:21:50Z — 560041→523226 → ✓ tat=3 days (same real production traffic as the serviceability check above)",
+        "intracityRouteConfirmed_2026-07-25": "Satya (560035) → Jaya (560067), both within Bengaluru — real production TAT = 1 day, identical for both Surface (mot='S') and Express (mot='E') modes. Confirms Delhivery quotes next-day (not same-day) for this intracity route regardless of mode selected — 'Express' doesn't get it any faster for this specific pair, at least at the TAT-estimate level.",
+        "shippingModePolicy_2026-07-25": "Per explicit business decision: ALL Delhivery orders should use shipping_mode='Express' (not 'Surface') going forward — noted here so this isn't lost. Current code (routes/orders.js, the auto-shipment shipmentData object) already hardcodes shipping_mode:'Express' by default — confirmed already matching this policy, no code change needed. Only today's manual Hyderabad test script used 'Surface' explicitly for testing purposes; that was a one-off test artifact, not a reflection of the real default."
       },
       {
         "purpose": "Pre-assign a waybill (AWB) number before creating a shipment",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "internal — called from order auto-shipment flow (POST /api/orders/:id/… ) and admin manual shipment create",
         "theirEndpoint": "GET /waybill/api/fetch/json/?count=1",
-        "sampleResponse_constructed": { "waybill_response": ["37760310000123"] }
+        "sampleResponse_constructed": { "waybill_response": ["37760310000123"] },
+        "realCallsConfirmed_viaRailwayLogs": [
+          "2026-07-22T21:05:27Z — order ADC20260722210454 → ✓ waybill=85582010000302",
+          "2026-07-22T21:16:19Z — order ADC20260722211553 → ✓ waybill=85582010000313"
+        ]
       },
       {
         "purpose": "Register a pickup warehouse (name must exactly match pickup_location used at shipment creation)",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "POST /api/admin/warehouses (admin creates/edits a store's pickup location)",
         "theirEndpoint": "POST /api/backend/clientwarehouse/create/   (edit: /api/backend/clientwarehouse/edit/)",
-        "sampleRequest_constructed": { "name": "A Dough Cookie — Jayanagar", "registered_name": "ADOORA FOODS", "email": "info@adoughcookie.com", "phone": "9381502998", "address": "Jain University, 1314, 24th Main Rd, Jayanagar 9th Block", "city": "Bengaluru", "country": "India", "pin": 560041, "return_address": "…", "return_pin": 560041, "return_city": "Bengaluru", "return_state": "Karnataka", "return_country": "India" }
+        "sampleRequest_constructed": { "name": "A Dough Cookie — Jayanagar", "registered_name": "ADOORA FOODS", "email": "info@adoughcookie.com", "phone": "9381502998", "address": "Jain University, 1314, 24th Main Rd, Jayanagar 9th Block", "city": "Bengaluru", "country": "India", "pin": 560041, "return_address": "…", "return_pin": 560041, "return_city": "Bengaluru", "return_state": "Karnataka", "return_country": "India" },
+        "realCallConfirmed_2026-07-24": "Registered a real test warehouse on PRODUCTION Delhivery (name='ADC-Test-Satya-Pickup', Satya's address, 560035) — succeeded, status 201: {message: 'A new client warehouse has been created in HQ(Delhivery).', active: true, client: '26f42e-ADC-do'}. Confirms our real Delhivery client account code and that this endpoint works cleanly (unlike Shadowfax's equivalent, no observed display bugs). Real client business_hours defaulted to Mon-Sat 09:30-18:30. Confirmed showing up correctly and immediately in Delhivery's own One Panel dashboard (Settings > Pickup Locations) — no mismatch between API and portal.",
+        "editAlsoLiveTested_2026-07-24": "updateWarehouseOnDelhivery() (the /edit/ endpoint) also confirmed working: edited ADC-Test-Satya-Pickup to add an address_line2 ('Near Mullur Junction') — succeeded, real response: {message: 'client warehouse has been updated in HQ(Delhivery).', address: '24-18-03, Green Fields Layout, Mullur, Near Mullur Junction'}. Clean, no issues.",
+        "realStoreCheck_2026-07-24": "Confirmed via direct DB query: our warehouses table has exactly ONE registered store, 'Adough Cookie' (id 2, pickup_location='Adough Cookie', pincode 560041, is_default=true) — matches Delhivery's One Panel dashboard's pre-existing 'Adough Cookie' entry exactly (same name, city, state). Delhivery only ever uses this single default warehouse for all orders (unlike Shadowfax's per-store routing) since Delhivery is only the outstation/inter-city fallback carrier — no per-store granularity needed here.",
+        "note": "This specific test warehouse (ADC-Test-Satya-Pickup) is separate from the real 'Adough Cookie' warehouse used for actual orders — created purely for today's live testing."
       },
       {
         "purpose": "Estimate shipping cost for a given weight/route (admin-only cost calculator)",
         "used": true,
+        "liveTested": true,
         "note": "Backend route still live, but the admin UI panel for this was removed earlier this project — orphaned-but-functional endpoint",
         "ourEndpoint": "GET /api/admin/delivery/shipping-cost?destPin=…&weight=…",
         "theirEndpoint": "GET /api/kinko/v1/invoice/charges/.json?md=S&cgm=<weight>&o_pin=…&d_pin=…&ss=Delivered&c_flag=P&cod=0",
-        "sampleResponse_constructed": [{ "zone": "d", "charged_weight": "0.50", "total_amount": "42.00" }]
+        "sampleResponse_constructed": [{ "zone": "d", "charged_weight": "0.50", "total_amount": "42.00" }],
+        "realCallConfirmed_2026-07-24": "Tested live, 560035→500032, 0.1kg, Prepaid: ✓ total=₹57.96, zone=C1, real tax breakdown (SGST ₹4.42, CGST ₹4.42), real charge line items (charge_DL=44, charge_DPH=1.62, charge_LM=2.5, charge_PEAK=1)."
       },
       {
         "purpose": "Create the actual outstation shipment (assigns final waybill, sort code)",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "internal — order auto-shipment flow after payment, and admin manual create (POST /api/admin/orders/:id/shipment)",
         "theirEndpoint": "POST /api/cmu/create.json   (form-encoded: format=json&data=<json>)",
         "sampleRequest_constructed": { "shipments": [{ "waybill": "37760310000123", "order": "ADC20260722104807", "client_name": "ADOORA FOODS", "consignee": "Satya Prakash", "phone": "9381502998", "address": "…", "city": "Delhi", "state": "Delhi", "pin": "110001", "cod_amount": "0", "total_amount": "130", "payment_mode": "Prepaid" }], "pickup_location": { "name": "A Dough Cookie — Jayanagar" } },
-        "sampleResponse_constructed": { "packages": [{ "waybill": "37760310000123", "status": "Success", "sort_code": "KCF/MDL", "remarks": [] }], "success": true }
+        "sampleResponse_constructed": { "packages": [{ "waybill": "37760310000123", "status": "Success", "sort_code": "KCF/MDL", "remarks": [] }], "success": true },
+        "realCallsConfirmed_viaRailwayLogs": [
+          "2026-07-22T21:05:28Z — order ADC20260722210454 → ✓ waybill=85582010000302, sort=null, label=ready",
+          "2026-07-22T21:16:19Z — order ADC20260722211553 → ✓ waybill=85582010000313, sort=null, label=ready"
+        ],
+        "note": "Real responses came back with sort=null on the 2026-07-22 staging-era orders, but real PRODUCTION orders (2026-07-24) correctly return a real sort code (e.g. 'HYD/MGW' for Hyderabad) — staging just didn't bother computing one."
       },
       {
-        "purpose": "Cancel a shipment",
+        "purpose": "Cancel a shipment (via the Shipment Edit endpoint — same endpoint also edits consignee/address/weight/payment-mode)",
         "used": true,
+        "liveTested": true,
+        "liveTestedResult": "CONFIRMED WORKING (2026-07-25, after fixing the request body shape — see below).",
         "ourEndpoint": "DELETE /api/admin/orders/:id/shipment",
-        "theirEndpoint": "POST /api/p/edit   (form-encoded: shipments:[{waybill, cancellation:'true'}])"
+        "theirEndpoint": "POST /api/p/edit   (FLAT JSON body: {waybill, cancellation:'true'} — NOT wrapped in shipments:[...])",
+        "sampleRequest_docConfirmed": { "waybill": "57064410000136", "cancellation": "true" },
+        "sampleResponse_liveCaptured": { "status": true, "waybill": "57064410000136", "order_id": "TEST-DL-COD-1784916125128", "remark": "Shipment has been cancelled." },
+        "bugFoundAndFixed_2026-07-25": "Was failing on every call (HTTP 200 but {\"error\":\"Enter Waybill/OrderID, please try again\",\"status\":\"Failure\",\"waybill\":null}). Root cause found in Delhivery's official Shipment Edit API docs: the body must be FLAT JSON ({waybill:..., cancellation:'true'}), Content-Type application/json — our code was sending the wrong shape ({shipments:[{waybill,cancellation:'true'}]} as form-encoded format=json&data=). Fixed cancelShipment() to send the flat JSON body and to read success from data.status===true (not the packages array). Confirmed live: real cancellation succeeded with remark 'Shipment has been cancelled.'",
+        "bonusCapability_note": "This same /api/p/edit endpoint (Shipment Edit) can also edit a shipment's name/phone/address/products_desc/weight/dimensions, and even convert payment mode (COD↔Prepaid), all against a waybill — only while status is Manifested/InTransit/Pending (not Dispatched/Delivered/RTO/etc.). Confirmed the harmless edit path works too (edited products_desc successfully). We don't currently use the edit capability, only cancellation, but it's available if ever needed."
       },
       {
         "purpose": "Book a courier pickup request at a warehouse",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "admin 'Create pickup request' panel",
         "theirEndpoint": "POST /fm/request/new/",
-        "sampleRequest_constructed": { "pickup_date": "2026-07-23", "pickup_time": "14:00:00", "pickup_location": "A Dough Cookie — Jayanagar", "expected_package_count": 4 }
+        "sampleRequest_constructed": { "pickup_date": "2026-07-23", "pickup_time": "14:00:00", "pickup_location": "A Dough Cookie — Jayanagar", "expected_package_count": 4 },
+        "realCallsConfirmed_2026-07-24": [
+          "Prepaid shipment, wallet balance ₹442.04 (below Delhivery's ₹500 minimum for Prepaid pickup requests) → real rejection: {\"prepaid\":\"Client wallet balance is 442.04 which is less than 500.0\"}",
+          "COD shipment, same wallet balance → HTTP 201, but business response was pr_exist:true, error code 669, 'A Pickup Request 307835274 for this Pickup Location Already Exist for 25 Jul in slot 14:00 - 18:00' — a duplicate-slot conflict masked the real balance check that time (see correction below).",
+          "CORRECTION 2026-07-25: retried after the duplicate pickup was cancelled — got the SAME real balance rejection on the COD shipment too: {\"prepaid\":\"Client wallet balance is 394.84 which is less than 500.0\"}. This disproves the earlier 'COD bypasses the balance check' theory — the ≥₹500 minimum applies regardless of payment mode. The earlier apparent bypass was just the duplicate-slot conflict short-circuiting before the balance check ran.",
+          "CLEAN SUCCESS 2026-07-25: after a real wallet top-up, booked a genuinely fresh pickup request — real response: {pickup_id: 307860158, client_name: '26f42e-ADC-do', pickup_location_name: 'ADC-Test-Satya-Pickup', incoming_center_name: 'Bangalore_Hosapalaya_C', pickup_time: '14:00:00', pickup_date: '2026-07-27', expected_package_count: 1}. Note: we requested pickup_date='2026-07-26' but Delhivery auto-scheduled it for '2026-07-27' instead — requested dates aren't always honored exactly, it adjusts to the next actually-available slot."
+        ],
+        "note": "Now fully confirmed working end-to-end, including a genuinely clean success response, not just error-handling. Real requirement confirmed: booking a pickup via this API needs the account wallet at ≥₹500, regardless of Prepaid/COD — this is a real Delhivery-side business rule, not something we can code around.",
+        "walletMechanicsConfirmed_2026-07-25": "Checked the real One Panel wallet ledger (Finances > Transactions). Shipment CREATION itself (not just pickup booking) incurs an immediate real debit — order .125 (Prepaid, Hyderabad route) debited ₹57.96 on manifest; order .136 (COD, same route) debited ₹105.16 — nearly double, presumably a COD handling surcharge on top of the base shipping cost (matches the getShippingCost() quote of ₹57.96 for this exact route/weight). GOOD NEWS: cancelling before pickup REFUNDS the shipping charge in full — confirmed via ledger: order .125's 'Shipment Not Picked' entry credited back the exact ₹57.96 that was debited at creation. So a cancelled-before-pickup test shipment doesn't cost anything net."
       },
       {
         "purpose": "Get a printable shipping label PDF (pre-signed URL)",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "GET /api/admin/delivery/label?waybills=…",
-        "theirEndpoint": "GET /api/p/packing_slip?wbns=<comma-sep waybills>&pdf=true"
+        "theirEndpoint": "GET /api/p/packing_slip?wbns=<comma-sep waybills>&pdf=true",
+        "realCallConfirmed_2026-07-24": "Confirmed the FULL real flow end to end: the endpoint returns JSON (not raw PDF bytes) — {\"packages\":[{\"pdf_download_link\":\"https://express-hq-prod.s3...\"}]} — our admin.js route already correctly anticipated this exact case (comment: 'packing_slip returns EITHER raw PDF bytes OR JSON with a pre-signed pdf_download_link'). Fetched the extracted S3 link directly — got a genuine PDF back, verified by checking the file starts with the real PDF magic bytes '%PDF-1.7', 161KB. Nothing needed fixing here, code was already correct."
       },
       {
         "purpose": "Live tracking / current status of a shipment",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "GET /api/orders/:id/delhivery-track   and  GET /api/admin/orders/:id/track",
-        "theirEndpoint": "GET /api/v1/packages/json/?waybill=<wbn>"
+        "theirEndpoint": "GET /api/v1/packages/json/?waybill=<wbn>",
+        "realCallConfirmed_2026-07-24": "Tested on 2 real production waybills. Genuinely useful finding: Consignee.Name comes through correctly ('Surya'), unlike Telephone1/2 which are masked blank (privacy) — so name masking behaves differently from Shadowfax's tracking API, which blanks name AND contact both. Also confirmed real status progression for the first time on any carrier this project: Manifested → 'Pickup scheduled' → 'Not Picked' (after the pickup was cancelled) — proves Delhivery's real tracking genuinely reflects real-world events, not stuck like the staging sandbox was."
       },
       {
         "purpose": "Fetch delivery proof documents — signature, EPOD, return QC images",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "GET /api/admin/orders/:id/document?docType=…",
-        "theirEndpoint": "GET /api/rest/fetch/pkg/document/?doc_type=<SIGNATURE_URL|RVP_QC_IMAGE|EPOD|SELLER_RETURN_IMAGE>&waybill=<wbn>"
+        "theirEndpoint": "GET /api/rest/fetch/pkg/document/?doc_type=<SIGNATURE_URL|RVP_QC_IMAGE|EPOD|SELLER_RETURN_IMAGE>&waybill=<wbn>",
+        "realCallConfirmed_2026-07-24": "Tested EPOD on an undelivered real shipment — got the correctly expected real rejection: HTTP 404, {\"success\":false,\"message\":\"doc_type: EPOD, is not available for this waybill.\",\"data\":{}}. Confirms the endpoint and our error-handling both work correctly for the 'not available yet' case. Have not yet seen the SUCCESS case (would need a real delivered/RTS shipment)."
+      },
+      {
+        "purpose": "NDR (Non-Delivery Report) action — RE-ATTEMPT a failed delivery, or PICKUP_RESCHEDULE, so a failed shipment isn't lost to RTO",
+        "used": false,
+        "liveTested": false,
+        "ourEndpoint": "NOT IMPLEMENTED — no route or function exists in our code yet",
+        "theirEndpoint": "POST /api/p/update  (async — returns a UPL ID; poll GET NDR Status API for the result)",
+        "sampleRequest_docConfirmed": { "data": [{ "waybill": "13163116xxxxxx", "act": "RE-ATTEMPT" }] },
+        "bodyShapeNote": "IMPORTANT — this endpoint uses a WRAPPED body {data:[{...}]}, DIFFERENT from /api/p/edit's FLAT body. Confirms Delhivery's request shapes vary per endpoint; never assume one shape works across endpoints.",
+        "rules": "RE-ATTEMPT: only valid when NSL code in [EOD-74,EOD-15,EOD-104,EOD-43,EOD-86,EOD-11,EOD-69,EOD-6], attempt_count 1 or 2, best applied after 9 PM. PICKUP_RESCHEDULE: only when NSL in [EOD-777,EOD-21] AND shipment is Cancelled (non-OTP), attempt_count 1 or 2, after 9 PM.",
+        "whyNotUsed": "Deliberately NOT built yet — this is failed-delivery edge-case handling (a 'better handling' feature for when a real delivery attempt fails), not core launch flow. Not a go-live blocker: a failed delivery can be handled manually via the One Panel portal for now. Documented here as a real, available endpoint to implement later once volume justifies it. Assessed 2026-07-25."
       }
     ]
   },
 
   "shadowfax": {
-    "docs": "Shadowfax Unified API (client-provided PDF docs, adc-cookies-backend-node/documentations/shadowfax.md)",
+    "docs": "Shadowfax's official Apiary-hosted API docs (full reference read 2026-07-23, cross-checked against our code — see findings below); also adc-cookies-backend-node/documentations/shadowfax.md",
     "mode": "staging (https://dale.staging.shadowfax.in/api) — used as the INTRACITY/same-day carrier for orders delivering to a city where we have a store (Bengaluru, Chennai)",
     "codeFile": "src/shadowfax.js",
     "auth": "Authorization: Token <SHADOWFAX_API>",
     "prepaidOnly": "cod_amount is always '0' / payment_mode 'Prepaid' — ADC never accepts COD",
+    "officialStagingTestPincodes_confirmedLive_2026-07-23": {
+      "note": "Shadowfax's own docs list these 3 as sample serviceable pincodes for testing order creation on staging. Confirmed directly against the real serviceability API (not assumed from docs) — all 3 genuinely serviceable right now.",
+      "110009": { "serviceable": true, "services": ["Large", "Regular", "Surface"] },
+      "560077": { "serviceable": true, "services": ["Regular"] },
+      "560007": { "serviceable": true, "services": ["Large", "Regular", "Surface"] }
+    },
+    "ourRealStorePincodes_serviceabilityConfirmedLive_2026-07-23": {
+      "note": "Checked our 3 Bengaluru store pincodes (the ones zoneStores()/nearestStore() in src/shadowfax.js actually route pickups to) against the same live API. Now also surfaced in Admin → Delivery → Shadowfax tab as a 'pickup stores' panel, dulled/greyed out when not serviceable, live-checked on every page load (not cached).",
+      "560100": { "store": "A Dough Cookie — Electronic City", "serviceable": true, "services": ["Regular"] },
+      "560029": { "store": "A Dough Cookie — S.G. Palya", "serviceable": true, "services": ["Regular"] },
+      "560041": { "store": "A Dough Cookie — Jayanagar", "serviceable": false, "services": [] }
+    },
+    "dbCheck_2026-07-23": "Queried all 9 orders with carrier=SHADOWFAX — all consistent (waybill + tracking_url correctly populated, no nulls where data is expected). One universal-but-harmless gap found, NOT Shadowfax-specific: delhivery_waybill/tracking_url are set correctly on every order regardless of carrier, but delhivery_shipment_id and estimated_delivery are NULL on 100% of orders (checked both SHADOWFAX and DELHIVERY carriers) — the shipment-creation code never writes to either column for any carrier. Not corrupted data, just two schema columns nothing currently populates.",
+    "invoiceGeneration_answeredDirectly_2026-07-23": "NO — read Shadowfax's complete official API reference (Serviceability, AWB Generation, Order Creation x2, Order Details, Update Order, Order Cancellation, Escalation, POD, QR Code) end to end: there is no invoice-generation or invoice-download endpoint anywhere in their API. The closest thing is 'Generate QR Code' (below) — but that only creates a payment QR code referencing an invoice number/GSTIN/amount YOU already have, it doesn't generate the invoice document itself, and it's explicitly COD-only ('QR Code can only be generated for COD') so it can never apply to ADC anyway (prepaid-only). Confirms what was already suspected earlier this project, now backed by the full official docs rather than a partial read.",
+    "warehouseModelConfirmedLive_2026-07-24": {
+      "summary": "ADC uses the Warehouse model, not Marketplace — confirmed correct because ADC owns all 4 stores outright (Marketplace model is for platforms coordinating pickups from independent third-party sellers, which doesn't apply). Same endpoint as marketplace (POST /v3/clients/orders/), differentiated by order_type:'warehouse'. Schema confirmed via Shadowfax's own Apiary 'Specification' example (their rendered docs never showed the Warehouse-model request body at all). Implemented as createShadowfaxWarehouseOrder() in src/shadowfax.js.",
+      "firstRealLiveOrder": "AWB SF3625058129DOF, placed 2026-07-24, pickup=Satya/Mullur(560035, unique_code='adc-test-pickup-01', made up — NOT pre-registered at the time), delivery=Jaya/Belathur-Kadugodi(560067), ₹60 Chocolate Chip Cookie, 100g. This is the very first genuinely-live (non-sandbox) Shadowfax order this project has ever created — real money was deducted from the Shadowfax wallet (100 → 53.98), confirming it's a real, billed shipment, not free/sandboxed.",
+      "realBugFound_pickupDetailsBlank": "The order-creation RESPONSE echoed pickup_details fully (name/contact/address all correct). But every SUBSEQUENT view — our own GET tracking call, AND the ShadowFax360 portal's 'Update Order' modal — shows pickup_details.name/contact/address_line_1 as EMPTY, while rto_details (sent with byte-identical data, since no separate rto was given) persisted and displays correctly, and customer_details (Jaya's) also displays correctly. Same input data, only pickup came back blank.",
+      "workingTheory": "pickup_details.unique_code is likely meant to reference a REAL pre-registered pickup address (via ShadowFax360's 'Manage Address' > 'Add Pickup Address' page), not an arbitrary self-chosen tag. We invented 'adc-test-pickup-01' without registering it anywhere, so the lookup likely found nothing and the address came back blank for storage/display purposes (even though creation's immediate response echoed what we submitted). rto_details, by contrast, doesn't appear to require a registered code — freeform text persisted fine. Not confirmed by Shadowfax directly — inferred from this evidence.",
+      "updateAttemptResult": "Tried fixing the existing stuck order via updateShadowfaxOrder() (POST /v3/clients/order_update/), setting pickup_details.contact/customer_address/pincode directly. REJECTED: HTTP 400, message 'Pickup details cannot be updated for this shipment'. This is a real, confirmed rejection from production — not a bug in our code. Likely because Warehouse-model pickup is meant to be fixed at creation (tied to a registered warehouse), not editable per-order like Marketplace's ad-hoc pickup_details can be (docs: 'pickup_details can be edited until the order is assigned_for_seller_pickup' — but this order is still status='new', so the rejection isn't about lifecycle stage, it's specific to the Warehouse model not allowing pickup edits at all).",
+      "addressRegistered_2026-07-24": "Registered a pickup address in ShadowFax360 > Manage Address: Label/Address Tag = 'ADC-Test-Pickup', Contact = Satya/9381502998, Address = 24-18-03, Green Fields Layout, Mullur, Bengaluru, Karnataka, 560035. The Manage Address LIST VIEW shows only this Label as an identifier — no separate system-generated ID/code visible anywhere in the UI. Working assumption: the Address Tag text itself ('ADC-Test-Pickup') IS the value to use as pickup_details.unique_code going forward — NOT YET CONFIRMED, since we haven't yet created an order referencing it to see if pickup_details populates correctly this time.",
+      "planForTomorrow": "(1) DONE 2026-07-24: cancelled SF3625058129DOF via cancelShadowfaxOrder() — succeeded, confirmed real (see Order Cancellation endpoint entry above). (2) NEXT: create ONE more real test order via createShadowfaxWarehouseOrder() with pickup.unique_code='ADC-Test-Pickup' (exact case matching the registered Address Tag) to confirm whether pickup_details now populates correctly. (3) If confirmed working, register the 4 REAL ADC stores (Jayanagar, S.G. Palya, Electronic City, Besant Nagar) the same way in ShadowFax360's Manage Address, each with its own Address Tag, and use those exact tags as unique_code for all real production orders going forward — this is the actual go-live blocker, not yet resolved as of this note."
+    },
+    "statusLabelCrossCheck_2026-07-24": "Tested every real official status_id from Shadowfax's Marketplace order-states table through sfxStatusLabel()/sfxStatusRank() directly (not guessed, actually ran it). Found and FIXED a real bug: 'picked' — Shadowfax's own official status_id for 'pickup completed' — was completely unrecognized (fell through to generic title-case, rank 0). Since sfxStatusRank() is what GET /api/orders/:id/track uses to decide whether a poll result should update the customer-visible shipment_status, rank 0 meant a genuine forward-progress update to 'picked' would have silently failed to register once Shadowfax actually started sending it (it never has yet — see below). Fixed: all 34 real official statuses now have a proper label; the 26 that form a clean, unambiguous linear forward path (new→…→delivered, plus the RTS/return sub-path) now have correct increasing ranks. 11 'exception' statuses (on_hold, pickup_on_hold, cid, seller_initiated_delay, seller_not_contactable, nc, na, pickup_not_attempted, reopen_ndr, pincode_updated, item_misrouted, cancelled_by_seller) were deliberately left unranked (rank 0) rather than guessed — they can interrupt the lifecycle at any point and there's no single correct place for them on a strictly-increasing scale; see the comment in shadowfax.js for the open question. Also confirmed: the webhook handler (routes/shadowfax.js) does NOT use rank at all — it stores whatever Shadowfax sends unconditionally (a push is never stale by definition), and DOES write estimated_delivery when the payload includes an eta — the earlier note that this column is 'never populated by any carrier' was accurate about what's happened so far but imprecise about the code: it's wired, just never received real data with that field. Separately: our webhook code recognizing 'seller_pickup_done' (from a real live webhook test earlier this project) is still real and still not in Shadowfax's own published docs at all — kept as an alias for 'picked', not removed.",
+    "stagingNeverProgressesPastNew_reconfirmed_2026-07-24": "Re-polled all 3 real test AWBs (SF1784684342DOF, SF1788389792DOF, SF1789127573DOF) a full day+ after creation — every one still shows status=new, zero tracking events beyond the initial 'Item New at BLR_Domlur' scan, no rider assigned. This is now confirmed with fresh, repeated evidence (not a one-off) — staging genuinely does not self-progress orders through the pickup/delivery lifecycle. Awaiting Shadowfax's reply on whether that needs manual triggering on their end.",
     "endpoints": [
       {
         "purpose": "Check if a pincode is serviceable for customer delivery",
-        "used": true,
-        "ourEndpoint": "internal — not directly exposed as its own route; used defensively before order creation",
+        "used": false,
+        "liveTested": true,
+        "liveTestedNote": "The API call itself works and was confirmed live (I called it directly, not through any product code) — 'used: false' means our checkout flow never actually calls it, not that it's broken.",
+        "ourEndpoint": "NONE — sfxServiceability() is fully implemented in src/shadowfax.js but is DEAD CODE, never called from anywhere in the backend",
         "theirEndpoint": "GET /v1/clients/serviceability/?service=customer_delivery&pincodes=<pin>&count=5",
-        "sampleResponse_constructed": [{ "code": "560041", "services": ["customer_delivery"] }]
+        "sampleRequest_liveCaptured": { "query": { "service": "customer_delivery", "pincodes": "560041", "count": 5 } },
+        "sampleResponse_liveCaptured": [],
+        "note_realResult": "560041 (our Jayanagar store) returns an EMPTY array — genuinely not serviceable on staging right now, confirmed live 2026-07-23, not a guess.",
+        "realGapFound_2026-07-23": "Checked src/routes/delivery.js /check route (what the checkout page calls to decide 'same-day Shadowfax' vs 'Pan-India Delhivery' and show the customer a delivery promise) — it ONLY does a local pincode-prefix match against the hardcoded SFX_STORES list (nearestStore()), it never calls this real serviceability API. Confirmed this caused a live mismatch: order ADC20260722210454 (id 68, dest pincode 560087) was told at checkout 'same-day from A Dough Cookie — Electronic City' via SHADOWFAX, but when the real shipment-creation call ran after payment, Shadowfax rejected all 3 in-zone pickup attempts with 'Invalid Delivery Pincode. Pincode 560087 is not serviceble' and the order silently fell back to Delhivery Pan-India instead. The order's OWN data ended up correct (order.carrier=DELHIVERY, and the customer's order confirmation correctly showed 'Pan-India · Delhivery' — verified from the user's own screenshot), so nothing is corrupted — but the checkout-time promise was wrong, and the switch to a slower carrier was never explicitly surfaced to the customer as a change. Wiring sfxServiceability() into /check would fix this at the source, but that's a product decision, not yet made."
       },
       {
         "purpose": "Create a forward (marketplace) intracity order — pickup from our store, deliver to customer",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "internal — order auto-shipment flow, tries each in-zone store nearest-first",
         "theirEndpoint": "POST /v3/clients/orders/",
         "sampleRequest_constructed": { "order_type": "marketplace", "order_details": { "client_order_id": "ADC20260722104807", "actual_weight": 500, "product_value": 130, "payment_mode": "Prepaid", "cod_amount": "0", "total_amount": 130, "order_service": "regular" }, "customer_details": { "name": "Satya Prakash", "contact": "9381502998", "address_line_1": "…", "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 }, "pickup_details": { "name": "A Dough Cookie — Electronic City", "contact": "9381502998", "address_line_1": "…", "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 }, "product_details": [{ "sku_name": "Double Choco Chip Cookie", "price": 65, "category": "Food" }] },
-        "sampleResponse_constructed": { "message": "Success", "data": { "awb_number": "SF1784684342DOF" } }
+        "sampleResponse_constructed": { "message": "Success", "data": { "awb_number": "SF1784684342DOF" } },
+        "realCallsConfirmed_viaRailwayLogs": [
+          "2026-07-22T20:29:36Z — order ADC20260722202856 (id 64), dest=560100 → ✓ awb=SF1788389792DOF (pickup override 560007 used, real store pin 560100 — staging sandbox only services a handful of pickup pins, see SHADOWFAX_TEST_PICKUP_PIN note below)",
+          "2026-07-22T21:05:27Z — order ADC20260722210454 (id 68), dest=560087 → ✗ all 3 in-zone pickups rejected 'Invalid Delivery Pincode. Pincode 560087 is not serviceble', auto-fell-back to Delhivery (waybill 85582010000302) — see the dead-serviceability-check gap noted above"
+        ],
+        "sandboxNote": "SHADOWFAX_TEST_PICKUP_PIN env var overrides our real store pincode (560100/560041/560029) with a staging-accepted one (560007) for the PICKUP side only — the destination pincode is always the real customer address. Must be left UNSET in production."
       },
       {
         "purpose": "Live tracking for an AWB",
         "used": true,
+        "liveTested": true,
+        "liveTestedNote": "Confirmed repeatedly (order 63, 64, and a fresh test order SF1789127573DOF created 2026-07-23) — always returns status=new, never further. See statusLabelCrossCheck note above re: why nothing has ever progressed past 'new' on staging (asked Shadowfax in the email sent 2026-07-23).",
         "ourEndpoint": "GET /api/orders/:id/delhivery-track (branches to Shadowfax when carrier=SHADOWFAX)  and  GET /api/admin/orders/:id/track",
         "theirEndpoint": "GET /v4/clients/orders/<awb>/track/",
         "sampleRequest_liveCaptured": {},
-        "sampleResponse_liveCaptured": { "message": "Success", "order_details": { "id": 4212176, "client_name": "ADOORA FOODS", "client_order_id": "ADC20260722104807", "awb_number": "SF1784684342DOF", "product_value": 130, "cod_amount": 0, "payment_mode": "prepaid", "status_display": "New", "status": "new", "delivery_details": { "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 } }, "tracking_details": [{ "created": "2026-07-22T05:18:41Z", "location": "BLR_Domlur", "status_id": "new", "status": "New", "remarks": "Item New at BLR_Domlur" }] }
+        "sampleResponse_liveCaptured": { "message": "Success", "order_details": { "id": 4212176, "client_name": "ADOORA FOODS", "client_order_id": "ADC20260722104807", "awb_number": "SF1784684342DOF", "product_value": 130, "cod_amount": 0, "payment_mode": "prepaid", "status_display": "New", "status": "new", "delivery_details": { "city": "Bengaluru", "state": "Karnataka", "pincode": 560100 } }, "tracking_details": [{ "created": "2026-07-22T05:18:41Z", "location": "BLR_Domlur", "status_id": "new", "status": "New", "remarks": "Item New at BLR_Domlur" }] },
+        "riderInfo": "rider_name/rider_contact fields exist in this API's response shape (confirmed from the real order_details object) and get populated once status reaches 'ofd' (Out For Delivery) per Shadowfax's own docs — but since no real order has ever progressed past 'new' on staging, these fields have never actually been observed populated. Not fabricated, not assumed — genuinely untested because nothing has reached that state yet.",
+        "customerTrackUrlRemovedFromAdminUI_2026-07-24": "The 'Live tracking link' the admin panel used to show (from customer_track_url) has been removed — it's been null in every real response we've ever seen, so we don't actually know what it links to. Not shown anywhere until confirmed. Admin still sees status + scan history, which is real.",
+        "trackingApiMasksNameContact_2026-07-24": "Confirmed: this endpoint returns name/contact/address_line_1/2 as EMPTY STRINGS for BOTH pickup_details AND delivery_details on every real order, regardless of registration status — only city/state/pincode come through. This is symmetric across pickup and delivery, so it's just privacy-masking on the tracking endpoint itself, NOT the same thing as the separate Pickup-Details-blank bug found in the ShadowFax360 portal's Update Order view (see shadowfax.warehouseModelConfirmedLive_2026-07-24 above) — that one is asymmetric (pickup blank, return/customer correct) and portal-specific."
+      },
+      {
+        "purpose": "Track up to 50 AWBs in a single call",
+        "used": true,
+        "liveTested": true,
+        "ourEndpoint": "bulkTrackShadowfax(awbs) in src/shadowfax.js — not yet wired to any route",
+        "theirEndpoint": "POST /v4/clients/bulk_track/",
+        "realCallConfirmed_2026-07-24": "Tested live with our 2 real AWBs (SF3625058129DOF, SF36986267659) — succeeded on first try with request body {awb_numbers: [...]}. Confirmed SF3625058129DOF's final real status: cancelled_by_customer, remarks 'Cancelled as per client's request' — clean confirmation the earlier cancel-order test fully completed."
       },
       {
         "purpose": "Proof of delivery — recipient's signature sheet (S3 PDF) once delivered/rts_d",
         "used": true,
+        "liveTested": false,
+        "liveTestedNote": "Never actually called against a real AWB — no order has ever reached delivered/rts_d status on staging, so there's nothing real to fetch yet. Sample below is constructed from the documented response shape, not a real capture.",
         "ourEndpoint": "GET /api/admin/orders/:id/shadowfax-doc",
         "theirEndpoint": "POST /v1/clients/pod_details/  (body: {awb_numbers:[awb]})",
         "sampleResponse_constructed": { "message": "Success", "pod_details": { "SF1784684342DOF": { "recipient_name": "Satya Prakash", "recipient_signature": "['https://shadowfax-pod.s3.amazonaws.com/report.pdf']" } } }
@@ -189,15 +369,53 @@
       {
         "purpose": "Status update webhook — Shadowfax pushes rider/delivery status changes to us",
         "used": true,
+        "liveTested": true,
         "ourEndpoint": "POST /api/shadowfax/webhook  (Authorization header must match SHADOWFAX_WEBHOOK_SECRET)",
         "theirEndpoint": "(inbound — Shadowfax calls US, configured in their dashboard)",
         "sampleRequest_realWorldTested": { "awb_number": "SF1770170860DOF", "event": "seller_pickup_done", "status": "Picked up from store", "comments": "Rider collected the order", "event_timestamp": "2026-07-17T00:00:00+05:30" }
       },
       {
-        "purpose": "COD UPI-QR generator",
+        "purpose": "COD UPI-QR generator (closest thing to 'invoicing' Shadowfax offers — see invoiceGeneration note above; does NOT generate an invoice document, just a payment QR referencing one)",
         "used": false,
-        "theirEndpoint": "POST /api/v2/clients/qr_code/generate/",
-        "whyNotUsed": "COD-only feature — ADC is prepaid-only, so this endpoint can never apply"
+        "liveTested": false,
+        "theirEndpoint": "POST https://saruman.staging.shadowfax.in/api/v2/clients/qr_code/generate/  (note: different subdomain — saruman, not dale — from every other Shadowfax endpoint we use)",
+        "whyNotUsed": "COD-only feature ('QR Code can only be generated for COD' per their own error message) — ADC is prepaid-only, so this endpoint can never apply. Deliberately staying unimplemented, per explicit instruction."
+      },
+      {
+        "purpose": "Cancel an order by AWB — WANTED: admin-only control (normal users can never cancel a placed order — that stays strict)",
+        "used": true,
+        "liveTested": true,
+        "realCallConfirmed_2026-07-24": "Cancelled the stuck test order SF3625058129DOF via cancelShadowfaxOrder() against real production — succeeded: {responseMsg: 'Request has been marked as cancelled', responseCode: 200}. First real confirmation this function works end-to-end.",
+        "specConfirmed_2026-07-24": "Real request/response schema pulled from Shadowfax's own Apiary 'Specification' tab via their Inspector tool (not their rendered docs, which never showed this) — genuinely their documented spec, not guessed.",
+        "ourEndpoint": "cancelShadowfaxOrder(awb, remarks) in src/shadowfax.js — not yet wired to an admin UI button",
+        "theirEndpoint": "POST /v3/clients/orders/cancel/",
+        "sampleRequest_specConfirmed": { "request_id": "SF10000002NRN", "cancel_remarks": "Request cancelled by customer" },
+        "sampleResponse_specConfirmed": { "responseMsg": "Request has been marked as cancelled", "responseCode": 200 },
+        "gotcha": "The field is `request_id`, NOT `awb_number`, even though the value you put there IS the AWB — easy to get wrong by symmetry with other endpoints.",
+        "note": "200 = cancelled immediately; 304 = queued (order already past a certain in-flight stage, e.g. ofp/ofd/bag_in_transit); other codes = real failure (e.g. already delivered)."
+      },
+      {
+        "purpose": "Update order data (edit delivery_details/pickup_details/return_details, or transition status to rts/rto/reopen_ndr from on_hold/cancelled_by_customer only) — WANTED: admin-only control",
+        "used": true,
+        "liveTested": false,
+        "specConfirmed_2026-07-24": "Real request/response schema pulled from Shadowfax's own Apiary 'Specification' tab via their Inspector tool.",
+        "ourEndpoint": "updateShadowfaxOrder(awb, updates) in src/shadowfax.js — not yet wired to an admin UI button",
+        "theirEndpoint": "POST /v3/clients/order_update/",
+        "sampleRequest_specConfirmed": { "awb_number": "SF47850936san", "delivery_details": { "contact": "9999999999", "customer_address": "#253, 2nd cross hebbal", "pincode": 560008 }, "pickup_details": { "contact": "9123456781", "customer_address": "pickupaddress verkvj lrvnkjt", "pincode": "560007" }, "return_details": { "contact": "9123456781", "email": "abc@gmail.com", "return_address": "abcd", "pincode": "560007" }, "order_details": { "cod_amount": 0, "actual_weight": "539.127", "volumetric_weight": "1498.314" }, "status_update": { "status": null } },
+        "sampleResponse_specConfirmed": { "message": "Request accepted." },
+        "gotcha": "Field is `customer_address` inside delivery_details/pickup_details here — DIFFERENT from address_line_1/address_line_2 used at order-creation time. Only include the sections you're actually updating; per Shadowfax's docs, values inside an included section that you're not changing should be passed as null, not omitted."
+      },
+      {
+        "purpose": "Escalation API — raise a support ticket for delayed delivery, expedite pickup, status mismatch, or delivery dispute — WANTED: admin-only control",
+        "used": true,
+        "liveTested": true,
+        "realCallConfirmed_2026-07-24": "Raised a real escalation (issue_category=3, Expedite Pickup-Seller) on live order SF36986267659 via escalateShadowfaxIssue() — succeeded: {message: 'Issue received', status: 'SUCCESS'}.",
+        "specConfirmed_2026-07-24": "Real request/response schema pulled from Shadowfax's own Apiary 'Specification' tab via their Inspector tool.",
+        "ourEndpoint": "escalateShadowfaxIssue(awb, issueCategory) in src/shadowfax.js — not yet wired to an admin UI button",
+        "theirEndpoint": "POST /v1/clients/support/issue/",
+        "sampleRequest_specConfirmed": { "awb_number": "SF00000000TC", "issue_category": 1 },
+        "sampleResponse_specConfirmed": { "message": "Issue received", "status": "SUCCESS" },
+        "note": "issue_category: 1=Delayed Delivery, 2=Expedite Pickup-Customer, 3=Expedite Pickup-Seller, 4=Status Mismatch, 5=Delivery Dispute (per Shadowfax's docs)."
       },
       {
         "purpose": "Printable shipping label",
@@ -207,7 +425,7 @@
       {
         "purpose": "Order/tax invoice",
         "used": false,
-        "whyNotUsed": "Confirmed earlier this project: Shadowfax's API has no invoice-generation endpoint at all"
+        "whyNotUsed": "See invoiceGeneration_answeredDirectly_2026-07-23 note at the top of this section — now confirmed against Shadowfax's complete official API reference, not a partial read: no invoice-generation endpoint exists anywhere in their API."
       }
     ]
   },
@@ -309,23 +527,23 @@
     ]
   },
 
-  "mailer_smtp": {
-    "docs": "SMTP protocol via Nodemailer — not a REST API",
+  "mailer": {
+    "docs": "https://resend.com/docs/api-reference/emails/send-email",
     "codeFile": "src/mailer.js",
-    "provider": "Zoho SMTP (smtp.zoho.in:465) in production, falls back to Gmail's service preset if MAIL_HOST unset",
+    "provider": "Resend (HTTPS API) — switched from Zoho SMTP on 2026-07-22",
+    "baseUrl": "https://api.resend.com",
+    "auth": "Authorization: Bearer <RESEND_API_KEY>",
+    "whySwitchedFromSmtp": "Railway's Hobby plan blocks ALL outbound SMTP (ports 25/465/587) — every send via Zoho SMTP was silently failing with a 10s connection timeout (confirmed: 100% failure rate across every real order placed, e.g. ADC20260722202856, ADC20260722203817, ADC20260722203833 — Railway support KB confirms SMTP is Pro-plan+ only). Resend's API is plain HTTPS, which Railway doesn't restrict. Old SMTP/nodemailer implementation kept commented out at the bottom of mailer.js (not deleted) as the fallback if this project ever moves to a Railway plan that allows SMTP again.",
+    "domainVerification": "adoughcookie.com verified in Resend via a dedicated 'send.' subdomain (MX + SPF + DKIM records scoped to send.adoughcookie.com) — deliberately does not touch the root domain's existing Zoho MX/SPF/DKIM, so Zoho Mail's inbox/webmail keeps working untouched. Emails still send FROM info@adoughcookie.com despite the verification living on the subdomain (Resend/SES support this pattern).",
     "endpoints": [
       {
-        "purpose": "Notify the business of a new contact-form enquiry",
+        "purpose": "Send an email (used for both contact-form notifications and order confirmations)",
         "used": true,
-        "ourEndpoint": "POST /api/contact",
-        "protocolNote": "SMTP SEND command, not a REST endpoint — 'from' is always \"a dough cookie\" <MAIL_USER>",
-        "sampleData_constructed": { "to": "info@adoughcookie.com", "replyTo": "customer@example.com", "subject": "New enquiry from Robert", "bodyFields": ["name", "email", "phone", "message"] }
-      },
-      {
-        "purpose": "Order confirmation to the customer + a copy to the business",
-        "used": true,
-        "ourEndpoint": "internal — finalizePaidOrder() in orders.js, called from /payment/verify and the Razorpay webhook",
-        "sampleData_liveCaptured": { "to": "satyaprakashreddy6789@gmail.com", "subject": "Your order ADC20260722104807 is placed 🍪" }
+        "ourEndpoint": "POST /api/contact  (business notification)  and  internal finalizePaidOrder() → sendOrderEmails() (order confirmation + business copy)",
+        "theirEndpoint": "POST https://api.resend.com/emails",
+        "sampleRequest_liveCaptured": { "from": "a dough cookie <info@adoughcookie.com>", "to": "pitchireddykummitha@gmail.com", "subject": "Your order ADC20260722211553 is placed 🍪" },
+        "sampleResponse_liveCaptured": { "id": "7a05d482-b83f-4e05-9d78-14c4975c25a0" },
+        "note": "Live-captured 2026-07-22 21:15:58 UTC — both the customer email (id 7a05d482…) and the business copy to info@adoughcookie.com (id b33cbe25…) sent successfully for real order ADC20260722211553. The immediately-prior order (ADC20260722210454, 21:04) failed with 'The adoughcookie.com domain is not verified' — domain verification finished in the ~11 minutes between the two, so this is a genuine before/after comparison, not a guess."
       }
     ]
   },
@@ -341,7 +559,12 @@
         "ourEndpoint": "POST /api/auth/log-location",
         "theirEndpoint": "GET https://ipapi.co/<ip>/json/",
         "sampleResponse_constructed": { "city": "Bengaluru", "region": "Karnataka", "country_name": "India" },
-        "note": "Never throws — a failed lookup just leaves the column unchanged; never blocks or delays login"
+        "note": "Never throws — a failed lookup just leaves the column unchanged; never blocks or delays login",
+        "realFinding_liveCaptured_2026-07-22": {
+          "xffParsedCorrectly": "user=7 | xff=\"13.234.202.9, 152.233.68.97\" | resolved_ip=13.234.202.9 — leftmost (real client) IP correctly extracted from the X-Forwarded-For chain, not Railway's proxy IP",
+          "butIpapiRateLimited": "user=7 | ✗ ipapi.co status=429 | {\"error\":true,\"reason\":\"RateLimited\",\"message\":\"Visit https://ipapi.co/ratelimited/ for details\"} — the free tier got rate-limited on a real request, so last_login_location stayed unset for this login",
+          "implication": "The XFF-parsing fix itself works correctly; the remaining gap is ipapi.co's free-tier rate limit, which is a real, observed failure mode (not hypothetical) — a busier login volume will hit this regularly. Not fixed yet — flagging for a decision (paid tier, a different free geolocation API, or accept the gaps) rather than silently living with it."
+        }
       }
     ]
   }

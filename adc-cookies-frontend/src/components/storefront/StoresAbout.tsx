@@ -6,6 +6,7 @@ import { ArrowRight, ShoppingBag, Mail, Phone, MessageCircle, ChevronDown } from
 import { STORES } from '@/lib/stores';
 import ContactForm from './ContactForm';
 import AboutVideo from './AboutVideo';
+import InstagramReels from './InstagramReels';
 import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
@@ -137,8 +138,11 @@ export default function StoresAbout() {
         </div>
       </section>
 
+      {/* ── ADC on Instagram — reel strip, ivory band ── */}
+      <InstagramReels />
+
       {/* ── Our stores — cream band · image left, details right ── */}
-      <section id="stores" style={band('var(--band-ivory)')}>
+      <section id="stores" style={band('var(--gold)')}>
         <div style={inner}>
           <div style={split}>
             <div style={col}>
@@ -158,7 +162,7 @@ export default function StoresAbout() {
                       <h4 style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 2px' }}>{s.name}</h4>
                       <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.address}</p>
                     </div>
-                    <Link href={`/order?store=${encodeURIComponent(s.city.toLowerCase())}`} aria-label={`Order from ${s.name}`} style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 800, fontSize: 'var(--text-2xs)' }}><ShoppingBag size={12} /> Order</Link>
+                    <Link href={`/locations#store-${s.pincode}`} aria-label={`See ${s.name}`} style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 800, fontSize: 'var(--text-2xs)' }}><ShoppingBag size={12} /> View</Link>
                   </div>
                 ))}
               </div>
@@ -169,7 +173,7 @@ export default function StoresAbout() {
       </section>
 
       {/* ── Get in touch — salmon band · full split on desktop, dropdown on mobile ── */}
-      <section id="get-in-touch" style={band('var(--gold)', { borderBottom: '1px solid var(--border-default)' })}>
+      <section id="get-in-touch" style={band('var(--band-ivory)', { borderBottom: '1px solid var(--border-default)' })}>
         <div style={inner}>
           {isMobile ? (
             <div>

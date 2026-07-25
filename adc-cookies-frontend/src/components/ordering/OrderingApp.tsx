@@ -263,21 +263,6 @@ function QStepper({ value, onChange, size = 'md' }: { value: number; onChange: (
   );
 }
 
-// Short, precise card blurbs (shown in full on the cards) keyed by product name —
-// falls back to the product's own description for anything not listed here.
-const SHORT_DESC: Record<string, string> = {
-  'Chocolate Chip Cookie': 'Buttery dough, dark chocolate chips, soft centre.',
-  'Double Choco Chip Cookie': 'Cocoa dough loaded with dark chocolate chunks.',
-  'Ragi Cookie (Gluten-Free)': 'Wholesome finger-millet cookie, naturally gluten-free.',
-  'Matcha Cookie': 'Stone-ground matcha with white-chocolate chips.',
-  'ADC Special Cookie': 'Browned butter, sea salt, three chocolates.',
-  'Red Velvet Filled Cookie': 'Cocoa-red velvet with a cream-cheese centre.',
-  'Biscoff Filled Cookie': 'Molten Biscoff inside a caramelised shell.',
-  'Nutella Filled Cookie': 'Gooey Nutella centre in a soft chocolate cookie.',
-  'Nutella Cookie Tin': 'Six Nutella-filled cookies in a gift tin.',
-  'Biscoff Cookie Tin': 'Nine Biscoff-filled cookies, gift-ready.',
-};
-
 /* ---- Compact mobile product card — two-up grid, no ratings, ADD goes straight to cart ---- */
 function MobileProductCard({ item, qty, onQtyChange }: { item: typeof FALLBACK_MENU[0]; qty: number; onQtyChange: (n: number) => void }) {
   return (
@@ -289,9 +274,9 @@ function MobileProductCard({ item, qty, onQtyChange }: { item: typeof FALLBACK_M
       <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {item.veg && <span style={{ width: 13, height: 13, border: '2px solid var(--mark-veg)', borderRadius: 2, display: 'grid', placeItems: 'center', flex: 'none' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--mark-veg)', display: 'block' }} /></span>}
-          <h3 style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</h3>
+          <h3 style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0, minWidth: 0, overflowWrap: 'anywhere' }}>{item.name}</h3>
         </div>
-        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>{SHORT_DESC[item.name] ?? item.desc}</p>
+        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{item.desc}</p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 'auto', paddingTop: 6 }}>
           <span style={{ fontWeight: 800, fontSize: 'var(--text-base)', color: 'var(--text-strong)' }}>₹{item.price}</span>
           {qty === 0 ? (
@@ -1494,7 +1479,7 @@ export default function OrderingApp() {
                 <OrderNavItem label="Home" href="/" />
                 <OrderNavItem label="Buy Cookies" href="/order?cat=cookies" menu={menu.map(m => ({ label: m.name, onClick: () => { setActive('Cookies'); setSearch(m.name); } }))} />
                 <OrderNavItem label="Cookie Tins" href="/order?cat=tins" menu={tins.map(t => ({ label: t.name, onClick: () => { setActive('Cookie Tins'); setSearch(''); } }))} />
-                <OrderNavItem label="Locations" href="/locations" menu={STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/order?store=${encodeURIComponent(s.city.toLowerCase())}` }))} />
+                <OrderNavItem label="Locations" href="/locations" menu={STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))} />
                 <OrderNavItem label="Partner with us" href="/franchise" menu={[{ label: 'Corporate & Bulk Order', onClick: () => setActive('Corporate Gifting') }, { label: 'Franchise Enquiry', href: '/franchise' }]} />
                 <OrderNavItem label="About Us" href="/about" />
                 <OrderNavItem label="Contact" href="/contact" />

@@ -173,10 +173,13 @@ body::before {
 /* Home products grid — 4-up, stepping down on smaller screens */
 .home-products-grid { grid-template-columns: repeat(4, 1fr); }
 @media (max-width:1024px) { .home-products-grid { grid-template-columns: repeat(3, 1fr) !important; } }
-@media (max-width:680px) { .home-products-grid { grid-template-columns: repeat(2, 1fr) !important; }
-  /* Hide the mid-side hero cookies on phones so they don't crowd the centred text */
-  .hero-cookie--side { display: none !important; }
-}
+@media (max-width:680px) { .home-products-grid { grid-template-columns: repeat(2, 1fr) !important; } }
+
+/* Hero height — shorter on phones so the fold isn't one giant photo, taller on desktop.
+   svh (not vh) so mobile browser chrome appearing/disappearing doesn't cause a jump. */
+.home-hero { min-height: 78svh; }
+@media (max-width:900px) { .home-hero { min-height: 68svh; } }
+@media (max-width:680px) { .home-hero { min-height: 62svh; padding: clamp(40px,7vw,64px) 0 !important; } }
 
 /* Footer (brand band) */
 .footer-link:hover { color: var(--white) !important; }
@@ -204,7 +207,7 @@ body::before {
   .prod-card-img { width: 100% !important; height: clamp(150px,38vw,196px) !important; order: -1 !important; }
   .prod-card-text { width: 100% !important; padding: 0 !important; min-width: 0 !important; }
   .prod-card-text h2 { font-size: 1.5rem !important; margin-bottom: 8px !important; }
-  .prod-card-text p { font-size: var(--text-sm) !important; line-height: 1.55 !important; margin-bottom: 16px !important; max-width: 100% !important; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .prod-card-text p { font-size: var(--text-sm) !important; line-height: 1.55 !important; margin-bottom: 16px !important; max-width: 100% !important; overflow-wrap: anywhere; }
   .bg-cookies-layer { display: none !important; }
   .product-doc-hero { grid-template-columns: 1fr !important; }
   .product-doc-grid { grid-template-columns: 1fr !important; }
@@ -212,22 +215,28 @@ body::before {
   .gallery-grid { grid-template-columns: 1fr !important; }
   .blog-grid { grid-template-columns: 1fr !important; }
   .contact-layout { grid-template-columns: 1fr !important; }
+  /* Bulk-order modal: stack the sell panel above the form on phones */
+  .bulk-modal-grid { grid-template-columns: 1fr !important; }
   .store-grid { grid-template-columns: 1fr !important; }
   /* On mobile, show the map first (above the store cards) and don't let it stick */
   .contact-stores > aside { order: -1; position: static !important; margin-bottom: 4px; }
+  /* Locations page: same idea — map above the list, not sticky, and shorter */
+  .locations-map { order: -1; position: static !important; height: clamp(260px,52vw,320px) !important; }
   .account-layout { grid-template-columns: 1fr !important; }
   .account-sidebar { position: static !important; }
   .account-order-detail-grid { grid-template-columns: 1fr !important; }
   .account-address-list { grid-template-columns: 1fr !important; }
   .account-address-grid { grid-template-columns: 1fr !important; }
-  /* Footer: brand on top (full width), then Shop | Company / Help side by side — keeps
-     the page short on phones instead of stacking every column. */
-  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 10px 16px !important; }
-  .footer-grid > div:first-child { grid-column: 1 / -1 !important; }
+  /* Footer: brand on top (full width), then the link columns two-per-row below it —
+     keeps the page short on phones instead of stacking every column. */
+  .footer-grid { justify-content: space-between !important; gap: 22px 16px !important; }
+  .footer-grid > div { flex: 1 1 42% !important; }
+  /* Brand spans the full top row (needs > .footer-grid > div specificity to win) */
+  .footer-grid > .footer-brand { flex: 0 0 100% !important; max-width: none !important; }
   /* Tighter link lists so the footer stays short on phones */
   .footer-grid > div > div:last-child { gap: 6px !important; }
-  /* Shorter footer on phones */
-  .site-footer { padding-top: 16px !important; padding-bottom: 10px !important; }
+  /* Shorter footer on phones, but keep enough bottom room for the watermark to sit cleanly */
+  .site-footer { padding-top: 32px !important; padding-bottom: 64px !important; }
 }
 
 /* Home promo popup — portrait card on mobile, larger landscape card on desktop */
