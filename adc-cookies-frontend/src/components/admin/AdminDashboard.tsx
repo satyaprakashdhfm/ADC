@@ -594,8 +594,12 @@ export default function AdminDashboard() {
               {/* Delhivery's pickup API books an empty slot — it takes a date, time and a package
                   COUNT, with no field for waybills. Attaching the actual parcels is a separate
                   action that only exists in their panel, and a pickup with nothing attached is why
-                  a rider turns up and leaves empty-handed. There is likewise no cancel-pickup API
-                  in Delhivery's spec (only cancel-SHIPMENT), so that link goes to the panel too. */}
+                  a rider turns up and leaves empty-handed.
+                  Cancelling is the same story: Delhivery's public API (all on track.delhivery.com)
+                  has cancel-SHIPMENT but no cancel-PICKUP. one.delhivery.com/v2/pickup-requests/
+                  domestic is a browser page, not an endpoint — it serves text/html and ignores our
+                  API token entirely; its Cancel button is authenticated by a panel login session
+                  our server doesn't have. So both links below deep-link into the panel. */}
               <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--amber-50)', border: '1px solid var(--border-brand)' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
                   <AlertTriangle size={16} style={{ color: 'var(--brand-secondary)', flex: 'none', marginTop: 2 }} />
@@ -610,11 +614,11 @@ export default function AdminDashboard() {
                       packages attached means the rider collects nothing.
                     </p>
                     <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                      <a href="https://one.delhivery.com/manifest/pickup-request" target="_blank" rel="noopener noreferrer"
+                      <a href="https://one.delhivery.com/v2/pickup-requests/domestic" target="_blank" rel="noopener noreferrer"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--brand-secondary)' }}>
                         <ExternalLink size={13} /> Open pickup requests
                       </a>
-                      <a href="https://one.delhivery.com/manifest/pickup-request" target="_blank" rel="noopener noreferrer"
+                      <a href="https://one.delhivery.com/v2/pickup-requests/domestic" target="_blank" rel="noopener noreferrer"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--status-error)' }}
                         title="Delhivery provides no cancel-pickup API — cancel it from their panel">
                         <X size={13} /> Cancel a pickup request
