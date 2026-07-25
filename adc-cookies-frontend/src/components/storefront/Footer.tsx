@@ -105,27 +105,16 @@ export default function Footer() {
           {/* Brand block — fills the left side so the link columns don't cluster in the right
               half with a dead gap. On phones this drops to full width above the columns. */}
           <div className="footer-brand" style={{ flex: '1 1 240px', maxWidth: 300 }}>
-            {/* The real logo on a white chip. Previously `brightness(0) invert(1)` flattened it to
-                a white silhouette, which lost the wordmark's detail against the orange band. */}
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '10px 16px',
-                borderRadius: 18,
-                background: 'var(--white)',
-                boxShadow: 'var(--shadow-sm)',
-              }}
-            >
-              <Image
-                src="/assets/adc-logo.png"
-                height={52}
-                width={88}
-                alt="a dough cookie"
-                style={{ height: 52, width: 'auto', objectFit: 'contain', display: 'block' }}
-              />
-            </span>
+            {/* White wordmark straight on the orange band — no chip or plate behind it. There's only
+                an orange logo asset, so the white variant is produced the same way the navbar does
+                it: crush to black, then invert to a solid white silhouette. */}
+            <Image
+              src="/assets/adc-logo.png"
+              height={64}
+              width={108}
+              alt="a dough cookie"
+              style={{ height: 64, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }}
+            />
             <p
               style={{
                 color: 'var(--white-72)',
