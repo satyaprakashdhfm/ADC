@@ -6,6 +6,11 @@ import { nearestStore } from '../shadowfax.js';
 
 const router = Router();
 
+// Shadowfax same-day delivery is paused (unresolved rider-assignment gap — see project notes).
+// While true, intracity zones are self-pickup from the nearest store instead of home delivery.
+// Flip back to false the moment Shadowfax is confirmed reliably assigning riders.
+const SHADOWFAX_DISABLED = process.env.SHADOWFAX_DISABLED === 'true';
+
 // Origin pincode: prefer default active warehouse, fall back to any active warehouse, then env var.
 async function getOriginPin() {
   try {
@@ -43,6 +48,15 @@ router.get('/check', async (req, res) => {
   // the real Shadowfax serviceability is verified at order time, falling back to Delhivery if needed.
   const pickup = nearestStore(pin);
   if (pickup) {
+    if (SHADOWFAX_DISABLED) {
+      console.log(`[DELIVERY] check | pin=${pin} | carrier=STORE_PICKUP | Shadowfax paused → collect from ${pickup.name}`);
+      return res.json({
+        serviceable: true, intracity: true, carrier: 'STORE_PICKUP', store: pickup.name, city: pickup.city,
+        sameDay: false, pickupOnly: true,
+        maintenanceMessage: `Shadowfax same-day delivery is temporarily under maintenance. Please collect your order from our ${pickup.name} store.`,
+        tat: null, expectedDeliveryDate: null, pincode: pin,
+      });
+    }
     console.log(`[DELIVERY] check | pin=${pin} | carrier=SHADOWFAX | intracity zone → same-day from ${pickup.name}`);
     return res.json({ serviceable: true, intracity: true, carrier: 'SHADOWFAX', store: pickup.name, city: pickup.city, sameDay: true, tat: null, expectedDeliveryDate: null, pincode: pin });
   }

@@ -15,6 +15,10 @@ router.use(requireAuth);
 // SFX_STORES + nearestStore (intracity pickup routing) live in ../shadowfax.js — shared with the
 // checkout /delivery/check so both use the same store-zone logic.
 
+// Mirrors delivery.js's SHADOWFAX_DISABLED — while true, intracity orders are self-pickup from
+// the nearest store (no shipment created at all) instead of being handed to Shadowfax.
+const SHADOWFAX_DISABLED = process.env.SHADOWFAX_DISABLED === 'true';
+
 // Auto-create a shipment once an order is PAID. Routes by DESTINATION PINCODE:
 //   • pincode in a city where we have a store (Bengaluru 560xxx / Chennai 600xxx) → Shadowfax (intracity)
 //   • anywhere else → Delhivery (out-of-city)
@@ -35,9 +39,19 @@ async function autoCreateShipment(orderId, addressArg) {
   // Routing decision — always logged so it's unambiguous in the terminal whether this order is
   // even eligible for Shadowfax, and if not, exactly why (no store in that pincode zone vs
   // Shadowfax not configured at all).
-  console.log(`[SHIPMENT] routing | order=${order.order_number} | dest_pin=${destPin} | zone_stores=${stores.length} | shadowfax_configured=${shadowfaxConfigured()}`);
+  console.log(`[SHIPMENT] routing | order=${order.order_number} | dest_pin=${destPin} | zone_stores=${stores.length} | shadowfax_configured=${shadowfaxConfigured()} | shadowfax_disabled=${SHADOWFAX_DISABLED}`);
   if (!stores.length) console.log(`[SHIPMENT] routing | order=${order.order_number} | no ADC store in pincode zone ${destPin.slice(0, 3)}xx → Delhivery only`);
   else if (!shadowfaxConfigured()) console.log(`[SHIPMENT] routing | order=${order.order_number} | SHADOWFAX_URL/SHADOWFAX_API missing → Delhivery only`);
+
+  // ---- Intracity, Shadowfax paused → self-pickup from store, no shipment created ----
+  if (stores.length && SHADOWFAX_DISABLED) {
+    await query(
+      `UPDATE orders SET carrier='STORE_PICKUP', shipment_status='AWAITING_PICKUP', updated_at=$1 WHERE id=$2`,
+      [nowIso(), orderId]
+    );
+    console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=STORE_PICKUP | store=${stores[0].name} | shadowfax paused — no shipment created`);
+    return { ok: true, carrier: 'STORE_PICKUP', store: stores[0].name };
+  }
 
   // ---- Intracity → Shadowfax ----
   // The pickup/return store's pincode must ALSO be serviceable (not just the destination), so we
