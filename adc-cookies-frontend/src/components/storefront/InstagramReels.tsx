@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { Volume2, VolumeX, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import { REELS, INSTAGRAM_HANDLE, INSTAGRAM_URL, reelVideo } from '@/lib/reels';
 
@@ -17,14 +17,15 @@ const InstagramGlyph = ({ size = 16 }: { size?: number }) => (
  * "A Dough Cookie on Social Media" — a rail of self-hosted reels that autoplay silently and loop,
  * with a YouTube-style sound toggle per tile. No Instagram chrome, no like/view counts.
  *
- * Why self-hosted mp4s instead of Instagram embeds: an embed is Instagram's player, so it cannot
- * autoplay, carries their branding and counters, and clicking it navigates away from the site.
- * Serving the files ourselves is the only way to get inline silent autoplay.
+ * Lazy by necessity: eleven clips is ~19MB, so nothing is fetched up front. Each tile only gets a
+ * `src` once it scrolls near the viewport (IntersectionObserver, generous rootMargin so it is
+ * loaded before it is seen), plays while on screen, and pauses when it leaves — so a visitor who
+ * never reaches this section downloads none of it, and one who does downloads only what they pass.
  *
  * Rotation copies the Reviews marquee: the list is rendered twice and scrollLeft advances a
  * fraction of a pixel per frame, wrapping at the halfway point for a seamless loop. It pauses on
- * hover, while an arrow nudge is active, and whenever a tile has its sound on — nobody wants the
- * clip they're listening to to slide out of view.
+ * hover, during an arrow nudge, and whenever a tile has its sound on — nobody wants the clip
+ * they're listening to to slide out of view.
  */
 export default function InstagramReels() {
   const track = useRef<HTMLDivElement>(null);
@@ -33,10 +34,41 @@ export default function InstagramReels() {
   const videos = useRef<(HTMLVideoElement | null)[]>([]);
   // Index of the tile with sound on (null = all muted). Only ever one at a time.
   const [audible, setAudible] = useState<number | null>(null);
+  // Mirrored into a ref so the marquee's once-bound mouseleave handler can read the current value
+  // without the animation effect needing to re-run (and restart) on every sound toggle.
+  const audibleRef = useRef<number | null>(null);
 
   const hasReels = REELS.length > 0;
   // Rendered twice for the seamless wrap, exactly like the reviews marquee.
   const tiles = hasReels ? [...REELS, ...REELS] : [];
+
+  // Attach/observe each tile: load + play near the viewport, pause once past it.
+  const observer = useRef<IntersectionObserver | null>(null);
+  useEffect(() => {
+    if (!hasReels || typeof IntersectionObserver === 'undefined') return;
+    observer.current = new IntersectionObserver(
+      entries => {
+        for (const e of entries) {
+          const v = e.target as HTMLVideoElement;
+          if (e.isIntersecting) {
+            // Assign src on first approach — this is what keeps the 19MB off the initial load.
+            if (!v.src && v.dataset.src) v.src = v.dataset.src;
+            v.play().catch(() => { /* autoplay policy or not yet buffered — harmless */ });
+          } else {
+            v.pause();
+          }
+        }
+      },
+      { root: null, rootMargin: '200px', threshold: 0.1 },
+    );
+    videos.current.forEach(v => { if (v) observer.current?.observe(v); });
+    return () => observer.current?.disconnect();
+  }, [hasReels]);
+
+  const registerVideo = useCallback((el: HTMLVideoElement | null, i: number) => {
+    videos.current[i] = el;
+    if (el) observer.current?.observe(el);
+  }, []);
 
   useEffect(() => {
     const el = track.current;
@@ -57,14 +89,14 @@ export default function InstagramReels() {
     };
     raf = requestAnimationFrame(tick);
     const enter = () => { paused.current = true; };
-    const leave = () => { pos.current = el.scrollLeft; paused.current = false; };
+    const leave = () => { if (audibleRef.current === null) { pos.current = el.scrollLeft; paused.current = false; } };
     el.addEventListener('mouseenter', enter);
     el.addEventListener('mouseleave', leave);
     return () => { cancelAnimationFrame(raf); el.removeEventListener('mouseenter', enter); el.removeEventListener('mouseleave', leave); };
   }, [hasReels]);
 
-  // Hold the rail still while a clip is audible, so it can't drift off-screen mid-listen.
   useEffect(() => {
+    audibleRef.current = audible;
     const el = track.current;
     if (!el) return;
     if (audible !== null) paused.current = true;
@@ -76,7 +108,7 @@ export default function InstagramReels() {
     if (!el) return;
     paused.current = true;
     el.scrollBy({ left: dir * 300, behavior: 'smooth' });
-    window.setTimeout(() => { pos.current = el.scrollLeft; if (audible === null) paused.current = false; }, 1400);
+    window.setTimeout(() => { pos.current = el.scrollLeft; if (audibleRef.current === null) paused.current = false; }, 1400);
   };
 
   // Unmuting one tile mutes every other — never two clips talking over each other.
@@ -107,7 +139,7 @@ export default function InstagramReels() {
             A Dough Cookie on Social Media
           </h2>
           <p style={{ fontSize: 'var(--text-base)', lineHeight: 1.6, color: 'var(--text-body)', margin: 0 }}>
-            Fresh batches, new flavours and far too many gooey close-ups.
+            Fresh batches, new flavours and far too many gooey close-ups. Tap the speaker for sound.
           </p>
         </div>
 
@@ -120,13 +152,12 @@ export default function InstagramReels() {
                   style={{ position: 'relative', flex: 'none', width: 'clamp(210px,58vw,262px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', background: 'var(--ink-900)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)' }}>
                   <div style={{ position: 'relative', width: '100%', aspectRatio: '9 / 16' }}>
                     <video
-                      ref={el => { videos.current[i] = el; }}
-                      src={reelVideo(r.id)}
-                      autoPlay
+                      ref={el => registerVideo(el, i)}
+                      data-src={reelVideo(r.id)}
                       muted
                       loop
                       playsInline
-                      preload="metadata"
+                      preload="none"
                       aria-label={r.caption || 'A Dough Cookie reel'}
                       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                     />
