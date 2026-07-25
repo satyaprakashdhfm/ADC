@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MapPin, Navigation, ChevronDown, X, Check } from 'lucide-react';
 import { STORES } from '@/lib/stores';
 import { useLocation, storeArea } from '@/context/LocationContext';
@@ -9,6 +10,9 @@ const ASKED_KEY = 'adc_location_asked';
 /* ---- Modal: detect location or pick a store ---- */
 function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { store, detect, detecting, error, chooseStore } = useLocation();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   // Escape closes it, and the page behind is locked from scrolling while it's open.
   useEffect(() => {
@@ -20,11 +24,15 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
   const cities = [...new Set(STORES.map(s => s.city))];
   const onDetect = async () => { const s = await detect(); if (s) onClose(); };
 
-  return (
+  /* Portalled to <body>. The pill that opens this lives inside the sticky header, which carries a
+     `transform` for its show/hide animation — and a transformed ancestor becomes the containing
+     block for position:fixed descendants. Rendered in place, the overlay was therefore sized and
+     stacked against the HEADER (clipped to it, stuck at its z-index) instead of the viewport. */
+  return createPortal(
     <div onClick={onClose} role="dialog" aria-modal="true" aria-label="Choose your location"
       style={{ position: 'fixed', inset: 0, zIndex: 96, background: 'var(--espresso-50)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16, overflowY: 'auto' }}>
       <div onClick={e => e.stopPropagation()} className="hide-sb" style={{ position: 'relative', width: 'min(440px,94vw)', maxHeight: 'min(76svh, 640px)', overflowY: 'auto', margin: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: '22px 22px 24px', animation: 'riseIn .3s var(--ease-spring) both' }}>
@@ -71,7 +79,8 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
           </div>
         ))}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
