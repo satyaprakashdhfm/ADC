@@ -7,7 +7,8 @@ import { nearestStore } from '../shadowfax.js';
 const router = Router();
 
 // Shadowfax same-day delivery is paused (unresolved rider-assignment gap — see project notes).
-// While true, intracity zones are self-pickup from the nearest store instead of home delivery.
+// While true, intracity zones are NOT serviceable at all (checkout is blocked, not offered as
+// self-pickup) — customers see "Shadowfax is down, please wait" instead of a delivery promise.
 // Flip back to false the moment Shadowfax is confirmed reliably assigning riders.
 const SHADOWFAX_DISABLED = process.env.SHADOWFAX_DISABLED === 'true';
 
@@ -49,11 +50,10 @@ router.get('/check', async (req, res) => {
   const pickup = nearestStore(pin);
   if (pickup) {
     if (SHADOWFAX_DISABLED) {
-      console.log(`[DELIVERY] check | pin=${pin} | carrier=STORE_PICKUP | Shadowfax paused → collect from ${pickup.name}`);
+      console.log(`[DELIVERY] check | pin=${pin} | carrier=SHADOWFAX | Shadowfax paused → blocking checkout (nearest store ${pickup.name})`);
       return res.json({
-        serviceable: true, intracity: true, carrier: 'STORE_PICKUP', store: pickup.name, city: pickup.city,
-        sameDay: false, pickupOnly: true,
-        maintenanceMessage: `Shadowfax same-day delivery is temporarily under maintenance. Please collect your order from our ${pickup.name} store.`,
+        serviceable: false, reason: 'shadowfax_paused', intracity: true, store: pickup.name, city: pickup.city,
+        maintenanceMessage: `Shadowfax same-day delivery is temporarily down. Please wait — we'll be back shortly.`,
         tat: null, expectedDeliveryDate: null, pincode: pin,
       });
     }

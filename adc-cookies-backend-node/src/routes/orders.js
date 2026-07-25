@@ -274,6 +274,11 @@ router.post('/', async (req, res) => {
   const feeIntracity = Number(process.env.DELIVERY_FEE_INTRACITY ?? 0);
   const feeOutstation = Number(process.env.DELIVERY_FEE_OUTSTATION ?? 100);
   const intracity = zoneStores(String(address.pincode || '').replace(/\D/g, '')).length > 0;
+  // Shadowfax is paused (see SHADOWFAX_DISABLED in delivery.js) — reject intracity orders
+  // server-side too, not just via the frontend's disabled "Proceed to pay" button.
+  if (intracity && SHADOWFAX_DISABLED) {
+    throw new ApiError('Same-day delivery is temporarily down. Please wait and try again shortly.', 503);
+  }
   const deliveryFee = subtotal > 0 ? (intracity ? feeIntracity : feeOutstation) : 0;
   const total = subtotal - discount + deliveryFee;
   const ts = nowIso();
