@@ -18,7 +18,7 @@ import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
   IndianRupee, Plus, Pencil, Trash2, Check, X, LogOut, Gift,
   Truck, Warehouse as WarehouseIcon, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download, Search, Filter, CalendarRange,
-  FileText,
+  FileText, AlertTriangle,
 } from 'lucide-react';
 
 const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
@@ -590,6 +590,39 @@ export default function AdminDashboard() {
                 }} disabled={!purDate || !purTime} style={{ ...addBtn, opacity: !purDate ? 0.5 : 1 }}>Request pickup</button>
               </div>
               {purResult && <div style={{ marginTop: 10, fontSize: 'var(--text-sm)', color: purResult.startsWith('Error') ? 'var(--status-error)' : 'var(--status-success)', fontWeight: 700 }}>{purResult}</div>}
+
+              {/* Delhivery's pickup API books an empty slot — it takes a date, time and a package
+                  COUNT, with no field for waybills. Attaching the actual parcels is a separate
+                  action that only exists in their panel, and a pickup with nothing attached is why
+                  a rider turns up and leaves empty-handed. There is likewise no cancel-pickup API
+                  in Delhivery's spec (only cancel-SHIPMENT), so that link goes to the panel too. */}
+              <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--amber-50)', border: '1px solid var(--border-brand)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                  <AlertTriangle size={16} style={{ color: 'var(--brand-secondary)', flex: 'none', marginTop: 2 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: 4 }}>
+                      After scheduling, add the packages in the Delhivery app
+                    </div>
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: 1.6, margin: '0 0 8px' }}>
+                      This books the <strong>slot only</strong> — Delhivery&apos;s API has no field for waybills. Open the
+                      Delhivery One panel → <strong>Pickup Requests</strong> → open today&apos;s request → <strong>Add to Pickup</strong>,
+                      and add all {Math.max(1, pending.length)} waybill{pending.length !== 1 ? 's' : ''} listed above. A pickup with no
+                      packages attached means the rider collects nothing.
+                    </p>
+                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                      <a href="https://one.delhivery.com/manifest/pickup-request" target="_blank" rel="noopener noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--brand-secondary)' }}>
+                        <ExternalLink size={13} /> Open pickup requests
+                      </a>
+                      <a href="https://one.delhivery.com/manifest/pickup-request" target="_blank" rel="noopener noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--status-error)' }}
+                        title="Delhivery provides no cancel-pickup API — cancel it from their panel">
+                        <X size={13} /> Cancel a pickup request
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </Panel>
               );
             })()}
@@ -619,7 +652,7 @@ export default function AdminDashboard() {
                             ? <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill}</span>
                             : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>—</span>}
                         </td>
-                        <td style={td}><Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} /></td>
+                        <td style={td}><Badge text={shipStatusLabel(o.shipmentStatus)} ok={o.shipmentStatus === 'DELIVERED'} /></td>
                         <td style={{ ...td, whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
                           {!o.delhiveryWaybill ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -636,19 +669,21 @@ export default function AdminDashboard() {
                               </button>
                             </div>
                           ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              {o.carrier !== 'SHADOWFAX' && <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={iconBtn} title="Download label"><Download size={14} /></button>}
+                            /* Labelled pills rather than bare icons — four unlabelled glyphs in a row
+                               gave no clue which one cancelled a shipment. */
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              {o.carrier !== 'SHADOWFAX' && <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={actionBtn()} title="Download the shipping label PDF"><Download size={13} /> Label</button>}
                               {o.carrier !== 'SHADOWFAX' && (
-                                <button title="Proof of delivery / signature" onClick={async () => {
+                                <button title="Proof of delivery / signature (available after delivery)" onClick={async () => {
                                   setErr('');
                                   for (const t of ['EPOD', 'SIGNATURE_URL'] as const) {
                                     const r = await adminFetchOrderDocument(o.id, t).catch(() => null);
                                     if (r?.ok && r.url) { window.open(r.url, '_blank', 'noopener'); return; }
                                   }
                                   setErr('No proof-of-delivery document available yet — Delhivery provides it after delivery.');
-                                }} style={iconBtn}><FileText size={14} /></button>
+                                }} style={actionBtn()}><FileText size={13} /> POD</button>
                               )}
-                              <button title="Track" onClick={async () => {
+                              <button title="Fetch the latest carrier status" onClick={async () => {
                                 const r = await adminTrackOrder(o.id).catch(() => null);
                                 if (!r?.ok) { if (r) setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${r.reason || 'unknown'}` } })); return; }
                                 if (r.carrier === 'SHADOWFAX') {
@@ -659,15 +694,17 @@ export default function AdminDashboard() {
                                   const scans = (shipment?.Scans || []).map(s => ({ time: s.ScanDetail?.ScanDateTime || '', event: [s.ScanDetail?.Scan, s.ScanDetail?.Instructions].filter(Boolean).join(' — ') })).reverse();
                                   setTrackResult(p => ({ ...p, [o.id]: { status: shipment?.Status?.Status || 'No status', note: shipment?.Status?.Instructions || '', scans } }));
                                 }
-                              }} style={iconBtn}><ExternalLink size={14} /></button>
+                              }} style={actionBtn()}><ExternalLink size={13} /> Status</button>
                               {o.shipmentStatus !== 'CANCELLED' && (
                                 <button disabled={shipmentBusy === o.id} onClick={async () => {
-                                  if (!confirm(`Cancel shipment ${o.delhiveryWaybill}?`)) return;
+                                  if (!confirm(`Cancel shipment ${o.delhiveryWaybill}?\n\nThis cancels the parcel with the carrier and refunds the shipping charge to your wallet. It does NOT refund the customer's payment.`)) return;
                                   setShipmentBusy(o.id); setErr('');
                                   await adminCancelShipment(o.id).catch(e => { setErr(String(e.message || e)); });
                                   setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
                                   setShipmentBusy(null);
-                                }} style={{ ...iconBtn, color: 'var(--status-error)' }} title="Cancel shipment"><X size={14} /></button>
+                                }} style={actionBtn(true)} title="Cancel this shipment with the carrier">
+                                  {shipmentBusy === o.id ? '…' : <><X size={13} /> Cancel</>}
+                                </button>
                               )}
                             </div>
                           )}
@@ -1212,6 +1249,30 @@ export default function AdminDashboard() {
 const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
 const addBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' };
 const iconBtn: React.CSSProperties = { width: 34, height: 34, borderRadius: 9, border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'inline-grid', placeItems: 'center', color: 'var(--text-body)', marginRight: 6 };
+
+/** Labelled row action ("Label", "POD", "Status", "Cancel"). `danger` tints it for destructive ones. */
+const actionBtn = (danger = false): React.CSSProperties => ({
+  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 'var(--radius-pill)',
+  border: `1.5px solid ${danger ? 'var(--status-error)' : 'var(--border-default)'}`,
+  background: 'var(--surface-card)', color: danger ? 'var(--status-error)' : 'var(--text-body)',
+  fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-2xs)', cursor: 'pointer', whiteSpace: 'nowrap',
+});
+
+/*
+ * Admin-facing shipment status. Delhivery's own wording is misleading at the start of the journey:
+ * "CREATED"/"Manifested" only means a waybill exists, which happens automatically on payment while
+ * the parcel is still on the counter. Spelling that out as "Awaiting pickup" is what tells the
+ * operator there is still something to DO (attach it to a pickup request).
+ */
+function shipStatusLabel(s?: string | null): string {
+  const t = (s || '').trim();
+  if (!t) return 'Not created';
+  const u = t.toUpperCase();
+  if (u === 'CREATED' || u === 'MANIFESTED') return 'Awaiting pickup';
+  if (u === 'AWAITING_PICKUP') return 'Awaiting pickup';
+  if (u === 'NOT_CREATED') return 'Not created';
+  return t;
+}
 
 /* ---------- Charts (lightweight inline SVG/CSS — no external deps) ---------- */
 const PIE = ['var(--orange-cta)', 'var(--green-success)', 'var(--google-blue)', 'var(--purple)', 'var(--orange-dark)', 'var(--gray)'];
