@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { ShoppingBag, Plus, Minus, ArrowRight, Cookie, Gift, Briefcase } from 'lucide-react';
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
-import BulkOrderModal from './BulkOrderModal';
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
 const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'clamp(14px,1.8vw,22px)' };
@@ -62,7 +61,6 @@ export default function HomeProducts() {
   const sectionRef = useRef<HTMLElement>(null);
   const deepLinkScrolled = useRef(false); // scroll a ?q= deep-link to its section only once, after products load
   const [inView, setInView] = useState(false); // the floating checkout bar only shows while browsing products
-  const [bulkOpen, setBulkOpen] = useState(false);
 
   useEffect(() => {
     // Show cached products instantly on reload (no waiting for the API), then refresh in the background.
@@ -152,7 +150,7 @@ export default function HomeProducts() {
         {/* Corporate & bulk gifting — last, as a wide card */}
         <button
           id="corporate-section"
-          onClick={() => setBulkOpen(true)}
+          onClick={() => router.push('/corporate')}
           style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: 'var(--surface-inverse)', color: 'var(--cream-100)', padding: 'clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 260, flex: '1 1 320px' }}>
@@ -166,7 +164,6 @@ export default function HomeProducts() {
         </button>
       </div>
 
-      <BulkOrderModal open={bulkOpen} onClose={() => setBulkOpen(false)} />
 
       {/* Floating checkout bar — only while the products section is on screen */}
       {count > 0 && inView && (
