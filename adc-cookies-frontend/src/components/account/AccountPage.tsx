@@ -129,15 +129,26 @@ const national10 = (value?: string | null) => {
   return /^91\d{10}$/.test(p) ? p.slice(2) : p;
 };
 
-// Fixed delivery milestones, and which one a carrier status has reached (0..3).
+/*
+ * Fixed delivery milestones, and which one a carrier status has reached (0..3).
+ *
+ * "Shipped" means the parcel is PHYSICALLY WITH THE CARRIER — not that we've booked it. Delhivery
+ * reports "Manifested" as soon as a waybill is generated, which happens seconds after payment
+ * while the box is still on our counter; counting that as Shipped told customers their order had
+ * left when it hadn't. Manifested/packed/pending therefore stay at "Order placed", and only a real
+ * handover (picked up, in transit, bagged, at a hub) advances the tracker.
+ */
 const SHIP_STAGES = ['Order placed', 'Shipped', 'Out for delivery', 'Delivered'];
 function shipStage(s?: string | null): number {
   const t = (s || '').toLowerCase();
   if (!t) return -1;
   if ((t.includes('deliver') && !t.includes('out for') && !t.includes('attempt') && !t.includes('undeliver')) || t.includes('rts_d')) return 3;
   if (t.includes('out for') || t === 'ofd' || t.includes('out_for') || t.includes('dispatch')) return 2;
-  if (t.includes('transit') || t.includes('shipped') || t.includes('picked') || t.includes('packed') || t.includes('manifest') || t.includes('bag') || t.includes('hub')) return 1;
-  return 0; // placed / confirmed / new / preparing / pending
+  // "Not picked" / "pickup not attempted" contain "picked" but mean the opposite — exclude them
+  // before the pickup check, or a failed pickup would read as Shipped.
+  const notPickedUp = /not\s*picked|pickup\s*(not|failed|cancel)|awaiting/.test(t);
+  if (!notPickedUp && (t.includes('transit') || t.includes('shipped') || t.includes('picked') || t.includes('bag') || t.includes('hub'))) return 1;
+  return 0; // placed / confirmed / manifested / packed / awaiting pickup / pending
 }
 const isCancelledStatus = (s?: string | null) => /cancel|\brto\b|returned|lost/i.test(s || '');
 function whenLabel(iso?: string): string {
