@@ -45,13 +45,19 @@ export default function HomeHero() {
           </picture>
         </motion.div>
 
-        {/* Soft light wash in the centre so the text always reads over the marble */}
-        <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'radial-gradient(58% 56% at 50% 46%, var(--cream-100-72) 0%, var(--cream-100-30) 52%, transparent 80%)' }} />
+        {/* No centre wash. The old marble hero was busy behind the copy, so it carried a 72% cream
+            radial to keep text legible; the current art is shot with the cookies ringing an empty
+            orange centre, so that wash had nothing left to do but bleach the brand colour to a pale
+            blob. Dark text on the orange measures ~5.2:1, comfortably past AA on its own. */}
 
         {/* Center content */}
         <motion.div initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           style={{ position: 'relative', zIndex: 3, textAlign: 'center', padding: '0 var(--gutter)', maxWidth: 720 }}>
-          <Image src="/assets/adc-logo.png" width={480} height={347} alt="a dough cookie" priority style={{ width: 'clamp(230px,36vw,400px)', height: 'auto', margin: '0 auto 10px' }} />
+          {/* White wordmark, as in the navbar and footer. The asset is amber, which only read
+              against the old cream wash — on the orange art it would sink into the background.
+              Same crush-to-black-then-invert trick those two already use. */}
+          <Image src="/assets/adc-logo.png" width={480} height={347} alt="a dough cookie" priority
+            style={{ width: 'clamp(230px,36vw,400px)', height: 'auto', margin: '0 auto 10px', filter: 'brightness(0) invert(1)' }} />
           <h1 style={{ font: '900 clamp(1.35rem,1.05rem + 1.7vw,2.2rem)/1.08 var(--font-display)', letterSpacing: '-.02em', color: 'var(--text-strong)', margin: '0 0 12px', textWrap: 'balance' }}>
             Chunky, gooey cookies — baked fresh, delivered warm.
           </h1>
