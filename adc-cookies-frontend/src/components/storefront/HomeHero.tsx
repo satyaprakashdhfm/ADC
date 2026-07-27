@@ -16,8 +16,8 @@ const ctaGhost: React.CSSProperties = { display: 'inline-flex', alignItems: 'cen
  *   HERO_DESKTOP  2400×1200 (2:1 landscape)
  *   HERO_MOBILE   1200×1600 (3:4 portrait)
  */
-const HERO_DESKTOP = '/assets/hero-cookies.jpg';
-const HERO_MOBILE = '/assets/hero-cookies.jpg';
+const HERO_DESKTOP = '/assets/hero-cookies-wide.jpg';
+const HERO_MOBILE = '/assets/hero-cookies-portrait.jpg';
 
 export default function HomeHero() {
   const router = useRouter();
