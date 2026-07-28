@@ -25,9 +25,11 @@ import { getAll, getOne, query, nowIso } from './db.js';
 import { logApiCall } from './apiLogger.js';
 
 const BASE = (process.env.PETPOOJA_BASE_URL || 'https://qle1yy2ydc.execute-api.ap-southeast-1.amazonaws.com/V1').replace(/\/+$/, '');
-const APP_KEY = process.env.PETPOOJA_APP_KEY || '';
-const APP_SECRET = process.env.PETPOOJA_APP_SECRET || '';
-const ACCESS_TOKEN = process.env.PETPOOJA_ACCESS_TOKEN || '';
+// Two accepted spellings: the descriptive ones matching Petpooja's own field names, and the
+// shorter PETPOOJA_API* set already present in .env. Same values either way.
+const APP_KEY = process.env.PETPOOJA_APP_KEY || process.env.PETPOOJA_API || '';
+const APP_SECRET = process.env.PETPOOJA_APP_SECRET || process.env.PETPOOJA_API_SECRET || '';
+const ACCESS_TOKEN = process.env.PETPOOJA_ACCESS_TOKEN || process.env.PETPOOJA_API_TOKEN || '';
 export const REST_ID = process.env.PETPOOJA_REST_ID || '';
 
 export const petpoojaConfigured = () => !!(APP_KEY && APP_SECRET && ACCESS_TOKEN && REST_ID);
@@ -91,67 +93,86 @@ export async function ingestMenu(payload, { restId = REST_ID, source = 'push' } 
     [rid, source, JSON.stringify(payload ?? {}), items.length, ts]
   );
 
-  for (const t of taxes) {
-    const taxId = String(t.taxid ?? t.id ?? '').trim();
-    if (!taxId) continue;
-    await query(
-      `INSERT INTO petpooja_taxes (rest_id, tax_id, name, percentage, tax_type, raw, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
-       ON CONFLICT (rest_id, tax_id) DO UPDATE SET
-         name=EXCLUDED.name, percentage=EXCLUDED.percentage, tax_type=EXCLUDED.tax_type,
-         raw=EXCLUDED.raw, updated_at=EXCLUDED.updated_at`,
-      [rid, taxId, String(t.taxname ?? t.name ?? ''), Number(t.tax ?? t.percentage ?? 0) || 0,
-       String(t.taxtype ?? ''), JSON.stringify(t), ts]
-    );
-  }
+  const taxRows = taxes
+    .filter(t => String(t.taxid ?? t.id ?? '').trim())
+    .map(t => [rid, String(t.taxid ?? t.id).trim(), String(t.taxname ?? t.name ?? ''),
+      Number(t.tax ?? t.percentage ?? 0) || 0, String(t.taxtype ?? ''), JSON.stringify(t), ts]);
+  await upsertMany('petpooja_taxes',
+    ['rest_id', 'tax_id', 'name', 'percentage', 'tax_type', 'raw', 'updated_at'],
+    ['rest_id', 'tax_id'], ['name', 'percentage', 'tax_type', 'raw', 'updated_at'], taxRows);
 
-  let addonCount = 0;
+  const addonRows = [];
   for (const g of groups) {
     const groupId = String(g.addongroupid ?? g.id ?? '').trim();
     const groupName = String(g.addongroup_name ?? g.name ?? '');
-    const groupItems = Array.isArray(g.addongroupitems) ? g.addongroupitems : [];
-    for (const a of groupItems) {
+    for (const a of (Array.isArray(g.addongroupitems) ? g.addongroupitems : [])) {
       const addonId = String(a.addonitemid ?? a.id ?? '').trim();
       if (!addonId) continue;
-      addonCount++;
-      await query(
-        `INSERT INTO petpooja_addons (rest_id, addon_id, group_id, group_name, name, price, in_stock, raw, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-         ON CONFLICT (rest_id, addon_id) DO UPDATE SET
-           group_id=EXCLUDED.group_id, group_name=EXCLUDED.group_name, name=EXCLUDED.name,
-           price=EXCLUDED.price, in_stock=EXCLUDED.in_stock, raw=EXCLUDED.raw, updated_at=EXCLUDED.updated_at`,
-        [rid, addonId, groupId, groupName, String(a.addonitem_name ?? a.name ?? ''),
-         Number(a.addonitem_price ?? a.price ?? 0) || 0, isInStock(a.active ?? a.in_stock), JSON.stringify(a), ts]
-      );
+      addonRows.push([rid, addonId, groupId, groupName, String(a.addonitem_name ?? a.name ?? ''),
+        Number(a.addonitem_price ?? a.price ?? 0) || 0, isInStock(a.active ?? a.in_stock), JSON.stringify(a), ts]);
     }
   }
+  await upsertMany('petpooja_addons',
+    ['rest_id', 'addon_id', 'group_id', 'group_name', 'name', 'price', 'in_stock', 'raw', 'updated_at'],
+    ['rest_id', 'addon_id'], ['group_id', 'group_name', 'name', 'price', 'in_stock', 'raw', 'updated_at'], addonRows);
 
-  let rows = 0;
+  const itemRows = [];
   for (const it of items) {
     const itemId = String(it.itemid ?? it.id ?? '').trim();
     if (!itemId) continue;
-    const base = {
-      name: String(it.itemname ?? it.name ?? ''),
-      categoryId: String(it.item_categoryid ?? it.categoryid ?? ''),
-      taxIds: String(it.item_tax ?? ''),
-      stock: isInStock(it.in_stock ?? it.active),
-    };
-    // Their `variation` child replaces the deprecated top-level `variations` object.
+    const name = String(it.itemname ?? it.name ?? '');
+    const categoryId = String(it.item_categoryid ?? it.categoryid ?? '');
+    const taxIds = String(it.item_tax ?? '');
+    const stock = isInStock(it.in_stock ?? it.active);
+    // Their `variation` child replaces the deprecated top-level `variations` object. One row per
+    // variation, because an order line needs item id AND variation id together.
     const variations = Array.isArray(it.variation) ? it.variation : [];
     if (variations.length === 0) {
-      await upsertItem(rid, itemId, '', base.name, null, Number(it.price ?? 0) || 0, base, it, ts);
-      rows++;
+      itemRows.push([rid, itemId, '', name, null, Number(it.price ?? 0) || 0, categoryId, taxIds, stock, JSON.stringify(it), ts]);
     } else {
       for (const v of variations) {
-        const vId = String(v.variationid ?? v.id ?? '').trim();
-        await upsertItem(rid, itemId, vId, base.name, String(v.name ?? ''), Number(v.price ?? 0) || 0, base, { ...it, _variation: v }, ts);
-        rows++;
+        itemRows.push([rid, itemId, String(v.variationid ?? v.id ?? '').trim(), name, String(v.name ?? ''),
+          Number(v.price ?? 0) || 0, categoryId, taxIds, stock, JSON.stringify({ ...it, _variation: v }), ts]);
       }
     }
   }
+  // product_id is deliberately absent from the update list: a re-sync must never unmap items an
+  // operator has already linked by hand.
+  await upsertMany('petpooja_items',
+    ['rest_id', 'item_id', 'variation_id', 'name', 'variation_name', 'price', 'category_id', 'tax_ids', 'in_stock', 'raw', 'created_at', 'updated_at'],
+    ['rest_id', 'item_id', 'variation_id'],
+    ['name', 'variation_name', 'price', 'category_id', 'tax_ids', 'in_stock', 'raw', 'updated_at'],
+    itemRows.map(r => [...r, r[r.length - 1]]));   // created_at and updated_at share the timestamp
 
-  log('menu-sync', `restID=${rid} | source=${source} | items=${rows} taxes=${taxes.length} addons=${addonCount}`);
-  return { ok: true, restId: rid, items: rows, taxes: taxes.length, addons: addonCount };
+  log('menu-sync', `restID=${rid} | source=${source} | items=${itemRows.length} taxes=${taxRows.length} addons=${addonRows.length}`);
+  return { ok: true, restId: rid, items: itemRows.length, taxes: taxRows.length, addons: addonRows.length };
+}
+
+/**
+ * Multi-row upsert in chunks.
+ *
+ * The obvious version — one INSERT per row — costs a network round-trip each time: measured at
+ * ~60ms/item against Supabase, so an 800-item menu took ~48s and blew Petpooja's push timeout
+ * (their dashboard just says "Menu trigger failed"). Batching turns that into a handful of
+ * statements. Chunked because Postgres caps a statement at 65535 bound parameters.
+ */
+async function upsertMany(table, cols, conflictCols, updateCols, rows, chunkSize = 200) {
+  if (!rows.length) return;
+  const colList = cols.join(', ');
+  const setList = updateCols.map(c => `${c}=EXCLUDED.${c}`).join(', ');
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    const params = [];
+    const tuples = chunk.map(r => {
+      const ph = r.map(v => { params.push(v); return `$${params.length}`; });
+      return `(${ph.join(',')})`;
+    });
+    await query(
+      `INSERT INTO ${table} (${colList}) VALUES ${tuples.join(',')}
+       ON CONFLICT (${conflictCols.join(', ')}) DO UPDATE SET ${setList}`,
+      params
+    );
+  }
 }
 
 // Their stock flags are inconsistent (1/0, "1"/"0", true/false, and 2 meaning out of stock in
@@ -160,20 +181,6 @@ function isInStock(v) {
   if (v === undefined || v === null || v === '') return true;
   const s = String(v).toLowerCase();
   return !(s === '0' || s === 'false' || s === '2' || s === 'no');
-}
-
-function upsertItem(rid, itemId, variationId, name, variationName, price, base, raw, ts) {
-  return query(
-    `INSERT INTO petpooja_items
-       (rest_id, item_id, variation_id, name, variation_name, price, category_id, tax_ids, in_stock, raw, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
-     ON CONFLICT (rest_id, item_id, variation_id) DO UPDATE SET
-       name=EXCLUDED.name, variation_name=EXCLUDED.variation_name, price=EXCLUDED.price,
-       category_id=EXCLUDED.category_id, tax_ids=EXCLUDED.tax_ids, in_stock=EXCLUDED.in_stock,
-       raw=EXCLUDED.raw, updated_at=EXCLUDED.updated_at`,
-    // product_id is intentionally absent from the UPDATE list — see note above.
-    [rid, itemId, variationId, name, variationName, price, base.categoryId, base.taxIds, base.stock, JSON.stringify(raw), ts]
-  );
 }
 
 /** Pull the menu on demand (no app credentials needed — restID only). */
