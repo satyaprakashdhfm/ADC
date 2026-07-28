@@ -330,6 +330,100 @@ export async function initSchema() {
       terms = 'A free Double Choc Chip cookie is added to your cart automatically when you redeem this reward, free of charge (discount capped at ₹65). Valid once the rest of your cart totals ₹65 or more. One reward per account per spin. Cannot be combined with other offers.'
       WHERE code = 'SPINCHOC' AND gift_kind IS NULL;
 
+    /* ---------------- Petpooja (POS / billing) ----------------
+       Petpooja owns the menu: it pushes its catalogue to us and every line we relay back must
+       carry THEIR item ids, so the whole integration hinges on holding that mapping. Everything
+       is keyed by rest_id even though only one outlet is live today, so adding outlets later is
+       configuration rather than a migration. */
+
+    -- Every menu payload exactly as received (push or fetch). Kept verbatim because their schema
+    -- carries optional objects we don't parse yet — re-reading a stored snapshot beats asking the
+    -- merchant to re-trigger a push when we need a field we skipped.
+    CREATE TABLE IF NOT EXISTS petpooja_menu_snapshots (
+      id SERIAL PRIMARY KEY,
+      rest_id TEXT NOT NULL,
+      source TEXT NOT NULL,                       -- 'push' (they call us) | 'fetch' (we pull)
+      payload JSONB NOT NULL,
+      item_count INTEGER NOT NULL DEFAULT 0,
+      received_at TEXT NOT NULL
+    );
+
+    -- Flattened item catalogue and, critically, product_id: the link from their menu to ours.
+    -- A variation is its own row (their order payload wants item id + variation id together), so
+    -- variation_id defaults to '' rather than NULL to keep the unique index usable.
+    CREATE TABLE IF NOT EXISTS petpooja_items (
+      id SERIAL PRIMARY KEY,
+      rest_id TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      variation_id TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      variation_name TEXT,
+      price FLOAT8,
+      category_id TEXT,
+      tax_ids TEXT,                               -- their comma-separated item_tax ids
+      in_stock BOOLEAN NOT NULL DEFAULT TRUE,
+      product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      raw JSONB,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (rest_id, item_id, variation_id)
+    );
+
+    -- Their tax definitions (CGST/SGST ids + percentages) — needed to build item_tax on an order.
+    CREATE TABLE IF NOT EXISTS petpooja_taxes (
+      id SERIAL PRIMARY KEY,
+      rest_id TEXT NOT NULL,
+      tax_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      percentage FLOAT8 NOT NULL DEFAULT 0,
+      tax_type TEXT,
+      raw JSONB,
+      updated_at TEXT NOT NULL,
+      UNIQUE (rest_id, tax_id)
+    );
+
+    -- Add-on items, flattened out of addongroups/addongroupitems.
+    CREATE TABLE IF NOT EXISTS petpooja_addons (
+      id SERIAL PRIMARY KEY,
+      rest_id TEXT NOT NULL,
+      addon_id TEXT NOT NULL,
+      group_id TEXT,
+      group_name TEXT,
+      name TEXT NOT NULL,
+      price FLOAT8 NOT NULL DEFAULT 0,
+      in_stock BOOLEAN NOT NULL DEFAULT TRUE,
+      raw JSONB,
+      updated_at TEXT NOT NULL,
+      UNIQUE (rest_id, addon_id)
+    );
+
+    -- Store open/closed, which the merchant toggles from their POS. We honour it at checkout.
+    CREATE TABLE IF NOT EXISTS petpooja_stores (
+      rest_id TEXT PRIMARY KEY,
+      store_status BOOLEAN NOT NULL DEFAULT TRUE, -- true = open
+      turn_on_time TEXT,
+      reason TEXT,
+      updated_at TEXT NOT NULL
+    );
+
+    -- Relay audit: one row per order we push, so a failed relay is visible and replayable rather
+    -- than lost in logs. petpooja_status mirrors their callback (-1/1/2/3/4/5/10).
+    CREATE TABLE IF NOT EXISTS petpooja_orders (
+      id SERIAL PRIMARY KEY,
+      order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      rest_id TEXT NOT NULL,
+      relay_ok BOOLEAN NOT NULL DEFAULT FALSE,
+      petpooja_order_id TEXT,
+      petpooja_status TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      request JSONB,
+      response JSONB,
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (order_id)
+    );
+
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This
     -- backend connects as the table owner, which bypasses RLS, so the app is unaffected.
