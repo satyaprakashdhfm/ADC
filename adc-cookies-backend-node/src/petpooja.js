@@ -48,7 +48,16 @@ async function ppRequest(path, body, { timeoutMs = 20_000 } = {}) {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      // Their docs show credentials two ways: as snake_case fields in the body (Save Order) and as
+      // hyphenated HEADERS (Fetch Menu). Send both — each endpoint reads whichever it expects, and
+      // the unused form is ignored. Verified to make no difference where the body form suffices.
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'app-key': APP_KEY,
+        'app-secret': APP_SECRET,
+        'access-token': ACCESS_TOKEN,
+      },
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
@@ -188,12 +197,19 @@ async function upsertMany(table, cols, conflictCols, updateCols, rows, chunkSize
   }
 }
 
-// Their stock flags are inconsistent (1/0, "1"/"0", true/false, and 2 meaning out of stock in
-// some payloads). Treat only the explicit negatives as out of stock.
+/*
+ * Only an explicit negative means out of stock.
+ *
+ * An earlier version also treated "2" as out of stock, which was wrong and dangerous: Petpooja's
+ * own sample menu carries `in_stock:"2"` on every item alongside `active:"1"`, so a real menu would
+ * have marked the whole catalogue unavailable — and because the stock webhook mirrors this onto
+ * products.is_available, that would have taken our storefront down with it. When their flag is
+ * ambiguous, stay available and let the explicit Item Off webhook do the disabling.
+ */
 function isInStock(v) {
   if (v === undefined || v === null || v === '') return true;
   const s = String(v).toLowerCase();
-  return !(s === '0' || s === 'false' || s === '2' || s === 'no');
+  return !(s === '0' || s === 'false' || s === 'no');
 }
 
 /** Pull the menu on demand (no app credentials needed — restID only). */
