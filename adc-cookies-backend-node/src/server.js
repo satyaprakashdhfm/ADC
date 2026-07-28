@@ -64,6 +64,13 @@ app.post('/api/payments/webhook', express.raw({ type: '*/*' }), paymentWebhook);
 // Public by design: mounted directly here, NOT through the auth-gated /api/orders router.
 app.post('/api/payment-callback/:orderId', express.urlencoded({ extended: false }), paymentCallback);
 
+// Petpooja pushes an ENTIRE restaurant menu — every item, variation, add-on group and tax — in one
+// POST. A real menu runs to hundreds of KB, so the 64kb cap below rejected it with a 413 before our
+// handler ever saw it, which the dashboard reports only as "Menu trigger failed". Give that one
+// router the headroom it needs and leave the rest of the API on the tight default: no storefront
+// request has any business being megabytes long.
+app.use('/api/petpooja', express.json({ limit: '12mb' }));
+
 app.use(express.json({ limit: '64kb' }));
 
 // Baseline per-IP rate limit on the whole API — generous for real browsing, blunts abuse/scraping.
