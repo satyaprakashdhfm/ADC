@@ -16,6 +16,16 @@ import { ingestMenu, setStoreOpen, getStoreOpen, REST_ID } from '../petpooja.js'
 
 const router = Router();
 
+/* Log every inbound call before any handler can reject it. When a push fails, Petpooja's dashboard
+   says only "Menu trigger failed" — it never reports the status or body we returned — so without
+   this there is no way to tell "they never called us" from "they called and we 4xx'd". */
+router.use((req, _res, next) => {
+  const len = req.get('content-length') || '?';
+  const keys = req.body && typeof req.body === 'object' ? Object.keys(req.body).join(',') : '(unparsed)';
+  console.log(`[PETPOOJA] <- ${req.method} ${req.path} | ct=${req.get('content-type') || 'none'} | bytes=${len} | keys=${keys.slice(0, 220)}`);
+  next();
+});
+
 function authed(req) {
   const secret = (process.env.PETPOOJA_WEBHOOK_SECRET || '').trim();
   if (!secret) return true;                       // not configured → open, same as our other webhooks

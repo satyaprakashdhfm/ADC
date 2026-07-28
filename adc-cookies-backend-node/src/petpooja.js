@@ -81,17 +81,30 @@ async function ppRequest(path, body, { timeoutMs = 20_000 } = {}) {
  */
 export async function ingestMenu(payload, { restId = REST_ID, source = 'push' } = {}) {
   const ts = nowIso();
-  const rid = String(restId || payload?.restaurants?.[0]?.restaurantid || '').trim();
-  if (!rid) return { ok: false, reason: 'no_rest_id' };
+  const r0 = payload?.restaurants?.[0] ?? {};
+  // Their restaurant id has appeared under several spellings across doc versions, and the push
+  // body may carry it where a fetch does not. Try each, then fall back to config.
+  const rid = String(
+    r0.restaurantid ?? r0.restID ?? r0.res_id ?? r0.id ??
+    payload?.restID ?? payload?.restaurantid ?? restId ?? ''
+  ).trim();
 
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const taxes = Array.isArray(payload?.taxes) ? payload.taxes : [];
   const groups = Array.isArray(payload?.addongroups) ? payload.addongroups : [];
 
+  // Store the payload BEFORE anything can reject it. An earlier version resolved rest_id first and
+  // bailed out, so a push whose id sat under an unexpected key vanished without trace and surfaced
+  // only as "Menu trigger failed" in their dashboard. Whatever arrives is now always inspectable.
   await query(
     `INSERT INTO petpooja_menu_snapshots (rest_id, source, payload, item_count, received_at) VALUES ($1,$2,$3,$4,$5)`,
-    [rid, source, JSON.stringify(payload ?? {}), items.length, ts]
+    [rid || 'unknown', source, JSON.stringify(payload ?? {}), items.length, ts]
   );
+
+  if (!rid) {
+    log('menu-sync', `✗ no rest_id in payload | top-level keys: ${Object.keys(payload ?? {}).join(',') || 'none'}`);
+    return { ok: false, reason: 'no_rest_id', keys: Object.keys(payload ?? {}) };
+  }
 
   const taxRows = taxes
     .filter(t => String(t.taxid ?? t.id ?? '').trim())
