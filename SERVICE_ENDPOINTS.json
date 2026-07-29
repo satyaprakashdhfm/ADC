@@ -1,6 +1,6 @@
 {
   "_readme": "One entry per third-party integration. 'ourEndpoint' = the route on OUR backend that triggers the call (or receives their webhook). 'theirEndpoint' = the real third-party REST endpoint we hit. 'sampleRequest'/'sampleResponse' marked (live-captured) are REAL payloads captured this session via logs/<service>-*.log or a direct safe test call; everything else is (constructed) — built from the exact field names our own code reads/writes, not guessed. 'used: false' entries are real endpoints this provider offers that our code does NOT call today — candidates for 'better handling' work.",
-  "generatedAt": "2026-07-22 (refreshed 2026-07-23…07-24 as noted; refreshed 2026-07-25: both carriers fully tested on REAL PRODUCTION — Delhivery cancelShipment bug FIXED (flat body, not shipments-wrapper), pickup-request booking + wallet mechanics confirmed, NDR endpoint documented as not-yet-used, and a top-level goLiveGaps_whatWeCannotDoViaApi section added summarizing the two real remaining blockers: Delhivery pickup-attachment, and Shadowfax rider-never-assigned) | refreshed 2026-07-28: added the full petpooja (POS/billing) section — three of our own bugs found and fixed, and the menu-push blocker isolated to their side with evidence. | refreshed 2026-07-29: menu fetch confirmed DEPRECATED by Petpooja, rest_id keying corrected to the menu-sharing code, and their demo payload ingested end-to-end (253 rows in 3.2s).",
+  "generatedAt": "2026-07-22 (refreshed 2026-07-23…07-24 as noted; refreshed 2026-07-25: both carriers fully tested on REAL PRODUCTION — Delhivery cancelShipment bug FIXED (flat body, not shipments-wrapper), pickup-request booking + wallet mechanics confirmed, NDR endpoint documented as not-yet-used, and a top-level goLiveGaps_whatWeCannotDoViaApi section added summarizing the two real remaining blockers: Delhivery pickup-attachment, and Shadowfax rider-never-assigned) | refreshed 2026-07-28: added the full petpooja (POS/billing) section — three of our own bugs found and fixed, and the menu-push blocker isolated to their side with evidence. | refreshed 2026-07-29: menu fetch confirmed DEPRECATED by Petpooja, rest_id keying corrected to the menu-sharing code, and their demo payload ingested end-to-end (253 rows in 3.2s). | 2026-07-29: save_order proven to reject at the outermost layer — credentials, restID, payload shape and item ids all eliminated by controlled test.",
   "codeFile": "adc-cookies-backend-node/src/",
   "goLiveGaps_whatWeCannotDoViaApi_2026-07-25": {
     "_summary": "The genuine can't-do-yet list after full real-production testing of both carriers. Everything NOT listed here is confirmed working. Ordered by go-live impact.",
@@ -1085,12 +1085,13 @@
       {
         "purpose": "Save Order — relay a paid order so the bill / KOT prints",
         "used": false,
-        "liveTested": false,
+        "liveTested": true,
         "direction": "we call them",
         "ourEndpoint": "saveOrder() in src/petpooja.js — NOT yet wired into checkout",
         "theirEndpoint": "POST /save_order",
-        "blockedBy": "Item mapping. Every line needs THEIR item id from the menu, so this cannot be exercised until a menu exists.",
-        "requiredFields": "app_key/app_secret/access_token, restID, device_type ('Web', case-sensitive), OrderInfo.{Customer,Order,OrderItem,Tax}, and callback_url passed per-order — there is no dashboard field for it."
+        "blockedBy": "Petpooja-side. Order relay appears not to be enabled for this restaurant — rejection occurs above credentials, restID, shape and item ids.",
+        "requiredFields": "app_key/app_secret/access_token, restID, device_type ('Web', case-sensitive), OrderInfo.{Customer,Order,OrderItem,Tax}, and callback_url passed per-order — there is no dashboard field for it.",
+        "realResult_2026-07-29": "Rejects EVERYTHING — see saveOrderRejectsEverything_2026-07-29. Not a payload problem on our side; every variable was eliminated by controlled test."
       },
       {
         "purpose": "Order Callback — merchant accepted / rejected / progressed the order",
@@ -1141,6 +1142,18 @@
     "MENU_FETCH_IS_DEPRECATED_2026-07-29": "Confirmed by Shivam Tiwari (Petpooja) by email: the menu FETCH method is deprecated. Menu PUSH is now the only way to receive a menu. This removes our fallback — we cannot pull on demand, so the catalogue only ever arrives when Petpooja sends it, and a broken push means no menu at all. The /mapped_restaurant_menus endpoint still answers, but only with 'unable to fetch Object from s3 bucket'; treat it as dead rather than as a blocked-but-usable route.",
     "restIdKeying_2026-07-29": "A payload carries TWO restaurant ids: restaurants[0].restaurantid (their internal row id, e.g. '4922') and restaurants[0].details.menusharingcode (e.g. 'm9nw6rhvxi'). Orders are relayed with restID = the MENU-SHARING CODE, so the catalogue must be keyed on that. Keying on restaurantid stored every row under one id while every lookup searched another — mappedItem() just returned null forever, indistinguishable from 'mapping not done yet'. Ours: menusharingcode bw8dz5o93u.",
     "demoPayloadIngested_2026-07-29": "Shivam supplied a real 288KB demo menu (restaurant 4922 'Integration 1 DEMO') so we could verify our logic while the sandbox push is broken. Ingested end-to-end through the live /pushmenu endpoint: 249 items -> 253 rows (4 variation items correctly expand to 2 rows each), 2 taxes (CGST 2.5 + SGST 2.5), 3 add-ons, in 3.2s. Variations, prices and add-on groups all parse correctly, and every item resolved in_stock TRUE — which is the in_stock:'2' fix proving itself, since the earlier reading would have marked all 253 unavailable and emptied our storefront.",
-    "tax_2026-07-29": "Their menu items carry tax_inclusive:false with item_tax '3196,3197' (CGST 2.5 + SGST 2.5 = 5%), i.e. tax ON TOP of the listed price. OUR prices are tax-INCLUSIVE (5% already inside). We relay our own prices with tax_inclusive:true, so the bill matches what Razorpay charged — but this is a real difference in convention and worth confirming with Petpooja before go-live, since it decides whether their bill shows the same total the customer actually paid."
+    "tax_2026-07-29": "Their menu items carry tax_inclusive:false with item_tax '3196,3197' (CGST 2.5 + SGST 2.5 = 5%), i.e. tax ON TOP of the listed price. OUR prices are tax-INCLUSIVE (5% already inside). We relay our own prices with tax_inclusive:true, so the bill matches what Razorpay charged — but this is a real difference in convention and worth confirming with Petpooja before go-live, since it decides whether their bill shows the same total the customer actually paid.",
+    "saveOrderRejectsEverything_2026-07-29": {
+      "symptom": "Every save_order call returns HTTP 200 with {\"success\":\"0\",\"message\":\"Invalid order relay payload \"} (note their trailing space).",
+      "whatWeEliminated": [
+        "CREDENTIALS: deliberately invalid app_key/app_secret/access_token produce the IDENTICAL message, so rejection happens before authentication is evaluated.",
+        "PAYLOAD SHAPE: six structures tried — OrderInfo as object, OrderInfo as a JSON string, credentials nested inside OrderInfo, device_type 'Web'/'web'/omitted. All identical.",
+        "ITEM IDS: a real item from our own dashboard (9658 Plain Dahi, lifted from the show_details() handler in their menu grid markup) and a fabricated id 99999999 produce the IDENTICAL message, so item ids are never read.",
+        "restID: all three identifiers for the same restaurant — mapping code bw8dz5o93u, restaurant id 5312, and 449010 — produce the IDENTICAL message."
+      ],
+      "theOneThingThatDIDdiffer": "A form-encoded request returns 415 Unsupported Media Type. The endpoint therefore does inspect and discriminate between requests, which means 'Invalid order relay payload' is a deliberate rejection rather than a parse failure or a catch-all.",
+      "conclusion": "save_order rejects at the outermost layer, above credentials, restID, payload shape and item ids. The same credentials work on update_order_status (success:'1') and rider_status_update (success:'success'), so the account and IP are fine. This points at order relay not being enabled for this restaurant on Petpooja's side. Nothing further is testable from our end.",
+      "ourItemIdsFromTheDashboard": "Discoverable without any API: the menu grid markup carries them in show_details('9658') / data-id='name_9658'. Plain Dahi 9658, Boondi Raita 9659, Mix Veg Raita 9660, Pineapple Raita 9661, Fruit Raita 9662, Plain Papad 9663, Masala Papad 9664. Category ids 88864-88882. Useful if a menu never arrives by push."
+    }
   }
 }
