@@ -91,11 +91,21 @@ async function ppRequest(path, body, { timeoutMs = 20_000 } = {}) {
 export async function ingestMenu(payload, { restId = REST_ID, source = 'push' } = {}) {
   const ts = nowIso();
   const r0 = payload?.restaurants?.[0] ?? {};
-  // Their restaurant id has appeared under several spellings across doc versions, and the push
-  // body may carry it where a fetch does not. Try each, then fall back to config.
+  /*
+   * Key on the MENU-SHARING CODE, not restaurantid.
+   *
+   * A real payload carries both: restaurantid "4922" (their internal row id) and
+   * details.menusharingcode "m9nw6rhvxi". Orders are relayed with restID = the menu-sharing code,
+   * so filing the catalogue under restaurantid meant every mapping lookup searched one id while
+   * the rows sat under another — silently finding nothing, and looking for all the world like
+   * "mapping is broken" rather than "the two ids differ".
+   *
+   * restaurantid stays as a last resort: better a consistent wrong-looking key than no rows at all.
+   */
   const rid = String(
-    r0.restaurantid ?? r0.restID ?? r0.res_id ?? r0.id ??
-    payload?.restID ?? payload?.restaurantid ?? restId ?? ''
+    r0.details?.menusharingcode ?? r0.menusharingcode ??
+    payload?.restID ?? restId ??
+    r0.restaurantid ?? r0.restID ?? r0.res_id ?? r0.id ?? ''
   ).trim();
 
   const items = Array.isArray(payload?.items) ? payload.items : [];

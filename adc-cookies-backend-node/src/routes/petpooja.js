@@ -37,9 +37,10 @@ function authed(req) {
 router.post('/pushmenu', async (req, res) => {
   if (!authed(req)) return res.status(401).json({ success: '0', message: 'unauthorized' });
   const body = req.body || {};
-  const restId = String(body?.restaurants?.[0]?.restaurantid || body?.restID || REST_ID || '').trim();
   try {
-    const r = await ingestMenu(body, { restId, source: 'push' });
+    // Let ingestMenu resolve the id — it knows to prefer the menu-sharing code over restaurantid,
+    // which is the id orders are relayed with. Passing one in from here only overrode that.
+    const r = await ingestMenu(body, { source: 'push' });
     if (!r.ok) {
       console.log(`[PETPOOJA] pushmenu | ✗ ${r.reason}`);
       return res.json({ success: '0', message: r.reason });
