@@ -1,6 +1,6 @@
 {
   "_readme": "One entry per third-party integration. 'ourEndpoint' = the route on OUR backend that triggers the call (or receives their webhook). 'theirEndpoint' = the real third-party REST endpoint we hit. 'sampleRequest'/'sampleResponse' marked (live-captured) are REAL payloads captured this session via logs/<service>-*.log or a direct safe test call; everything else is (constructed) — built from the exact field names our own code reads/writes, not guessed. 'used: false' entries are real endpoints this provider offers that our code does NOT call today — candidates for 'better handling' work.",
-  "generatedAt": "2026-07-22 (refreshed 2026-07-23…07-24 as noted; refreshed 2026-07-25: both carriers fully tested on REAL PRODUCTION — Delhivery cancelShipment bug FIXED (flat body, not shipments-wrapper), pickup-request booking + wallet mechanics confirmed, NDR endpoint documented as not-yet-used, and a top-level goLiveGaps_whatWeCannotDoViaApi section added summarizing the two real remaining blockers: Delhivery pickup-attachment, and Shadowfax rider-never-assigned) | refreshed 2026-07-28: added the full petpooja (POS/billing) section — three of our own bugs found and fixed, and the menu-push blocker isolated to their side with evidence.",
+  "generatedAt": "2026-07-22 (refreshed 2026-07-23…07-24 as noted; refreshed 2026-07-25: both carriers fully tested on REAL PRODUCTION — Delhivery cancelShipment bug FIXED (flat body, not shipments-wrapper), pickup-request booking + wallet mechanics confirmed, NDR endpoint documented as not-yet-used, and a top-level goLiveGaps_whatWeCannotDoViaApi section added summarizing the two real remaining blockers: Delhivery pickup-attachment, and Shadowfax rider-never-assigned) | refreshed 2026-07-28: added the full petpooja (POS/billing) section — three of our own bugs found and fixed, and the menu-push blocker isolated to their side with evidence. | refreshed 2026-07-29: menu fetch confirmed DEPRECATED by Petpooja, rest_id keying corrected to the menu-sharing code, and their demo payload ingested end-to-end (253 rows in 3.2s).",
   "codeFile": "adc-cookies-backend-node/src/",
   "goLiveGaps_whatWeCannotDoViaApi_2026-07-25": {
     "_summary": "The genuine can't-do-yet list after full real-production testing of both carriers. Everything NOT listed here is confirmed working. Ordered by go-live impact.",
@@ -1060,8 +1060,8 @@
     ],
     "endpoints": [
       {
-        "purpose": "Fetch Menu — pull the catalogue on demand. The half of menu sync that does NOT depend on their push working.",
-        "used": true,
+        "purpose": "Fetch Menu — DEPRECATED by Petpooja (confirmed by email 2026-07-29). Kept for reference only.",
+        "used": false,
         "liveTested": true,
         "direction": "we call them",
         "ourEndpoint": "fetchMenu() in src/petpooja.js",
@@ -1070,16 +1070,17 @@
           "restID": "bw8dz5o93u"
         },
         "realResult_2026-07-28": "{\"success\":\"0\",\"message\":\"unable to fetch Object from s3 bucket\"} — no menu generated yet. Credentials are NOT required here, so reaching their API at all proves our IP is whitelisted and the restID is accepted.",
-        "note": "Preferred over the push for our purposes: we can re-sync whenever we like instead of waiting on a merchant edit."
+        "note": "Superseded. Petpooja state that push is now the only way to receive a menu. Our earlier note called fetch the preferred route because it did not depend on their push working; that is no longer an option, so a broken push now means no menu by any route."
       },
       {
         "purpose": "Push Menu — they POST the whole catalogue to us after every menu change",
         "used": true,
-        "liveTested": false,
+        "liveTested": "payload-verified 2026-07-29 — their own 288KB demo menu ingested through the live endpoint in 3.2s; still never actually sent BY them",
         "direction": "they call us",
         "ourEndpoint": "POST /api/petpooja/pushmenu  (Base URL https://adc-backend-copy-production.up.railway.app/api/petpooja)",
         "realResult_2026-07-28": "Our side verified from an external IP: HTTP 200, 244KB in <1s, any body stored before validation. Their trigger still reports failure and NOTHING arrives — see openBlocker.",
-        "payloadShape": "restaurants[], ordertypes, categories, parentcategories, group_categories, items[] (with child `variation` — the top-level `variations` object is deprecated), attributes, taxes[], discounts[], addongroups[] -> addongroupitems[]"
+        "payloadShape": "restaurants[], ordertypes, categories, parentcategories, group_categories, items[] (with child `variation` — the top-level `variations` object is deprecated), attributes, taxes[], discounts[], addongroups[] -> addongroupitems[]",
+        "note": "Now the ONLY route to a menu, since fetch is deprecated."
       },
       {
         "purpose": "Save Order — relay a paid order so the bill / KOT prints",
@@ -1136,6 +1137,10 @@
         "realResult_2026-07-28": "Both verified: returns store_status '1', and closing then reopening persisted correctly.",
         "note": "store_status 1 = Open, 0 = Closed. An unknown store defaults to OPEN so a missing row can never silently block sales."
       }
-    ]
+    ],
+    "MENU_FETCH_IS_DEPRECATED_2026-07-29": "Confirmed by Shivam Tiwari (Petpooja) by email: the menu FETCH method is deprecated. Menu PUSH is now the only way to receive a menu. This removes our fallback — we cannot pull on demand, so the catalogue only ever arrives when Petpooja sends it, and a broken push means no menu at all. The /mapped_restaurant_menus endpoint still answers, but only with 'unable to fetch Object from s3 bucket'; treat it as dead rather than as a blocked-but-usable route.",
+    "restIdKeying_2026-07-29": "A payload carries TWO restaurant ids: restaurants[0].restaurantid (their internal row id, e.g. '4922') and restaurants[0].details.menusharingcode (e.g. 'm9nw6rhvxi'). Orders are relayed with restID = the MENU-SHARING CODE, so the catalogue must be keyed on that. Keying on restaurantid stored every row under one id while every lookup searched another — mappedItem() just returned null forever, indistinguishable from 'mapping not done yet'. Ours: menusharingcode bw8dz5o93u.",
+    "demoPayloadIngested_2026-07-29": "Shivam supplied a real 288KB demo menu (restaurant 4922 'Integration 1 DEMO') so we could verify our logic while the sandbox push is broken. Ingested end-to-end through the live /pushmenu endpoint: 249 items -> 253 rows (4 variation items correctly expand to 2 rows each), 2 taxes (CGST 2.5 + SGST 2.5), 3 add-ons, in 3.2s. Variations, prices and add-on groups all parse correctly, and every item resolved in_stock TRUE — which is the in_stock:'2' fix proving itself, since the earlier reading would have marked all 253 unavailable and emptied our storefront.",
+    "tax_2026-07-29": "Their menu items carry tax_inclusive:false with item_tax '3196,3197' (CGST 2.5 + SGST 2.5 = 5%), i.e. tax ON TOP of the listed price. OUR prices are tax-INCLUSIVE (5% already inside). We relay our own prices with tax_inclusive:true, so the bill matches what Razorpay charged — but this is a real difference in convention and worth confirming with Petpooja before go-live, since it decides whether their bill shows the same total the customer actually paid."
   }
 }
