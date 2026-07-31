@@ -1,6 +1,6 @@
 {
   "_readme": "One entry per third-party integration. 'ourEndpoint' = the route on OUR backend that triggers the call (or receives their webhook). 'theirEndpoint' = the real third-party REST endpoint we hit. 'sampleRequest'/'sampleResponse' marked (live-captured) are REAL payloads captured this session via logs/<service>-*.log or a direct safe test call; everything else is (constructed) — built from the exact field names our own code reads/writes, not guessed. 'used: false' entries are real endpoints this provider offers that our code does NOT call today — candidates for 'better handling' work.",
-  "generatedAt": "2026-07-22 (refreshed 2026-07-23…07-24 as noted; refreshed 2026-07-25: both carriers fully tested on REAL PRODUCTION — Delhivery cancelShipment bug FIXED (flat body, not shipments-wrapper), pickup-request booking + wallet mechanics confirmed, NDR endpoint documented as not-yet-used, and a top-level goLiveGaps_whatWeCannotDoViaApi section added summarizing the two real remaining blockers: Delhivery pickup-attachment, and Shadowfax rider-never-assigned) | refreshed 2026-07-28: added the full petpooja (POS/billing) section — three of our own bugs found and fixed, and the menu-push blocker isolated to their side with evidence. | refreshed 2026-07-29: menu fetch confirmed DEPRECATED by Petpooja, rest_id keying corrected to the menu-sharing code, and their demo payload ingested end-to-end (253 rows in 3.2s). | 2026-07-29: save_order proven to reject at the outermost layer — credentials, restID, payload shape and item ids all eliminated by controlled test.",
+  "generatedAt": "2026-07-22 (refreshed 2026-07-23…07-24 as noted; refreshed 2026-07-25: both carriers fully tested on REAL PRODUCTION — Delhivery cancelShipment bug FIXED (flat body, not shipments-wrapper), pickup-request booking + wallet mechanics confirmed, NDR endpoint documented as not-yet-used, and a top-level goLiveGaps_whatWeCannotDoViaApi section added summarizing the two real remaining blockers: Delhivery pickup-attachment, and Shadowfax rider-never-assigned) | refreshed 2026-07-28: added the full petpooja (POS/billing) section — three of our own bugs found and fixed, and the menu-push blocker isolated to their side with evidence. | refreshed 2026-07-29: menu fetch confirmed DEPRECATED by Petpooja, rest_id keying corrected to the menu-sharing code, and their demo payload ingested end-to-end (253 rows in 3.2s). | 2026-07-29: save_order proven to reject at the outermost layer — credentials, restID, payload shape and item ids all eliminated by controlled test. | 2026-07-29: added request/response payload samples to every petpooja endpoint.",
   "codeFile": "adc-cookies-backend-node/src/",
   "goLiveGaps_whatWeCannotDoViaApi_2026-07-25": {
     "_summary": "The genuine can't-do-yet list after full real-production testing of both carriers. Everything NOT listed here is confirmed working. Ordered by go-live impact.",
@@ -1070,7 +1070,12 @@
           "restID": "bw8dz5o93u"
         },
         "realResult_2026-07-28": "{\"success\":\"0\",\"message\":\"unable to fetch Object from s3 bucket\"} — no menu generated yet. Credentials are NOT required here, so reaching their API at all proves our IP is whitelisted and the restID is accepted.",
-        "note": "Superseded. Petpooja state that push is now the only way to receive a menu. Our earlier note called fetch the preferred route because it did not depend on their push working; that is no longer an option, so a broken push now means no menu by any route."
+        "note": "Superseded. Petpooja state that push is now the only way to receive a menu. Our earlier note called fetch the preferred route because it did not depend on their push working; that is no longer an option, so a broken push now means no menu by any route.",
+        "sampleResponse_liveCaptured_2026-07-29": {
+          "success": "0",
+          "message": "unable to fetch Object from s3 bucket",
+          "validation_errors": ""
+        }
       },
       {
         "purpose": "Push Menu — they POST the whole catalogue to us after every menu change",
@@ -1080,7 +1085,108 @@
         "ourEndpoint": "POST /api/petpooja/pushmenu  (Base URL https://adc-backend-copy-production.up.railway.app/api/petpooja)",
         "realResult_2026-07-28": "Our side verified from an external IP: HTTP 200, 244KB in <1s, any body stored before validation. Their trigger still reports failure and NOTHING arrives — see openBlocker.",
         "payloadShape": "restaurants[], ordertypes, categories, parentcategories, group_categories, items[] (with child `variation` — the top-level `variations` object is deprecated), attributes, taxes[], discounts[], addongroups[] -> addongroupitems[]",
-        "note": "Now the ONLY route to a menu, since fetch is deprecated."
+        "note": "Now the ONLY route to a menu, since fetch is deprecated.",
+        "sampleRequest_theySendUs_abridged": {
+          "success": "1",
+          "restaurants": [
+            {
+              "restaurantid": "4922",
+              "active": "1",
+              "details": {
+                "menusharingcode": "m9nw6rhvxi",
+                "restaurantname": "Integration 1 DEMO",
+                "deliverycharge": "0",
+                "calculatetaxondelivery": 0,
+                "dc_taxes_id": ""
+              }
+            }
+          ],
+          "ordertypes": [
+            {
+              "ordertypeid": 1,
+              "ordertype": "Delivery"
+            }
+          ],
+          "categories": [
+            {
+              "categoryid": "87910",
+              "categoryname": "Cakes",
+              "active": "1"
+            }
+          ],
+          "items": [
+            {
+              "itemid": "10589495",
+              "itemname": "Raita Biryani",
+              "price": "0",
+              "item_categoryid": "81286",
+              "item_tax": "3196,3197",
+              "tax_inclusive": false,
+              "gst_type": "services",
+              "in_stock": "2",
+              "itemallowvariation": "1",
+              "variation": [
+                {
+                  "id": "10589514",
+                  "variationid": "12489",
+                  "name": "Half",
+                  "groupname": "Size",
+                  "price": "150.00"
+                },
+                {
+                  "id": "10589515",
+                  "variationid": "12490",
+                  "name": "Full",
+                  "groupname": "Size",
+                  "price": "300.00"
+                }
+              ],
+              "addon": [
+                {
+                  "addon_group_id": "13039",
+                  "addon_item_selection_min": "0",
+                  "addon_item_selection_max": "1"
+                }
+              ]
+            }
+          ],
+          "addongroups": [
+            {
+              "addongroupid": "13039",
+              "addongroup_name": "Customization",
+              "active": "1",
+              "addongroupitems": [
+                {
+                  "addonitemid": "72290",
+                  "addonitem_name": "Coke",
+                  "addonitem_price": "40",
+                  "active": "1"
+                }
+              ]
+            }
+          ],
+          "taxes": [
+            {
+              "taxid": "3196",
+              "taxname": "CGST",
+              "tax": "2.5",
+              "taxtype": "1",
+              "active": "1"
+            }
+          ],
+          "discounts": []
+        },
+        "sampleResponse_weReturn": {
+          "success": "1",
+          "message": "Menu saved (253 items, 3 addons)"
+        },
+        "parsingGotchas": [
+          "in_stock '2' means AVAILABLE. Their own sample carries '2' on every item beside active:'1'. Reading 2 as out-of-stock marks the whole catalogue unavailable and, via the stock webhook, empties our storefront too.",
+          "An item's `variation[]` child supersedes the deprecated top-level `variations` object. One row per variation, since an order line needs item id AND variation id together.",
+          "A variation carries both `id` (10589514) and `variationid` (12489). The order payload wants variationid; the other is preserved in `raw`.",
+          "item_tax is a COMMA-SEPARATED STRING in a menu but an ARRAY OF OBJECTS in an order — same concept, two shapes.",
+          "Menu items are tax-EXCLUSIVE (tax_inclusive false) while our prices are tax-inclusive. See tax_2026-07-29."
+        ]
       },
       {
         "purpose": "Save Order — relay a paid order so the bill / KOT prints",
@@ -1091,7 +1197,112 @@
         "theirEndpoint": "POST /save_order",
         "blockedBy": "Petpooja-side. Order relay appears not to be enabled for this restaurant — rejection occurs above credentials, restID, shape and item ids.",
         "requiredFields": "app_key/app_secret/access_token, restID, device_type ('Web', case-sensitive), OrderInfo.{Customer,Order,OrderItem,Tax}, and callback_url passed per-order — there is no dashboard field for it.",
-        "realResult_2026-07-29": "Rejects EVERYTHING — see saveOrderRejectsEverything_2026-07-29. Not a payload problem on our side; every variable was eliminated by controlled test."
+        "realResult_2026-07-29": "Rejects EVERYTHING — see saveOrderRejectsEverything_2026-07-29. Not a payload problem on our side; every variable was eliminated by controlled test.",
+        "sampleRequest_constructed": {
+          "app_key": "<32 chars>",
+          "app_secret": "<40 chars>",
+          "access_token": "<40 chars>",
+          "restID": "bw8dz5o93u",
+          "device_type": "Web",
+          "udid": "",
+          "res_name": "A Dough Cookie - Begur",
+          "address": "167/3 First floor, Chickbegur Village, Begur, Bengaluru 560114",
+          "contact_information": "9381502998",
+          "OrderInfo": {
+            "Customer": {
+              "name": "Customer Name",
+              "address": "Full delivery address",
+              "phone": "9876543210",
+              "email": "customer@example.com",
+              "latitude": "12.8845",
+              "longitude": "77.6270"
+            },
+            "Order": {
+              "orderID": "ADC1042",
+              "preorder_date": "2026-07-29",
+              "preorder_time": "14:30:00",
+              "advanced_order": "N",
+              "order_type": "H",
+              "payment_type": "ONLINE",
+              "total": "80.00",
+              "tax_total": "3.80",
+              "discount_total": "0",
+              "discount_type": "F",
+              "delivery_charges": "0",
+              "packing_charges": "0",
+              "service_charge": "0",
+              "enable_delivery": 0,
+              "dc_tax_percentage": "0",
+              "pc_tax_percentage": "0",
+              "min_prep_time": 20,
+              "description": "",
+              "created_on": "2026-07-29 14:30:00",
+              "callback_url": "https://adc-backend-copy-production.up.railway.app/api/petpooja/callback"
+            },
+            "OrderItem": [
+              {
+                "id": "9658",
+                "name": "Plain Dahi",
+                "gst_liability": "restaurant",
+                "tax_inclusive": true,
+                "price": "80.00",
+                "final_price": "80.00",
+                "quantity": "1",
+                "item_discount": "0",
+                "description": "",
+                "variation_name": "",
+                "variation_id": "",
+                "item_tax": [
+                  {
+                    "id": "11213",
+                    "name": "CGST",
+                    "tax_percentage": "2.5",
+                    "amount": "1.90"
+                  },
+                  {
+                    "id": "20375",
+                    "name": "SGST",
+                    "tax_percentage": "2.5",
+                    "amount": "1.90"
+                  }
+                ],
+                "AddonItem": {
+                  "details": []
+                }
+              }
+            ],
+            "Tax": [
+              {
+                "id": "11213",
+                "title": "CGST",
+                "type": "P",
+                "price": "2.5",
+                "tax": "1.90",
+                "restaurant_liable_amt": "0.00"
+              },
+              {
+                "id": "20375",
+                "title": "SGST",
+                "type": "P",
+                "price": "2.5",
+                "tax": "1.90",
+                "restaurant_liable_amt": "0.00"
+              }
+            ],
+            "Discount": []
+          }
+        },
+        "sampleResponse_expected": {
+          "success": "1",
+          "message": "Order placed successfully",
+          "restID": "bw8dz5o93u",
+          "orderID": "<their id>",
+          "clientOrderID": "ADC1042"
+        },
+        "sampleResponse_liveCaptured_2026-07-29": {
+          "success": "0",
+          "message": "Invalid order relay payload "
+        }
       },
       {
         "purpose": "Order Callback — merchant accepted / rejected / progressed the order",
@@ -1100,7 +1311,23 @@
         "direction": "they call us",
         "ourEndpoint": "POST /api/petpooja/callback",
         "statusMap": "-1 Cancelled | 1/2/3 Accepted | 4 Dispatched | 5 Food ready | 10 Delivered",
-        "note": "Never walks a DELIVERED/CANCELLED order backwards on a late or duplicate callback. Unknown order ids answer HTTP 200 — a retry cannot fix a bad id, and 4xx would invite a retry storm."
+        "note": "Never walks a DELIVERED/CANCELLED order backwards on a late or duplicate callback. Unknown order ids answer HTTP 200 — a retry cannot fix a bad id, and 4xx would invite a retry storm.",
+        "sampleRequest_theySendUs": {
+          "restID": "bw8dz5o93u",
+          "orderID": "ADC1042",
+          "status": "1",
+          "cancel_reason": "",
+          "minimum_prep_time": 20
+        },
+        "sampleResponse_weReturn": {
+          "success": "1",
+          "message": "received"
+        },
+        "sampleResponse_unknownOrder": {
+          "success": "0",
+          "message": "order not found"
+        },
+        "fieldNote": "`orderID` in their callback is OUR order_number, echoed back — not their internal id."
       },
       {
         "purpose": "Update Order Status — cancel an order at the POS",
@@ -1109,7 +1336,30 @@
         "direction": "we call them",
         "ourEndpoint": "cancelOrder() in src/petpooja.js",
         "theirEndpoint": "POST /update_order_status",
-        "limitation": "CANCEL ONLY. status is always -1; their API accepts no other transition."
+        "limitation": "CANCEL ONLY. status is always -1; their API accepts no other transition.",
+        "sampleRequest_liveCaptured": {
+          "app_key": "<32 chars>",
+          "app_secret": "<40 chars>",
+          "access_token": "<40 chars>",
+          "restID": "bw8dz5o93u",
+          "orderID": "",
+          "clientorderID": "ADC1042",
+          "cancelReason": "Cancelled by customer",
+          "status": "-1"
+        },
+        "sampleResponse_liveCaptured_2026-07-29": {
+          "success": "1",
+          "message": "Order status updated successfully.",
+          "restID": "bw8dz5o93u",
+          "clientOrderID": "ADC1042"
+        },
+        "sampleResponse_badCredentials_2026-07-29": {
+          "success": "0",
+          "message": "Invalid client credentials.",
+          "errorCode": "GN_105",
+          "validation_errors": ""
+        },
+        "gotchas": "Request field is `clientorderID`, response field is `clientOrderID` — different casing. Does NOT validate restID: a bogus code and an empty string both return success:'1' with the value echoed back, so never use this to check a mapping code. It DOES validate credentials, which makes it our fastest liveness probe at ~400ms warm."
       },
       {
         "purpose": "Rider Info — tell the POS the parcel moved, so the merchant sees progress without polling",
@@ -1119,7 +1369,26 @@
         "ourEndpoint": "riderStatus() in src/petpooja.js",
         "theirEndpoint": "POST /rider_status_update",
         "statusValues": "rider-assigned | rider-arrived | pickedup | delivered",
-        "note": "Maps cleanly onto Delhivery scan events — this is how a courier shipment reports back into the POS."
+        "note": "Maps cleanly onto Delhivery scan events — this is how a courier shipment reports back into the POS.",
+        "sampleRequest_liveCaptured": {
+          "app_key": "<32 chars>",
+          "app_secret": "<40 chars>",
+          "access_token": "<40 chars>",
+          "status": "pickedup",
+          "order_id": "ADC1042",
+          "external_order_id": "",
+          "rider_data": {
+            "name": "Delhivery",
+            "contact": "",
+            "waybill": "1234567890"
+          }
+        },
+        "sampleResponse_liveCaptured_2026-07-29": {
+          "success": "success",
+          "message": "Your reuqest received succesfully",
+          "code": 200
+        },
+        "gotchas": "`success` is the string 'success' here, NOT '1' as on every other endpoint — a check for success==='1' silently treats every successful call as a failure. Their response also contains two typos ('reuqest', 'succesfully'); match loosely if ever matching on text."
       },
       {
         "purpose": "Item / add-on stock toggle",
@@ -1127,7 +1396,27 @@
         "liveTested": "partially — smoke-tested by us, never yet called by them",
         "direction": "they call us",
         "ourEndpoint": "POST /api/petpooja/item-stock — ONE endpoint for both on and off, as their docs advise",
-        "note": "Also mirrors onto products.is_available, so an item they mark sold-out stops being orderable on our storefront."
+        "note": "Also mirrors onto products.is_available, so an item they mark sold-out stops being orderable on our storefront.",
+        "sampleRequest_theySendUs": {
+          "restID": "bw8dz5o93u",
+          "type": "item",
+          "inStock": true,
+          "itemID": [
+            "9658",
+            "9659"
+          ],
+          "autoTurnOnTime": ""
+        },
+        "sampleResponse_weReturn": {
+          "code": "200",
+          "status": "success",
+          "message": "Stock status updated successfully"
+        },
+        "sampleResponse_onFailure": {
+          "code": "400",
+          "status": "failed",
+          "message": "Stock status not updated successfully"
+        }
       },
       {
         "purpose": "Get / Update Store Status",
@@ -1136,7 +1425,30 @@
         "direction": "they call us",
         "ourEndpoint": "POST /api/petpooja/get-store-status and /api/petpooja/update-store-status",
         "realResult_2026-07-28": "Both verified: returns store_status '1', and closing then reopening persisted correctly.",
-        "note": "store_status 1 = Open, 0 = Closed. An unknown store defaults to OPEN so a missing row can never silently block sales."
+        "note": "store_status 1 = Open, 0 = Closed. An unknown store defaults to OPEN so a missing row can never silently block sales.",
+        "sampleRequest_getStoreStatus": {
+          "restID": "bw8dz5o93u"
+        },
+        "sampleResponse_getStoreStatus": {
+          "restID": "bw8dz5o93u",
+          "status": "success",
+          "store_status": "1",
+          "http_code": "200",
+          "message": "Store is open"
+        },
+        "sampleRequest_updateStoreStatus": {
+          "restID": "bw8dz5o93u",
+          "store_status": "0",
+          "turn_on_time": "2026-07-30 09:00:00",
+          "reason": "Kitchen closed"
+        },
+        "sampleResponse_updateStoreStatus": {
+          "restID": "bw8dz5o93u",
+          "status": "success",
+          "store_status": "0",
+          "message": "Store turned off"
+        },
+        "fieldNote": "There is NO endpoint for asking Petpooja whether a store is open — store status flows POS -> us only. Both of these are endpoints THEY call on US."
       }
     ],
     "MENU_FETCH_IS_DEPRECATED_2026-07-29": "Confirmed by Shivam Tiwari (Petpooja) by email: the menu FETCH method is deprecated. Menu PUSH is now the only way to receive a menu. This removes our fallback — we cannot pull on demand, so the catalogue only ever arrives when Petpooja sends it, and a broken push means no menu at all. The /mapped_restaurant_menus endpoint still answers, but only with 'unable to fetch Object from s3 bucket'; treat it as dead rather than as a blocked-but-usable route.",
