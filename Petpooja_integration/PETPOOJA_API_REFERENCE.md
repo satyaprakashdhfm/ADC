@@ -192,7 +192,15 @@ Failure (**what we currently always get**):
 
 ## A2. Update Order Status — `POST /update_order_status`
 
-**Status: ✅ WORKS — verified live.**
+**Status: ✅ WORKS — verified live.** Also our fastest liveness/credential probe: ~400 ms warm.
+
+> **It does NOT validate `restID`.** A bogus code (`ZZZZZZZZZZ`) and an empty string both return
+> `success:"1"` with the value echoed straight back. Never use this to check a mapping code.
+> It *does* validate credentials — bad ones give `{"success":"0","message":"Invalid client
+> credentials.","errorCode":"GN_105"}`.
+>
+> There is no endpoint for asking Petpooja whether a store is open. Store status flows POS → us
+> (§B4/B5); we are never the ones asking.
 
 Cancel only. `status` is always `-1`; their API accepts no other transition.
 
@@ -457,6 +465,18 @@ eliminated by controlled test — all produce the **identical** response:
 The 415 proves the endpoint does inspect and discriminate between requests, so the message is a
 deliberate rejection rather than a parse failure. The same credentials succeed on
 `update_order_status` and `rider_status_update`.
+
+**The decisive comparison.** `update_order_status` sent with deliberately bad credentials returns:
+
+```json
+{ "success": "0", "message": "Invalid client credentials.", "errorCode": "GN_105", "validation_errors": "" }
+```
+
+`save_order` sent with those same bad credentials returns `"Invalid order relay payload "` — **not**
+`GN_105`. Their API therefore has a proper credential-validation layer that returns a specific coded
+error, `update_order_status` reaches it, and `save_order` never does. The request is being rejected
+*above* credential checking, which is not a payload fault at all — it is consistent with the request
+never being routed into the order-relay service.
 
 **Most likely cause:** order relay never activated for this outlet. An onboarding email states:
 *"Rest id: 449010, Rest name: A Dough Cookie - Begur. For this outlet customer took POS + Growth
