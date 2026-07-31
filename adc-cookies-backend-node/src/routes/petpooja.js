@@ -91,8 +91,9 @@ router.post('/callback', async (req, res) => {
     const terminal = ['DELIVERED', 'CANCELLED'].includes(order.order_status);
     if (next && !terminal && next !== order.order_status) {
       await query('UPDATE orders SET order_status=$1, updated_at=$2 WHERE id=$3', [next, ts, order.id]);
+      // Column is `remarks`, as everywhere else in the codebase — not `description`.
       await query(
-        `INSERT INTO order_tracking (order_id, status, description, created_at) VALUES ($1,$2,$3,$4)`,
+        `INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)`,
         [order.id, next, b.cancel_reason ? `Petpooja: ${b.cancel_reason}` : `Petpooja status ${status}`, ts]
       );
     }
