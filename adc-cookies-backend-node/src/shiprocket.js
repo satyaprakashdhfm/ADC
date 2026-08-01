@@ -226,10 +226,23 @@ export async function assignAwb(shipmentId, { courierId, vehicleType, futurePick
 
   const r = await srRequest('POST', '/courier/assign/awb', { body });
   if (!r.ok) { log('assign-awb', `✗ shipment=${shipmentId} | ${JSON.stringify(r.reason).slice(0, 160)}`); return r; }
+
   const d = r.data?.response?.data ?? r.data?.data ?? r.data;
-  const awb = d?.awb_code ?? d?.awb;
+  const awb = d?.awb_code ?? d?.awb ?? null;
+
+  /*
+   * Assignment is ASYNCHRONOUS for hyperlocal. A successful call answers
+   *   {"success":true,"message":"We are processing your request"}
+   * with NO awb — they then search for a rider and deliver the awb by webhook
+   * (SEARCHING FOR RIDER -> RIDER ASSIGNED). Treating a missing awb as a failure would mark a
+   * perfectly good dispatch as broken, so `pending` is a normal outcome here, not an error.
+   */
+  if (!awb) {
+    log('assign-awb', `✓ shipment=${shipmentId} | accepted, searching for rider — awb will arrive by webhook`);
+    return { ok: true, pending: true, awb: null, message: d?.message || r.data?.message, data: d };
+  }
   log('assign-awb', `✓ shipment=${shipmentId} | awb=${awb} | courier=${d?.courier_name || '?'}`);
-  return { ok: true, awb, courierName: d?.courier_name, data: d };
+  return { ok: true, pending: false, awb, courierName: d?.courier_name, data: d };
 }
 
 /** Rider name/phone once assigned, for the order page. */
