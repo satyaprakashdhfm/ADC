@@ -25,12 +25,20 @@ function authed(req) {
 
 router.post('/webhook', async (req, res) => {
   const b = req.body || {};
-  const awb = String(b.awb || '').trim();
-  const clientOrderId = String(b.order_id || '').trim();      // our order_number, echoed back
+  // `awb` arrives as a NUMBER in their real payloads, not a string.
+  const awb = String(b.awb ?? '').trim();
+  /*
+   * Match on channel_order_id, NOT order_id.
+   *
+   * `order_id` is SHIPROCKET's internal id (e.g. 13905312). Ours is `channel_order_id` — the create
+   * response pairs them: {"order_id":1488719462,"channel_order_id":"ADCSR1785587438692"}. Reading
+   * order_id as ours means no webhook ever matches, and the order silently never progresses.
+   */
+  const clientOrderId = String(b.channel_order_id ?? '').trim();
   const status = String(b.current_status || b.shipment_status || '').trim();
   const ts = nowIso();
 
-  console.log(`[HYPERLOCAL] <- awb=${awb || '-'} | order=${clientOrderId || '-'} | status=${status} | courier=${b.courier_name || '-'}`);
+  console.log(`[HYPERLOCAL] <- awb=${awb || '-'} | channel_order=${clientOrderId || '-'} | sr_order=${b.order_id ?? '-'} | status=${status} | courier=${b.courier_name || '-'}`);
 
   // Answer 200 even when we cannot act on it. Shiprocket retries non-200s, and a retry cannot fix
   // an unknown order or a status we do not model — it would just repeat forever.
@@ -59,9 +67,12 @@ router.post('/webhook', async (req, res) => {
       console.log(`[HYPERLOCAL] webhook | order=${order.order_number} | ${order.order_status} → ${next}`);
     } else {
       // Still worth a tracking row: rider-reached-pickup and similar are useful to the admin even
-      // though they do not move our own status.
+      // though they do not move our own status. Their latest scan line is the most human-readable
+      // detail they give us, so keep it when present.
+      const latest = Array.isArray(b.scans) && b.scans.length ? b.scans[0] : null;
+      const note = latest?.activity ? `Shiprocket: ${status} — ${latest.activity}` : `Shiprocket: ${status}`;
       await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-        [order.id, order.order_status, `Shiprocket: ${status}`, ts]);
+        [order.id, order.order_status, note, ts]);
     }
     return res.json({ ok: true, matched: true });
   } catch (err) {
