@@ -254,13 +254,32 @@ export async function getRiderData(awb) {
   return { ok: true, rider: d };
 }
 
-/** Track by AWB. Webhooks are the primary signal; this is for on-demand refresh. */
-export async function trackShiprocket(awb) {
-  const r = await srRequest('GET', `/courier/track/awb/${encodeURIComponent(awb)}`);
+/**
+ * Track by SHIPMENT id.
+ *
+ * The hyperlocal document lists no tracking endpoint and presents webhooks as the only feed, which
+ * is not true: /courier/track/shipment/{id} works and returns the awb, live status, courier and the
+ * activity trail. That matters — it means an intracity order is not hostage to their webhook being
+ * configured correctly, and the awb can be recovered even when no webhook ever arrives.
+ *
+ * The awb is NOT available at assignment time (that call is async), so this is also how we learn it.
+ */
+export async function trackShiprocket(shipmentId) {
+  const r = await srRequest('GET', `/courier/track/shipment/${encodeURIComponent(shipmentId)}`);
   if (!r.ok) return r;
-  const td = r.data?.tracking_data ?? r.data?.[0]?.tracking_data ?? r.data;
-  return { ok: true, status: td?.shipment_track?.[0]?.current_status || td?.track_status || null,
-    scans: td?.shipment_track_activities || [], data: td };
+  const td = r.data?.tracking_data ?? r.data;
+  const t = td?.shipment_track?.[0] ?? {};
+  return {
+    ok: true,
+    awb: t.awb_code || null,
+    status: t.current_status || null,
+    courierName: t.courier_name || null,
+    pickupDate: t.pickup_date || null,
+    deliveredDate: t.delivered_date || null,
+    trackUrl: td?.track_url || (t.awb_code ? `https://shiprocket.co/tracking/${t.awb_code}` : null),
+    activities: td?.shipment_track_activities || [],
+    data: td,
+  };
 }
 
 export async function cancelShiprocketOrder(srOrderIds) {
