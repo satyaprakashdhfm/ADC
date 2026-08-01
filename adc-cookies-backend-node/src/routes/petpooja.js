@@ -59,7 +59,10 @@ const ORDER_STATUS_FOR = {
   '-1': 'CANCELLED',
   '1': 'CONFIRMED', '2': 'CONFIRMED', '3': 'CONFIRMED',
   '4': 'OUT_FOR_DELIVERY',
-  '5': 'PREPARING',        // food ready — still ours to hand over, so not "out for delivery" yet
+  // 5 is "Food Ready" — preparation is FINISHED, so PACKED ("packed and ready for pickup"), not
+  // PREPARING. Mapping it to PREPARING showed the customer "Preparing" for an order already sitting
+  // ready for the courier, which under-reports progress at exactly the point they are watching.
+  '5': 'PACKED',
   '10': 'DELIVERED',
 };
 
