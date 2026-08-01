@@ -151,15 +151,16 @@ export async function checkServiceability({ pickupPin, deliveryPin, latFrom, lon
 /* Orders                                                              */
 /* ------------------------------------------------------------------ */
 
-// Their category_name is a closed list; anything else is rejected. Cookies are Food.
-const CATEGORY = 'Food';
+// Their category_name is a CLOSED list — anything outside it is rejected outright.
+const CATEGORIES = ['Electronics', 'Clothes', 'Medicines', 'Food', 'Documents', 'Groceries', 'Others'];
+const CATEGORY = CATEGORIES.includes(process.env.SHIPROCKET_CATEGORY) ? process.env.SHIPROCKET_CATEGORY : 'Food';
 
 /**
  * Create a hyperlocal order. Returns { shipment_id, order_id } — no rider yet; that needs the AWB
  * assignment below. Two steps rather than one, so a serviceable-but-unassignable lane fails at a
  * point where we still know what happened.
  */
-export async function createHyperlocalOrder({ order, items, customer, address, pickupLocation = SHIPROCKET_PICKUP, dims }) {
+export async function createHyperlocalOrder({ order, items, customer, address, pickupLocation = SHIPROCKET_PICKUP, dims, category = CATEGORY }) {
   const now = new Date();
   const p2 = (n) => String(n).padStart(2, '0');
   const orderDate = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())} ${p2(now.getHours())}:${p2(now.getMinutes())}`;
@@ -190,7 +191,7 @@ export async function createHyperlocalOrder({ order, items, customer, address, p
     longitude: String(address.longitude),
     order_items: items.map((i) => ({
       name: i.product_name,
-      category_name: CATEGORY,
+      category_name: CATEGORIES.includes(category) ? category : CATEGORY,
       sku: `ADC-${i.product_id ?? 'X'}`,
       units: Number(i.quantity) || 1,
       selling_price: String(i.unit_price),
