@@ -453,7 +453,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
   const [mySpinReward, setMySpinReward] = useState<SpinClaim | null>(null);
   const [adding, setAdding] = useState(false);
-  const [aform, setAform] = useState({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' });
+  const [aform, setAform] = useState<{ fullName: string; phone: string; addressLine1: string; addressLine2: string; city: string; state: string; pincode: string; label: string; latitude: number | null; longitude: number | null }>({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home', latitude: null, longitude: null });
   const [editId, setEditId] = useState<number | null>(null);   // address being edited (null = adding new)
   const [makeDefault, setMakeDefault] = useState(false);
   const [detecting, setDetecting] = useState(false);
@@ -560,14 +560,14 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const canProceed = hydrated && lines.length > 0 && !!chosen && chosenPinOk && chosenPhoneOk && (delivCheck ? delivCheck.serviceable : true);
   const fieldStyle: React.CSSProperties = { flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
   const hintStyle: React.CSSProperties = { fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 600 };
-  const EMPTY_AFORM = { fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home' };
+  const EMPTY_AFORM = { fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home', latitude: null, longitude: null };
   // New address starts pre-filled with the signed-in user's name & phone (they can edit it, e.g. gifting to someone else).
   const prefillAform = () => ({ ...EMPTY_AFORM, fullName: user?.name || '', phone: user?.phone || '' });
   const closeAddrForm = () => { setAdding(false); setEditId(null); setMakeDefault(false); setDetectErr(''); setAform(EMPTY_AFORM); };
 
   // Open the form pre-filled to edit an existing saved address.
   const editAddr = (a: Address) => {
-    setAform({ fullName: a.fullName, phone: a.phone || '', addressLine1: a.addressLine1, addressLine2: a.addressLine2 || '', city: a.city, state: a.state || '', pincode: a.pincode, label: a.label || 'Home' });
+    setAform({ fullName: a.fullName, phone: a.phone || '', addressLine1: a.addressLine1, addressLine2: a.addressLine2 || '', city: a.city, state: a.state || '', pincode: a.pincode, label: a.label || 'Home', latitude: a.latitude ?? null, longitude: a.longitude ?? null });
     setMakeDefault(!!a.isDefault); setEditId(a.id); setDetectErr(''); setAdding(true);
   };
 
@@ -611,6 +611,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           const area = [a.road, a.neighbourhood || a.suburb || a.residential || a.quarter].filter(Boolean).join(', ');
           setAform(f => ({
             ...f,
+            // Keep the coordinates themselves, not just the address they resolve to. Same-day
+            // intracity needs them: without a lat/long the carrier returns no couriers at all and
+            // the order quietly falls back to multi-day shipping.
+            latitude, longitude,
             // Flat / House / Building is user-specific — GPS can't know it, so leave it for the user to type.
             addressLine2: f.addressLine2 || area,
             city: a.city || cleanDistrict(a.state_district) || a.town || a.municipality || a.county || a.village || f.city,
@@ -916,8 +920,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       </button>
                       {detectErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 600, lineHeight: 1.4 }}>{detectErr}</div>}
 
-                      {[['fullName', 'Full name'], ['phone', 'Phone'], ['addressLine1', 'Flat / House / Building'], ['addressLine2', 'Area / Landmark']].map(([k, ph]) => (
-                        <input key={k} value={aform[k as keyof typeof aform]} onChange={aset(k as keyof typeof aform)} placeholder={ph} inputMode={k === 'phone' ? 'tel' : undefined} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
+                      {/* Text fields only — latitude/longitude live on the same form object but are
+                          captured from GPS, never typed, so they are deliberately not listed here. */}
+                      {([['fullName', 'Full name'], ['phone', 'Phone'], ['addressLine1', 'Flat / House / Building'], ['addressLine2', 'Area / Landmark']] as const).map(([k, ph]) => (
+                        <input key={k} value={aform[k]} onChange={aset(k)} placeholder={ph} inputMode={k === 'phone' ? 'tel' : undefined} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                       ))}
                       {aform.phone.trim().length > 0 && !phoneOk && <div style={hintStyle}>Enter a valid 10-digit mobile number — needed to deliver this order.</div>}
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

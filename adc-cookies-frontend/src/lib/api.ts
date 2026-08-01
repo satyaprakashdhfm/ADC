@@ -130,6 +130,10 @@ export interface Address {
   addressLine1: string; addressLine2?: string;
   city: string; state: string; pincode: string; isDefault: boolean;
   label?: string; // Home / Office / Other
+  // Captured from the browser when the shopper uses "detect my location". REQUIRED for same-day
+  // intracity delivery — Shiprocket Hyperlocal returns no couriers for a pincode without
+  // coordinates, so an address lacking them silently falls back to multi-day courier.
+  latitude?: number | null; longitude?: number | null;
 }
 
 export async function getAddresses(): Promise<Address[]> { return request('/addresses'); }
