@@ -30,3 +30,6 @@ next-env.d.ts
 
 # Production data exports (real customer PII — never commit)
 /backup-prod-*/
+
+# Postman environment holds live Petpooja credentials
+postman/*.postman_environment.json
