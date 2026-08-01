@@ -6,7 +6,11 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { shadowfaxConfigured, createShadowfaxOrder, zoneStores, trackShadowfax, sfxStatusLabel, sfxStatusRank } from '../shadowfax.js';
+// Shadowfax is RETIRED — it never assigned a rider in any live test and support was unreachable.
+// zoneStores/tracking helpers are still imported because historical SHADOWFAX orders must remain
+// viewable; createShadowfaxOrder is deliberately no longer used for new shipments.
+import { zoneStores, trackShadowfax, sfxStatusLabel, sfxStatusRank, shadowfaxConfigured } from '../shadowfax.js';
+import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
 
@@ -19,6 +23,8 @@ router.use(requireAuth);
 // Mirrors delivery.js's SHADOWFAX_DISABLED — while true, intracity orders are self-pickup from
 // the nearest store (no shipment created at all) instead of being handed to Shadowfax.
 const SHADOWFAX_DISABLED = process.env.SHADOWFAX_DISABLED === 'true';
+// Same escape hatch for Shiprocket: flip this and intracity falls through to Delhivery.
+const SHIPROCKET_DISABLED = process.env.SHIPROCKET_DISABLED === 'true';
 
 // Auto-create a shipment once an order is PAID. Routes by DESTINATION PINCODE:
 //   • pincode in a city where we have a store (Bengaluru 560xxx / Chennai 600xxx) → Shadowfax (intracity)
@@ -37,42 +43,52 @@ async function autoCreateShipment(orderId, addressArg) {
   const destPin = String(address.pincode || '').replace(/\D/g, '');
   const stores = zoneStores(destPin);
 
-  // Routing decision — always logged so it's unambiguous in the terminal whether this order is
-  // even eligible for Shadowfax, and if not, exactly why (no store in that pincode zone vs
-  // Shadowfax not configured at all).
-  console.log(`[SHIPMENT] routing | order=${order.order_number} | dest_pin=${destPin} | zone_stores=${stores.length} | shadowfax_configured=${shadowfaxConfigured()} | shadowfax_disabled=${SHADOWFAX_DISABLED}`);
+  // Routing decision — always logged so it is unambiguous in the terminal whether this order is
+  // even eligible for intracity, and if not, exactly why (no store in that pincode zone, versus
+  // Shiprocket not configured at all).
+  console.log(`[SHIPMENT] routing | order=${order.order_number} | dest_pin=${destPin} | zone_stores=${stores.length} | shiprocket_configured=${shiprocketConfigured()} | shiprocket_disabled=${SHIPROCKET_DISABLED}`);
   if (!stores.length) console.log(`[SHIPMENT] routing | order=${order.order_number} | no ADC store in pincode zone ${destPin.slice(0, 3)}xx → Delhivery only`);
-  else if (!shadowfaxConfigured()) console.log(`[SHIPMENT] routing | order=${order.order_number} | SHADOWFAX_URL/SHADOWFAX_API missing → Delhivery only`);
+  else if (!shiprocketConfigured()) console.log(`[SHIPMENT] routing | order=${order.order_number} | SHIPROCKET_EMAIL/PASSWORD missing → Delhivery only`);
 
-  // ---- Intracity, Shadowfax paused → self-pickup from store, no shipment created ----
-  if (stores.length && SHADOWFAX_DISABLED) {
-    await query(
-      `UPDATE orders SET carrier='STORE_PICKUP', shipment_status='AWAITING_PICKUP', updated_at=$1 WHERE id=$2`,
-      [nowIso(), orderId]
-    );
-    console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=STORE_PICKUP | store=${stores[0].name} | shadowfax paused — no shipment created`);
-    return { ok: true, carrier: 'STORE_PICKUP', store: stores[0].name };
-  }
-
-  // ---- Intracity → Shadowfax ----
-  // The pickup/return store's pincode must ALSO be serviceable (not just the destination), so we
-  // try each in-zone store nearest-first until Shadowfax accepts one. Only if none works do we
-  // fall back to Delhivery.
-  if (stores.length && shadowfaxConfigured()) {
-    console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | trying Shadowfax pickups: ${stores.map(s => `${s.name}(${s.pincode})`).join(', ')}`);
-    for (const pk of stores) {
-      const r = await createShadowfaxOrder({ order, address, items, pickup: pk });
-      if (r.ok) {
+  /* ---- Intracity → Shiprocket Hyperlocal ----
+   *
+   * Replaces Shadowfax, which never assigned a rider in any live test. Proven end to end on
+   * 2026-08-01: Green Field Layout -> Kadugodi, 10.61 km, Rapido rider, delivered in ~73 min.
+   *
+   * Three steps, all needed: create the order, assign the AWB, then read the AWB back. Assignment
+   * is ASYNCHRONOUS — it returns "We are processing your request" with no AWB while they search for
+   * a rider — so the AWB is recovered by polling rather than from the assign response.
+   *
+   * Hyperlocal needs coordinates on the delivery address. Without them we fall through to Delhivery
+   * instead of failing: a slower shipment beats no shipment on an order already paid for.
+   */
+  if (stores.length && shiprocketConfigured() && !SHIPROCKET_DISABLED) {
+    if (address.latitude == null || address.longitude == null) {
+      console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity but address has no lat/long → Delhivery`);
+    } else {
+      const pickup = stores[0];
+      console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | Shiprocket from ${pickup.name}`);
+      const created = await createHyperlocalOrder({
+        order, items,
+        customer: { name: address.full_name, phone: address.phone, email: null },
+        address,
+      });
+      if (created.ok) {
+        const assigned = await assignAwb(created.shipmentId, { vehicleType: 2 });
+        // A pending assignment is a success, not a failure — the rider search is under way.
+        const track = assigned.ok ? await trackShiprocket(created.shipmentId) : null;
+        const awb = assigned.awb || track?.awb || null;
         await query(
-          `UPDATE orders SET delhivery_waybill=$1, carrier='SHADOWFAX', shipment_status='CREATED', tracking_url=$2, label_generated=FALSE, updated_at=$3 WHERE id=$4`,
-          [r.awb, `https://track.shadowfax.in/#/track/${r.awb}`, nowIso(), orderId]
+          `UPDATE orders SET delhivery_waybill=$1, delhivery_shipment_id=$2, carrier='SHIPROCKET',
+                  shipment_status=$3, tracking_url=$4, label_generated=FALSE, updated_at=$5 WHERE id=$6`,
+          [awb, String(created.shipmentId), track?.status || 'CREATED',
+           awb ? `https://shiprocket.co/tracking/${awb}` : null, nowIso(), orderId]
         );
-        console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=SHADOWFAX | pickup=${pk.name} | awb=${r.awb} | ok=true`);
-        return { ok: true, waybill: r.awb, carrier: 'SHADOWFAX' };
+        console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=SHIPROCKET | shipment=${created.shipmentId} | awb=${awb || 'pending'}`);
+        return { ok: true, waybill: awb, shipmentId: created.shipmentId, carrier: 'SHIPROCKET' };
       }
-      console.log(`[SHIPMENT] auto | order=${order.order_number} | shadowfax pickup=${pk.name}(${pk.pincode}) failed=${r.reason}`);
+      console.log(`[SHIPMENT] auto | order=${order.order_number} | shiprocket failed=${JSON.stringify(created.reason).slice(0, 120)} → Delhivery`);
     }
-    console.log(`[SHIPMENT] auto | order=${order.order_number} | all Shadowfax pickups failed → Delhivery`);
   }
 
   // ---- Out-of-city (or Shadowfax unavailable) → Delhivery ----
@@ -280,10 +296,11 @@ router.post('/', async (req, res) => {
   const feeIntracity = Number(process.env.DELIVERY_FEE_INTRACITY ?? 0);
   const feeOutstation = Number(process.env.DELIVERY_FEE_OUTSTATION ?? 100);
   const intracity = zoneStores(String(address.pincode || '').replace(/\D/g, '')).length > 0;
-  // Shadowfax is paused (see SHADOWFAX_DISABLED in delivery.js) — reject intracity orders
-  // server-side too, not just via the frontend's disabled "Proceed to pay" button.
-  if (intracity && SHADOWFAX_DISABLED) {
-    throw new ApiError('Same-day delivery is temporarily down. Please wait and try again shortly.', 503);
+  // Intracity is OPEN again — Shiprocket Hyperlocal replaced Shadowfax and is proven end to end
+  // (real Rapido rider, delivered in ~73 min). The old Shadowfax block that rejected these orders
+  // is gone; SHIPROCKET_DISABLED remains as the kill switch if that carrier ever needs pausing.
+  if (intracity && SHIPROCKET_DISABLED) {
+    throw new ApiError('Same-day delivery is temporarily unavailable. Please try again shortly.', 503);
   }
   const deliveryFee = subtotal > 0 ? (intracity ? feeIntracity : feeOutstation) : 0;
   const total = subtotal - discount + deliveryFee;

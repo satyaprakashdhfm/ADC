@@ -23,7 +23,17 @@ import { logApiCall } from './apiLogger.js';
 const BASE = (process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external').replace(/\/+$/, '');
 const EMAIL = (process.env.SHIPROCKET_EMAIL || '').trim();
 const PASSWORD = (process.env.SHIPROCKET_PASSWORD || process.env.SHIPROCKET_API || '').trim();
-export const SHIPROCKET_PICKUP = (process.env.SHIPROCKET_PICKUP_LOCATION || 'Begur').trim();
+/*
+ * The pickup NICKNAME registered in their panel — orders are collected from whatever address that
+ * name points at, not from whichever ADC store happened to match the destination zone. So quoting
+ * must use this same origin, or the rate we show is for a warehouse we do not dispatch from.
+ */
+export const SHIPROCKET_PICKUP = (process.env.SHIPROCKET_PICKUP_LOCATION || 'warehouse-1').trim();
+export const SHIPROCKET_ORIGIN = {
+  pin: (process.env.SHIPROCKET_PICKUP_PIN || '560035').trim(),
+  lat: Number(process.env.SHIPROCKET_PICKUP_LAT || 12.9130),
+  long: Number(process.env.SHIPROCKET_PICKUP_LONG || 77.7070),
+};
 
 export const shiprocketConfigured = () => !!(EMAIL && PASSWORD);
 
