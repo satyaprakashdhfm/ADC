@@ -70,7 +70,9 @@ app.post('/api/payment-callback/:orderId', express.urlencoded({ extended: false 
 // handler ever saw it, which the dashboard reports only as "Menu trigger failed". Give that one
 // router the headroom it needs and leave the rest of the API on the tight default: no storefront
 // request has any business being megabytes long.
-app.use('/api/petpooja', express.json({ limit: '12mb' }));
+// Scoped to /pushmenu ALONE, not the whole router. The other Petpooja endpoints take tiny bodies,
+// and a 12mb ceiling on a public endpoint is a cheap memory-exhaustion target.
+app.use('/api/petpooja/pushmenu', express.json({ limit: '12mb' }));
 
 app.use(express.json({ limit: '64kb' }));
 

@@ -26,16 +26,57 @@ router.use((req, _res, next) => {
   next();
 });
 
+/*
+ * Shared secret, configured as "Client Authorization" in their dashboard.
+ *
+ * FAIL CLOSED. This previously returned true when no secret was configured, which left these
+ * endpoints wide open on any deploy where the variable was unset — and they are not read-only:
+ * update-store-status closes the shop, item-stock delists products from the storefront, and
+ * callback moves any order to DELIVERED or CANCELLED. Verified exploitable with a plain curl.
+ *
+ * PETPOOJA_WEBHOOK_ALLOW_UNAUTH=true exists only as a first-run window while the secret is being
+ * pasted into their panel. It warns on every request so it cannot quietly be left on.
+ */
 function authed(req) {
   const secret = (process.env.PETPOOJA_WEBHOOK_SECRET || '').trim();
-  if (!secret) return true;                       // not configured → open, same as our other webhooks
-  const got = String(req.get('authorization') || '').trim();
+  if (!secret) {
+    if (process.env.PETPOOJA_WEBHOOK_ALLOW_UNAUTH === 'true') {
+      console.warn('[PETPOOJA] ⚠ unauthenticated call allowed — PETPOOJA_WEBHOOK_SECRET is not set');
+      return true;
+    }
+    console.warn('[PETPOOJA] ✗ rejected: PETPOOJA_WEBHOOK_SECRET not set, refusing unauthenticated call');
+    return false;
+  }
+  const got = String(req.get('authorization') || req.get('x-api-key') || '').trim();
   return got === secret || got.replace(/^(Bearer|Token)\s+/i, '') === secret;
+}
+
+/*
+ * Only act on calls naming OUR restaurant.
+ *
+ * Defence in depth behind the secret: a request carrying a different restID has no business
+ * touching our catalogue or orders. A blank restID passes, because their store-status calls do not
+ * always carry one.
+ */
+function restIdOk(body) {
+  const ours = String(REST_ID || '').trim();
+  if (!ours) return true;
+  const got = String(body?.restID ?? body?.restaurants?.[0]?.details?.menusharingcode ?? '').trim();
+  if (!got || got === ours) return true;
+  console.warn(`[PETPOOJA] ✗ rejected: restID mismatch (got ${got}, expected ${ours})`);
+  return false;
+}
+
+/** Both gates, as one guard. Returns true when the request has been answered and must stop. */
+function blocked(req, res, failBody) {
+  if (!authed(req)) { res.status(401).json(failBody); return true; }
+  if (!restIdOk(req.body)) { res.status(403).json(failBody); return true; }
+  return false;
 }
 
 /* ---- Menu push: they call this after every menu change ---- */
 router.post('/pushmenu', async (req, res) => {
-  if (!authed(req)) return res.status(401).json({ success: '0', message: 'unauthorized' });
+  if (blocked(req, res, { success: '0', message: 'unauthorized' })) return;
   const body = req.body || {};
   try {
     // Let ingestMenu resolve the id — it knows to prefer the menu-sharing code over restaurantid,
@@ -67,7 +108,7 @@ const ORDER_STATUS_FOR = {
 };
 
 router.post('/callback', async (req, res) => {
-  if (!authed(req)) return res.status(401).json({ success: '0', message: 'unauthorized' });
+  if (blocked(req, res, { success: '0', message: 'unauthorized' })) return;
   const b = req.body || {};
   const clientOrderId = String(b.orderID || '').trim();     // our order_number, echoed back
   const status = String(b.status ?? '').trim();
@@ -109,7 +150,7 @@ router.post('/callback', async (req, res) => {
 
 /* ---- Item / add-on stock toggle. Their docs advise ONE endpoint for both on and off. ---- */
 router.post('/item-stock', async (req, res) => {
-  if (!authed(req)) return res.status(401).json({ code: '400', status: 'failed', message: 'unauthorized' });
+  if (blocked(req, res, { code: '400', status: 'failed', message: 'unauthorized' })) return;
   const b = req.body || {};
   const restId = String(b.restID || REST_ID || '').trim();
   const inStock = b.inStock === true || String(b.inStock).toLowerCase() === 'true';
@@ -145,7 +186,7 @@ router.post('/item-stock', async (req, res) => {
 
 /* ---- Store status: merchant reads / sets whether we accept online orders ---- */
 router.post('/get-store-status', async (req, res) => {
-  if (!authed(req)) return res.status(401).json({ status: 'failed', message: 'unauthorized' });
+  if (blocked(req, res, { status: 'failed', message: 'unauthorized' })) return;
   const restId = String(req.body?.restID || REST_ID || '').trim();
   try {
     const open = await getStoreOpen(restId);
@@ -156,7 +197,7 @@ router.post('/get-store-status', async (req, res) => {
 });
 
 router.post('/update-store-status', async (req, res) => {
-  if (!authed(req)) return res.status(401).json({ status: 'failed', message: 'unauthorized' });
+  if (blocked(req, res, { status: 'failed', message: 'unauthorized' })) return;
   const b = req.body || {};
   const restId = String(b.restID || REST_ID || '').trim();
   const open = String(b.store_status ?? '1') === '1';

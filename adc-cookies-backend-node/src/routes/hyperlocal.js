@@ -15,10 +15,23 @@ import { shiprocketStatusToOrderStatus } from '../shiprocket.js';
 
 const router = Router();
 
-// Optional shared secret, sent as x-api-key. Their panel calls it "Auth Token Type".
+/*
+ * Shared secret, sent as x-api-key (their panel's "Auth Token Type").
+ *
+ * FAIL CLOSED. This endpoint moves orders to DELIVERED and CANCELLED, so accepting unauthenticated
+ * calls when the variable happens to be unset is not a safe default — an unset variable on one
+ * deploy would silently open it.
+ */
 function authed(req) {
   const secret = (process.env.SHIPROCKET_WEBHOOK_TOKEN || '').trim();
-  if (!secret) return true;                       // not configured → accept, same as our other webhooks
+  if (!secret) {
+    if (process.env.SHIPROCKET_WEBHOOK_ALLOW_UNAUTH === 'true') {
+      console.warn('[HYPERLOCAL] ⚠ unauthenticated call allowed — SHIPROCKET_WEBHOOK_TOKEN is not set');
+      return true;
+    }
+    console.warn('[HYPERLOCAL] ✗ rejected: SHIPROCKET_WEBHOOK_TOKEN not set, refusing unauthenticated call');
+    return false;
+  }
   const got = String(req.get('x-api-key') || req.get('authorization') || '').trim();
   return got === secret || got.replace(/^Bearer\s+/i, '') === secret;
 }
