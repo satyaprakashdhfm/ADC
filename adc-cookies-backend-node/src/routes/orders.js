@@ -9,7 +9,7 @@ import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from
 // Shadowfax is RETIRED — it never assigned a rider in any live test and support was unreachable.
 // zoneStores/tracking helpers are still imported because historical SHADOWFAX orders must remain
 // viewable; createShadowfaxOrder is deliberately no longer used for new shipments.
-import { zoneStores, trackShadowfax, sfxStatusLabel, sfxStatusRank, shadowfaxConfigured } from '../shadowfax.js';
+import { zoneStores, nearestStoreToCoords, trackShadowfax, sfxStatusLabel, sfxStatusRank, shadowfaxConfigured } from '../shadowfax.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -66,12 +66,17 @@ async function autoCreateShipment(orderId, addressArg) {
     if (address.latitude == null || address.longitude == null) {
       console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity but address has no lat/long → Delhivery`);
     } else {
-      const pickup = stores[0];
-      console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | Shiprocket from ${pickup.name}`);
+      // Nearest store to the CUSTOMER, not merely the first in the pincode zone — the rider's
+      // journey is what the delivery costs, and hyperlocal is priced per km.
+      const pickup = nearestStoreToCoords(address.latitude, address.longitude, address.city) || stores[0];
+      console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | nearest store=${pickup.name}${pickup.km != null ? ` (${pickup.km} km)` : ''}`);
       const created = await createHyperlocalOrder({
         order, items,
         customer: { name: address.full_name, phone: address.phone, email: null },
         address,
+        // Falls back to the configured default when this store has no registered pickup nickname —
+        // Shiprocket collects from the nickname, so an unregistered store cannot be a pickup point.
+        pickupLocation: pickup.pickupName || undefined,
       });
       if (created.ok) {
         const assigned = await assignAwb(created.shipmentId, { vehicleType: 2 });

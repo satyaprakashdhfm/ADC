@@ -1,6 +1,6 @@
 {
   "_readme": "One entry per third-party integration. 'ourEndpoint' = the route on OUR backend that triggers the call (or receives their webhook). 'theirEndpoint' = the real third-party REST endpoint we hit. 'sampleRequest'/'sampleResponse' marked (live-captured) are REAL payloads captured this session via logs/<service>-*.log or a direct safe test call; everything else is (constructed) — built from the exact field names our own code reads/writes, not guessed. 'used: false' entries are real endpoints this provider offers that our code does NOT call today — candidates for 'better handling' work.",
-  "generatedAt": "2026-07-22 (refreshed 2026-07-23…07-24 as noted; refreshed 2026-07-25: both carriers fully tested on REAL PRODUCTION — Delhivery cancelShipment bug FIXED (flat body, not shipments-wrapper), pickup-request booking + wallet mechanics confirmed, NDR endpoint documented as not-yet-used, and a top-level goLiveGaps_whatWeCannotDoViaApi section added summarizing the two real remaining blockers: Delhivery pickup-attachment, and Shadowfax rider-never-assigned) | refreshed 2026-07-28: added the full petpooja (POS/billing) section — three of our own bugs found and fixed, and the menu-push blocker isolated to their side with evidence. | refreshed 2026-07-29: menu fetch confirmed DEPRECATED by Petpooja, rest_id keying corrected to the menu-sharing code, and their demo payload ingested end-to-end (253 rows in 3.2s). | 2026-07-29: save_order proven to reject at the outermost layer — credentials, restID, payload shape and item ids all eliminated by controlled test. | 2026-07-29: added request/response payload samples to every petpooja endpoint.",
+  "generatedAt": "2026-07-22 (refreshed 2026-07-23…07-24 as noted; refreshed 2026-07-25: both carriers fully tested on REAL PRODUCTION — Delhivery cancelShipment bug FIXED (flat body, not shipments-wrapper), pickup-request booking + wallet mechanics confirmed, NDR endpoint documented as not-yet-used, and a top-level goLiveGaps_whatWeCannotDoViaApi section added summarizing the two real remaining blockers: Delhivery pickup-attachment, and Shadowfax rider-never-assigned) | refreshed 2026-07-28: added the full petpooja (POS/billing) section — three of our own bugs found and fixed, and the menu-push blocker isolated to their side with evidence. | refreshed 2026-07-29: menu fetch confirmed DEPRECATED by Petpooja, rest_id keying corrected to the menu-sharing code, and their demo payload ingested end-to-end (253 rows in 3.2s). | 2026-07-29: save_order proven to reject at the outermost layer — credentials, restID, payload shape and item ids all eliminated by controlled test. | 2026-07-29: added request/response payload samples to every petpooja endpoint. | 2026-08-01: added shiprocket (intracity, proven end to end with a real delivery), marked shadowfax RETIRED, and corrected the petpooja save_order record — the payload was nested, not a provisioning problem.",
   "codeFile": "adc-cookies-backend-node/src/",
   "goLiveGaps_whatWeCannotDoViaApi_2026-07-25": {
     "_summary": "The genuine can't-do-yet list after full real-production testing of both carriers. Everything NOT listed here is confirmed working. Ordered by go-live impact.",
@@ -844,7 +844,8 @@
         "used": false,
         "whyNotUsed": "See invoiceGeneration_answeredDirectly_2026-07-23 note at the top of this section — now confirmed against Shadowfax's complete official API reference, not a partial read: no invoice-generation endpoint exists anywhere in their API."
       }
-    ]
+    ],
+    "RETIRED_2026-08-01": "RETIRED. Never assigned a rider in any live test and support was unreachable, which is why intracity checkout was blocked outright for weeks. Replaced by Shiprocket Hyperlocal. Order creation is gone from the code path; zoneStores/tracking helpers remain so historical SHADOWFAX orders stay viewable, and SFX_STORES is still the ADC store list (now carrying coordinates, used for nearest-store pickup routing)."
   },
   "messageCentral": {
     "docs": "https://www.messagecentral.com (VerifyNow OTP product)",
@@ -1466,6 +1467,183 @@
       "theOneThingThatDIDdiffer": "A form-encoded request returns 415 Unsupported Media Type. The endpoint therefore does inspect and discriminate between requests, which means 'Invalid order relay payload' is a deliberate rejection rather than a parse failure or a catch-all.",
       "conclusion": "save_order rejects at the outermost layer, above credentials, restID, payload shape and item ids. The same credentials work on update_order_status (success:'1') and rider_status_update (success:'success'), so the account and IP are fine. This points at order relay not being enabled for this restaurant on Petpooja's side. Nothing further is testable from our end.",
       "ourItemIdsFromTheDashboard": "Discoverable without any API: the menu grid markup carries them in show_details('9658') / data-id='name_9658'. Plain Dahi 9658, Boondi Raita 9659, Mix Veg Raita 9660, Pineapple Raita 9661, Fruit Raita 9662, Plain Papad 9663, Masala Papad 9664. Category ids 88864-88882. Useful if a menu never arrives by push."
-    }
+    },
+    "SAVE_ORDER_SOLVED_2026-08-01": "SOLVED, and the earlier diagnosis in this file was wrong. save_order rejects a FLAT payload — which is what their PDF's field tables imply — with 'Invalid order relay payload ', the same message an empty {} draws. The working shape is nested: orderinfo -> OrderInfo -> Restaurant|Customer|Order|OrderItem|Tax|Discount -> details, with restID inside Restaurant.details and udid/device_type beside OrderInfo. Verified returning {'success':'1','message':'Your order is saved.'}. The API service activation theory was a red herring caused by testing a structurally invalid payload.",
+    "liveOrdersRelayed_2026-08-01": "Five test-case orders placed and visible in their dashboard with correct totals: TC1 Items+Tax 105.00 | TC2 Addons+Tax 157.50 | TC3 Variation+Tax 157.50 | TC4 Discount+Tax 94.50 | TC5 Addon+Variation+Tax 210.00. Callbacks verified live from the merchant dashboard: accept (1) -> CONFIRMED, food ready (5) -> PACKED, cancel (-1) -> CANCELLED with the cancellation reason captured.",
+    "integrationWiring_2026-08-01": "relayOrder() runs after the shipment attempt inside finalizePaidOrder, so the courier fee on the bill is the real one, and LAST in the chain because by then the money is taken and the parcel booked — a POS problem must fail neither. Every attempt lands in petpooja_orders; relaying twice is a no-op; an order containing an unmapped product refuses by name rather than guessing an id and printing a wrong KOT. Admin cancel relays a cancellation to the POS."
+  },
+  "shiprocket": {
+    "docs": "adc-cookies-backend-node/documentations/Shiprocket Hyperlocal External API Technical Document.md. Panel: app.shiprocket.in",
+    "whatItIs": "INTRACITY same-day delivery, replacing Shadowfax. Point-to-point rider (Rapido network via 'Shiprocket Quick') — no hub, no sorting. Delhivery still handles everything out-of-city.",
+    "mode": "LIVE production account, company_id 10789416, ADOORA FOODS.",
+    "codeFile": "adc-cookies-backend-node/src/shiprocket.js + src/routes/hyperlocal.js",
+    "auth": "External API USER — email + password, NOT an api key. Create at app.shiprocket.in/seller/settings/additional-settings/api-users. Token lasts 10 days; we cache it and refresh at 9 days, because a token expiring mid-checkout would fail an order already paid for.",
+    "baseUrl": "https://apiv2.shiprocket.in/v1/external",
+    "provenEndToEnd_2026-08-01": "One real delivery, every step verified. Green Field Layout (560035) -> Amrutha Sarovar, Kadugodi (560067). 10.61 km, Rs 174.64, Rapido rider. Dispatched 18:22, collected 18:33, delivered 19:46 — ~73 min pickup-to-drop against their 1-hour estimate. All four tracking webhooks arrived unprompted.",
+    "ratesObservedLive_2026-08-01": {
+      "formula": "approx Rs 70.80 base + Rs 12.98 per km. Verified: 10.61 km -> 70.80 + (12.98 x 8) = Rs 174.64 exactly.",
+      "min": "Rs 70.80 at 1.09 km",
+      "max": "Rs 356.36 at 24.07 km",
+      "curve": "1.09km Rs70.80 | 4.92km Rs96.76 | 7.85km Rs135.70 | 9.09km Rs161.66 | 10.22km Rs174.64 | 12.34km Rs200.60 | 18.13km Rs278.48 | 24.07km Rs356.36",
+      "serviceability": "11/11 Bengaluru lanes tested serviceable, every one quoting 1 hour.",
+      "pricingImplication": "A FLAT intracity fee is wrong almost everywhere — the spread is 5x. Checkout now quotes the live rate whenever the address has coordinates."
+    },
+    "quirksConfirmedLive_2026-08-01": [
+      "Hyperlocal REQUIRES geo coordinates at BOTH ends. is_new_hyperlocal=1 with pincodes alone returns no couriers, so a missing lat/long is a hard failure, not an unserviceable lane.",
+      "AWB assignment is ASYNCHRONOUS: a successful call returns {'success':true,'message':'We are processing your request'} with NO awb. Reading that as failure would mark a good dispatch broken and a retry would dispatch a SECOND rider.",
+      "The technical document claims webhooks are the only tracking feed. NOT TRUE — /courier/track/shipment/{id} returns awb, live status, courier and the activity trail. This is also how the awb is recovered, given assignment does not return one.",
+      "Webhook `order_id` is SHIPROCKET's internal id; OURS is `channel_order_id`. Matching on order_id means no webhook ever binds to an order. Their `awb` arrives as a NUMBER, not a string.",
+      "The webhook URL must NOT contain shiprocket / kartrocket / sr / kr / localhost — their panel rejects it. Hence our route is /api/hyperlocal, not /api/shiprocket.",
+      "category_name on order items is a CLOSED list: Electronics, Clothes, Medicines, Food, Documents, Groceries, Others. Anything else is rejected.",
+      "Early activity rows can show a burst of FAILED entries with no location — those are rider ALLOCATION retries before one accepts, not delivery failures. Confirmed by the successful pickup that followed."
+    ],
+    "openIssues_2026-08-01": [
+      "GET /settings/company/pickup returns shipping_address: null — the API sees NO registered pickup address, because warehouse-1 is verified but toggled OFF and not primary. Our test worked anyway (single address fallback), but routing to a SPECIFIC store will not until each store is registered AND active in the panel.",
+      "Only one pickup address exists (Green Field Layout 560035). Routing to the nearest of the 5 ADC stores is implemented but each store needs its own registered pickup nickname — SHIPROCKET_PICKUP_BEGUR / _JAYANAGAR / _SGPALYA / _ECITY / _BESANT.",
+      "Saved addresses need latitude/longitude. Without them an intracity order silently falls through to Delhivery — 2-6 days instead of 1 hour."
+    ],
+    "envVars": "SHIPROCKET_EMAIL, SHIPROCKET_PASSWORD (or SHIPROCKET_API), SHIPROCKET_PICKUP_LOCATION, SHIPROCKET_PICKUP_PIN/_LAT/_LONG (quote origin), SHIPROCKET_WEBHOOK_TOKEN, SHIPROCKET_DISABLED (kill switch), SHIPROCKET_CATEGORY",
+    "endpoints": [
+      {
+        "purpose": "Login — bearer token, valid 10 days",
+        "used": true,
+        "liveTested": true,
+        "direction": "we call them",
+        "theirEndpoint": "POST /auth/login",
+        "sampleRequest_liveCaptured": {
+          "email": "<api user email>",
+          "password": "<api user password>"
+        },
+        "sampleResponse_liveCaptured": {
+          "company_id": 10789416,
+          "email": "...",
+          "first_name": "...",
+          "token": "<bearer>"
+        }
+      },
+      {
+        "purpose": "Serviceability + live rate. The only way to price an intracity delivery correctly.",
+        "used": true,
+        "liveTested": true,
+        "direction": "we call them",
+        "theirEndpoint": "GET /courier/serviceability",
+        "sampleRequest_liveCaptured": {
+          "pickup_postcode": "560035",
+          "delivery_postcode": "560067",
+          "lat_from": "12.913",
+          "long_from": "77.707",
+          "lat_to": "12.995",
+          "long_to": "77.757",
+          "is_new_hyperlocal": "1"
+        },
+        "sampleResponse_liveCaptured": {
+          "status": true,
+          "data": [
+            {
+              "courier_name": "Shiprocket Quick",
+              "distance": 10.61,
+              "rates": 174.64,
+              "etd_hours": 1
+            }
+          ]
+        }
+      },
+      {
+        "purpose": "Create order — returns shipment_id. No rider yet.",
+        "used": true,
+        "liveTested": true,
+        "direction": "we call them",
+        "theirEndpoint": "POST /orders/create/adhoc",
+        "keyFields": "order_id (ours), pickup_location (nickname registered in their panel), latitude/longitude (delivery, mandatory), shipping_method 'HL', payment_method 'Prepaid', order_items[].category_name from the closed list",
+        "sampleResponse_liveCaptured": {
+          "order_id": 1488719462,
+          "channel_order_id": "ADCSR1785587438692",
+          "shipment_id": 1484942889,
+          "status": "NEW",
+          "awb_code": ""
+        }
+      },
+      {
+        "purpose": "Assign AWB — THIS dispatches a real rider and bills the account",
+        "used": true,
+        "liveTested": true,
+        "direction": "we call them",
+        "theirEndpoint": "POST /courier/assign/awb",
+        "sampleRequest_liveCaptured": {
+          "shipment_id": "1484942889",
+          "vehicle_type": "2"
+        },
+        "sampleResponse_liveCaptured": {
+          "success": true,
+          "message": "We are processing your request",
+          "first_order": false
+        },
+        "gotcha": "ASYNCHRONOUS — no awb in the response. Poll /courier/track/shipment/{id} for it."
+      },
+      {
+        "purpose": "Track by shipment id — awb, live status, courier, activity trail",
+        "used": true,
+        "liveTested": true,
+        "direction": "we call them",
+        "theirEndpoint": "GET /courier/track/shipment/{shipment_id}",
+        "note": "NOT in their hyperlocal document, which presents webhooks as the only feed. It works, and it means intracity is not hostage to their webhook being configured.",
+        "sampleResponse_liveCaptured": {
+          "tracking_data": {
+            "shipment_track": [
+              {
+                "awb_code": "6a6dec3748b1e92fa8a43d8b",
+                "current_status": "Delivered",
+                "courier_name": "Quick-Rapido"
+              }
+            ],
+            "track_url": "https://shiprocket.co/tracking/6a6dec..."
+          }
+        }
+      },
+      {
+        "purpose": "Cancel order",
+        "used": true,
+        "liveTested": true,
+        "direction": "we call them",
+        "theirEndpoint": "POST /orders/cancel",
+        "sampleRequest_liveCaptured": {
+          "ids": [
+            1488709941
+          ]
+        },
+        "sampleResponse_liveCaptured": {
+          "status_code": 200,
+          "message": "Order cancelled successfully."
+        }
+      },
+      {
+        "purpose": "Tracking webhook — they POST status changes to us",
+        "used": true,
+        "liveTested": true,
+        "direction": "they call us",
+        "ourEndpoint": "POST /api/hyperlocal/webhook  (NOT /api/shiprocket — their panel rejects that URL)",
+        "auth": "x-api-key header, matched against SHIPROCKET_WEBHOOK_TOKEN",
+        "sampleRequest_liveCaptured": {
+          "awb": 59629792084,
+          "current_status": "Delivered",
+          "order_id": "13905312",
+          "channel_order_id": "ADCSR1785587438692",
+          "courier_name": "Quick-Rapido",
+          "scans": [
+            {
+              "date": "...",
+              "activity": "SHIPMENT DELIVERED",
+              "location": "..."
+            }
+          ]
+        },
+        "sampleResponse_weReturn": {
+          "ok": true,
+          "matched": true
+        },
+        "statusMapping": "RIDER ASSIGNED -> PACKED | PICKED UP / OUT FOR DELIVERY -> OUT_FOR_DELIVERY | RIDER REACHED DROP -> no change (at the door is not delivered) | DELIVERED -> DELIVERED | CANCELLED/RTO -> CANCELLED",
+        "realSequenceCaptured_2026-08-01": "RIDER REACHED PICKUP 18:33:01 -> PICKED UP 18:33:28 -> RIDER REACHED DROP 18:57:12 -> DELIVERED 19:46:05. All four arrived within seconds of the event."
+      }
+    ]
   }
 }
