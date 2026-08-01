@@ -8,6 +8,7 @@ import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
 import { shadowfaxConfigured, createShadowfaxOrder, zoneStores, trackShadowfax, sfxStatusLabel, sfxStatusRank } from '../shadowfax.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
+import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -190,7 +191,12 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
           [orderId, 'SHIPMENT_CREATED', `Delhivery waybill ${ship.waybill}`, nowIso()]);
       }
     })
-    .catch((err) => console.error(`[SHIPMENT] background create failed | order=${orderId} | ${err?.message || err}`));
+    .catch((err) => console.error(`[SHIPMENT] background create failed | order=${orderId} | ${err?.message || err}`))
+    // Relay to the POS only AFTER the shipment attempt, so the courier fee on the bill is the real
+    // one. Deliberately chained rather than run in parallel, and deliberately last: the money is
+    // taken and the parcel is booked by this point, so a POS problem must never fail either. It
+    // records itself in petpooja_orders for the admin to retry.
+    .finally(() => relayOrder(orderId).catch(() => {}));
 
   return { ok: true };
 }

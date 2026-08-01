@@ -264,12 +264,219 @@ export function unmappedProducts(restId = REST_ID) {
   );
 }
 
+/*
+ * Relay a paid order.
+ *
+ * The nesting here is not decorative and not what their PDF's field tables imply. Petpooja wants
+ *   orderinfo -> OrderInfo -> Restaurant|Customer|Order|OrderItem|Tax|Discount -> details
+ * with restID inside Restaurant.details and udid/device_type beside OrderInfo. A flatter shape —
+ * which is what the field tables read like — is refused with "Invalid order relay payload ", the
+ * SAME message an empty {} gets, because the body is never inspected. That cost a day; the shape
+ * below is the one verified to return {"success":"1","message":"Your order is saved."}.
+ */
 export async function saveOrder(payload) {
   if (!petpoojaConfigured()) return { ok: false, reason: 'not_configured' };
-  log('save-order', `orderID=${payload?.OrderInfo?.Order?.orderID || '?'} | relaying…`);
+  const orderID = payload?.orderinfo?.OrderInfo?.Order?.details?.orderID || '?';
+  log('save-order', `orderID=${orderID} | relaying…`);
   const r = await ppRequest('/save_order', { ...creds(), ...payload });
   log('save-order', r.ok ? `✓ ${JSON.stringify(r.data).slice(0, 160)}` : `✗ ${r.reason}`);
   return r;
+}
+
+const money = (n) => (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
+
+/** Public origin Petpooja should call back on. Railway sets RAILWAY_PUBLIC_DOMAIN for us. */
+function callbackBase() {
+  const explicit = (process.env.PETPOOJA_CALLBACK_BASE || '').trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
+  const railway = (process.env.RAILWAY_PUBLIC_DOMAIN || '').trim();
+  if (railway) return `https://${railway.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`;
+  return 'https://adc-backend-copy-production.up.railway.app';
+}
+
+/**
+ * Build the Save Order body from one of our orders.
+ *
+ * Prices are OURS, not the POS menu's — that is what Razorpay actually charged, so the bill always
+ * reconciles with the settlement even if their menu drifts. Their menu is an id source only.
+ *
+ * GST is already inside our prices, so every line goes out tax_inclusive with item_tax split evenly
+ * between CGST and SGST. Delivery is a third-party courier (enable_delivery 0) and the fee is fixed
+ * and untaxed, hence dc_/pc_tax_percentage 0.
+ */
+export function buildOrderPayload({ order, items, customer, address, taxIds = [] }) {
+  const now = new Date();
+  const p2 = (n) => String(n).padStart(2, '0');
+  const date = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`;
+  const time = `${p2(now.getHours())}:${p2(now.getMinutes())}:${p2(now.getSeconds())}`;
+
+  // 5% GST inside the price: base = total / 1.05, tax = total - base, split CGST/SGST.
+  const gross = items.reduce((s, i) => s + (Number(i.total_price) || 0), 0);
+  const taxTotal = gross - gross / 1.05;
+  const halfTax = taxTotal / 2;
+  const [cgstId, sgstId] = [taxIds[0] || '', taxIds[1] || ''];
+
+  const orderItems = items.map((i) => {
+    const lineTax = ((Number(i.total_price) || 0) - (Number(i.total_price) || 0) / 1.05) / 2;
+    return {
+      id: String(i.petpooja_item_id),
+      name: i.product_name,
+      tax_inclusive: true,
+      gst_liability: 'restaurant',
+      item_tax: cgstId ? [
+        { id: cgstId, name: 'CGST', tax_percentage: '2.5', amount: money(lineTax) },
+        { id: sgstId, name: 'SGST', tax_percentage: '2.5', amount: money(lineTax) },
+      ] : [],
+      item_discount: '',
+      price: money(i.unit_price),
+      final_price: money(i.unit_price),
+      quantity: String(i.quantity),
+      description: i.special_notes || '',
+      variation_name: i.petpooja_variation_name || '',
+      variation_id: i.petpooja_variation_id || '',
+      AddonItem: { details: [] },
+    };
+  });
+
+  return {
+    orderinfo: {
+      OrderInfo: {
+        Restaurant: { details: {
+          res_name: process.env.PETPOOJA_RES_NAME || 'A Dough Cookie - Begur',
+          address: process.env.PETPOOJA_RES_ADDRESS || '167/3 First floor, Chickbegur Village, Singasandra Post, Begur, Bengaluru 560114',
+          contact_information: process.env.PETPOOJA_RES_CONTACT || '9381502998',
+          restID: REST_ID,
+        } },
+        Customer: { details: {
+          email: customer?.email || '',
+          name: customer?.name || 'Customer',
+          address: address || '',
+          phone: String(customer?.phone || '').replace(/\D/g, '').slice(-10),
+          latitude: customer?.latitude != null ? String(customer.latitude) : '',
+          longitude: customer?.longitude != null ? String(customer.longitude) : '',
+        } },
+        Order: { details: {
+          orderID: order.order_number,
+          preorder_date: date, preorder_time: time,
+          service_charge: '0', sc_tax_amount: '0',
+          // The courier fee is known by now — the relay runs after the shipment is created.
+          delivery_charges: money(order.delivery_fee), dc_tax_percentage: '0', dc_tax_amount: '0',
+          packing_charges: '0', pc_tax_amount: '0', pc_tax_percentage: '0',
+          order_type: 'H', advanced_order: 'N', payment_type: 'ONLINE',
+          table_no: '', no_of_persons: '0',
+          discount_total: money(order.discount_amount), discount_type: 'F',
+          tax_total: money(taxTotal), total: money(order.total_amount),
+          description: order.coupon_code ? `Coupon ${order.coupon_code}` : '',
+          created_on: `${date} ${time}`,
+          enable_delivery: 0, min_prep_time: 20,
+          // Sent per order — there is no dashboard field for it. Railway injects
+          // RAILWAY_PUBLIC_DOMAIN, so this is correct on deploy without extra configuration;
+          // PETPOOJA_CALLBACK_BASE overrides it for local tunnels or a custom domain.
+          callback_url: `${callbackBase()}/api/petpooja/callback`,
+          collect_cash: '', otp: '',
+        } },
+        OrderItem: { details: orderItems },
+        Tax: { details: cgstId ? [
+          { id: cgstId, title: 'CGST', type: 'P', price: '2.5', tax: money(halfTax), restaurant_liable_amt: money(halfTax) },
+          { id: sgstId, title: 'SGST', type: 'P', price: '2.5', tax: money(halfTax), restaurant_liable_amt: money(halfTax) },
+        ] : [] },
+        Discount: { details: Number(order.discount_amount) > 0
+          ? [{ id: '', title: order.coupon_code || 'Discount', type: 'F', price: money(order.discount_amount) }]
+          : [] },
+      },
+      udid: '',
+      device_type: 'Web',
+    },
+  };
+}
+
+/**
+ * Relay one of our orders, recording the attempt either way.
+ *
+ * NEVER throws. The customer has already paid and the parcel is already booked by the time this
+ * runs — a POS hiccup must not surface as a failed order, so every outcome is written to
+ * petpooja_orders for the admin to see and retry rather than propagated to the caller.
+ *
+ * Unmapped products are the one thing worth refusing outright: relaying an order with a missing or
+ * guessed item id would print a wrong KOT, which is worse than not printing one at all.
+ */
+export async function relayOrder(orderId) {
+  const ts = nowIso();
+  const fail = async (reason, request = null) => {
+    await query(
+      `INSERT INTO petpooja_orders (order_id, rest_id, relay_ok, attempts, request, last_error, created_at, updated_at)
+       VALUES ($1,$2,FALSE,1,$3,$4,$5,$5)
+       ON CONFLICT (order_id) DO UPDATE SET attempts = petpooja_orders.attempts + 1,
+         request = COALESCE(EXCLUDED.request, petpooja_orders.request),
+         last_error = EXCLUDED.last_error, updated_at = EXCLUDED.updated_at`,
+      [orderId, REST_ID, request ? JSON.stringify(request) : null, reason, ts]
+    );
+    log('relay', `order=${orderId} | ✗ ${reason}`);
+    return { ok: false, reason };
+  };
+
+  try {
+    if (!petpoojaConfigured()) return await fail('not_configured');
+
+    const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
+    if (!order) return await fail('order_not_found');
+
+    const done = await getOne('SELECT relay_ok FROM petpooja_orders WHERE order_id = $1', [orderId]);
+    if (done?.relay_ok) { log('relay', `order=${order.order_number} | skip=already_relayed`); return { ok: true, skipped: true }; }
+
+    // Join our line items to their catalogue. A LEFT JOIN so we can name what is missing.
+    const items = await getAll(
+      `SELECT oi.product_name, oi.quantity, oi.unit_price, oi.total_price, oi.special_notes,
+              pi.item_id AS petpooja_item_id, pi.variation_id AS petpooja_variation_id,
+              pi.variation_name AS petpooja_variation_name
+         FROM order_items oi
+         LEFT JOIN petpooja_items pi ON pi.product_id = oi.product_id AND pi.rest_id = $2
+        WHERE oi.order_id = $1`,
+      [orderId, REST_ID]
+    );
+    if (!items.length) return await fail('no_items');
+    const unmapped = items.filter((i) => !i.petpooja_item_id).map((i) => i.product_name);
+    if (unmapped.length) return await fail(`unmapped_products: ${unmapped.join(', ')}`);
+
+    // The delivery address holds the RECIPIENT's name, phone and coordinates, which is who the
+    // rider actually calls — prefer it, and fall back to the account holder only when absent.
+    const account = await getOne('SELECT name, email, phone FROM users WHERE id = $1', [order.user_id]);
+    const addr = order.address_id
+      ? await getOne(`SELECT full_name, phone, address_line1, address_line2, city, state, pincode,
+                             latitude, longitude FROM addresses WHERE id = $1`, [order.address_id])
+      : null;
+    const customer = {
+      name: addr?.full_name || account?.name || 'Customer',
+      phone: addr?.phone || account?.phone || '',
+      email: account?.email || '',
+      latitude: addr?.latitude, longitude: addr?.longitude,
+    };
+    const address = addr
+      ? [addr.address_line1, addr.address_line2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ')
+      : 'Address not provided';
+
+    const taxRows = await getAll(
+      `SELECT tax_id, name FROM petpooja_taxes WHERE rest_id = $1 ORDER BY tax_id`, [REST_ID]);
+    const taxIds = taxRows.map((t) => t.tax_id);
+
+    const payload = buildOrderPayload({ order, items, customer, address, taxIds });
+    const r = await saveOrder(payload);
+
+    await query(
+      `INSERT INTO petpooja_orders (order_id, rest_id, relay_ok, petpooja_order_id, attempts, request, response, last_error, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,1,$5,$6,$7,$8,$8)
+       ON CONFLICT (order_id) DO UPDATE SET
+         relay_ok = EXCLUDED.relay_ok, petpooja_order_id = EXCLUDED.petpooja_order_id,
+         attempts = petpooja_orders.attempts + 1, request = EXCLUDED.request,
+         response = EXCLUDED.response, last_error = EXCLUDED.last_error, updated_at = EXCLUDED.updated_at`,
+      [orderId, REST_ID, !!r.ok, r.data?.orderID || null, JSON.stringify(payload),
+       JSON.stringify(r.data ?? {}), r.ok ? null : r.reason, ts]
+    );
+    log('relay', `order=${order.order_number} | ${r.ok ? '✓ saved' : `✗ ${r.reason}`}`);
+    return r.ok ? { ok: true } : { ok: false, reason: r.reason };
+  } catch (err) {
+    return await fail(`exception: ${err.message}`);
+  }
 }
 
 /** Their Update Order Status only accepts cancel (-1); there is no other transition. */
