@@ -300,9 +300,20 @@ function callbackBase() {
  * Prices are OURS, not the POS menu's — that is what Razorpay actually charged, so the bill always
  * reconciles with the settlement even if their menu drifts. Their menu is an id source only.
  *
- * GST is already inside our prices, so every line goes out tax_inclusive with item_tax split evenly
- * between CGST and SGST. Delivery is a third-party courier (enable_delivery 0) and the fee is fixed
- * and untaxed, hence dc_/pc_tax_percentage 0.
+ * Tax handling follows Petpooja's own annotated payload (reviewed by them 2026-08-01):
+ *
+ *   "tax_inclusive … item tax is cal only when this is false"
+ *
+ * Our prices already contain 5% GST, so every line is tax_inclusive TRUE and item_tax is therefore
+ * EMPTY — sending both an inclusive flag and a per-item tax breakdown double-counts, which is what
+ * their review flagged. The tax still reaches the bill through the order-level Tax block, where
+ * restaurant_liable_amt carries it because gst_liability is 'restaurant' (we remit it).
+ *
+ * price and final_price are PER UNIT — their note: multiple quantities are reflected in the order
+ * `total`, not by multiplying the line price. final_price = price - item_discount.
+ *
+ * Delivery is a third-party courier (enable_delivery 0) and the fee is fixed and untaxed, hence
+ * dc_/pc_tax_percentage 0 and gst_details that are zero on both sides.
  */
 export function buildOrderPayload({ order, items, customer, address, taxIds = [] }) {
   const now = new Date();
@@ -310,31 +321,36 @@ export function buildOrderPayload({ order, items, customer, address, taxIds = []
   const date = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`;
   const time = `${p2(now.getHours())}:${p2(now.getMinutes())}:${p2(now.getSeconds())}`;
 
-  // 5% GST inside the price: base = total / 1.05, tax = total - base, split CGST/SGST.
+  // 5% GST inside the price: base = total / 1.05, tax = total - base, split evenly CGST/SGST.
   const gross = items.reduce((s, i) => s + (Number(i.total_price) || 0), 0);
   const taxTotal = gross - gross / 1.05;
   const halfTax = taxTotal / 2;
   const [cgstId, sgstId] = [taxIds[0] || '', taxIds[1] || ''];
 
   const orderItems = items.map((i) => {
-    const lineTax = ((Number(i.total_price) || 0) - (Number(i.total_price) || 0) / 1.05) / 2;
+    const unit = Number(i.unit_price) || 0;
+    const itemDiscount = Number(i.item_discount) || 0;
     return {
       id: String(i.petpooja_item_id),
       name: i.product_name,
       tax_inclusive: true,
       gst_liability: 'restaurant',
-      item_tax: cgstId ? [
-        { id: cgstId, name: 'CGST', tax_percentage: '2.5', amount: money(lineTax) },
-        { id: sgstId, name: 'SGST', tax_percentage: '2.5', amount: money(lineTax) },
-      ] : [],
-      item_discount: '',
-      price: money(i.unit_price),
-      final_price: money(i.unit_price),
+      // Empty BY DESIGN — see the note above. With tax_inclusive true they do not compute item tax,
+      // and supplying a breakdown here on top of the inclusive price double-counts it.
+      item_tax: [],
+      item_discount: itemDiscount ? money(itemDiscount) : '',
+      price: money(unit),
+      final_price: money(unit - itemDiscount),
       quantity: String(i.quantity),
       description: i.special_notes || '',
       variation_name: i.petpooja_variation_name || '',
       variation_id: i.petpooja_variation_id || '',
-      AddonItem: { details: [] },
+      AddonItem: { details: (i.addons || []).map((a) => ({
+        id: String(a.id), name: a.name, group_name: a.group_name,
+        price: money(a.price),
+        group_id: Number(a.group_id),   // an INT here, not a string — per their annotation
+        quantity: String(a.quantity || 1),
+      })) },
     };
   });
 
@@ -359,9 +375,12 @@ export function buildOrderPayload({ order, items, customer, address, taxIds = []
           orderID: order.order_number,
           preorder_date: date, preorder_time: time,
           service_charge: '0', sc_tax_amount: '0',
-          // The courier fee is known by now — the relay runs after the shipment is created.
+          // The courier fee is known by now — the relay runs after the shipment is created. It is a
+          // flat pass-through and untaxed, so the percentages are 0 and neither party is liable.
           delivery_charges: money(order.delivery_fee), dc_tax_percentage: '0', dc_tax_amount: '0',
+          dc_gst_details: [{ gst_liable: 'vendor', amount: '0' }, { gst_liable: 'restaurant', amount: '0' }],
           packing_charges: '0', pc_tax_amount: '0', pc_tax_percentage: '0',
+          pc_gst_details: [{ gst_liable: 'vendor', amount: '0' }, { gst_liable: 'restaurant', amount: '0' }],
           order_type: 'H', advanced_order: 'N', payment_type: 'ONLINE',
           table_no: '', no_of_persons: '0',
           discount_total: money(order.discount_amount), discount_type: 'F',
@@ -376,13 +395,19 @@ export function buildOrderPayload({ order, items, customer, address, taxIds = []
           collect_cash: '', otp: '',
         } },
         OrderItem: { details: orderItems },
+        /*
+         * Order-level tax, aggregated per tax id across every line. Because the items are
+         * tax_inclusive with empty item_tax, THIS is where the GST reaches the bill, and
+         * restaurant_liable_amt carries the full amount since we remit it (gst_liability
+         * 'restaurant').
+         */
         Tax: { details: cgstId ? [
           { id: cgstId, title: 'CGST', type: 'P', price: '2.5', tax: money(halfTax), restaurant_liable_amt: money(halfTax) },
           { id: sgstId, title: 'SGST', type: 'P', price: '2.5', tax: money(halfTax), restaurant_liable_amt: money(halfTax) },
         ] : [] },
-        Discount: { details: Number(order.discount_amount) > 0
-          ? [{ id: '', title: order.coupon_code || 'Discount', type: 'F', price: money(order.discount_amount) }]
-          : [] },
+        // No Discount object: their guide says to omit it, and their own annotated reference payload
+        // has none. Order-level discount travels as discount_total + discount_type on Order, and
+        // per-item discount as item_discount on the line.
       },
       udid: '',
       device_type: 'Web',
