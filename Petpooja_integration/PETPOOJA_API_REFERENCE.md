@@ -478,6 +478,37 @@ error, `update_order_status` reaches it, and `save_order` never does. The reques
 *above* credential checking, which is not a payload fault at all — it is consistent with the request
 never being routed into the order-relay service.
 
+**The decisive test — an empty object and a complete order are indistinguishable.**
+
+Building the payload up one layer at a time, from nothing to fully spec-compliant, the response never
+changes once:
+
+```
+{}                                    -> Invalid order relay payload
+credentials only                      -> Invalid order relay payload
++ restID                              -> Invalid order relay payload
++ device_type                         -> Invalid order relay payload
++ OrderInfo.Customer                  -> Invalid order relay payload
++ Order                               -> Invalid order relay payload
++ OrderItem (empty array)             -> Invalid order relay payload
+FULL spec-compliant order             -> Invalid order relay payload
+```
+
+Plus every structural alternative: `{"data": ...}` wrapper, OrderInfo un-nested at root,
+`enable_delivery` as string, `%` in the Tax price per their PDF example, `addon_items` instead of
+`AddonItem`, non-empty `udid`. All identical.
+
+**No payload validator can return the same message for `{}` as for a complete order.** If their code
+were inspecting the body, those two cases would have to differ. They do not, so nothing is inspecting
+it — the request is refused before the body is read. Note also the trailing space in
+`"Invalid order relay payload "`, the signature of a message built as `"...payload " + <detail>` with
+an empty detail: a generic fallback, not a field-level complaint.
+
+This reconciles the wording with the evidence. The payload genuinely cannot be validated — but not
+because ours is malformed. There is no menu for this restaurant, so no item id can ever resolve, and
+no payload could ever be valid. Same root cause as the failing menu push, which is why both broke
+together.
+
 **Most likely cause:** order relay never activated for this outlet. An onboarding email states:
 *"Rest id: 449010, Rest name: A Dough Cookie - Begur. For this outlet customer took POS + Growth
 Plan, in that API service he took. Kindly process it further to activate the service."* An
