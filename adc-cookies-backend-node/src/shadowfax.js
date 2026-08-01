@@ -47,6 +47,17 @@ export const SFX_STORES = [
  * rider travels least from, which is what the customer pays for. Falls back to zone matching when
  * the address has no coordinates.
  */
+/** Stores sorted nearest-first to a customer location. Used to try pickups in a sensible order. */
+export function orderStoresByProximity(stores, lat, lng) {
+  if (lat == null || lng == null) return stores;
+  const R = 6371, rad = (d) => (d * Math.PI) / 180;
+  return [...stores].map((s) => {
+    const dLat = rad(s.latitude - lat), dLng = rad(s.longitude - lng);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat)) * Math.cos(rad(s.latitude)) * Math.sin(dLng / 2) ** 2;
+    return { ...s, km: Math.round(2 * R * Math.asin(Math.sqrt(a)) * 100) / 100 };
+  }).sort((a, b) => a.km - b.km);
+}
+
 export function nearestStoreToCoords(lat, lng, city) {
   if (lat == null || lng == null) return null;
   const R = 6371;

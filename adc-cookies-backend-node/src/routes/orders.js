@@ -9,8 +9,8 @@ import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from
 // Shadowfax is RETIRED — it never assigned a rider in any live test and support was unreachable.
 // zoneStores/tracking helpers are still imported because historical SHADOWFAX orders must remain
 // viewable; createShadowfaxOrder is deliberately no longer used for new shipments.
-import { zoneStores, nearestStoreToCoords, trackShadowfax, sfxStatusLabel, sfxStatusRank, shadowfaxConfigured } from '../shadowfax.js';
-import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket } from '../shiprocket.js';
+import { zoneStores, nearestStoreToCoords, orderStoresByProximity, trackShadowfax, sfxStatusLabel, sfxStatusRank, shadowfaxConfigured } from '../shadowfax.js';
+import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
 
@@ -66,10 +66,22 @@ async function autoCreateShipment(orderId, addressArg) {
     if (address.latitude == null || address.longitude == null) {
       console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity but address has no lat/long → Delhivery`);
     } else {
-      // Nearest store to the CUSTOMER, not merely the first in the pincode zone — the rider's
-      // journey is what the delivery costs, and hyperlocal is priced per km.
-      const pickup = nearestStoreToCoords(address.latitude, address.longitude, address.city) || stores[0];
-      console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | nearest store=${pickup.name}${pickup.km != null ? ` (${pickup.km} km)` : ''}`);
+      /*
+       * Nearest store the carrier can ACTUALLY serve.
+       *
+       * Sorting by distance to the customer is right — the rider's journey is what the delivery
+       * costs — but nearest is not the same as serviceable. Measured live: a Kadugodi drop is
+       * serviceable from Begur at 18.69 km yet not from S.G. Palya at 17.59 km. So we quote each in
+       * order and take the first that answers, rather than picking one and hoping.
+       */
+      const ordered = orderStoresByProximity(stores, address.latitude, address.longitude);
+      const chosen = await pickServiceableStore(ordered, { pin: destPin, lat: address.latitude, lng: address.longitude });
+      if (!chosen) {
+        // Fall through to Delhivery below rather than failing: slower beats nothing on a paid order.
+        console.log(`[SHIPMENT] auto | order=${order.order_number} | no ADC store can serve ${destPin} → Delhivery`);
+      } else {
+      const pickup = chosen.store;
+      console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | store=${pickup.name} | ₹${chosen.rate} | ${chosen.distance} km`);
       const created = await createHyperlocalOrder({
         order, items,
         customer: { name: address.full_name, phone: address.phone, email: null },
@@ -93,6 +105,7 @@ async function autoCreateShipment(orderId, addressArg) {
         return { ok: true, waybill: awb, shipmentId: created.shipmentId, carrier: 'SHIPROCKET' };
       }
       console.log(`[SHIPMENT] auto | order=${order.order_number} | shiprocket failed=${JSON.stringify(created.reason).slice(0, 120)} → Delhivery`);
+      }
     }
   }
 

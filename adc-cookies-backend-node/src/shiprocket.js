@@ -157,6 +157,32 @@ export async function checkServiceability({ pickupPin, deliveryPin, latFrom, lon
     etd: cheapest.etd || cheapest.estimated_delivery_days || null };
 }
 
+/**
+ * First store that can actually serve this drop, trying nearest first.
+ *
+ * Nearest is not the same as serviceable. Measured live: a drop in Kadugodi is serviceable from
+ * Begur at 18.69 km but NOT from S.G. Palya at 17.59 km — coverage is drawn by their zones and by
+ * whether a pickup address is fully verified, not by distance alone. Picking the nearest store and
+ * stopping there would fail orders that a slightly further store could have delivered.
+ *
+ * Returns { store, rate, distance } or null when no store covers the drop.
+ */
+export async function pickServiceableStore(stores, { pin, lat, lng }) {
+  for (const s of stores) {
+    if (s.latitude == null || s.longitude == null) continue;
+    const q = await checkServiceability({
+      pickupPin: String(s.pincode), deliveryPin: String(pin),
+      latFrom: s.latitude, longFrom: s.longitude, latTo: lat, longTo: lng,
+    });
+    if (q.serviceable) {
+      log('pick-store', `✓ ${s.name} | ₹${q.rate} | ${q.couriers?.[0]?.distance} km`);
+      return { store: s, rate: q.rate, distance: q.couriers?.[0]?.distance ?? null, etdHours: q.couriers?.[0]?.etd_hours ?? null };
+    }
+    log('pick-store', `✗ ${s.name} cannot serve ${pin}`);
+  }
+  return null;
+}
+
 /* ------------------------------------------------------------------ */
 /* Orders                                                              */
 /* ------------------------------------------------------------------ */
