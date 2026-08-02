@@ -45,10 +45,12 @@ export default function HomeHero() {
           </picture>
         </motion.div>
 
-        {/* No centre wash. The old marble hero was busy behind the copy, so it carried a 72% cream
-            radial to keep text legible; the current art is shot with the cookies ringing an empty
-            orange centre, so that wash had nothing left to do but bleach the brand colour to a pale
-            blob. Dark text on the orange measures ~5.2:1, comfortably past AA on its own. */}
+        {/* Legibility scrim. The art rings the frame with cookies around an empty orange centre; on
+            wide screens the copy sits clear of them, but on a narrow phone the cookies crowd inward
+            and the paragraph ends up printed over a dark chocolate/matcha cookie — unreadable. A soft
+            radial in the brand orange (not cream) mutes whatever's directly behind the copy without
+            bleaching the brand: the edge cookies stay crisp beyond its radius. */}
+        <div aria-hidden className="home-hero-scrim" style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
 
         {/* Center content */}
         <motion.div initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}

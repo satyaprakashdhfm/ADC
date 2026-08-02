@@ -458,6 +458,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [makeDefault, setMakeDefault] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectErr, setDetectErr] = useState('');
+  const [savingAddr, setSavingAddr] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [payError, setPayError] = useState('');
   const [payFailMsg, setPayFailMsg] = useState(''); // shown on the review step after a failed payment redirect
@@ -565,14 +566,55 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const prefillAform = () => ({ ...EMPTY_AFORM, fullName: user?.name || '', phone: user?.phone || '' });
   const closeAddrForm = () => { setAdding(false); setEditId(null); setMakeDefault(false); setDetectErr(''); setAform(EMPTY_AFORM); };
 
+  // Opening the "add address" form kicks off location detection by default, so the fields + GPS
+  // coordinates prefill without an extra tap. The customer can still correct anything they like —
+  // and whatever address they end up with is re-geocoded on save, so the coordinates follow the
+  // address they actually typed rather than wherever they happened to be standing.
+  const openAddForm = () => {
+    setEditId(null); setMakeDefault(false); setAform(prefillAform()); setDetectErr(''); setAdding(true);
+    detectLocation();
+  };
+
   // Open the form pre-filled to edit an existing saved address.
   const editAddr = (a: Address) => {
     setAform({ fullName: a.fullName, phone: a.phone || '', addressLine1: a.addressLine1, addressLine2: a.addressLine2 || '', city: a.city, state: a.state || '', pincode: a.pincode, label: a.label || 'Home', latitude: a.latitude ?? null, longitude: a.longitude ?? null });
     setMakeDefault(!!a.isDefault); setEditId(a.id); setDetectErr(''); setAdding(true);
   };
 
+  // Forward-geocode a typed address to coordinates. A structured query (postcode/city/state/street)
+  // is far more reliable in India than free text. Returns null on any failure so save never blocks.
+  const geocodeAddress = async (a: typeof aform): Promise<{ latitude: number; longitude: number } | null> => {
+    const street = [a.addressLine1, a.addressLine2].filter(Boolean).join(', ').trim();
+    if (!a.pincode.trim() && !a.city.trim() && !street) return null;
+    try {
+      const params = new URLSearchParams({ format: 'jsonv2', limit: '1', country: 'India' });
+      if (a.pincode.trim()) params.set('postalcode', a.pincode.trim());
+      if (a.city.trim()) params.set('city', a.city.trim());
+      if (a.state.trim()) params.set('state', a.state.trim());
+      if (street) params.set('street', street);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 7000);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, { headers: { Accept: 'application/json' }, signal: ctrl.signal });
+      clearTimeout(timer);
+      const arr = await res.json();
+      if (Array.isArray(arr) && arr.length && arr[0].lat && arr[0].lon) {
+        return { latitude: parseFloat(arr[0].lat), longitude: parseFloat(arr[0].lon) };
+      }
+    } catch { /* ignore — fall back to any GPS-detected coords */ }
+    return null;
+  };
+
   const saveAddr = async () => {
-    const data: Omit<Address, 'id'> = { ...aform, isDefault: makeDefault };
+    setSavingAddr(true);
+    // Guarantee coordinates for intracity/same-day routing. The typed address is the source of
+    // truth: geocode it on save and use that; only fall back to any GPS-detected coordinates if the
+    // lookup fails — so a manually-typed address never ships without a location and quietly drops to
+    // multi-day (the carriers return zero couriers when there's no lat/long).
+    let latitude = aform.latitude;
+    let longitude = aform.longitude;
+    const geo = await geocodeAddress(aform);
+    if (geo) { latitude = geo.latitude; longitude = geo.longitude; }
+    const data: Omit<Address, 'id'> = { ...aform, latitude, longitude, isDefault: makeDefault };
     if (editId != null) {
       // Editing an existing address.
       const updated: Address = { ...data, id: editId };
@@ -586,6 +628,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       setAddresses(p => [...(makeDefault ? p.map(a => ({ ...a, isDefault: false })) : p), created]);
       setAddr(created.id);
     }
+    setSavingAddr(false);
     closeAddrForm();
   };
 
@@ -914,7 +957,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   })}
                   {adding ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)' }}>
-                      {/* Detect my location — only runs on click; fills the columns we can read */}
+                      {/* Detect my location — runs automatically when the form opens, and again on tap;
+                          fills the columns we can read. Coordinates are re-derived from the typed
+                          address on save, so editing the fields moves the delivery point with them. */}
                       <button onClick={detectLocation} disabled={detecting} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--brand-secondary)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: detecting ? 'wait' : 'pointer' }}>
                         <Navigation size={16} /> {detecting ? 'Detecting…' : 'Detect my location'}
                       </button>
@@ -957,12 +1002,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       </button>
 
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button disabled={!aValid} onClick={saveAddr} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: aValid ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: aValid ? 'pointer' : 'not-allowed' }}>{editId != null ? 'Save changes' : 'Save & use'}</button>
+                        <button disabled={!aValid || savingAddr} onClick={saveAddr} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: (aValid && !savingAddr) ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: savingAddr ? 'wait' : aValid ? 'pointer' : 'not-allowed' }}>{savingAddr ? 'Saving…' : editId != null ? 'Save changes' : 'Save & use'}</button>
                         <button onClick={closeAddrForm} style={{ padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => { setEditId(null); setMakeDefault(false); setAform(prefillAform()); setDetectErr(''); setAdding(true); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
+                    <button onClick={openAddForm} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
                       <Plus size={16} color="var(--brand-secondary)" />
                       <span style={{ fontWeight: 700, color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Add new address</span>
                     </button>

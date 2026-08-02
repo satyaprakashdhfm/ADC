@@ -191,7 +191,10 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
   return (
     <>
       {/* Sticky header — a distinct warm band (vanilla) so it stands off the page behind it. */}
-      <div className="home-sticky-header" style={{ position: revealOnScroll ? 'fixed' : 'sticky', top: 0, left: 0, right: 0, zIndex: 50, background: 'var(--navbar-bg)', boxShadow: 'var(--shadow-md)', borderBottom: '1px solid var(--white-16)', transform: revealed ? 'translateY(0)' : 'translateY(-110%)', transition: 'transform .35s var(--ease-out)' }}>
+      {/* On the home hero (revealOnScroll) the bar is fixed and offset down by the sticky
+          announcement ribbon's height so it slides in just beneath it, not over it. Other pages
+          have no ribbon, so the sticky bar sits flush at the top. */}
+      <div className="home-sticky-header" style={{ position: revealOnScroll ? 'fixed' : 'sticky', top: revealOnScroll ? 'var(--ribbon-h)' : 0, left: 0, right: 0, zIndex: 50, background: 'var(--navbar-bg)', boxShadow: 'var(--shadow-md)', borderBottom: '1px solid var(--white-16)', transform: revealed ? 'translateY(0)' : 'translateY(-130%)', transition: 'transform .35s var(--ease-out)' }}>
         {/* Desktop — Row 1: logo · search · cart · account. Row 2: nav links. */}
         <nav className="home-nav--desktop">
           <div style={{ maxWidth: 1680, margin: '0 auto', padding: '10px var(--gutter) 6px', display: 'flex', alignItems: 'center', gap: 'clamp(16px,2vw,32px)' }}>

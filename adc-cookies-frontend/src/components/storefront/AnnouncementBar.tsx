@@ -32,8 +32,13 @@ export default function AnnouncementBar() {
   return (
     <div
       style={{
+        // Pinned to the very top so the ribbon persists through scrolling (the revealing home
+        // navbar is offset down by --ribbon-h to sit just beneath it). z above the nav (50).
+        position: 'sticky', top: 0, zIndex: 60,
+        height: 'var(--ribbon-h)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'var(--orange-light)', color: 'var(--ink-800)',
-        textAlign: 'center', padding: '3px 40px', overflow: 'hidden',
+        textAlign: 'center', padding: '0 40px', overflow: 'hidden',
         borderBottom: '1px solid var(--ink-900-08)',
       }}
     >
