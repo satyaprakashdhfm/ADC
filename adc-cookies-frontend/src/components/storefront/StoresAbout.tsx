@@ -7,6 +7,7 @@ import { STORES } from '@/lib/stores';
 import ContactForm from './ContactForm';
 import AboutVideo from './AboutVideo';
 import InstagramReels from './InstagramReels';
+import IngredientsCarousel from './IngredientsCarousel';
 import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
@@ -120,21 +121,8 @@ export default function StoresAbout() {
             <h3 style={heading}>The Finest Ingredients</h3>
             <p style={{ ...body, maxWidth: '100%', margin: 0 }}>Crafted from the best — because extraordinary cookies deserve nothing less.</p>
           </div>
-          {/* Mobile: a horizontal swipe row (like the reviews) so it doesn't run tall. Desktop: a grid. */}
-          <div
-            className={isMobile ? 'hide-sb' : undefined}
-            style={isMobile
-              ? { display: 'flex', gap: 14, overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingBottom: 4 }
-              : { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 'clamp(14px,1.8vw,22px)' }}
-          >
-            {INGREDIENTS.map(x => (
-              <div key={x.n} style={{ ...(isMobile ? { flex: 'none', width: 'min(78vw,300px)', scrollSnapAlign: 'start' } : {}), background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', padding: 'clamp(18px,2vw,26px)' }}>
-                <div style={{ font: '900 clamp(1.5rem,1.1rem + 1vw,2.1rem)/1 var(--font-display)', color: 'var(--brand-secondary)', marginBottom: 8, letterSpacing: '-.02em' }}>{x.n}</div>
-                <h4 style={{ font: 'var(--weight-extra) var(--text-lg)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 8px' }}>{x.title}</h4>
-                <p style={{ fontSize: 'var(--text-sm)', lineHeight: 1.55, color: 'var(--text-body)', margin: 0 }}>{x.text}</p>
-              </div>
-            ))}
-          </div>
+          {/* Sideways auto-scrolling marquee (same as the reviews strip) instead of a tall grid. */}
+          <IngredientsCarousel items={INGREDIENTS} />
         </div>
       </section>
 

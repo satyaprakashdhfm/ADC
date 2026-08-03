@@ -49,18 +49,41 @@ router.get('/check', async (req, res) => {
   console.log(`[DELIVERY] HIT /api/delivery/check | pincode=${pin || req.query.pincode || 'MISSING'}${lat && lng ? ` | coords=${lat},${lng}` : ''}`);
   if (!/^\d{6}$/.test(pin)) return res.json({ serviceable: false, reason: 'invalid_pincode' });
 
+  // Delhivery pan-India quote — used both for out-of-town pincodes and as the fallback for an
+  // intracity zone whenever same-day can't be quoted, so a store-city pincode is never hard-blocked.
+  const delhiveryQuote = async () => {
+    if (!delhiveryConfigured()) {
+      console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | delhivery=unconfigured → serviceable=true`);
+      return { serviceable: true, reason: 'unconfigured', carrier: 'DELHIVERY', pincode: pin, tat: null, expectedDeliveryDate: null };
+    }
+    const origin = await getOriginPin();
+    const [svc, tat] = await Promise.all([
+      checkServiceability(pin),
+      (async () => {
+        if (!origin) return { ok: false, reason: 'origin_not_set' };
+        return expectedTat({ originPin: origin, destinationPin: pin });
+      })(),
+    ]);
+    console.log(`[DELIVERY] check result | pin=${pin} | carrier=DELHIVERY | serviceable=${svc.serviceable} | reason=${svc.reason} | tat=${tat.ok ? tat.tat : tat.reason}`);
+    return {
+      serviceable: svc.serviceable, embargo: svc.embargo || false, reason: svc.reason, cod: svc.cod,
+      carrier: 'DELHIVERY', pincode: pin, tat: tat.ok ? tat.tat : null, expectedDeliveryDate: tat.ok ? tat.expectedDeliveryDate : null,
+    };
+  };
+
   // Intracity first: if the pincode is in a city where we have a store, it ships same-day from the
-  // nearest store via Shadowfax. We surface that here based on the store zone (robust + instant);
-  // the real Shadowfax serviceability is verified at order time, falling back to Delhivery if needed.
+  // nearest store via the hyperlocal carrier (Shiprocket). We surface that here based on the store
+  // zone (robust + instant); the real serviceability is verified at order time.
   const pickup = nearestStore(pin);
   if (pickup) {
-    if (SHIPROCKET_DISABLED || !shiprocketConfigured()) {
-      console.log(`[DELIVERY] check | pin=${pin} | intracity paused → blocking checkout (nearest store ${pickup.name})`);
-      return res.json({
-        serviceable: false, reason: 'intracity_paused', intracity: true, store: pickup.name, city: pickup.city,
-        maintenanceMessage: `Same-day delivery is temporarily unavailable. Please try again shortly.`,
-        tat: null, expectedDeliveryDate: null, pincode: pin,
-      });
+    // Same-day is only offered while the hyperlocal carrier is actually live. If it's paused or
+    // unconfigured ("down"), we DON'T block the store-city pincode — we quietly fall back to
+    // Delhivery so the order still goes through (just not same-day). Availability first.
+    const hyperlocalLive = shiprocketConfigured() && !SHIPROCKET_DISABLED;
+    if (!hyperlocalLive) {
+      console.log(`[DELIVERY] check | pin=${pin} | hyperlocal down → Delhivery fallback (store ${pickup.name})`);
+      const d = await delhiveryQuote();
+      return res.json({ ...d, store: pickup.name, city: pickup.city });
     }
     /*
      * Quote the REAL rate when we have coordinates for both ends.
@@ -72,45 +95,25 @@ router.get('/check', async (req, res) => {
      */
     let quotedFee = null, etaHours = null;
     if (lat && lng) {
-      const q = await srServiceability({
-        pickupPin: SHIPROCKET_ORIGIN.pin, deliveryPin: pin,
-        latFrom: SHIPROCKET_ORIGIN.lat, longFrom: SHIPROCKET_ORIGIN.long, latTo: lat, longTo: lng,
-      });
-      if (q.serviceable) { quotedFee = q.rate; etaHours = q.couriers?.[0]?.etd_hours ?? null; }
+      try {
+        const q = await srServiceability({
+          pickupPin: SHIPROCKET_ORIGIN.pin, deliveryPin: pin,
+          latFrom: SHIPROCKET_ORIGIN.lat, longFrom: SHIPROCKET_ORIGIN.long, latTo: lat, longTo: lng,
+        });
+        if (q.serviceable) { quotedFee = q.rate; etaHours = q.couriers?.[0]?.etd_hours ?? null; }
+      } catch (e) {
+        // A failed quote isn't fatal — the zone is still same-day serviceable; only the live rate is
+        // missing, so we leave the fee to the configured default and the shipment is created later.
+        console.log(`[DELIVERY] check | pin=${pin} | hyperlocal quote failed (${e?.message || e}) → default fee`);
+      }
     }
     console.log(`[DELIVERY] check | pin=${pin} | carrier=SHIPROCKET | intracity from ${pickup.name} | quote=${quotedFee ?? 'default'} | eta=${etaHours ?? '?'}h`);
     return res.json({ serviceable: true, intracity: true, carrier: 'SHIPROCKET', store: pickup.name, city: pickup.city,
       sameDay: true, deliveryFee: quotedFee, etaHours, tat: null, expectedDeliveryDate: null, pincode: pin });
   }
 
-  if (!delhiveryConfigured()) {
-    console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | delhivery=unconfigured → returning serviceable=true`);
-    return res.json({ serviceable: true, reason: 'unconfigured', tat: null, expectedDeliveryDate: null });
-  }
-
-  const origin = await getOriginPin();
-  console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | origin=${origin || 'MISSING'}`);
-
-  const [svc, tat] = await Promise.all([
-    checkServiceability(pin),
-    (async () => {
-      if (!origin) return { ok: false, reason: 'origin_not_set' };
-      return expectedTat({ originPin: origin, destinationPin: pin });
-    })(),
-  ]);
-
-  console.log(`[DELIVERY] check result | pin=${pin} | carrier=DELHIVERY | serviceable=${svc.serviceable} | reason=${svc.reason} | tat=${tat.ok ? tat.tat : tat.reason}`);
-
-  res.json({
-    serviceable: svc.serviceable,
-    embargo: svc.embargo || false,
-    reason: svc.reason,
-    cod: svc.cod,
-    carrier: 'DELHIVERY',
-    pincode: pin,
-    tat: tat.ok ? tat.tat : null,
-    expectedDeliveryDate: tat.ok ? tat.expectedDeliveryDate : null,
-  });
+  console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | out-of-town`);
+  res.json(await delhiveryQuote());
 });
 
 export default router;

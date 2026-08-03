@@ -182,19 +182,6 @@ body::before {
 @media (max-width:900px) { .home-hero { min-height: 68svh; } }
 @media (max-width:680px) { .home-hero { min-height: 62svh; padding: clamp(40px,7vw,64px) 0 !important; } }
 
-/* Hero legibility scrim (brand orange, not cream, so it never bleaches the brand). Desktop keeps
-   the copy clear of the ringed cookies, so a light centre wash is enough. */
-.home-hero-scrim {
-  background: radial-gradient(ellipse 60% 52% at 50% 50%, rgba(239,117,7,0.9) 0%, rgba(239,117,7,0.5) 45%, rgba(239,117,7,0) 72%);
-}
-/* On phones the ring closes in and the paragraph prints over dark cookies — widen and strengthen
-   the wash so the whole copy column sits on muted orange; only the outermost cookies stay crisp. */
-@media (max-width:680px) {
-  .home-hero-scrim {
-    background: radial-gradient(ellipse 96% 64% at 50% 47%, rgba(239,117,7,0.97) 0%, rgba(239,117,7,0.88) 46%, rgba(239,117,7,0.45) 72%, rgba(239,117,7,0) 90%);
-  }
-}
-
 /* Footer (brand band) */
 .footer-link:hover { color: var(--white) !important; }
 .footer-pill { transition: transform .15s ease, box-shadow .15s ease; }

@@ -45,13 +45,6 @@ export default function HomeHero() {
           </picture>
         </motion.div>
 
-        {/* Legibility scrim. The art rings the frame with cookies around an empty orange centre; on
-            wide screens the copy sits clear of them, but on a narrow phone the cookies crowd inward
-            and the paragraph ends up printed over a dark chocolate/matcha cookie — unreadable. A soft
-            radial in the brand orange (not cream) mutes whatever's directly behind the copy without
-            bleaching the brand: the edge cookies stay crisp beyond its radius. */}
-        <div aria-hidden className="home-hero-scrim" style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
-
         {/* Center content */}
         <motion.div initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           style={{ position: 'relative', zIndex: 3, textAlign: 'center', padding: '0 var(--gutter)', maxWidth: 720 }}>

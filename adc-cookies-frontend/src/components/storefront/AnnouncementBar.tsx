@@ -38,15 +38,18 @@ export default function AnnouncementBar() {
         height: 'var(--ribbon-h)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'var(--orange-light)', color: 'var(--ink-800)',
-        textAlign: 'center', padding: '0 40px', overflow: 'hidden',
+        textAlign: 'center', padding: '0 clamp(12px, 4vw, 40px)', overflow: 'hidden',
         borderBottom: '1px solid var(--ink-900-08)',
       }}
     >
-      {/* key forces a remount so the slide-in animation replays on each message */}
+      {/* key forces a remount so the slide-in animation replays on each message. One line always —
+          a long trending message (e.g. a long product name) would otherwise wrap to two lines and
+          get clipped by the fixed ribbon height on mobile, so nowrap + ellipsis keeps it neat. */}
       <span
         key={i}
         style={{
-          display: 'inline-block', fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)',
+          display: 'block', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)',
           fontWeight: 700, letterSpacing: '.01em', animation: 'annSlide .5s var(--ease-out) both',
         }}
       >
