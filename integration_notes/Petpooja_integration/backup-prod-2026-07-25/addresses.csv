@@ -1,0 +1,20 @@
+id,user_id,full_name,phone,address_line1,address_line2,city,state,pincode,latitude,longitude,is_default,label
+7,14,sudheer kumar,9346701469,"Plot No, 57"," Sainath Colony Rd, Injapur,  Telangana",Hyderabad,Karnataka,501510,,,t,Home
+11,16,greeshma sappidi,8790284586,new building ,Challaghatta,Bengaluru,Karnataka,560007,,,t,Home
+16,7,Satya Prakash,jkbfedjd,efhjasbfjh,fejrszrjhf,Delhi,Delhi,110001,,,t,Home
+8,7,Satya,9381502998,everst colive pg,Eletronicity,Bengaluru,Karnataka,560100,,,t,Home
+17,21,jk,919113874768,asdfasdf,asdfad,Fadfa,Adfad,560067,,,f,Home
+12,14,Sudheer Kumar,919346701469,Revanth PG ,Phase 3,Hyderabad,Telangana,500072,,,f,Other
+13,14,Sudheer Kumar,919346701469,Testing Buliding,Electronic city,Bangloure,Karatanaka,560100,,,f,Home
+14,14,Sudheer Kumar,919346701469,test Home,Make up Amzaon,New Delhi,Delhi,110001,,,t,Office
+18,22,surya prakash,"",fxf,Gunjur,Bengaluru,Karnataka,560087,,,t,Home
+15,14,Sudheer Kumar,9346701469,Testing Flat ,Testing,Delhi,Delhi,110001,,,f,Other
+19,40,Bunty,8790284586,64,Tcvmkj,యాదాద్రి భువనగిరి,Telangana,508100,,,t,Home
+20,41,disha,9606737183,"block -7D, #505, 5th floor","provident sunworth city apartments, near kumbalgudu kengeri",Bengaluru,Karnataka,560060,,,f,Home
+21,43,VISHNU VARDHAN REDDY C,7353180599,"#3, Nakshatra homes, flat no 201, hagadur main road",Immadihalli,Bengaluru,Karnataka,560066,,,t,Home
+22,44,Sumanth,9113277234,4,Acharya ,Bengaluru,Karnataka,570023,,,f,Other
+23,45,Olivia Debroy,9901350657,"Sooryakiran Apartment, Sultanpalya main road, RT Nagar",Opposite to Medax Hospital,Bengaluru,Karnataka,560032,,,t,Home
+9,53,satya prakash,09381502998,219,"9th Main Road, Ashoka Pillar",Prakasam,Andhra Pradesh,523226,,,f,Home
+10,53,satya prakash,09381502998,219,"9th Main Road, Ashoka Pillar",Prakasam,Andhra Pradesh,523226,,,t,Home
+24,62,P. Vikram,8898898669,25/22,Venkatakrishnan street,Salem,Tamil Nadu,636002,,,f,Home
+25,28,Kummitha pitchi reddy,8008883479,green fields layout,Gunjur,Bengaluru,Karnataka,560087,,,t,Home

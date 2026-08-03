@@ -1,0 +1,99 @@
+id,order_id,status,remarks,created_at
+40,31,PLACED,Order placed successfully,2026-06-22T18:10:12.816Z
+41,31,CONFIRMED,Payment received via Razorpay,2026-06-22T18:11:12.698Z
+42,31,SHIPMENT_CREATED,Delhivery waybill 85582010000044,2026-06-22T18:11:13.440Z
+43,32,PLACED,Order placed successfully,2026-06-22T18:29:37.707Z
+44,32,CONFIRMED,Payment received via Razorpay,2026-06-22T18:30:37.249Z
+45,32,SHIPMENT_CREATED,Delhivery waybill 85582010000055,2026-06-22T18:30:38.298Z
+46,33,PLACED,Order placed successfully,2026-06-27T05:22:37.399Z
+47,33,CONFIRMED,Payment received via Razorpay,2026-06-27T05:23:45.505Z
+48,33,SHIPMENT_CREATED,Delhivery waybill 85582010000066,2026-06-27T05:23:46.717Z
+49,34,PLACED,Order placed successfully,2026-06-29T08:55:07.987Z
+50,34,CONFIRMED,Payment received via Razorpay,2026-06-29T08:56:13.416Z
+51,34,SHIPMENT_CREATED,Delhivery waybill 85582010000070,2026-06-29T08:56:14.437Z
+53,36,PLACED,Order placed successfully,2026-07-04T18:51:06.782Z
+54,36,CONFIRMED,Payment received via Razorpay,2026-07-04T18:51:47.669Z
+55,36,SHIPMENT_CREATED,Delhivery waybill 85582010000081,2026-07-04T18:51:48.781Z
+56,37,PLACED,Order placed successfully,2026-07-04T19:05:58.931Z
+57,37,CONFIRMED,Payment received via Razorpay,2026-07-04T19:06:21.669Z
+58,37,SHIPMENT_CREATED,Delhivery waybill 85582010000092,2026-07-04T19:06:22.670Z
+59,38,PLACED,Order placed successfully,2026-07-04T19:24:23.696Z
+60,38,CONFIRMED,Payment received via Razorpay,2026-07-04T19:24:48.101Z
+61,38,SHIPMENT_CREATED,Delhivery waybill 85582010000103,2026-07-04T19:24:49.177Z
+63,40,PLACED,Order placed successfully,2026-07-05T17:44:53.915Z
+64,40,CONFIRMED,Payment received via Razorpay,2026-07-05T17:45:32.396Z
+65,40,SHIPMENT_CREATED,Delhivery waybill SF1768309781DOF,2026-07-05T17:45:33.138Z
+66,41,PLACED,Order placed successfully,2026-07-05T18:42:38.432Z
+67,41,CONFIRMED,Payment received via Razorpay,2026-07-05T18:43:27.468Z
+68,41,SHIPMENT_CREATED,Delhivery waybill SF1768310687DOF,2026-07-05T18:43:28.614Z
+71,43,PLACED,Order placed successfully,2026-07-07T19:33:39.145Z
+72,43,CONFIRMED,Payment received via Razorpay,2026-07-07T19:34:11.364Z
+73,43,SHIPMENT_CREATED,Delhivery waybill SF1769040728DOF,2026-07-07T19:34:12.374Z
+74,43,New,Item New at BLR_Domlur,2026-07-08 01:04:12
+76,45,PLACED,Order placed successfully,2026-07-08T10:50:28.620Z
+77,45,CONFIRMED,Payment received via Razorpay,2026-07-08T10:51:09.625Z
+78,45,SHIPMENT_CREATED,Delhivery waybill SF1770170860DOF,2026-07-08T10:51:11.393Z
+79,45,New,Item New at BLR_Domlur,2026-07-08 16:21:11
+80,45,Out for delivery,Rider en route to your address,2026-07-08T16:45:00+05:30
+81,45,Out for delivery,test,2026-07-08T16:45:00+05:30
+82,45,Out for delivery,Rider en route to your address,2026-07-08T16:45:00+05:30
+87,45,Delivered,Delivered to Sudheer Kumar,2026-07-08T18:00:00+05:30
+88,48,PLACED,Order placed successfully,2026-07-08T19:32:59.019Z
+89,48,CONFIRMED,Payment received via Razorpay,2026-07-08T19:33:34.705Z
+90,48,SHIPMENT_CREATED,Delhivery waybill 85582010000195,2026-07-08T19:33:35.820Z
+91,49,PLACED,Order placed successfully,2026-07-09T18:46:43.840Z
+92,49,CONFIRMED,Payment received via Razorpay,2026-07-09T18:47:19.440Z
+93,49,SHIPMENT_CREATED,Delhivery waybill 85582010000254,2026-07-09T18:47:20.650Z
+95,51,PLACED,Order placed successfully,2026-07-09T18:48:57.994Z
+96,51,CONFIRMED,Payment received via Razorpay,2026-07-09T18:49:33.601Z
+97,51,SHIPMENT_CREATED,Delhivery waybill SF1776195036DOF,2026-07-09T18:49:35.980Z
+98,51,New,Item New at BLR_Domlur,2026-07-10 00:19:36
+99,31,DELIVERED,,2026-07-09T19:24:23.676Z
+100,45,Picked up from store,Rider collected from Electronic City store,2026-07-08T17:00:00+05:30
+101,51,Pickup assigned,test assigned_for_seller_pickup,2026-07-10T12:00:00+05:30
+102,43,Picked up from store,test seller_pickup_done,2026-07-10T12:00:00+05:30
+103,41,Out for delivery,test ofd,2026-07-10T12:00:00+05:30
+104,40,Delivered,test delivered,2026-07-10T12:00:00+05:30
+105,52,PLACED,Order placed successfully,2026-07-14T11:00:11.986Z
+106,52,CONFIRMED,Payment received via Razorpay,2026-07-14T11:00:45.228Z
+107,52,SHIPMENT_CREATED,Delhivery waybill 85582010000265,2026-07-14T11:00:46.387Z
+108,53,PLACED,Order placed successfully,2026-07-15T09:18:42.259Z
+109,53,CONFIRMED,Payment received via Razorpay,2026-07-15T09:19:12.776Z
+110,54,PLACED,Order placed successfully,2026-07-16T18:21:41.550Z
+111,54,CONFIRMED,Payment received via Razorpay,2026-07-16T18:22:28.420Z
+112,54,SHIPMENT_CREATED,Delhivery waybill SF1776975778DOF,2026-07-16T18:22:29.238Z
+113,54,New,Item New at BLR_Domlur,2026-07-17 00:41:08
+114,55,PLACED,Order placed successfully,2026-07-16T20:01:30.888Z
+115,56,PLACED,Order placed successfully,2026-07-16T20:09:20.757Z
+116,56,CONFIRMED,Payment received via Razorpay,2026-07-16T20:10:01.258Z
+117,56,SHIPMENT_CREATED,Delhivery waybill SF1783902349DOF,2026-07-16T20:10:02.153Z
+118,56,New,Item New at BLR_Domlur,2026-07-17 02:10:00
+119,57,PLACED,Order placed successfully,2026-07-17T03:23:50.737Z
+120,57,CONFIRMED,Payment received via Razorpay,2026-07-17T03:24:25.126Z
+121,57,SHIPMENT_CREATED,Delhivery waybill 85582010000280,2026-07-17T03:24:26.378Z
+122,58,PLACED,Order placed successfully,2026-07-17T05:20:03.569Z
+123,58,CONFIRMED,Payment received via Razorpay,2026-07-17T05:21:12.817Z
+124,59,PLACED,Order placed successfully,2026-07-17T05:32:47.815Z
+125,60,PLACED,Order placed successfully,2026-07-19T14:31:47.945Z
+126,61,PLACED,Order placed successfully,2026-07-19T14:43:01.572Z
+127,62,PLACED,Order placed successfully,2026-07-19T17:34:01.397Z
+128,63,PLACED,Order placed successfully,2026-07-22T05:18:07.172Z
+129,63,CONFIRMED,Payment received via Razorpay,2026-07-22T05:18:39.870Z
+130,63,SHIPMENT_CREATED,Delhivery waybill SF1784684342DOF,2026-07-22T05:18:41.180Z
+131,63,New,Item New at BLR_Domlur,2026-07-22 10:48:41
+135,64,PLACED,Order placed successfully,2026-07-22T20:28:56.278Z
+136,64,CONFIRMED,Payment received via Razorpay,2026-07-22T20:29:34.844Z
+137,64,SHIPMENT_CREATED,Delhivery waybill SF1788389792DOF,2026-07-22T20:29:36.439Z
+138,65,PLACED,Order placed successfully,2026-07-22T20:38:17.976Z
+139,66,PLACED,Order placed successfully,2026-07-22T20:38:33.249Z
+140,66,PAYMENT_FAILED,"Payment failed (code=BAD_REQUEST_ERROR, reason=payment_failed, source=gateway, step=payment_authorization, payment=pay_TGgPql6xL1J3nS)",2026-07-22T20:38:54.823Z
+141,66,PAYMENT_FAILED,"Payment failed (code=BAD_REQUEST_ERROR, reason=payment_failed, source=gateway, step=payment_authorization, payment=pay_TGgQF6RAwVuZJF)",2026-07-22T20:39:16.268Z
+142,66,PAYMENT_FAILED,"Payment failed (code=BAD_REQUEST_ERROR, reason=payment_failed, source=gateway, step=payment_authorization, payment=pay_TGgQbvxKs8Wo8N)",2026-07-22T20:39:36.431Z
+143,67,PLACED,Order placed successfully,2026-07-22T21:04:54.320Z
+144,67,CONFIRMED,Payment received via Razorpay,2026-07-22T21:05:26.734Z
+145,67,SHIPMENT_CREATED,Delhivery waybill 85582010000302,2026-07-22T21:05:28.237Z
+146,68,PLACED,Order placed successfully,2026-07-22T21:15:53.056Z
+147,68,CONFIRMED,Payment received via Razorpay,2026-07-22T21:16:18.220Z
+148,68,SHIPMENT_CREATED,Delhivery waybill 85582010000313,2026-07-22T21:16:19.732Z
+149,64,New,Item New at BLR_Domlur,2026-07-23 12:45:09
+150,69,PLACED,Order placed successfully,2026-07-25T08:01:59.263Z
