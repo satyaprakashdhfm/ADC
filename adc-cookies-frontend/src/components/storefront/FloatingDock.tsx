@@ -14,7 +14,8 @@ const WHEEL_MINI = 'conic-gradient(var(--amber-400) 0 45deg, var(--orange-500) 4
 const MiniWheel = () => (
   <span style={{ position: 'relative', width: 32, height: 32, display: 'grid', placeItems: 'center' }}>
     <span aria-hidden style={{ position: 'absolute', top: -2, left: '50%', transform: 'translateX(-50%)', zIndex: 2, width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '7px solid var(--ink-900)' }} />
-    <span aria-hidden style={{ width: 30, height: 30, borderRadius: '50%', background: WHEEL_MINI, border: '2px solid var(--white)', boxShadow: '0 0 0 1px var(--amber-600)' }} />
+    {/* The disc spins continuously so the launcher always reads as a live, dynamic prize wheel. */}
+    <span aria-hidden className="mini-wheel-disc" style={{ width: 30, height: 30, borderRadius: '50%', background: WHEEL_MINI, border: '2px solid var(--white)', boxShadow: '0 0 0 1px var(--amber-600)' }} />
     <span aria-hidden style={{ position: 'absolute', width: 9, height: 9, borderRadius: '50%', background: 'var(--white)', boxShadow: '0 0 0 1.5px var(--amber-600)' }} />
   </span>
 );

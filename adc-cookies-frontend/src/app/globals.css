@@ -267,6 +267,11 @@ body::before {
   .home-corp-body { max-width: 100% !important; }
 }
 
+/* The floating Spin & Win launcher's mini-wheel spins forever so it reads as a live prize wheel. */
+@keyframes miniWheelSpin { to { transform: rotate(360deg); } }
+.mini-wheel-disc { animation: miniWheelSpin 3.6s linear infinite; will-change: transform; }
+@media (prefers-reduced-motion: reduce) { .mini-wheel-disc { animation: none; } }
+
 /* Header doodle wash — a faint, sparse scatter of cookie doodles behind the nav band so it isn't a
    flat orange block. Two cookie sizes + crumbs at offset positions break the grid feel; low opacity
    keeps it a background texture, never dominating. The nav content sits above it (z-index below). */
@@ -276,20 +281,13 @@ body::before {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  /* A scattered HANDFUL (not a tiled grid) — each doodle placed once, spread across the band, so
-     it stays sparse and reads as background texture rather than a repeating wallpaper. */
-  background-image:
-    url('/assets/doodles/cookie-1.png'),
-    url('/assets/doodles/cookie-2.png'),
-    url('/assets/doodles/cookie-3.png'),
-    url('/assets/doodles/crumb-1.png'),
-    url('/assets/doodles/cookie-4.png'),
-    url('/assets/doodles/crumb-2.png'),
-    url('/assets/doodles/cookie-2.png');
-  background-repeat: no-repeat;
-  background-size: 66px, 52px, 60px, 40px, 58px, 36px, 48px;
-  background-position: 4% 30%, 20% 78%, 34% 24%, 52% 70%, 68% 32%, 82% 74%, 95% 36%;
-  opacity: .08;
+  /* Hand-drawn cream cookie-doodle strip (client's reference art) tiled small and light, so the
+     band reads as a busy-but-subtle doodle texture rather than a flat orange block. The art's own
+     background is the same brand orange, so only the cream doodles show through at low opacity. */
+  background-image: url('/assets/doodles/header-doodles.png');
+  background-repeat: repeat;
+  background-size: 300px auto;
+  opacity: .34;
 }
 .home-sticky-header > nav,
 .home-sticky-header > .home-topbar { position: relative; z-index: 1; }
