@@ -267,6 +267,33 @@ body::before {
   .home-corp-body { max-width: 100% !important; }
 }
 
+/* Header doodle wash — a faint, sparse scatter of cookie doodles behind the nav band so it isn't a
+   flat orange block. Two cookie sizes + crumbs at offset positions break the grid feel; low opacity
+   keeps it a background texture, never dominating. The nav content sits above it (z-index below). */
+.home-sticky-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* A scattered HANDFUL (not a tiled grid) — each doodle placed once, spread across the band, so
+     it stays sparse and reads as background texture rather than a repeating wallpaper. */
+  background-image:
+    url('/assets/doodles/cookie-1.png'),
+    url('/assets/doodles/cookie-2.png'),
+    url('/assets/doodles/cookie-3.png'),
+    url('/assets/doodles/crumb-1.png'),
+    url('/assets/doodles/cookie-4.png'),
+    url('/assets/doodles/crumb-2.png'),
+    url('/assets/doodles/cookie-2.png');
+  background-repeat: no-repeat;
+  background-size: 66px, 52px, 60px, 40px, 58px, 36px, 48px;
+  background-position: 4% 30%, 20% 78%, 34% 24%, 52% 70%, 68% 32%, 82% 74%, 95% 36%;
+  opacity: .08;
+}
+.home-sticky-header > nav,
+.home-sticky-header > .home-topbar { position: relative; z-index: 1; }
+
 /* Product card image hover-swap — a second styled shot crossfades in over the first when the card
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
 .prod-media__hover { opacity: 0; transition: opacity .45s ease; }
