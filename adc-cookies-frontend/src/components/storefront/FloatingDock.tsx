@@ -64,6 +64,17 @@ export default function FloatingDock() {
     return () => window.removeEventListener(OPEN_CHAT_EVENT, open);
   }, []);
 
+  // A little "Hi, I'm Doughie" speech bubble pinned beside the support mascot — homepage only, a
+  // couple of seconds after load so it doesn't fight the first paint. It stays until dismissed or
+  // until the chat is opened.
+  const [bubble, setBubble] = useState(false);
+  useEffect(() => {
+    if (pathname !== '/') { setBubble(false); return; }
+    const t = setTimeout(() => setBubble(true), 2500);
+    return () => clearTimeout(t);
+  }, [pathname]);
+  useEffect(() => { if (chat) setBubble(false); }, [chat]);
+
   return (
     <>
       <div className="floating-dock" style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
@@ -89,12 +100,32 @@ export default function FloatingDock() {
         {/* Chatbot (middle) — Doughie, the support mascot, seated on a round white disk with a
             pulsing ring, so it matches the spin (white disk) and WhatsApp (green disk) launchers and
             the trio reads as one set. Same waPulse ring as WhatsApp, tinted amber to the brand. */}
-        <button onClick={() => setChat(o => !o)} aria-label="Help & support" title="Help & support"
-          style={{ ...fab, background: 'var(--white)', border: '1.5px solid var(--border-default)' }}>
-          <span aria-hidden style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid rgba(242,159,5,.6)', animation: 'waPulse 2.4s ease-out infinite' }} />
-          <Image src="/assets/mascots/doughie-support.png" alt="" width={42} height={42}
-            style={{ width: 42, height: 42, objectFit: 'contain' }} />
-        </button>
+        <div style={{ position: 'relative', display: 'grid', placeItems: 'center' }}>
+          {bubble && (
+            <button
+              onClick={() => setChat(true)}
+              className="doughie-bubble"
+              style={{
+                position: 'absolute', right: 'calc(100% + 14px)', top: '50%', transform: 'translateY(-50%)',
+                width: 'max-content', maxWidth: 210, textAlign: 'left', cursor: 'pointer',
+                background: 'var(--white)', color: 'var(--text-strong)', border: '1.5px solid var(--border-default)',
+                borderRadius: 14, padding: '9px 13px', boxShadow: '0 10px 24px var(--black-18)',
+                fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)', fontWeight: 600, lineHeight: 1.4,
+              }}
+            >
+              <span aria-hidden onClick={(e) => { e.stopPropagation(); setBubble(false); }} style={{ position: 'absolute', top: -8, right: -8, width: 20, height: 20, borderRadius: '50%', background: 'var(--white)', border: '1.5px solid var(--border-default)', color: 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, lineHeight: 1 }}>×</span>
+              <strong style={{ fontWeight: 800 }}>Hi! I&apos;m Doughie 🍪</strong><br />ADC support — need any help?
+              {/* tail pointing right at the mascot */}
+              <span aria-hidden style={{ position: 'absolute', right: -7, top: '50%', transform: 'translateY(-50%) rotate(45deg)', width: 12, height: 12, background: 'var(--white)', borderRight: '1.5px solid var(--border-default)', borderTop: '1.5px solid var(--border-default)' }} />
+            </button>
+          )}
+          <button onClick={() => setChat(o => !o)} aria-label="Help & support" title="Help & support"
+            style={{ ...fab, background: 'var(--white)', border: '1.5px solid var(--border-default)' }}>
+            <span aria-hidden style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid rgba(242,159,5,.6)', animation: 'waPulse 2.4s ease-out infinite' }} />
+            <Image src="/assets/mascots/doughie-support.png" alt="" width={42} height={42}
+              style={{ width: 42, height: 42, objectFit: 'contain' }} />
+          </button>
+        </div>
 
         {/* WhatsApp (bottom) */}
         <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" aria-label="Chat with us on WhatsApp" title="WhatsApp"

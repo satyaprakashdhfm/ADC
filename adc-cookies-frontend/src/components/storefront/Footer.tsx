@@ -2,6 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import FooterCookies from './FooterCookies';
+import { NAV_DESKTOP } from './SiteNav';
 import { footerHeadingStyle, footerLinkStyle } from './footerStyles';
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 import { openChatbot } from '@/lib/chatEvents';
@@ -90,6 +91,19 @@ export default function Footer() {
 
       <div style={{ position: 'relative', zIndex: 2 }}>
         <h2 style={srOnly}>a dough cookie</h2>
+
+        {/* Header/footer "merge" — the main navbar links repeated across the top of the footer
+            (Dohful-style), so the footer opens with the same wayfinding the header carries. */}
+        <nav
+          className="footer-nav"
+          aria-label="Footer"
+          style={{ maxWidth: 1180, margin: '0 auto clamp(28px,4vw,44px)', padding: '0 var(--gutter)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '10px clamp(16px,2.4vw,36px)', borderBottom: '1px solid var(--white-16)', paddingBottom: 'clamp(22px,3vw,32px)' }}
+        >
+          {NAV_DESKTOP.filter(n => n.label !== 'Home').map(n => (
+            <Link key={n.label} href={n.href} className="footer-link" style={{ color: 'var(--white)', textDecoration: 'none', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}>{n.label}</Link>
+          ))}
+        </nav>
+
         <div
           className="footer-grid"
           style={{
