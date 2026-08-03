@@ -1,10 +1,40 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { getOne, getAll, withTransaction, nowIso } from '../db.js';
+import { getOne, getAll, query, withTransaction, nowIso } from '../db.js';
 import { requireAuth, ApiError } from '../middleware.js';
 import { serializeCoupon } from '../serializers.js';
+import { sendCouponEmail } from '../mailer.js';
 
 const router = Router();
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Emailed spin coupons stay valid a week — long enough that the winner can create an account with
+// that email and still redeem it, unlike the tight 12h window for an already-logged-in claim.
+const EMAIL_CLAIM_WINDOW_DAYS = 7;
+
+// Attach any pending email-subscribe spin claim for `email` to this user account: create their
+// spin_claims row (so the coupon works at checkout) and mark the email claim linked. Called on
+// login (GET /auth/me). Safe to call often — it no-ops once linked or if they already hold a reward.
+export async function linkEmailClaimsToUser(userId, email) {
+  if (!userId || !email) return;
+  const em = String(email).trim().toLowerCase();
+  const nowIsoStr = new Date().toISOString();
+  const pending = await getAll(
+    `SELECT * FROM spin_email_claims WHERE lower(email) = $1 AND linked_user_id IS NULL AND expires_at > $2`,
+    [em, nowIsoStr],
+  );
+  for (const ec of pending) {
+    const already = await getOne('SELECT 1 FROM spin_claims WHERE user_id = $1 AND expires_at > $2 LIMIT 1', [userId, nowIsoStr]);
+    if (!already) {
+      await query(
+        `INSERT INTO spin_claims (user_id, coupon_id, code, label, claimed_at, expires_at, gift_product_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [userId, ec.coupon_id, ec.code, ec.label, ec.claimed_at, ec.expires_at, ec.gift_product_id],
+      );
+    }
+    await query('UPDATE spin_email_claims SET linked_user_id = $1 WHERE id = $2', [userId, ec.id]);
+  }
+}
 
 // Generous enough that a real shopper (who tries a handful of codes at checkout) never hits it,
 // tight enough to blunt anonymous brute-force code-guessing. Combined with requireAuth below.
@@ -392,6 +422,77 @@ router.post('/claim-spin', requireAuth, couponLimiter, async (req, res) => {
   });
 
   res.status(result.isNew ? 201 : 200).json(serializeClaim(result.row, result.coupon));
+});
+
+// Claim a spin win by EMAIL (subscribe-to-claim) instead of logging in. One reward per email:
+// records it, emails the code, and — if an account with that email already exists — attaches it to
+// that account now. Otherwise it's attached the moment they sign in with this email (see /auth/me).
+router.post('/claim-email', couponLimiter, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const name = String(req.body?.name || '').trim();
+  const code = String(req.body?.code || '').toUpperCase();
+  if (!EMAIL_RE.test(email)) throw new ApiError('Please enter a valid email address.');
+  if (name.length < 2) throw new ApiError('Please enter your name.');
+  if (!code) throw new ApiError('Missing reward code.');
+  const nowMs = Date.now();
+  const nowIsoStr = new Date(nowMs).toISOString();
+
+  const serialize = (row, coupon, alreadyClaimed) => ({
+    code: row.code, label: row.label,
+    discountType: coupon.discount_type, discountValue: coupon.discount_value,
+    minimumOrderAmount: coupon.minimum_order_amount, maximumDiscount: coupon.maximum_discount,
+    terms: coupon.terms || '',
+    isGift: !!coupon.gift_kind || Number(coupon.discount_value) === 0,
+    expiresAt: row.expires_at, alreadyClaimed: !!alreadyClaimed,
+  });
+
+  // Once per email — return their existing reward if they've already claimed with this address.
+  const existing = await getOne('SELECT * FROM spin_email_claims WHERE lower(email) = $1', [email]);
+  if (existing) {
+    const coupon = await getOne('SELECT * FROM coupons WHERE id = $1', [existing.coupon_id]);
+    return res.json(serialize(existing, coupon || {}, true));
+  }
+
+  const coupon = await getOne('SELECT * FROM coupons WHERE code = $1 AND is_active = TRUE AND spin_weight IS NOT NULL', [code]);
+  if (!coupon) throw new ApiError('This reward is no longer available.');
+
+  // Mystery gift: pick the surprise cookie once, now (same as the logged-in claim path).
+  let giftProductId = null;
+  if (coupon.gift_kind === 'MYSTERY') {
+    const pick = await getOne(
+      "SELECT id FROM products WHERE category = 'COOKIES' AND is_available = TRUE AND price <= $1 ORDER BY RANDOM() LIMIT 1",
+      [coupon.maximum_discount ?? coupon.discount_value],
+    );
+    giftProductId = pick?.id ?? null;
+  }
+
+  const expiresAt = new Date(nowMs + EMAIL_CLAIM_WINDOW_DAYS * 24 * 3600_000).toISOString();
+  const label = coupon.spin_label || coupon.code;
+  let row;
+  try {
+    row = await getOne(
+      `INSERT INTO spin_email_claims (email, name, coupon_id, code, label, claimed_at, expires_at, gift_product_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [email, name, coupon.id, coupon.code, label, nowIsoStr, expiresAt, giftProductId],
+    );
+  } catch (e) {
+    // Unique(email) race — someone claimed with this email a moment ago; return that one.
+    const dupe = await getOne('SELECT * FROM spin_email_claims WHERE lower(email) = $1', [email]);
+    if (dupe) return res.json(serialize(dupe, coupon, true));
+    throw e;
+  }
+
+  // If an account with this email already exists, attach the reward to it right away.
+  const user = await getOne('SELECT id FROM users WHERE lower(email) = $1', [email]);
+  if (user) { try { await linkEmailClaimsToUser(user.id, email); } catch { /* best effort */ } }
+
+  // Email the coupon (never blocks the response — the mailer swallows its own errors).
+  const offerText = coupon.discount_type === 'PERCENTAGE'
+    ? `${Math.round(coupon.discount_value)}% off${coupon.maximum_discount ? `, up to ₹${coupon.maximum_discount}` : ''}`
+    : (Number(coupon.discount_value) > 0 ? `₹${Math.round(coupon.discount_value)} off` : 'A free treat');
+  sendCouponEmail({ email, name, code: coupon.code, label, offerText, terms: coupon.terms || '', expiresAt }).catch(() => {});
+
+  res.status(201).json(serialize(row, coupon, false));
 });
 
 export default router;

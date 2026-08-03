@@ -243,6 +243,17 @@ export async function claimSpin(code: string): Promise<SpinClaim> {
   return request('/coupons/claim-spin', { method: 'POST', body: JSON.stringify({ code }) });
 }
 
+// Claim a spin win by EMAIL (subscribe-to-claim) — no login needed. The backend emails the coupon
+// and, once they sign in with this same email, attaches it to their account for checkout.
+export interface EmailSpinClaim {
+  code: string; label: string; discountType?: string; discountValue?: number;
+  minimumOrderAmount?: number | null; maximumDiscount?: number | null; terms?: string;
+  isGift?: boolean; expiresAt: string; alreadyClaimed?: boolean;
+}
+export async function claimEmailSpin(code: string, email: string, name: string): Promise<EmailSpinClaim> {
+  return request('/coupons/claim-email', { method: 'POST', body: JSON.stringify({ code, email, name }) });
+}
+
 /* ---- Orders ---- */
 export interface OrderPayment { provider: string; transactionId: string | null; status: string; paidAt: string | null; }
 

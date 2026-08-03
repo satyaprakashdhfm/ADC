@@ -254,6 +254,24 @@ export async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_spin_draws_device_id ON spin_draws(device_id);
     CREATE INDEX IF NOT EXISTS idx_spin_draws_user_id ON spin_draws(user_id);
 
+    -- Email-subscribe spin claims: a guest who wins subscribes with their email to claim the coupon
+    -- (instead of logging in). We email them the code and, once they sign in with that same email,
+    -- attach it to their account (a spin_claims row) so it works at checkout. One reward per email
+    -- (unique index on lower(email)).
+    CREATE TABLE IF NOT EXISTS spin_email_claims (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      name TEXT,
+      coupon_id INTEGER NOT NULL REFERENCES coupons(id),
+      code TEXT NOT NULL,
+      label TEXT NOT NULL,
+      claimed_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      linked_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      gift_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_spin_email_claims_email ON spin_email_claims(lower(email));
+
     -- Idempotent migrations
     ALTER TABLE addresses ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT 'Home';
     -- Spin & Win: which active coupons the wheel can award, their odds, and their terms.
