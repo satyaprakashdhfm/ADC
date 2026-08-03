@@ -216,12 +216,13 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
               <>
                 <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <button onClick={() => setSearchExpanded(true)} aria-label="Search" style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Search size={20} /></button>
-                  <LocationPill />
                 </div>
                 <a href="/" aria-label="a dough cookie home" style={{ justifySelf: 'center', display: 'flex', alignItems: 'center' }}>
                   <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 78, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }} />
                 </a>
                 <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* Location sits to the left of the account icon (per request). */}
+                  <LocationPill />
                   <button onClick={accountClick} className="nav-round-btn" aria-label={user ? 'My account' : 'Log in'} style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)' }}><User size={20} /></button>
                   <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)' }}>
                     <ShoppingBag size={20} />
