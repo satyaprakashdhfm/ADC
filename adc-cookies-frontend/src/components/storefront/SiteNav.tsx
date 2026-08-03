@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Menu, User, Search, ShoppingBag, ChevronDown } from 'lucide-react';
+import { Menu, User, Search, ShoppingBag, ChevronDown, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { getProducts, firstImage, type Product } from '@/lib/api';
@@ -19,13 +19,16 @@ import { LocationPill } from './LocationPicker';
  * in <SiteNav /> with no wiring.
  */
 
-interface NavLink { label: string; href: string; menuKey?: 'cookies' | 'tins' | 'locations' | 'partner' }
-const NAV_DESKTOP: NavLink[] = [
+interface NavLink { label: string; href: string; menuKey?: 'cookies' | 'tins' | 'locations' }
+// Corporate and Partner-with-us are now their own top-level links (each its own page), not a
+// combined "Partner with us" dropdown — the client wants both visible directly in the navbar.
+export const NAV_DESKTOP: NavLink[] = [
   { label: 'Home', href: '/' },
   { label: 'Buy Cookies', href: '/order?cat=cookies', menuKey: 'cookies' },
   { label: 'Cookie Tins', href: '/order?cat=tins', menuKey: 'tins' },
   { label: 'Locations', href: '/locations', menuKey: 'locations' },
-  { label: 'Partner with us', href: '/franchise', menuKey: 'partner' },
+  { label: 'Corporate', href: '/corporate' },
+  { label: 'Partner with us', href: '/franchise' },
   { label: 'About Us', href: '/about' },
   { label: 'Contact', href: '/contact' },
   { label: 'Orders', href: '/account' },
@@ -154,15 +157,29 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
   const [menuOpen, setMenuOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false); // mobile: search is an icon that expands, to keep the header short
-  // On the home hero, the bar hides until the first scroll, then slides in.
-  const [revealed, setRevealed] = useState(!revealOnScroll);
+  const [searchExpanded, setSearchExpanded] = useState(false); // desktop: search icon expands to a centered search
+  // Header is always visible at the top of the page, hides as you scroll DOWN, and reappears the
+  // moment you scroll UP — the standard "peek" header. (Same behaviour on every page now.)
+  const [hidden, setHidden] = useState(false);
   useEffect(() => {
-    if (!revealOnScroll) return;
-    const onScroll = () => setRevealed(window.scrollY > 120);
-    onScroll();
+    let lastY = typeof window !== 'undefined' ? window.scrollY : 0;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (y < 90) setHidden(false);            // always show near the top
+      else if (y > lastY + 6) setHidden(true);  // scrolling down → tuck away
+      else if (y < lastY - 6) setHidden(false); // scrolling up → reveal
+      lastY = y;
+    };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, [revealOnScroll]);
+  }, []);
+  // Close the expanded desktop search on Escape.
+  useEffect(() => {
+    if (!searchExpanded) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSearchExpanded(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [searchExpanded]);
   // Nav dropdown data: cookie/tin products (fetched) and store locations.
   const [products, setProducts] = useState<Product[]>([]);
   useEffect(() => {
@@ -175,18 +192,9 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
     key === 'cookies' ? toMenu('COOKIES')
       : key === 'tins' ? toMenu('TINS')
         : key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))
-          : key === 'partner' ? [{ label: 'Corporate & Bulk Order', href: '/corporate' }, { label: 'Franchise Enquiry', href: '/franchise' }]
-            : undefined;
+          : undefined;
   // Account icon → login modal (or account/admin page if already signed in).
   const accountClick = () => { if (user) router.push(user.role === 'ADMIN' ? '/admin' : '/account'); else setLoginOpen(true); };
-  const cartButton = (
-    <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', flex: 'none' }}>
-      <ShoppingBag size={20} />
-      {count > 0 && (
-        <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--gradient-warm)', color: 'var(--white)', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>
-      )}
-    </button>
-  );
 
   return (
     <>
@@ -194,19 +202,34 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
       {/* On the home hero (revealOnScroll) the bar is fixed and offset down by the sticky
           announcement ribbon's height so it slides in just beneath it, not over it. Other pages
           have no ribbon, so the sticky bar sits flush at the top. */}
-      <div className="home-sticky-header" style={{ position: revealOnScroll ? 'fixed' : 'sticky', top: revealOnScroll ? 'var(--ribbon-h)' : 0, left: 0, right: 0, zIndex: 50, background: 'var(--navbar-bg)', boxShadow: 'var(--shadow-md)', borderBottom: '1px solid var(--white-16)', transform: revealed ? 'translateY(0)' : 'translateY(-130%)', transition: 'transform .35s var(--ease-out)' }}>
-        {/* Desktop — Row 1: logo · search · cart · account. Row 2: nav links. */}
+      <div className="home-sticky-header" style={{ position: revealOnScroll ? 'fixed' : 'sticky', top: revealOnScroll ? 'var(--ribbon-h)' : 0, left: 0, right: 0, zIndex: 50, background: 'var(--navbar-bg)', boxShadow: 'var(--shadow-md)', borderBottom: '1px solid var(--white-16)', transform: hidden ? 'translateY(-130%)' : 'translateY(0)', transition: 'transform .35s var(--ease-out)' }}>
+        {/* Desktop — Row 1: search (left) · logo (centre) · cart + account (right). Row 2: nav links.
+            Clicking search swaps row 1 for a centred search field (Dohful-style). */}
         <nav className="home-nav--desktop">
-          <div style={{ maxWidth: 1680, margin: '0 auto', padding: '10px var(--gutter) 6px', display: 'flex', alignItems: 'center', gap: 'clamp(16px,2vw,32px)' }}>
-            <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
-              <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 84, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }} />
-            </a>
-            <SearchBox products={products} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
-              <LocationPill />
-              {cartButton}
-              <button onClick={accountClick} className="nav-round-btn" aria-label={user ? 'My account' : 'Log in'} style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}><User size={20} /></button>
-            </div>
+          <div style={{ maxWidth: 1680, margin: '0 auto', padding: '10px var(--gutter) 6px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 16, minHeight: 92 }}>
+            {searchExpanded ? (
+              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                <div style={{ flex: 1, maxWidth: 640 }}><SearchBox products={products} autoFocus onNavigate={() => setSearchExpanded(false)} /></div>
+                <button onClick={() => setSearchExpanded(false)} aria-label="Close search" style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><X size={20} /></button>
+              </div>
+            ) : (
+              <>
+                <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button onClick={() => setSearchExpanded(true)} aria-label="Search" style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Search size={20} /></button>
+                  <LocationPill />
+                </div>
+                <a href="/" aria-label="a dough cookie home" style={{ justifySelf: 'center', display: 'flex', alignItems: 'center' }}>
+                  <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 78, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }} />
+                </a>
+                <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button onClick={accountClick} className="nav-round-btn" aria-label={user ? 'My account' : 'Log in'} style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)' }}><User size={20} /></button>
+                  <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)' }}>
+                    <ShoppingBag size={20} />
+                    {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--white)', color: 'var(--orange-600)', fontSize: 11, fontWeight: 900, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
           <div>
             <div style={{ maxWidth: 1680, margin: '0 auto', padding: '2px var(--gutter) 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(16px,2.4vw,40px)', flexWrap: 'wrap' }}>
@@ -222,45 +245,49 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
           maxWidth: 1680, margin: '0 auto', padding: 'clamp(8px,1.6vw,12px) var(--gutter) 10px',
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <a href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
+          {/* Search (left) · logo (centre) · cart + menu (right) — mirrors the desktop layout. */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8 }}>
+            <div style={{ justifySelf: 'start' }}>
+              <button
+                onClick={() => setSearchOpen(v => !v)}
+                className="nav-round-btn"
+                aria-label={searchOpen ? 'Close search' : 'Search'}
+                aria-expanded={searchOpen}
+                style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: searchOpen ? 'var(--white-16)' : 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}
+              >
+                {searchOpen ? <X size={20} /> : <Search size={20} />}
+              </button>
+            </div>
+
+            <a href="/" aria-label="a dough cookie home" style={{ justifySelf: 'center', display: 'flex', alignItems: 'center' }}>
               <Image
                 src="/assets/adc-logo.png"
                 width={232}
                 height={168}
                 alt="a dough cookie"
                 priority
-                style={{ height: 'clamp(46px,11vw,66px)', width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }}
+                style={{ height: 'clamp(44px,11vw,62px)', width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }}
               />
             </a>
 
-            {/* location as a compact inline link, not a full-width row */}
-            <LocationPill compact />
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
-              {/* Search is a compact icon that expands the bar — keeps the header short */}
-              <button
-                onClick={() => setSearchOpen(v => !v)}
-                className="nav-round-btn"
-                aria-label={searchOpen ? 'Close search' : 'Search'}
-                aria-expanded={searchOpen}
-                style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: searchOpen ? 'var(--amber-50)' : 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', boxShadow: 'var(--shadow-xs)', flex: 'none' }}
-              >
-                <Search size={20} />
+            <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+              <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}>
+                <ShoppingBag size={20} />
+                {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 19, height: 19, padding: '0 5px', borderRadius: 10, background: 'var(--white)', color: 'var(--orange-600)', fontSize: 11, fontWeight: 900, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>}
               </button>
-              {cartButton}
               <button
                 onClick={() => setMenuOpen(true)}
                 className="nav-round-btn"
                 aria-label="Open menu"
-                style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', boxShadow: 'var(--shadow-xs)', flex: 'none' }}
+                style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}
               >
                 <Menu size={20} />
               </button>
             </div>
           </div>
 
-          {/* Search bar only when the icon is tapped */}
+          {/* Location + search reveal below the top row when tapped */}
+          <LocationPill compact />
           {searchOpen && (
             <SearchBox products={products} compact autoFocus onNavigate={() => setSearchOpen(false)} />
           )}
