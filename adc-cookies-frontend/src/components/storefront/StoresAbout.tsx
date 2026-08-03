@@ -25,12 +25,14 @@ const chip: React.CSSProperties = { display: 'inline-flex', alignItems: 'center'
 const chipIcon: React.CSSProperties = { width: 38, height: 38, borderRadius: 11, background: 'var(--surface-card)', color: 'var(--brand-secondary)', display: 'grid', placeItems: 'center', flex: 'none', border: '1px solid var(--border-default)' };
 
 // What goes into every cookie — shown between About Us and Our Stores.
+// img → public/assets/ingredients/<slug>.jpg (4:3). Optional — a branded number tile shows until
+// the photo is dropped in, so the section never renders a broken image.
 const INGREDIENTS = [
-  { n: '01', title: 'Président Butter', text: 'We use Président Butter, a premium French butter with a higher fat content that gives our cookies their signature gooey centre and soft, melt-in-your-mouth texture.' },
-  { n: '02', title: 'Couverture Chocolate', text: 'Made with imported Couverture Chocolate — known for its high cocoa content and silky finish. This rich, decadent chocolate delivers an intense cocoa flavour in every bite, elevating each cookie to gourmet status.' },
-  { n: '03', title: 'Artisanal Flour Blend', text: 'A curated blend of artisanal flours gives the perfect cookie structure and a nuanced, complex flavour profile — the kind of taste and texture only premium flour can deliver.' },
-  { n: '04', title: 'Premium Fillings', text: 'No compromises, just the best. Stuffed with only 100% real Nutella, Lotus Biscoff, Reese’s Cups and homemade peanut butter — our fillings are never substitutes, they’re the real deal.' },
-  { n: '05', title: 'Handcrafted in Small Batches', text: 'Every cookie is handmade in small batches and baked fresh through the day, so each one reaches you warm, soft-centred and never mass-produced.' },
+  { n: '01', title: 'Président Butter', img: '/assets/ingredients/president-butter.jpg', text: 'We use Président Butter, a premium French butter with a higher fat content that gives our cookies their signature gooey centre and soft, melt-in-your-mouth texture.' },
+  { n: '02', title: 'Couverture Chocolate', img: '/assets/ingredients/couverture-chocolate.jpg', text: 'Made with imported Couverture Chocolate — known for its high cocoa content and silky finish. This rich, decadent chocolate delivers an intense cocoa flavour in every bite, elevating each cookie to gourmet status.' },
+  { n: '03', title: 'Artisanal Flour Blend', img: '/assets/ingredients/artisanal-flour.jpg', text: 'A curated blend of artisanal flours gives the perfect cookie structure and a nuanced, complex flavour profile — the kind of taste and texture only premium flour can deliver.' },
+  { n: '04', title: 'Premium Fillings', img: '/assets/ingredients/premium-fillings.jpg', text: 'No compromises, just the best. Stuffed with only 100% real Nutella, Lotus Biscoff, Reese’s Cups and homemade peanut butter — our fillings are never substitutes, they’re the real deal.' },
+  { n: '05', title: 'Handcrafted in Small Batches', img: '/assets/ingredients/small-batches.jpg', text: 'Every cookie is handmade in small batches and baked fresh through the day, so each one reaches you warm, soft-centred and never mass-produced.' },
 ];
 
 function useIsMobile(bp = 760) {

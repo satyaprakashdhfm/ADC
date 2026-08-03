@@ -1,39 +1,62 @@
 'use client';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-export interface Ingredient { n: string; title: string; text: string; }
+export interface Ingredient { n: string; title: string; text: string; img?: string }
 
 const arrowBtn: React.CSSProperties = {
-  position: 'absolute', top: '50%', transform: 'translateY(-50%)', zIndex: 5,
+  position: 'absolute', top: '42%', transform: 'translateY(-50%)', zIndex: 5,
   width: 42, height: 42, borderRadius: '50%', cursor: 'pointer',
   border: '1px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--text-strong)',
   display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-md)',
 };
 
+/** Ingredient image = top half of the card (4:3). Falls back to a branded gradient + number tile
+ *  until the real photo (public/assets/ingredients/<slug>.jpg) is dropped in, so nothing 404s. */
+function IngredientImage({ n, src, title }: { n: string; src?: string; title: string }) {
+  const [ok, setOk] = useState(!!src);
+  return (
+    <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: 'var(--gradient-warm)', overflow: 'hidden' }}>
+      {ok && src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={title} loading="lazy" onError={() => setOk(false)}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+      )}
+      <span aria-hidden style={{ position: 'absolute', top: 10, left: 12, font: '900 clamp(1.5rem,1.1rem + 1vw,2.1rem)/1 var(--font-display)', color: 'var(--white)', letterSpacing: '-.02em', textShadow: '0 2px 8px rgba(0,0,0,.25)' }}>{n}</span>
+    </div>
+  );
+}
+
 /**
- * The Finest Ingredients — same sideways marquee as the reviews strip: a smooth, continuous
- * auto-scroll (cards rendered twice for a seamless loop) that pauses on hover, with arrows at the
- * far ends to nudge it. Keeps the section short instead of running tall as a stacked grid.
+ * The Finest Ingredients — a gentle sideways auto-scroll through the FIVE unique cards (no doubling,
+ * so nothing ever visibly repeats): it eases forward, then smoothly returns to the first card and
+ * goes again. Pauses on hover; arrows nudge it. Each card is half image (top) / half text (below).
  */
 export default function IngredientsCarousel({ items }: { items: Ingredient[] }) {
   const track = useRef<HTMLDivElement>(null);
   const paused = useRef(false);
-  const pos = useRef(0); // float scroll position so sub-pixel speed accumulates
+  const returning = useRef(false);
+  const pos = useRef(0);
 
   useEffect(() => {
     const el = track.current;
     if (!el) return;
     let raf = 0;
-    const speed = 0.6; // px per frame — slow, premium glide (matches the reviews strip)
+    const speed = 0.5; // px/frame — slow, premium glide
     pos.current = el.scrollLeft;
     const tick = () => {
-      if (el && !paused.current) {
-        const half = el.scrollWidth / 2; // second copy is identical → seamless wrap
-        if (half > 0) {
+      if (el && !paused.current && !returning.current) {
+        const max = el.scrollWidth - el.clientWidth;
+        if (max > 4) {
           pos.current += speed;
-          if (pos.current >= half) pos.current -= half;
-          el.scrollLeft = pos.current;
+          if (pos.current >= max) {
+            // Reached the last card — ease back to the start, then resume (only 5, no duplicate).
+            returning.current = true;
+            el.scrollTo({ left: 0, behavior: 'smooth' });
+            window.setTimeout(() => { pos.current = 0; returning.current = false; }, 1000);
+          } else {
+            el.scrollLeft = pos.current;
+          }
         }
       }
       raf = requestAnimationFrame(tick);
@@ -50,26 +73,27 @@ export default function IngredientsCarousel({ items }: { items: Ingredient[] }) 
     const el = track.current;
     if (!el) return;
     paused.current = true;
-    el.scrollBy({ left: dir * 320, behavior: 'smooth' });
-    window.setTimeout(() => { pos.current = el.scrollLeft; paused.current = false; }, 1400);
+    returning.current = true;
+    el.scrollBy({ left: dir * 340, behavior: 'smooth' });
+    window.setTimeout(() => { pos.current = el.scrollLeft; paused.current = false; returning.current = false; }, 1200);
   };
-
-  const cards = [...items, ...items];
 
   return (
     <div style={{ position: 'relative' }}>
       <button aria-label="Previous ingredient" onClick={() => nudge(-1)} style={{ ...arrowBtn, left: -6 }}><ChevronLeft size={20} /></button>
 
       <div ref={track} className="hide-sb" style={{ display: 'flex', gap: 16, overflowX: 'auto', scrollBehavior: 'auto' }}>
-        {cards.map((x, i) => (
+        {items.map((x) => (
           <div
-            key={i}
+            key={x.n}
             className="ingredient-card"
-            style={{ flex: 'none', width: 'min(80vw, 320px)', background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', padding: 'clamp(18px,2vw,26px)' }}
+            style={{ flex: 'none', width: 'min(82vw, 320px)', background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
           >
-            <div style={{ font: '900 clamp(1.5rem,1.1rem + 1vw,2.1rem)/1 var(--font-display)', color: 'var(--brand-secondary)', marginBottom: 8, letterSpacing: '-.02em' }}>{x.n}</div>
-            <h4 style={{ font: 'var(--weight-extra) var(--text-lg)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 8px' }}>{x.title}</h4>
-            <p style={{ fontSize: 'var(--text-sm)', lineHeight: 1.55, color: 'var(--text-body)', margin: 0 }}>{x.text}</p>
+            <IngredientImage n={x.n} src={x.img} title={x.title} />
+            <div style={{ padding: 'clamp(16px,1.8vw,22px)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <h4 style={{ font: 'var(--weight-extra) var(--text-lg)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>{x.title}</h4>
+              <p style={{ fontSize: 'var(--text-sm)', lineHeight: 1.55, color: 'var(--text-body)', margin: 0 }}>{x.text}</p>
+            </div>
           </div>
         ))}
       </div>
