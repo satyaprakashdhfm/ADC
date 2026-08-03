@@ -14,7 +14,7 @@ const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '
 // direct name → file map; cookies without a placeholder simply keep their single image.
 const HOVER_IMAGE_NAMES = new Set([
   'ADC Special Cookie', 'Biscoff Filled Cookie', 'Chocolate Chip Cookie', 'Double Choco Chip Cookie',
-  'Matcha Cookie', 'Nutella Filled Cookie', 'Red Velvet Filled Cookie',
+  'Matcha Cookie', 'Nutella Filled Cookie', 'Red Velvet Filled Cookie', 'Ragi Cookie (Gluten-Free)',
 ]);
 const hoverImageFor = (name: string): string | null =>
   HOVER_IMAGE_NAMES.has(name) ? encodeURI(`/assets/product_placeholders/${name}.PNG`) : null;
