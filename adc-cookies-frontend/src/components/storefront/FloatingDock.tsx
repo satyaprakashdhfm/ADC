@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Clock } from 'lucide-react';
 import { whatsappLink } from '@/lib/site';
 import { useActiveSpinReward, formatRemainingShort } from '@/lib/spinReward';
+import { useAuth } from '@/context/AuthContext';
 import { OPEN_CHAT_EVENT } from '@/lib/chatEvents';
 import SpinWheel from './SpinWheel';
 import Chatbot from './Chatbot';
@@ -35,28 +36,34 @@ export default function FloatingDock() {
   const [chat, setChat] = useState(false);
   const spinDone = useRef(false);
   const pathname = usePathname();
+  const { user } = useAuth();
+  const prevUser = useRef<typeof user>(user);
   // Lifted here (not inside SpinWheel) so the 12h claim countdown stays visible on the launcher
   // itself even after the wheel modal is closed — not just while it's open.
   const { activeReward, setActiveReward, checking: checkingReward, now, refresh } = useActiveSpinReward();
 
-  // Spin pops on its own a few seconds after load (at most once a day) — location is no longer a
-  // prerequisite; it's collected at checkout via the delivery address, so nothing gates the wheel
-  // on the homepage anymore.
-  // The dock is mounted app-wide (support has to be reachable from every page), but the wheel
-  // should still only ambush people on the homepage — not mid-checkout or on a contact form.
+  // The wheel auto-opens on the FIRST visit to the site (once ever, tracked in localStorage) —
+  // only on the homepage, so it never ambushes anyone mid-checkout or on a contact form.
   useEffect(() => {
     if (typeof window === 'undefined' || spinDone.current || pathname !== '/') return;
-    let last = 0;
-    try { last = Number(localStorage.getItem('adc_spin_last') || 0); } catch { /* ignore */ }
-    const DAY = 24 * 60 * 60 * 1000;
-    if (last && Date.now() - last <= DAY) { spinDone.current = true; return; }
+    let seen = false;
+    try { seen = !!localStorage.getItem('adc_spin_first_seen'); } catch { /* ignore */ }
+    if (seen) { spinDone.current = true; return; }
     spinDone.current = true;
     const t = setTimeout(() => {
       setSpin(true);
-      try { localStorage.setItem('adc_spin_last', String(Date.now())); } catch { /* ignore */ }
-    }, 3000);
+      try { localStorage.setItem('adc_spin_first_seen', '1'); } catch { /* ignore */ }
+    }, 2800);
     return () => clearTimeout(t);
   }, [pathname]);
+
+  // …and again right after they log in (transition from signed-out → signed-in), on the homepage,
+  // so a returning shopper is offered a spin the moment they sign in.
+  useEffect(() => {
+    const was = prevUser.current;
+    prevUser.current = user;
+    if (!was && user && pathname === '/') setSpin(true);
+  }, [user, pathname]);
 
   // Lets other parts of the site (e.g. the footer's "FAQs" link) open this same chatbot instance.
   useEffect(() => {

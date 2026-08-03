@@ -5,6 +5,7 @@ import { getOne, query, nowIso } from '../db.js';
 import { requireAuth, ApiError } from '../middleware.js';
 import { normalizePhone, sendOtp, validateOtp, messageCentralConfigured } from '../messageCentral.js';
 import { adminClient, anonClient, supabaseConfigured } from '../supabaseAdmin.js';
+import { linkEmailClaimsToUser } from './coupons.js';
 
 // Rejects junk like "123@gmail.com" (digits-only local part) — requires a real-looking local
 // part (at least one letter, 2+ characters) and a proper domain/TLD.
@@ -59,7 +60,10 @@ const verifyLimiter = rateLimit({
 
 // Most auth (Google + email/password) runs through Supabase on the client. This endpoint
 // lets the frontend resolve the app role (CUSTOMER/ADMIN) + canonical name after login.
-router.get('/me', requireAuth, (req, res) => {
+router.get('/me', requireAuth, async (req, res) => {
+  // Attach any email-subscribe spin reward won before this account existed (best-effort, never
+  // blocks the profile response) — this is what makes an emailed coupon usable at checkout.
+  if (req.user.email) { try { await linkEmailClaimsToUser(req.user.id, req.user.email); } catch { /* ignore */ } }
   res.json({ email: req.user.email, name: req.user.name, role: req.user.role, phone: req.user.phone ?? null });
 });
 

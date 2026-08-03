@@ -285,9 +285,10 @@ body::before {
      band reads as a busy-but-subtle doodle texture rather than a flat orange block. The art's own
      background is the same brand orange, so only the cream doodles show through at low opacity. */
   background-image: url('/assets/doodles/header-doodles.png');
-  background-repeat: repeat;
-  background-size: 300px auto;
-  opacity: .34;
+  background-repeat: repeat-x;      /* a single horizontal band, not a full-grid wallpaper */
+  background-position: center;
+  background-size: auto 230%;       /* enlarge a lot so only a few big doodles show, not a swarm */
+  opacity: .1;                      /* faint ghost wash so it never fights the nav */
 }
 .home-sticky-header > nav,
 .home-sticky-header > .home-topbar { position: relative; z-index: 1; }
