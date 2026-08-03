@@ -9,18 +9,30 @@ import { useCart } from '@/context/CartContext';
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
 const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'clamp(14px,1.8vw,22px)' };
 
+// Second "hover" shot per cookie — a styled placeholder that crossfades in when you hover the card
+// (Dohful-style two-image swap). The filenames match the product names exactly, so the lookup is a
+// direct name → file map; cookies without a placeholder simply keep their single image.
+const HOVER_IMAGE_NAMES = new Set([
+  'ADC Special Cookie', 'Biscoff Filled Cookie', 'Chocolate Chip Cookie', 'Double Choco Chip Cookie',
+  'Matcha Cookie', 'Nutella Filled Cookie', 'Red Velvet Filled Cookie',
+]);
+const hoverImageFor = (name: string): string | null =>
+  HOVER_IMAGE_NAMES.has(name) ? encodeURI(`/assets/product_placeholders/${name}.PNG`) : null;
+
 function ProductCard({ p }: { p: Product }) {
   const { cart, setQty } = useCart();
   const id = String(p.id);
   const qty = cart[id]?.qty || 0;
   const img = firstImage(p.images);
+  const hoverImg = hoverImageFor(p.name);
   const price = Number(p.price);
   const change = (n: number) => setQty(id, Math.max(0, n), p.name, price, img);
 
   return (
     <div style={{ background: 'var(--vanilla)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: 'var(--surface-sunken)' }}>
+      <div className="prod-media" style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: 'var(--surface-sunken)' }}>
         {img && <Image src={img} alt={p.name} fill sizes="(max-width:760px) 50vw, 280px" style={{ objectFit: 'cover' }} />}
+        {hoverImg && <Image src={hoverImg} alt="" fill sizes="(max-width:760px) 50vw, 280px" className="prod-media__hover" style={{ objectFit: 'cover' }} />}
       </div>
       <div style={{ padding: 'clamp(12px,1.4vw,16px)', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
         <h3 style={{ font: 'var(--weight-extra) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>{p.name}</h3>

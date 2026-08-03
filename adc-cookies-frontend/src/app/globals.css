@@ -267,6 +267,13 @@ body::before {
   .home-corp-body { max-width: 100% !important; }
 }
 
+/* Product card image hover-swap — a second styled shot crossfades in over the first when the card
+   is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
+.prod-media__hover { opacity: 0; transition: opacity .45s ease; }
+.prod-media:hover .prod-media__hover { opacity: 1; }
+/* Subtle lift so the swap reads as interactive; the image itself eases in via the opacity above. */
+.prod-media { transition: transform .45s ease; }
+
 /* Customer Love (Reviews) — compact cards on mobile, noticeably larger on desktop */
 .review-card { flex: none; width: min(80vw, 300px); }
 @media (min-width: 900px) {
