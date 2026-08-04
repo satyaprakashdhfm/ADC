@@ -2,6 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import FooterCookies from './FooterCookies';
+import CookiesSoldCounter from './CookiesSoldCounter';
 import { NAV_DESKTOP } from './SiteNav';
 import { footerHeadingStyle, footerLinkStyle } from './footerStyles';
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
@@ -197,6 +198,7 @@ export default function Footer() {
         >
           <span>© 2026 a dough cookie. All rights reserved.</span>
           <span>{SITE_EMAIL} · {SITE_PHONE}</span>
+          <span style={{ marginLeft: 'auto' }}><CookiesSoldCounter /></span>
         </div>
       </div>
     </footer>
