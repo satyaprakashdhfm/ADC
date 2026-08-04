@@ -71,45 +71,32 @@ router.get('/check', async (req, res) => {
     };
   };
 
-  // Intracity first: if the pincode is in a city where we have a store, it ships same-day from the
-  // nearest store via the hyperlocal carrier (Shiprocket). We surface that here based on the store
-  // zone (robust + instant); the real serviceability is verified at order time.
+  // Intracity: if the pincode is in a city where we have a store (Bengaluru / Chennai zones), it
+  // ALWAYS ships SAME-DAY, ~1 hour, fulfilled from the nearest store — that's the intracity promise,
+  // so a store-zone pincode is never dropped to multi-day Delhivery. When the hyperlocal carrier
+  // (Shiprocket) is live and we have coordinates, we quote its real rate/ETA; otherwise we promise a
+  // store-fulfilled ~1h delivery at the configured intracity fee (the shipment is created at order
+  // time, trying the carrier first and falling back to the store's own rider).
   const pickup = nearestStore(pin);
   if (pickup) {
-    // Same-day is only offered while the hyperlocal carrier is actually live. If it's paused or
-    // unconfigured ("down"), we DON'T block the store-city pincode — we quietly fall back to
-    // Delhivery so the order still goes through (just not same-day). Availability first.
     const hyperlocalLive = shiprocketConfigured() && !SHIPROCKET_DISABLED;
-    if (!hyperlocalLive) {
-      console.log(`[DELIVERY] check | pin=${pin} | hyperlocal down → Delhivery fallback (store ${pickup.name})`);
-      const d = await delhiveryQuote();
-      return res.json({ ...d, store: pickup.name, city: pickup.city });
-    }
-    /*
-     * Quote the REAL rate when we have coordinates for both ends.
-     *
-     * Hyperlocal pricing is distance-based and spans 5x — Rs 70.80 at 1 km to Rs 356 at 24 km — so a
-     * flat fee is wrong almost everywhere. Coordinates are optional at this stage (a shopper may only
-     * have typed a pincode), so a failed or coordinate-less quote still reports the zone serviceable
-     * and leaves the fee to the configured default; the shipment itself is created later regardless.
-     */
-    let quotedFee = null, etaHours = null;
-    if (lat && lng) {
+    let quotedFee = null, etaHours = 1, carrier = 'STORE';
+    if (hyperlocalLive && lat && lng) {
       try {
         const q = await srServiceability({
           pickupPin: SHIPROCKET_ORIGIN.pin, deliveryPin: pin,
           latFrom: SHIPROCKET_ORIGIN.lat, longFrom: SHIPROCKET_ORIGIN.long, latTo: lat, longTo: lng,
         });
-        if (q.serviceable) { quotedFee = q.rate; etaHours = q.couriers?.[0]?.etd_hours ?? null; }
+        if (q.serviceable) { quotedFee = q.rate; etaHours = q.couriers?.[0]?.etd_hours ?? 1; carrier = 'SHIPROCKET'; }
       } catch (e) {
         // A failed quote isn't fatal — the zone is still same-day serviceable; only the live rate is
-        // missing, so we leave the fee to the configured default and the shipment is created later.
-        console.log(`[DELIVERY] check | pin=${pin} | hyperlocal quote failed (${e?.message || e}) → default fee`);
+        // missing, so we leave the fee to the configured default and promise store-fulfilled ~1h.
+        console.log(`[DELIVERY] check | pin=${pin} | hyperlocal quote failed (${e?.message || e}) → store same-day`);
       }
     }
-    console.log(`[DELIVERY] check | pin=${pin} | carrier=SHIPROCKET | intracity from ${pickup.name} | quote=${quotedFee ?? 'default'} | eta=${etaHours ?? '?'}h`);
-    return res.json({ serviceable: true, intracity: true, carrier: 'SHIPROCKET', store: pickup.name, city: pickup.city,
-      sameDay: true, deliveryFee: quotedFee, etaHours, tat: null, expectedDeliveryDate: null, pincode: pin });
+    console.log(`[DELIVERY] check | pin=${pin} | carrier=${carrier} | SAME-DAY ~${etaHours}h from ${pickup.name} | fee=${quotedFee ?? 'default'}`);
+    return res.json({ serviceable: true, intracity: true, sameDay: true, carrier, store: pickup.name, city: pickup.city,
+      deliveryFee: quotedFee, etaHours, etaLabel: 'within ~1 hour', tat: null, expectedDeliveryDate: null, pincode: pin });
   }
 
   console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | out-of-town`);

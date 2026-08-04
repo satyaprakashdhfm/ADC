@@ -25,7 +25,7 @@ type Msg =
   | { kind: 'yesno'; usedKeys: string[] }
   | { kind: 'closed' };
 
-const GREETING = 'Hi! I’m ADC Support 🍪 What can I help you with?';
+const GREETING = 'Hey there! I’m Doughie, your friendly ADC support cookie. Whether you have a question, need help with an order, or just want to know more about our cookies, I’m here to help. What can I do for you today?';
 const WELCOME_BACK = 'Welcome back! 👋 What can I help you with now?';
 const ANYTHING_ELSE = 'Anything else I can help with?';
 const GOODBYE = 'Glad I could help! Have a sweet day 👋';

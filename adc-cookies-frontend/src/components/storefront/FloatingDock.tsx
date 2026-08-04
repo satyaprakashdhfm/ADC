@@ -114,17 +114,17 @@ export default function FloatingDock() {
               onClick={() => setChat(true)}
               className="doughie-bubble"
               style={{
-                position: 'absolute', right: 'calc(100% + 14px)', top: '50%', transform: 'translateY(-50%)',
-                width: 'max-content', maxWidth: 210, textAlign: 'left', cursor: 'pointer',
+                position: 'absolute', right: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)',
+                width: 'max-content', maxWidth: 150, textAlign: 'left', cursor: 'pointer', whiteSpace: 'nowrap',
                 background: 'var(--white)', color: 'var(--text-strong)', border: '1.5px solid var(--border-default)',
-                borderRadius: 14, padding: '9px 13px', boxShadow: '0 10px 24px var(--black-18)',
-                fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)', fontWeight: 600, lineHeight: 1.4,
+                borderRadius: 12, padding: '6px 10px', boxShadow: '0 8px 18px var(--black-18)',
+                fontFamily: 'var(--font-body)', fontSize: 'var(--text-2xs)', fontWeight: 800, lineHeight: 1.2,
               }}
             >
-              <span aria-hidden onClick={(e) => { e.stopPropagation(); setBubble(false); }} style={{ position: 'absolute', top: -8, right: -8, width: 20, height: 20, borderRadius: '50%', background: 'var(--white)', border: '1.5px solid var(--border-default)', color: 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, lineHeight: 1 }}>×</span>
-              <strong style={{ fontWeight: 800 }}>Hi! I&apos;m Doughie 🍪</strong><br />ADC support — need any help?
+              <span aria-hidden onClick={(e) => { e.stopPropagation(); setBubble(false); }} style={{ position: 'absolute', top: -7, right: -7, width: 17, height: 17, borderRadius: '50%', background: 'var(--white)', border: '1.5px solid var(--border-default)', color: 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, lineHeight: 1 }}>×</span>
+              Hi! I&apos;m Doughie 🍪
               {/* tail pointing right at the mascot */}
-              <span aria-hidden style={{ position: 'absolute', right: -7, top: '50%', transform: 'translateY(-50%) rotate(45deg)', width: 12, height: 12, background: 'var(--white)', borderRight: '1.5px solid var(--border-default)', borderTop: '1.5px solid var(--border-default)' }} />
+              <span aria-hidden style={{ position: 'absolute', right: -6, top: '50%', transform: 'translateY(-50%) rotate(45deg)', width: 11, height: 11, background: 'var(--white)', borderRight: '1.5px solid var(--border-default)', borderTop: '1.5px solid var(--border-default)' }} />
             </button>
           )}
           <button onClick={() => setChat(o => !o)} aria-label="Help & support" title="Help & support"
