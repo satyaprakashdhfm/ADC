@@ -470,6 +470,14 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [loginOpen, setLoginOpen] = useState(false);
   const [delivCheck, setDelivCheck] = useState<DeliveryCheck | null>(null);
   const [delivChecking, setDelivChecking] = useState(false);
+  const [catalog, setCatalog] = useState<Product[]>([]); // for the "Goes great with" upsell
+
+  // Catalog for the upsell row — show the cached products instantly (same cache the storefront
+  // fills), then refresh in the background.
+  useEffect(() => {
+    try { const c = localStorage.getItem('adc_products_cache'); if (c) { const arr = JSON.parse(c); if (Array.isArray(arr) && arr.length) setCatalog(arr); } } catch { /* ignore */ }
+    getProducts().then(ps => { if (ps?.length) setCatalog(ps); }).catch(() => {});
+  }, []);
 
   // Addresses are private to the signed-in user — fetch on login, clear on logout.
   useEffect(() => {
@@ -920,6 +928,34 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             )}
             <div style={{ flex: '1 1 340px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
               {orderSummary}
+              {(() => {
+                // "Goes great with" — a horizontal upsell of available cookies not already in the
+                // cart (Zomato "complete your meal with" style). Quick-add straight from here.
+                const suggestions = catalog.filter(p => p.isAvailable && p.category === 'COOKIES' && !cart[String(p.id)] && !/sundae/i.test(p.name)).slice(0, 8);
+                if (suggestions.length === 0) return null;
+                return (
+                  <div style={card$}>
+                    {head(<Cookie size={18} color="var(--brand-secondary)" />, 'Goes great with')}
+                    <div className="hide-sb" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
+                      {suggestions.map(p => (
+                        <div key={p.id} style={{ flex: 'none', width: 132, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'var(--surface-sunken)' }}>
+                            <Image src={firstImage(p.images)} alt={p.name} fill sizes="132px" style={{ objectFit: 'cover' }} />
+                          </div>
+                          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)', lineHeight: 1.25, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 'auto' }}>
+                            <span style={{ fontWeight: 900, fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>₹{Number(p.price)}</span>
+                            <button onClick={() => setQty(String(p.id), (cart[String(p.id)]?.qty || 0) + 1, p.name, Number(p.price), firstImage(p.images))}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '5px 10px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
+                              <Plus size={13} /> Add
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div style={{ flex: '1.4 1 440px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>

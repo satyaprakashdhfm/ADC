@@ -196,6 +196,8 @@ export default function Footer() {
             flexWrap: 'wrap',
           }}
         >
+          {/* Secondary seal mark (Dohful-style) — the little cookie roundel next to the copyright. */}
+          <Image src="/assets/cookie-mark.svg" width={22} height={22} alt="" style={{ flex: 'none', opacity: 0.9 }} />
           <span>© 2026 a dough cookie. All rights reserved.</span>
           <span>{SITE_EMAIL} · {SITE_PHONE}</span>
           <span style={{ marginLeft: 'auto' }}><CookiesSoldCounter /></span>
