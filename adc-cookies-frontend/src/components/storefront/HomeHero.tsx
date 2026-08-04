@@ -46,7 +46,7 @@ export default function HomeHero() {
         </motion.div>
 
         {/* Center content */}
-        <motion.div initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        <motion.div className="home-hero-copy" initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           style={{ position: 'relative', zIndex: 3, textAlign: 'center', padding: '0 var(--gutter)', maxWidth: 720 }}>
           {/* White wordmark, as in the navbar and footer. The asset is amber, which only read
               against the old cream wash — on the orange art it would sink into the background.
