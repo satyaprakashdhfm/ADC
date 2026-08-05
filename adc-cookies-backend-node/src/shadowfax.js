@@ -22,12 +22,57 @@ console.log(`[SHADOWFAX] config | base=${BASE_URL || 'MISSING'} | token=${TOKEN 
 
 // Our stores that act as intracity Shadowfax pickup points. When a city has more than one store
 // (Bengaluru), the order ships from the store whose pincode is NEAREST the delivery pincode.
+/*
+ * ADC pickup points. Coordinates are REQUIRED for Shiprocket Hyperlocal quoting and routing — a
+ * pincode alone returns no couriers.
+ *
+ * `pickupName` must match a pickup address registered in the Shiprocket panel; orders are collected
+ * from whatever that nickname resolves to, NOT from the address written here. If a store has no
+ * registered pickup, intracity from it cannot work, so SHIPROCKET_PICKUP_LOCATION is the fallback.
+ *
+ * Begur is the fulfilment warehouse: Delhivery collects from it and Petpooja bills against it.
+ */
 export const SFX_STORES = [
-  { name: 'A Dough Cookie — Jayanagar', contact: '9381502998', address_line_1: 'Jain University, 1314, 24th Main Rd, Jayanagar 9th Block', city: 'Bengaluru', state: 'Karnataka', pincode: 560041 },
-  { name: 'A Dough Cookie — S.G. Palya', contact: '9381502998', address_line_1: 'No 10, 1st Main Rd, Venkateshwara Layout, S.G. Palya', city: 'Bengaluru', state: 'Karnataka', pincode: 560029 },
-  { name: 'A Dough Cookie — Electronic City', contact: '9381502998', address_line_1: 'F3 Alley, GF, 1st Cross, Neeladri Rd, Electronic City Phase I', city: 'Bengaluru', state: 'Karnataka', pincode: 560100 },
-  { name: 'A Dough Cookie — Besant Nagar', contact: '9381502998', address_line_1: '63, 6th Avenue, Besant Nagar', city: 'Chennai', state: 'Tamil Nadu', pincode: 600090 },
+  { name: 'A Dough Cookie — Begur (Warehouse)', contact: '9381502998', address_line_1: '167/3, First floor, Chickbegur Village, Singasandra Post, Manipal County Rd', city: 'Bengaluru', state: 'Karnataka', pincode: 560114, latitude: 12.8845, longitude: 77.6270, pickupName: process.env.SHIPROCKET_PICKUP_BEGUR || null },
+  { name: 'A Dough Cookie — Jayanagar', contact: '9381502998', address_line_1: 'Jain University, 1314, 24th Main Rd, Jayanagar 9th Block', city: 'Bengaluru', state: 'Karnataka', pincode: 560041, latitude: 12.9250, longitude: 77.5938, pickupName: process.env.SHIPROCKET_PICKUP_JAYANAGAR || null },
+  { name: 'A Dough Cookie — S.G. Palya', contact: '9381502998', address_line_1: 'No 10, 1st Main Rd, Venkateshwara Layout, S.G. Palya', city: 'Bengaluru', state: 'Karnataka', pincode: 560029, latitude: 12.9345, longitude: 77.6070, pickupName: process.env.SHIPROCKET_PICKUP_SGPALYA || null },
+  { name: 'A Dough Cookie — Electronic City', contact: '9381502998', address_line_1: 'F3 Alley, GF, 1st Cross, Neeladri Rd, Electronic City Phase I', city: 'Bengaluru', state: 'Karnataka', pincode: 560100, latitude: 12.8452, longitude: 77.6602, pickupName: process.env.SHIPROCKET_PICKUP_ECITY || null },
+  { name: 'A Dough Cookie — Besant Nagar', contact: '9381502998', address_line_1: '63, 6th Avenue, Besant Nagar', city: 'Chennai', state: 'Tamil Nadu', pincode: 600090, latitude: 13.0002, longitude: 80.2668, pickupName: process.env.SHIPROCKET_PICKUP_BESANT || null },
 ];
+
+/**
+ * Nearest store to an actual customer location, by great-circle distance.
+ *
+ * Pincode-zone matching (below) only tells us the right CITY; for intracity we want the store the
+ * rider travels least from, which is what the customer pays for. Falls back to zone matching when
+ * the address has no coordinates.
+ */
+/** Stores sorted nearest-first to a customer location. Used to try pickups in a sensible order. */
+export function orderStoresByProximity(stores, lat, lng) {
+  if (lat == null || lng == null) return stores;
+  const R = 6371, rad = (d) => (d * Math.PI) / 180;
+  return [...stores].map((s) => {
+    const dLat = rad(s.latitude - lat), dLng = rad(s.longitude - lng);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat)) * Math.cos(rad(s.latitude)) * Math.sin(dLng / 2) ** 2;
+    return { ...s, km: Math.round(2 * R * Math.asin(Math.sqrt(a)) * 100) / 100 };
+  }).sort((a, b) => a.km - b.km);
+}
+
+export function nearestStoreToCoords(lat, lng, city) {
+  if (lat == null || lng == null) return null;
+  const R = 6371;
+  const rad = (d) => (d * Math.PI) / 180;
+  const candidates = city ? SFX_STORES.filter((s) => s.city.toLowerCase() === String(city).toLowerCase()) : SFX_STORES;
+  const pool = candidates.length ? candidates : SFX_STORES;
+  let best = null;
+  for (const s of pool) {
+    const dLat = rad(s.latitude - lat), dLng = rad(s.longitude - lng);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat)) * Math.cos(rad(s.latitude)) * Math.sin(dLng / 2) ** 2;
+    const km = 2 * R * Math.asin(Math.sqrt(a));
+    if (!best || km < best.km) best = { ...s, km: Math.round(km * 100) / 100 };
+  }
+  return best;
+}
 
 // All our stores in the destination's city zone (pincode's first 3 digits), NEAREST FIRST.
 // Shadowfax needs a serviceable PICKUP pincode too, so shipment creation tries these in order

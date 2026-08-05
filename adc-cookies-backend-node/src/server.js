@@ -19,6 +19,8 @@ import adminRoutes from './routes/admin.js';
 import contactRoutes from './routes/contact.js';
 import deliveryRoutes from './routes/delivery.js';
 import shadowfaxWebhookRoutes from './routes/shadowfax.js';
+import petpoojaRoutes from './routes/petpooja.js';
+import hyperlocalRoutes from './routes/hyperlocal.js';
 import { paymentWebhook } from './routes/paymentsWebhook.js';
 import { paymentCallback } from './routes/orders.js';
 
@@ -63,6 +65,15 @@ app.post('/api/payments/webhook', express.raw({ type: '*/*' }), paymentWebhook);
 // Public by design: mounted directly here, NOT through the auth-gated /api/orders router.
 app.post('/api/payment-callback/:orderId', express.urlencoded({ extended: false }), paymentCallback);
 
+// Petpooja pushes an ENTIRE restaurant menu — every item, variation, add-on group and tax — in one
+// POST. A real menu runs to hundreds of KB, so the 64kb cap below rejected it with a 413 before our
+// handler ever saw it, which the dashboard reports only as "Menu trigger failed". Give that one
+// router the headroom it needs and leave the rest of the API on the tight default: no storefront
+// request has any business being megabytes long.
+// Scoped to /pushmenu ALONE, not the whole router. The other Petpooja endpoints take tiny bodies,
+// and a 12mb ceiling on a public endpoint is a cheap memory-exhaustion target.
+app.use('/api/petpooja/pushmenu', express.json({ limit: '12mb' }));
+
 app.use(express.json({ limit: '64kb' }));
 
 // Baseline per-IP rate limit on the whole API — generous for real browsing, blunts abuse/scraping.
@@ -89,6 +100,10 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api/shadowfax', shadowfaxWebhookRoutes);
+app.use('/api/petpooja', petpoojaRoutes);
+// Shiprocket Hyperlocal tracking. NOT /api/shiprocket — their panel rejects webhook URLs
+// containing shiprocket / kartrocket / sr / kr / localhost.
+app.use('/api/hyperlocal', hyperlocalRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found', message: 'Resource not found' }));
 
@@ -113,7 +128,15 @@ export default app;
 if (!process.env.VERCEL) {
   (async () => {
     await initSchema();
-    await seedIfEmpty();
+    // SKIP_SEED=true disables the auto-seed entirely — used by the isolated final_deploy test
+    // environment, whose DB is provisioned separately (schema + curated reference data) and must
+    // NOT be auto-seeded (the seed keys off an empty users table and would clash with pre-loaded
+    // reference data / omit the warehouse row Delhivery needs).
+    if (process.env.SKIP_SEED === 'true') {
+      console.log('[CONFIG] SKIP_SEED=true — auto-seed disabled');
+    } else {
+      await seedIfEmpty();
+    }
     app.listen(PORT, () => {
       console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
       console.log(`[CONFIG] DB=${process.env.DATABASE_URL ? 'supabase-pooler' : 'local-pg'}`);

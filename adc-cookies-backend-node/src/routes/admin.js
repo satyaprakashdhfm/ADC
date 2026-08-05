@@ -17,6 +17,7 @@ import {
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
 import { shadowfaxConfigured, trackShadowfax, getShadowfaxPod, sfxStatusLabel, SFX_STORES, sfxServiceability } from '../shadowfax.js';
+import { cancelOrder as petpoojaCancelOrder, relayOrder, unmappedProducts } from '../petpooja.js';
 
 const router = Router();
 router.use(requireAdmin);
@@ -127,10 +128,62 @@ router.patch('/orders/:id/status', async (req, res) => {
   await query('UPDATE orders SET order_status=$1, updated_at=$2 WHERE id=$3', [status, ts, order.id]);
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [order.id, status, remarks ?? null, ts]);
+
+  // Cancelling here must also cancel at the POS, or the kitchen keeps a live ticket for an order
+  // that no longer exists. Fire-and-forget: the cancellation on our side already stands, and their
+  // API is the only transition they accept anyway (-1).
+  if (status === 'CANCELLED' && order.order_status !== 'CANCELLED') {
+    petpoojaCancelOrder(order.order_number, remarks || 'Cancelled by ADC admin')
+      .catch((err) => console.error(`[PETPOOJA] cancel relay failed | order=${order.order_number} | ${err?.message || err}`));
+  }
   const updated = await getOne('SELECT * FROM orders WHERE id = $1', [order.id]);
   const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order.id]);
   const address = updated.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [updated.address_id]) : null;
   res.json(serializeOrder(updated, items, address));
+});
+
+/* ---------- Petpooja (POS / billing) ---------- */
+
+// Everything the mapping screen needs in one call: their catalogue, our products, and what is
+// still unlinked. An order cannot relay until every product it contains has a Petpooja item id.
+router.get('/petpooja/mapping', async (_req, res) => {
+  const restId = process.env.PETPOOJA_REST_ID || '';
+  const [items, products, unmapped] = await Promise.all([
+    getAll(`SELECT item_id, variation_id, name, variation_name, price, in_stock, product_id
+              FROM petpooja_items WHERE rest_id = $1 ORDER BY name, variation_name`, [restId]),
+    getAll('SELECT id, name, price, is_available FROM products ORDER BY id'),
+    unmappedProducts(restId),
+  ]);
+  res.json({ restId, items, products, unmapped, menuSynced: items.length > 0 });
+});
+
+// Link or unlink one of their items to one of our products. product_id null clears the link.
+router.post('/petpooja/mapping', async (req, res) => {
+  const { itemId, variationId = '', productId } = req.body || {};
+  if (!itemId) throw new ApiError('itemId is required');
+  await query(
+    `UPDATE petpooja_items SET product_id = $1, updated_at = $2
+      WHERE rest_id = $3 AND item_id = $4 AND variation_id = $5`,
+    [productId ?? null, nowIso(), process.env.PETPOOJA_REST_ID || '', String(itemId), String(variationId)]
+  );
+  res.json({ ok: true });
+});
+
+// Relay history — which orders reached the POS, which failed and why.
+router.get('/petpooja/orders', async (_req, res) => {
+  const rows = await getAll(
+    `SELECT p.order_id, o.order_number, o.total_amount, p.relay_ok, p.petpooja_order_id,
+            p.petpooja_status, p.attempts, p.last_error, p.updated_at
+       FROM petpooja_orders p JOIN orders o ON o.id = p.order_id
+      ORDER BY p.updated_at DESC LIMIT 100`);
+  res.json(rows);
+});
+
+// Retry a relay that failed — after fixing a mapping, say. relayOrder is idempotent: an order
+// already relayed is skipped rather than duplicated at the POS.
+router.post('/petpooja/orders/:id/retry', async (req, res) => {
+  const r = await relayOrder(Number(req.params.id));
+  res.json(r);
 });
 
 /* ---------- Coupons ---------- */
