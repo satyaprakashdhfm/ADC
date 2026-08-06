@@ -425,7 +425,7 @@ export function buildOrderPayload({ order, items, customer, address, taxIds = []
  * Unmapped products are the one thing worth refusing outright: relaying an order with a missing or
  * guessed item id would print a wrong KOT, which is worse than not printing one at all.
  */
-export async function relayOrder(orderId) {
+export async function relayOrder(orderId, { force = false } = {}) {
   const ts = nowIso();
   const fail = async (reason, request = null) => {
     await query(
@@ -445,6 +445,14 @@ export async function relayOrder(orderId) {
 
     const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
     if (!order) return await fail('order_not_found');
+
+    // A ticket on the POS means the kitchen starts baking, so it must never be raised for an order
+    // we have not actually been paid for, nor for one already cancelled. The normal caller
+    // (finalizePaidOrder) can only reach here on a paid order, but the admin retry endpoint calls
+    // relayOrder directly — this is what stops a mis-click from putting an unpaid order in the
+    // kitchen. `force` exists for the genuine case of a manually reconciled payment.
+    if (!force && order.payment_status !== 'PAID') return await fail(`not_paid (payment_status=${order.payment_status})`);
+    if (!force && order.order_status === 'CANCELLED') return await fail('order_cancelled');
 
     const done = await getOne('SELECT relay_ok FROM petpooja_orders WHERE order_id = $1', [orderId]);
     if (done?.relay_ok) { log('relay', `order=${order.order_number} | skip=already_relayed`); return { ok: true, skipped: true }; }

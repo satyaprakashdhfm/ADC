@@ -11,8 +11,10 @@ import {
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
   adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument, adminFetchShadowfaxDoc, adminGetShadowfaxStores,
+  adminAttention, adminRebookShipment, adminRetryPosRelay,
   type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type CouponInput, type AdminMessage,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput, type ShadowfaxDocResult, type ShadowfaxStore,
+  type AttentionReport,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
@@ -134,7 +136,10 @@ export default function AdminDashboard() {
   const [editing, setEditing] = useState<{ id?: number; data: ProductInput } | null>(null);
   const [couponForm, setCouponForm] = useState<CouponDraft | null>(null);
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
+  const [attention, setAttention] = useState<AttentionReport | null>(null);
+  const [fixing, setFixing] = useState<number | null>(null);   // order id currently being re-booked/re-relayed
   const [err, setErr] = useState('');
+  const [notice, setNotice] = useState('');
   const [loginOpen, setLoginOpen] = useState(false);
 
   // Orders filter state
@@ -184,6 +189,9 @@ export default function AdminDashboard() {
   useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); setStallInfo(s.stallInfo || ''); }).catch(() => {}); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminAnalytics(range.from, range.to).then(setAnalytics).catch(() => {}); }, [isAdmin, range.from, range.to]);
+  // Loaded on every admin visit, not lazily per tab: an order that took money but never reached the
+  // kitchen or a courier is the one thing that must not wait for someone to click the right tab.
+  useEffect(() => { if (isAdmin) adminAttention().then(setAttention).catch(() => {}); }, [isAdmin]);
 
   // Lazy-load each tab's data the first time it's opened.
   useEffect(() => {
@@ -202,9 +210,46 @@ export default function AdminDashboard() {
 
   const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); adminDashboard().then(setStats).catch(() => {}); }, []);
 
+  const refreshAttention = useCallback(() => { adminAttention().then(setAttention).catch(() => {}); }, []);
+
   const changeOrderStatus = async (id: number, status: string) => {
     const updated = await adminUpdateOrderStatus(id, status).catch(() => null);
-    if (updated) { setOrders(o => (o || []).map(x => x.id === id ? updated : x)); adminDashboard().then(setStats).catch(() => {}); }
+    if (!updated) return;
+    setOrders(o => (o || []).map(x => x.id === id ? updated : x));
+    adminDashboard().then(setStats).catch(() => {});
+    refreshAttention();
+    // Cancelling also cancels the POS ticket and the courier booking. If either refused, say so
+    // loudly — otherwise the operator assumes the rider was called off when they were not.
+    if (updated.cancelWarnings?.length) setErr(updated.cancelWarnings.join('  •  '));
+  };
+
+  /** Retry the automatic courier booking for a paid order that never got one. */
+  const rebookShipment = async (id: number) => {
+    setFixing(id); setErr(''); setNotice('');
+    try {
+      const r = await adminRebookShipment(id);
+      setNotice(`Courier booked — ${r.carrier} ${r.waybill}`);
+      // Refresh the open modal too, or it keeps showing the failure that was just fixed.
+      adminGetOrders().then(list => { setOrders(list); setViewOrder(v => (v ? list.find(x => x.id === v.id) ?? v : v)); }).catch(() => {});
+      refreshAttention();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Could not book a courier');
+    } finally { setFixing(null); }
+  };
+
+  /** Push a paid order to the Petpooja POS again — after fixing an item mapping, typically. */
+  const retryPosRelay = async (id: number) => {
+    setFixing(id); setErr(''); setNotice('');
+    try {
+      const r = await adminRetryPosRelay(id);
+      if (r.ok) setNotice(r.skipped ? 'Already on the POS.' : 'Sent to the Petpooja POS.');
+      else setErr(`POS refused it: ${r.reason}`);
+      // Refresh the open modal too, or it keeps showing the failure that was just fixed.
+      adminGetOrders().then(list => { setOrders(list); setViewOrder(v => (v ? list.find(x => x.id === v.id) ?? v : v)); }).catch(() => {});
+      refreshAttention();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Could not reach the POS');
+    } finally { setFixing(null); }
   };
   const saveProduct = async () => {
     if (!editing) return;
@@ -303,7 +348,12 @@ export default function AdminDashboard() {
       </header>
 
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '22px var(--gutter) 64px' }}>
-        {err && <div style={{ ...card, padding: '12px 16px', marginBottom: 16, color: 'var(--status-error)', borderColor: 'var(--status-error)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>{err}</div>}
+        {err && <div onClick={() => setErr('')} style={{ ...card, padding: '12px 16px', marginBottom: 16, color: 'var(--status-error)', borderColor: 'var(--status-error)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{err}</div>}
+        {notice && <div onClick={() => setNotice('')} style={{ ...card, padding: '12px 16px', marginBottom: 16, color: 'var(--status-success, #1a7f4b)', borderColor: 'var(--status-success, #1a7f4b)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{notice}</div>}
+
+        {/* Needs attention — orders that took money but did not complete downstream. Sits above the
+            tabs because it applies to every screen, and is hidden entirely when there is nothing. */}
+        {!!attention?.total && <AttentionPanel report={attention} busy={fixing} onRebook={rebookShipment} onRetryPos={retryPosRelay} onOpen={id => { const o = (orders || []).find(x => x.id === id); if (o) setViewOrder(o); else { setTab('orders'); setOrderSearch(String(id)); } }} onRefresh={refreshAttention} />}
 
         {/* Tabs */}
         <div className="hide-sb" style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 22, paddingBottom: 4 }}>
@@ -435,10 +485,10 @@ export default function AdminDashboard() {
               action={<button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
               <FilterBar search={orderSearch} onSearch={v => { setOrderSearch(v); setPageOf('orders', 1); }} placeholder="Search order #, customer, city…" active={active} onClear={clear}>
                 <Field label="Order status"><select value={orderStatusFilter} onChange={e => { setOrderStatusFilter(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All statuses</option>{ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
-                <Field label="Carrier"><select value={orderCarrier} onChange={e => { setOrderCarrier(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All carriers</option><option value="SHADOWFAX">Shadowfax (intracity)</option><option value="DELHIVERY">Delhivery (outstation)</option></select></Field>
+                <Field label="Carrier"><select value={orderCarrier} onChange={e => { setOrderCarrier(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All carriers</option><option value="SHIPROCKET">Shiprocket (intracity)</option><option value="DELHIVERY">Delhivery (outstation)</option><option value="SHADOWFAX">Shadowfax (retired)</option></select></Field>
                 <Field label="Payment"><select value={orderPayment} onChange={e => { setOrderPayment(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">Any payment</option><option value="PAID">Paid</option><option value="PENDING">Pending</option></select></Field>
               </FilterBar>
-              <Table head={['Order', 'Customer', 'Total', 'Payment', 'Shipment', 'Status', 'Date']}>
+              <Table head={['Order', 'Customer', 'Total', 'Payment', 'Shipment', 'POS', 'Status', 'Date']}>
                 {paginate(filtered, 'orders').map(o => (
                   <tr key={o.id} onClick={() => setViewOrder(o)} style={{ cursor: 'pointer' }}>
                     <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{(o.items || []).length} item{(o.items || []).length !== 1 ? 's' : ''} · tap for details</span></td>
@@ -452,7 +502,20 @@ export default function AdminDashboard() {
                         </div>
                       )}
                     </td>
-                    <td style={td}><Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} /></td>
+                    <td style={td}>
+                      <Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} />
+                      {/* A paid order with no courier is money taken for an undelivered parcel — say why. */}
+                      {o.shipmentError && !o.delhiveryWaybill && (
+                        <div title={o.shipmentError} style={{ color: 'var(--status-error)', fontSize: 'var(--text-2xs)', fontWeight: 700, marginTop: 3, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.shipmentError}</div>
+                      )}
+                    </td>
+                    {/* Did the kitchen actually get this ticket? Blank for unpaid orders, which are
+                        never relayed by design, so a dash there is correct rather than a failure. */}
+                    <td style={td}>
+                      {o.paymentStatus !== 'PAID' ? <span style={{ color: 'var(--text-subtle)' }}>—</span>
+                        : o.pos?.relayed ? <Badge text="On POS" ok />
+                        : <span title={o.pos?.lastError || 'Not sent to the POS yet.'}><Badge text={o.pos ? 'FAILED' : 'NOT SENT'} /></span>}
+                    </td>
                     <td style={td} onClick={e => e.stopPropagation()}>
                       <select value={o.orderStatus} onChange={e => changeOrderStatus(o.id, e.target.value)} style={{ padding: '7px 10px', borderRadius: 10, border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', cursor: 'pointer' }}>
                         {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -1283,7 +1346,7 @@ export default function AdminDashboard() {
               {/* Shipment — read-only summary; create/cancel/label live in the Delivery tab (no duplication) */}
               {(() => {
                 const modalTrack = trackResult[o.id] as { status?: string; note?: string; scans?: { time: string; event: string }[] } | undefined;
-                const service = o.carrier === 'SHADOWFAX' ? 'Intracity (Shadowfax)' : o.carrier === 'DELHIVERY' ? 'Intercity (Delhivery)' : null;
+                const service = o.carrier === 'SHIPROCKET' ? 'Intracity (Shiprocket)' : o.carrier === 'SHADOWFAX' ? 'Intracity (Shadowfax, retired)' : o.carrier === 'DELHIVERY' ? 'Intercity (Delhivery)' : null;
                 return (
                   <div style={{ ...card, padding: 14, marginBottom: 14 }}>
                     <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Shipment</div>
@@ -1297,7 +1360,9 @@ export default function AdminDashboard() {
                         <button onClick={async () => {
                           const r = await adminTrackOrder(o.id).catch(() => null);
                           if (!r?.ok) return;
-                          if (r.carrier === 'SHADOWFAX') {
+                          // Shiprocket and Shadowfax are pre-normalised by the backend into
+                          // { status, scans }; only Delhivery returns its own raw envelope.
+                          if (r.carrier === 'SHADOWFAX' || r.carrier === 'SHIPROCKET') {
                             setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', note: '', scans: r.scans || [] } }));
                           } else {
                             type ShipmentData = { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
@@ -1308,7 +1373,16 @@ export default function AdminDashboard() {
                         }} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', background: 'var(--surface-raised)', color: 'var(--text-strong)', border: '1.5px solid var(--border-default)' }}><ExternalLink size={14} /> Track</button>
                       </div>
                     ) : (
-                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '10px 0 0' }}>Not shipped yet — create, cancel or download the label from the <strong>Delivery</strong> tab.</p>
+                      <div style={{ marginTop: 10 }}>
+                        {o.shipmentError && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, margin: '0 0 8px' }}>Booking failed: {o.shipmentError}</p>}
+                        {o.paymentStatus === 'PAID' && o.orderStatus !== 'CANCELLED' ? (
+                          <button disabled={fixing === o.id} onClick={() => rebookShipment(o.id)} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', opacity: fixing === o.id ? 0.5 : 1 }}>
+                            <Truck size={14} /> {fixing === o.id ? 'Booking…' : 'Book courier now'}
+                          </button>
+                        ) : (
+                          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>Not shipped — a courier is only booked once payment is confirmed.</p>
+                        )}
+                      </div>
                     )}
                     {modalTrack && (
                       <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 8, padding: 12 }}>
@@ -1328,6 +1402,29 @@ export default function AdminDashboard() {
                   </div>
                 );
               })()}
+
+              {/* Kitchen / POS — the leg that decides whether the bill and KOT actually print.
+                  Shown only for paid orders: an unpaid one is never relayed, by design. */}
+              {o.paymentStatus === 'PAID' && (
+                <div style={{ ...card, padding: 14, marginBottom: 14 }}>
+                  <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Kitchen (Petpooja POS)</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <Badge text={o.pos?.relayed ? 'Ticket printed' : o.pos ? 'Relay failed' : 'Not sent'} ok={!!o.pos?.relayed} />
+                    {o.pos?.petpoojaOrderId && <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.pos.petpoojaOrderId}</span>}
+                  </div>
+                  {!o.pos?.relayed && (
+                    <div style={{ marginTop: 10 }}>
+                      {o.pos?.lastError && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, margin: '0 0 8px' }}>{o.pos.lastError}{o.pos.attempts ? ` — ${o.pos.attempts} attempt${o.pos.attempts > 1 ? 's' : ''}` : ''}</p>}
+                      {o.orderStatus !== 'CANCELLED' && (
+                        <button disabled={fixing === o.id} onClick={() => retryPosRelay(o.id)} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', opacity: fixing === o.id ? 0.5 : 1 }}>
+                          <RefreshCw size={14} /> {fixing === o.id ? 'Sending…' : 'Send to POS'}
+                        </button>
+                      )}
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '8px 0 0' }}>Invoices and KOTs live in the Petpooja dashboard — this only shows whether the ticket reached them.</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {row('Item total', money(o.subtotal ?? o.totalAmount))}
@@ -1349,6 +1446,85 @@ export default function AdminDashboard() {
         );
       })()}
     </main>
+  );
+}
+
+/*
+ * Orders that took the customer's money but did not finish downstream.
+ *
+ * Four separate lists rather than one, because each needs a different action:
+ *   • paid, no courier      → re-book (one click, re-runs the same routing payment would have)
+ *   • paid, no POS ticket   → usually an unmapped product; fix the mapping, then push again
+ *   • cancelled, leg stuck  → the POS or carrier refused; must be finished in THEIR dashboard
+ *   • money reversed        → a refund or chargeback landed on an order still being fulfilled
+ * The whole panel is hidden when every list is empty, so a clean day shows nothing at all.
+ */
+function AttentionPanel({ report, busy, onRebook, onRetryPos, onOpen, onRefresh }: {
+  report: AttentionReport; busy: number | null;
+  onRebook: (id: number) => void; onRetryPos: (id: number) => void;
+  onOpen: (id: number) => void; onRefresh: () => void;
+}) {
+  const head: React.CSSProperties = { fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', margin: '14px 0 6px' };
+  const line: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 0', borderTop: '1px solid var(--border-soft)', fontSize: 'var(--text-sm)' };
+  const num: React.CSSProperties = { fontWeight: 800, color: 'var(--text-link)', cursor: 'pointer' };
+  const why: React.CSSProperties = { color: 'var(--text-muted)', fontSize: 'var(--text-xs)', flex: 1, minWidth: 180 };
+
+  return (
+    <div style={{ ...card, padding: '14px 16px', marginBottom: 16, borderColor: 'var(--status-error)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <AlertTriangle size={18} style={{ color: 'var(--status-error)' }} />
+        <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>Needs attention ({report.total})</span>
+        <button onClick={onRefresh} style={{ ...iconBtn, marginLeft: 'auto' }} title="Refresh"><RefreshCw size={15} /></button>
+      </div>
+
+      {!!report.paidNoShipment.length && <>
+        <div style={head}>Paid, but no courier booked ({report.paidNoShipment.length})</div>
+        {report.paidNoShipment.map(o => (
+          <div key={o.id} style={line}>
+            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
+            <span>{money(o.total_amount)}</span>
+            <span style={why}>{o.shipment_error || 'No booking attempt recorded yet.'}</span>
+            <button disabled={busy === o.id} onClick={() => onRebook(o.id)} style={{ ...actionBtn(), opacity: busy === o.id ? 0.5 : 1 }}>
+              <Truck size={13} /> {busy === o.id ? 'Booking…' : 'Book courier'}
+            </button>
+          </div>
+        ))}
+      </>}
+
+      {!!report.paidNoPosTicket.length && <>
+        <div style={head}>Paid, but the kitchen never got the ticket ({report.paidNoPosTicket.length})</div>
+        {report.paidNoPosTicket.map(o => (
+          <div key={o.id} style={line}>
+            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
+            <span>{money(o.total_amount)}</span>
+            <span style={why}>{o.last_error || 'Never attempted.'}{o.attempts ? ` (${o.attempts} attempt${o.attempts > 1 ? 's' : ''})` : ''}</span>
+            <button disabled={busy === o.id} onClick={() => onRetryPos(o.id)} style={{ ...actionBtn(), opacity: busy === o.id ? 0.5 : 1 }}>
+              <RefreshCw size={13} /> {busy === o.id ? 'Sending…' : 'Send to POS'}
+            </button>
+          </div>
+        ))}
+      </>}
+
+      {!!report.cancelStuckDownstream.length && <>
+        <div style={head}>Cancelled here, but still live downstream ({report.cancelStuckDownstream.length})</div>
+        {report.cancelStuckDownstream.map((o, i) => (
+          <div key={`${o.id}-${i}`} style={line}>
+            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
+            <span style={why}>{o.remarks}</span>
+          </div>
+        ))}
+      </>}
+
+      {!!report.moneyReversed.length && <>
+        <div style={head}>Money refunded or contested ({report.moneyReversed.length})</div>
+        {report.moneyReversed.map((o, i) => (
+          <div key={`${o.id}-${i}`} style={line}>
+            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
+            <span style={why}>{o.remarks}</span>
+          </div>
+        ))}
+      </>}
+    </div>
   );
 }
 

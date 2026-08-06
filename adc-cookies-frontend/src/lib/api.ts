@@ -263,9 +263,13 @@ export interface Order {
   subtotal?: number; discountAmount?: number; deliveryFee?: number; taxAmount?: number;
   couponCode?: string | null; shipmentStatus?: string; trackingUrl?: string | null;
   delhiveryWaybill?: string | null; delhiveryShipmentId?: string | null; labelGenerated?: boolean;
-  carrier?: string | null; // 'SHADOWFAX' (intracity) | 'DELHIVERY' (outstation)
-  estimatedDelivery?: string | null; // Shadowfax promised date from webhook (YYYY-MM-DD HH:MM:SS)
+  carrierOrderId?: string | null;   // the carrier's own order id — Shiprocket's cancel API keys off it
+  carrier?: string | null; // 'SHIPROCKET' (intracity) | 'DELHIVERY' (outstation) | 'SHADOWFAX' (retired)
+  shipmentError?: string | null;    // why the automatic courier booking failed, if it did
+  estimatedDelivery?: string | null; // carrier promised date from webhook (YYYY-MM-DD HH:MM:SS)
   payment?: OrderPayment | null;
+  /** Petpooja relay state (admin views only) — whether the kitchen actually received the ticket. */
+  pos?: { relayed: boolean; petpoojaOrderId: string | null; attempts: number; lastError: string | null } | null;
   address?: Address | null; items?: OrderItem[];
   warningFlags?: string[]; // e.g. 'DUPLICATE_CHARGE' — admin-facing alerts, doesn't affect order status
 }
@@ -387,8 +391,33 @@ export async function adminAnalytics(from?: string, to?: string): Promise<AdminA
 }
 
 export async function adminGetOrders(): Promise<Order[]> { return request('/admin/orders'); }
-export async function adminUpdateOrderStatus(id: number, status: string, remarks?: string): Promise<Order> {
+
+/**
+ * Cancelling also cancels the POS ticket and the courier booking. `cancelWarnings` lists any leg
+ * that refused — those need doing by hand in the carrier's or Petpooja's own dashboard.
+ */
+export async function adminUpdateOrderStatus(id: number, status: string, remarks?: string): Promise<Order & { cancelWarnings?: string[] }> {
   return request(`/admin/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, remarks }) });
+}
+
+/** Everything that took money but did not complete downstream. Empty lists = nothing to chase. */
+export interface AttentionReport {
+  paidNoShipment: { id: number; order_number: string; total_amount: number; created_at: string; shipment_error: string | null; carrier: string | null }[];
+  paidNoPosTicket: { id: number; order_number: string; total_amount: number; created_at: string; last_error: string | null; attempts: number }[];
+  cancelStuckDownstream: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
+  moneyReversed: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
+  total: number;
+}
+export async function adminAttention(): Promise<AttentionReport> { return request('/admin/attention'); }
+
+/** Re-run the AUTOMATIC carrier routing (intracity → Shiprocket, else Delhivery) for a paid order. */
+export async function adminRebookShipment(orderId: number): Promise<{ ok: boolean; reason?: string; waybill?: string; carrier?: string }> {
+  return request(`/admin/orders/${orderId}/rebook`, { method: 'POST' });
+}
+
+/** Push a paid order to the Petpooja POS again after a failed relay (e.g. once mapping is fixed). */
+export async function adminRetryPosRelay(orderId: number): Promise<{ ok: boolean; reason?: string; skipped?: boolean }> {
+  return request(`/admin/petpooja/orders/${orderId}/retry`, { method: 'POST', body: JSON.stringify({}) });
 }
 
 export async function adminGetProducts(): Promise<Product[]> { return request('/admin/products'); }
