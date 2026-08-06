@@ -296,6 +296,13 @@ export async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_order_id TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS carrier TEXT; -- 'SHADOWFAX' (intracity) or 'DELHIVERY' (outstation)
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_delivery TEXT; -- Shadowfax promised date from the webhook (YYYY-MM-DD HH:MM:SS)
+    -- The carrier's OWN order id, distinct from the waybill/AWB and from delhivery_shipment_id.
+    -- Shiprocket's cancel API (POST /orders/cancel) takes order ids, NOT shipment ids, so without
+    -- this a cancelled order could not be cancelled at Shiprocket and a rider would still turn up.
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS carrier_order_id TEXT;
+    -- Why the automatic shipment booking failed. Previously this only ever reached the console, so
+    -- a paid order with no shipment looked identical to one that simply hadn't been booked yet.
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipment_error TEXT;
     -- Phone-login users have no email: it stays NULL (we never fabricate a synthetic address).
     ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
     -- Best-effort city/region from the IP they last logged in from (see POST /auth/log-location) —

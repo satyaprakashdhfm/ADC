@@ -77,16 +77,22 @@ export function serializeOrderItem(oi) {
 
 // items, address and payment are pre-loaded by the caller. `warningFlags` is an optional array
 // of short codes (e.g. 'DUPLICATE_CHARGE') the caller pre-computed from order_tracking rows —
-// admin-facing alerts that don't affect order/payment status itself.
-export function serializeOrder(order, items = [], address = null, payment = null, warningFlags = []) {
+// admin-facing alerts that don't affect order/payment status itself. `pos` is the petpooja_orders
+// row for this order (admin views only) — whether the kitchen actually received the ticket.
+export function serializeOrder(order, items = [], address = null, payment = null, warningFlags = [], pos = null) {
   if (!order) return null;
   return {
+    pos: pos ? { relayed: !!pos.relay_ok, petpoojaOrderId: pos.petpooja_order_id ?? null, attempts: pos.attempts, lastError: pos.last_error ?? null } : null,
     id: order.id, orderNumber: order.order_number,
     subtotal: order.subtotal, discountAmount: order.discount_amount,
     deliveryFee: order.delivery_fee, taxAmount: order.tax_amount, totalAmount: order.total_amount,
     couponCode: order.coupon_code, paymentStatus: order.payment_status, orderStatus: order.order_status,
     delhiveryWaybill: order.delhivery_waybill, delhiveryShipmentId: order.delhivery_shipment_id,
+    carrierOrderId: order.carrier_order_id ?? null,
     trackingUrl: order.tracking_url, shipmentStatus: order.shipment_status,
+    // Why the automatic courier booking failed, if it did — a paid order with no shipment is money
+    // taken for something nobody is delivering, so the reason belongs on the order, not in a log.
+    shipmentError: order.shipment_error ?? null,
     carrier: order.carrier ?? null,
     estimatedDelivery: order.estimated_delivery ?? null,
     labelGenerated: !!order.label_generated,

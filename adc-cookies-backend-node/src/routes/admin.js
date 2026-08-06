@@ -17,7 +17,9 @@ import {
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
 import { shadowfaxConfigured, trackShadowfax, getShadowfaxPod, sfxStatusLabel, SFX_STORES, sfxServiceability } from '../shadowfax.js';
+import { cancelShiprocketOrder, trackShiprocket } from '../shiprocket.js';
 import { cancelOrder as petpoojaCancelOrder, relayOrder, unmappedProducts } from '../petpooja.js';
+import { autoCreateShipment } from './orders.js';
 
 const router = Router();
 router.use(requireAdmin);
@@ -89,11 +91,13 @@ router.get('/orders', async (req, res) => {
   // session pooler (~15 client cap) -> EMAXCONNSESSION -> 500 (empty admin shipments table).
   const orderIds = rows.map((o) => o.id);
   const addrIds = [...new Set(rows.map((o) => o.address_id).filter(Boolean))];
-  const [items, payments, addresses, warnings] = await Promise.all([
+  const [items, payments, addresses, warnings, posRows] = await Promise.all([
     orderIds.length ? getAll('SELECT * FROM order_items WHERE order_id = ANY($1) ORDER BY id', [orderIds]) : [],
     orderIds.length ? getAll('SELECT DISTINCT ON (order_id) order_id, provider, transaction_id, status, paid_at FROM payments WHERE order_id = ANY($1) ORDER BY order_id, id DESC', [orderIds]) : [],
     addrIds.length ? getAll('SELECT * FROM addresses WHERE id = ANY($1)', [addrIds]) : [],
     orderIds.length ? getAll("SELECT DISTINCT order_id FROM order_tracking WHERE order_id = ANY($1) AND status = 'DUPLICATE_CHARGE_WARNING'", [orderIds]) : [],
+    // One extra set-based query, not one per order — same reason as the note above.
+    orderIds.length ? getAll('SELECT order_id, relay_ok, petpooja_order_id, attempts, last_error FROM petpooja_orders WHERE order_id = ANY($1)', [orderIds]) : [],
   ]);
   const itemsByOrder = new Map();
   for (const it of items) {
@@ -103,9 +107,10 @@ router.get('/orders', async (req, res) => {
   const payByOrder = new Map(payments.map((p) => [p.order_id, p]));
   const addrById = new Map(addresses.map((a) => [a.id, a]));
   const duplicateChargeOrderIds = new Set(warnings.map((w) => w.order_id));
+  const posByOrder = new Map(posRows.map((p) => [p.order_id, p]));
   const serialized = rows.map((o) =>
     serializeOrder(o, itemsByOrder.get(o.id) || [], o.address_id ? addrById.get(o.address_id) || null : null, payByOrder.get(o.id) || null,
-      duplicateChargeOrderIds.has(o.id) ? ['DUPLICATE_CHARGE'] : [])
+      duplicateChargeOrderIds.has(o.id) ? ['DUPLICATE_CHARGE'] : [], posByOrder.get(o.id) || null)
   );
   res.json(serialized);
 });
@@ -117,8 +122,67 @@ router.get('/orders/:id', async (req, res) => {
   const address = order.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null;
   const payment = await getOne(PAYMENT_SELECT, [order.id]);
   const hasDuplicateCharge = await getOne("SELECT 1 FROM order_tracking WHERE order_id = $1 AND status = 'DUPLICATE_CHARGE_WARNING' LIMIT 1", [order.id]);
-  res.json(serializeOrder(order, items, address, payment, hasDuplicateCharge ? ['DUPLICATE_CHARGE'] : []));
+  const pos = await getOne('SELECT relay_ok, petpooja_order_id, attempts, last_error FROM petpooja_orders WHERE order_id = $1', [order.id]);
+  res.json(serializeOrder(order, items, address, payment, hasDuplicateCharge ? ['DUPLICATE_CHARGE'] : [], pos));
 });
+
+/*
+ * Cancel an order everywhere it exists downstream — the POS ticket AND the courier booking.
+ *
+ * Cancelling only on our side used to leave both live: the kitchen kept baking and the rider still
+ * turned up for a parcel nobody was going to pay for. Each leg is independent and each records its
+ * own outcome on the order timeline, so a partial cancellation is visible rather than assumed.
+ *
+ * Never throws — a downstream refusal must not stop us cancelling on our own side.
+ */
+async function cancelDownstream(order, reason) {
+  const ts = nowIso();
+  const note = async (status, remarks) =>
+    query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+      [order.id, status, remarks.slice(0, 500), ts]).catch(() => {});
+
+  // ---- POS ----
+  // Only if a ticket actually reached them; cancelling one they never received is a guaranteed error.
+  const relayed = await getOne('SELECT relay_ok FROM petpooja_orders WHERE order_id = $1', [order.id]).catch(() => null);
+  if (relayed?.relay_ok) {
+    try {
+      const r = await petpoojaCancelOrder(order.order_number, reason);
+      await note(r.ok ? 'POS_CANCELLED' : 'POS_CANCEL_FAILED',
+        r.ok ? 'Petpooja ticket cancelled' : `⚠ Petpooja would not cancel: ${JSON.stringify(r.reason).slice(0, 300)} — cancel it in the Petpooja dashboard`);
+    } catch (err) {
+      await note('POS_CANCEL_FAILED', `⚠ Petpooja cancel threw: ${err?.message || err} — cancel it in the Petpooja dashboard`);
+    }
+  }
+
+  // ---- Courier ----
+  if (!order.delhivery_waybill && !order.carrier_order_id) return;
+  if (order.shipment_status === 'CANCELLED') return;
+  try {
+    let r;
+    if (order.carrier === 'SHIPROCKET') {
+      // Their cancel API takes THEIR order id, not the shipment id or the AWB.
+      if (!order.carrier_order_id) {
+        await note('SHIPMENT_CANCEL_FAILED', '⚠ No Shiprocket order id stored (booked before this was recorded) — cancel it in the Shiprocket panel');
+        return;
+      }
+      r = await cancelShiprocketOrder(order.carrier_order_id);
+    } else if (order.carrier === 'SHADOWFAX') {
+      await note('SHIPMENT_CANCEL_FAILED', '⚠ Shadowfax is retired — cancel this one in their dashboard');
+      return;
+    } else {
+      r = await cancelShipment(order.delhivery_waybill);
+    }
+    if (r.ok) {
+      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', ['CANCELLED', ts, order.id]);
+      await note('SHIPMENT_CANCELLED', `${order.carrier || 'DELHIVERY'} booking ${order.delhivery_waybill || order.carrier_order_id} cancelled`);
+    } else {
+      await note('SHIPMENT_CANCEL_FAILED',
+        `⚠ ${order.carrier || 'DELHIVERY'} would not cancel ${order.delhivery_waybill || order.carrier_order_id}: ${JSON.stringify(r.reason).slice(0, 300)} — cancel it in their dashboard`);
+    }
+  } catch (err) {
+    await note('SHIPMENT_CANCEL_FAILED', `⚠ Courier cancel threw: ${err?.message || err} — cancel it in their dashboard`);
+  }
+}
 
 router.patch('/orders/:id/status', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
@@ -129,17 +193,23 @@ router.patch('/orders/:id/status', async (req, res) => {
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [order.id, status, remarks ?? null, ts]);
 
-  // Cancelling here must also cancel at the POS, or the kitchen keeps a live ticket for an order
-  // that no longer exists. Fire-and-forget: the cancellation on our side already stands, and their
-  // API is the only transition they accept anyway (-1).
+  // Cancel downstream too, or the kitchen keeps a live ticket and the rider still collects a parcel
+  // for an order that no longer exists. Awaited rather than fire-and-forget so the response reflects
+  // what actually happened — the admin needs to know immediately if a leg refused and needs doing by
+  // hand. cancelDownstream never throws, so a carrier outage cannot fail our own cancellation.
   if (status === 'CANCELLED' && order.order_status !== 'CANCELLED') {
-    petpoojaCancelOrder(order.order_number, remarks || 'Cancelled by ADC admin')
-      .catch((err) => console.error(`[PETPOOJA] cancel relay failed | order=${order.order_number} | ${err?.message || err}`));
+    await cancelDownstream(order, remarks || 'Cancelled by ADC admin');
   }
   const updated = await getOne('SELECT * FROM orders WHERE id = $1', [order.id]);
   const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order.id]);
   const address = updated.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [updated.address_id]) : null;
-  res.json(serializeOrder(updated, items, address));
+  // Surface anything the downstream cancel could NOT do, so the admin is told to finish it by hand
+  // instead of assuming a green tick meant the rider was called off.
+  const failures = await getAll(
+    `SELECT status, remarks FROM order_tracking
+      WHERE order_id = $1 AND status IN ('POS_CANCEL_FAILED','SHIPMENT_CANCEL_FAILED') AND created_at >= $2`,
+    [order.id, ts]).catch(() => []);
+  res.json({ ...serializeOrder(updated, items, address), cancelWarnings: failures.map((f) => f.remarks) });
 });
 
 /* ---------- Petpooja (POS / billing) ---------- */
@@ -180,10 +250,55 @@ router.get('/petpooja/orders', async (_req, res) => {
 });
 
 // Retry a relay that failed — after fixing a mapping, say. relayOrder is idempotent: an order
-// already relayed is skipped rather than duplicated at the POS.
+// already relayed is skipped rather than duplicated at the POS. It also refuses unpaid and
+// cancelled orders; force:true is the escape hatch for a payment reconciled outside Razorpay.
 router.post('/petpooja/orders/:id/retry', async (req, res) => {
-  const r = await relayOrder(Number(req.params.id));
+  const r = await relayOrder(Number(req.params.id), { force: String(req.body?.force) === 'true' });
   res.json(r);
+});
+
+/*
+ * GET /api/admin/attention — every order that took money but did not complete downstream.
+ *
+ * This is the one screen that answers "did anything fall through the cracks today". Each list is
+ * something a human has to act on; an empty response means every paid order reached both the
+ * kitchen and a courier.
+ */
+router.get('/attention', async (_req, res) => {
+  const [noShipment, noRelay, cancelStuck, disputes] = await Promise.all([
+    // Paid, not cancelled, and no courier booked. `has_address` matters: an order with no address
+    // can NEVER be booked, so the UI must explain that rather than offer a retry that always fails.
+    getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error, o.carrier,
+                   (o.address_id IS NOT NULL) AS has_address
+              FROM orders o
+             WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
+               AND o.delhivery_waybill IS NULL
+             ORDER BY o.created_at DESC LIMIT 100`),
+    // Paid, not cancelled, and the kitchen never got the ticket.
+    getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at,
+                   p.last_error, COALESCE(p.attempts, 0) AS attempts
+              FROM orders o LEFT JOIN petpooja_orders p ON p.order_id = o.id
+             WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
+               AND (p.relay_ok IS NULL OR p.relay_ok = FALSE)
+             ORDER BY o.created_at DESC LIMIT 100`),
+    // Cancelled on our side but a downstream leg refused — POS ticket or rider still live.
+    getAll(`SELECT DISTINCT o.id, o.order_number, t.status, t.remarks, t.created_at
+              FROM orders o JOIN order_tracking t ON t.order_id = o.id
+             WHERE t.status IN ('POS_CANCEL_FAILED','SHIPMENT_CANCEL_FAILED')
+             ORDER BY t.created_at DESC LIMIT 100`),
+    // Money reversed or contested after the fact.
+    getAll(`SELECT DISTINCT o.id, o.order_number, t.status, t.remarks, t.created_at
+              FROM orders o JOIN order_tracking t ON t.order_id = o.id
+             WHERE t.status IN ('DISPUTE_OPENED','REFUNDED','REFUND_FAILED','FULFILLED_THEN_REFUNDED')
+             ORDER BY t.created_at DESC LIMIT 100`),
+  ]);
+  res.json({
+    paidNoShipment: noShipment,
+    paidNoPosTicket: noRelay,
+    cancelStuckDownstream: cancelStuck,
+    moneyReversed: disputes,
+    total: noShipment.length + noRelay.length + cancelStuck.length + disputes.length,
+  });
 });
 
 /* ---------- Coupons ---------- */
@@ -517,6 +632,15 @@ router.post('/orders/:id/shipment', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
   if (!order) throw new ApiError('Order not found', 404);
   if (order.delhivery_waybill) throw new ApiError('Shipment already created for this order', 409);
+  // Booking a courier costs real money out of the Delhivery wallet the moment the shipment is
+  // created, so it must not be possible to do it for an order nobody has paid for. `force` covers
+  // the genuine case of a payment reconciled outside Razorpay.
+  if (order.payment_status !== 'PAID' && String(req.body?.force) !== 'true') {
+    throw new ApiError(`Order is not paid (payment_status=${order.payment_status}) — booking a courier would spend from the Delhivery wallet for an unpaid order. Send force:true to override.`, 409);
+  }
+  if (order.order_status === 'CANCELLED' && String(req.body?.force) !== 'true') {
+    throw new ApiError('Order is cancelled — send force:true to book a courier anyway.', 409);
+  }
 
   const address = order.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null;
   if (!address) throw new ApiError('Order has no delivery address', 400);
@@ -586,25 +710,83 @@ router.post('/orders/:id/shipment', async (req, res) => {
   res.json({ ...serialized, waybill: result.waybill });
 });
 
-// DELETE /api/admin/orders/:id/shipment — cancel shipment
+// DELETE /api/admin/orders/:id/shipment — cancel the shipment WITH WHOEVER BOOKED IT.
+// This used to always call Delhivery, so cancelling an intracity order sent a Shiprocket AWB to
+// Delhivery's edit endpoint, which rejected it while the rider was still on the way.
 router.delete('/orders/:id/shipment', async (req, res) => {
-  if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
   if (!order) throw new ApiError('Order not found', 404);
-  if (!order.delhivery_waybill) throw new ApiError('No shipment exists for this order', 400);
+  if (!order.delhivery_waybill && !order.carrier_order_id) throw new ApiError('No shipment exists for this order', 400);
 
-  console.log(`[ADMIN-SHIPMENT] cancel | order=${order.order_number} | waybill=${order.delhivery_waybill}`);
-  const result = await cancelShipment(order.delhivery_waybill);
+  const ref = order.delhivery_waybill || order.carrier_order_id;
+  console.log(`[ADMIN-SHIPMENT] cancel | order=${order.order_number} | carrier=${order.carrier || 'DELHIVERY'} | ref=${ref}`);
+
+  let result;
+  if (order.carrier === 'SHIPROCKET') {
+    if (!order.carrier_order_id) {
+      throw new ApiError('This Shiprocket booking predates us storing their order id — cancel it in the Shiprocket panel.', 409);
+    }
+    result = await cancelShiprocketOrder(order.carrier_order_id);
+  } else if (order.carrier === 'SHADOWFAX') {
+    throw new ApiError('Shadowfax is retired — cancel this one in their dashboard.', 409);
+  } else {
+    if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
+    result = await cancelShipment(order.delhivery_waybill);
+  }
+
   if (!result.ok) {
-    console.log(`[ADMIN-SHIPMENT] cancel FAILED | waybill=${order.delhivery_waybill} | reason=${result.reason}`);
+    console.log(`[ADMIN-SHIPMENT] cancel FAILED | ref=${ref} | reason=${JSON.stringify(result.reason)}`);
+    await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+      [order.id, 'SHIPMENT_CANCEL_FAILED', `⚠ ${order.carrier || 'DELHIVERY'} refused to cancel ${ref}: ${JSON.stringify(result.reason).slice(0, 300)}`, nowIso()]).catch(() => {});
     return res.status(502).json({ error: result.reason, detail: result.detail });
   }
 
-  await query(
-    `UPDATE orders SET shipment_status='CANCELLED', updated_at=$1 WHERE id=$2`,
-    [nowIso(), order.id]
-  );
-  res.json({ ok: true, waybill: order.delhivery_waybill });
+  await query(`UPDATE orders SET shipment_status='CANCELLED', updated_at=$1 WHERE id=$2`, [nowIso(), order.id]);
+  await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+    [order.id, 'SHIPMENT_CANCELLED', `${order.carrier || 'DELHIVERY'} booking ${ref} cancelled`, nowIso()]).catch(() => {});
+  res.json({ ok: true, waybill: order.delhivery_waybill, carrier: order.carrier || 'DELHIVERY' });
+});
+
+/*
+ * POST /api/admin/orders/:id/rebook — retry the AUTOMATIC carrier booking.
+ *
+ * Distinct from POST /orders/:id/shipment, which only ever books Delhivery from the default
+ * warehouse. This re-runs the real routing (intracity → nearest serviceable store on Shiprocket,
+ * otherwise Delhivery), so an order whose booking failed at payment time is retried exactly as it
+ * would have been booked then — no manual carrier choice, and no wrong-carrier bookings.
+ */
+/*
+ * Turn autoCreateShipment's internal reason code into something an operator can act on, and pick a
+ * status that reflects WHOSE problem it is: 409 when the order itself cannot be shipped (nothing to
+ * retry until the data is fixed), 502 when the carrier refused or was unreachable (retrying may
+ * work). Returning a bare reason code was useless — the frontend reads `message`/`error`, so a
+ * failure surfaced in the UI as an unexplained "HTTP 502".
+ */
+function shipmentFailureResponse(reason) {
+  const r = String(reason || '');
+  if (r === 'no_address') return { status: 409, message: 'This order has no delivery address, so there is nowhere to ship it. Orders created directly for testing (and any placed without an address) can never be booked — this is not a carrier problem.' };
+  if (r === 'order_not_found') return { status: 404, message: 'Order not found.' };
+  if (r === 'not_configured') return { status: 503, message: 'No courier is configured on this environment, so nothing can be booked here.' };
+  if (r === 'no_warehouse') return { status: 409, message: 'No active default warehouse — set one under Delivery → Warehouses before booking Delhivery.' };
+  if (r.startsWith('waybill_fetch:')) return { status: 502, message: `Delhivery would not issue a waybill (${r.slice(14)}). This is usually a wallet balance or account issue on their side.` };
+  return { status: 502, message: `The carrier refused the booking: ${r}` };
+}
+
+router.post('/orders/:id/rebook', async (req, res) => {
+  const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  if (!order) throw new ApiError('Order not found', 404);
+  if (order.delhivery_waybill) throw new ApiError('This order already has a shipment — cancel it first.', 409);
+  if (order.payment_status !== 'PAID') throw new ApiError(`Order is not paid (payment_status=${order.payment_status}).`, 409);
+  if (order.order_status === 'CANCELLED') throw new ApiError('Order is cancelled.', 409);
+
+  const r = await autoCreateShipment(order.id);
+  if (!r.ok) {
+    const { status, message } = shipmentFailureResponse(r.reason);
+    return res.status(status).json({ ok: false, reason: r.reason, error: message, message });
+  }
+  await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+    [order.id, 'SHIPMENT_CREATED', `${r.carrier || 'Carrier'} waybill ${r.waybill} (re-booked by admin)`, nowIso()]).catch(() => {});
+  res.json(r);
 });
 
 // GET /api/admin/orders/:id/track — pull fresh tracking from whichever carrier created the shipment.
@@ -613,7 +795,21 @@ router.get('/orders/:id/track', async (req, res) => {
   if (!order) throw new ApiError('Order not found', 404);
   if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
 
-  // Shadowfax (intracity) — normalize into { ok, carrier, status, scans } for the admin UI.
+  // Shiprocket (intracity) — normalize into the same { ok, carrier, status, scans } shape.
+  // Without this branch an intracity AWB was sent to Delhivery's tracker, which of course
+  // knows nothing about it, so the admin saw "not found" for a parcel that was moving fine.
+  if (order.carrier === 'SHIPROCKET') {
+    const sid = order.delhivery_shipment_id;
+    if (!sid) return res.json({ ok: false, carrier: 'SHIPROCKET', reason: 'no_shipment_id' });
+    const result = await trackShiprocket(sid);
+    if (result.ok && result.status) {
+      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [result.status, nowIso(), order.id]);
+    }
+    const scans = (result.activities || []).map((a) => ({ time: a.date || a.time, event: a.activity || a.status }));
+    return res.json({ ok: result.ok, carrier: 'SHIPROCKET', status: result.status || null, awb: result.awb || order.delhivery_waybill, scans });
+  }
+
+  // Shadowfax (retired) — normalize into { ok, carrier, status, scans } for the admin UI.
   if (order.carrier === 'SHADOWFAX') {
     if (!shadowfaxConfigured()) throw new ApiError('Shadowfax not configured', 503);
     const result = await trackShadowfax(order.delhivery_waybill);
