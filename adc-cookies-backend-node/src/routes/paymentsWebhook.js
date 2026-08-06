@@ -18,6 +18,33 @@ import { logApiCall } from '../apiLogger.js';
  * Configure the webhook in the Razorpay dashboard for events: payment.captured, order.paid,
  * payment.failed.
  */
+/*
+ * The money has gone back (refund) or is being clawed back (chargeback) on an order that is still
+ * live downstream — a POS ticket the kitchen is working, or a courier booking a rider is servicing.
+ *
+ * Deliberately does NOT cancel anything: refunds are frequently goodwill on an order we still fully
+ * intend to deliver, and auto-cancelling a rider mid-delivery would turn a small refund into an
+ * angry customer with no cookies. It raises a flag the admin dashboard's attention list picks up,
+ * so a person decides.
+ */
+async function flagIfStillLive(orderId, what) {
+  const order = await getOne(
+    'SELECT order_number, order_status, shipment_status, delhivery_waybill, carrier FROM orders WHERE id = $1',
+    [orderId]
+  );
+  if (!order) return;
+  const posLive = await getOne('SELECT 1 FROM petpooja_orders WHERE order_id = $1 AND relay_ok = TRUE', [orderId]);
+  const courierLive = !!order.delhivery_waybill && order.shipment_status !== 'CANCELLED' && order.shipment_status !== 'DELIVERED';
+  if (!posLive && !courierLive) return;
+
+  const live = [posLive ? 'a live Petpooja ticket' : null, courierLive ? `a live ${order.carrier || 'courier'} booking (${order.delhivery_waybill})` : null]
+    .filter(Boolean).join(' and ');
+  const remarks = `⚠ ${what} but this order still has ${live}. Decide whether to cancel it downstream — nothing was cancelled automatically.`;
+  await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+    [orderId, 'FULFILLED_THEN_REFUNDED', remarks, nowIso()]).catch(() => {});
+  console.log(`[PAYMENT] ⚠ ${order.order_number} | ${what} | still live: ${live}`);
+}
+
 export async function paymentWebhook(req, res) {
   const sig = req.headers['x-razorpay-signature'];
   const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
@@ -97,6 +124,13 @@ export async function paymentWebhook(req, res) {
           [payment.order_id, newStatus, `Refund ${refundEntity?.id || ''} — ₹${amount} — ${type}`, nowIso()]
         );
         console.log(`[PAYMENT] webhook | ${type} | order_id=${payment.order_id} | refund=${refundEntity?.id} | ₹${amount}`);
+        // A refund on an order the kitchen is still cooking, or a rider is still carrying, is the
+        // real-world version of "paid=no, but the POS and courier say yes". Razorpay refunds can be
+        // issued straight from their dashboard without ever touching our admin, so this webhook is
+        // the only place we would ever learn about it. Flag it loudly rather than reverse anything
+        // automatically — a refund is often a goodwill gesture on an order we still intend to
+        // deliver, so silently cancelling the rider would be worse than the problem.
+        if (type === 'refund.processed') await flagIfStillLive(payment.order_id, `Refund of ₹${amount} processed`);
       } else {
         console.log(`[PAYMENT] webhook | ${type} | no local payment matches rzpPayment=${rzpPaymentId}`);
       }
@@ -117,6 +151,7 @@ export async function paymentWebhook(req, res) {
           [payment.order_id, 'DISPUTE_OPENED', `⚠ Chargeback/dispute opened — ₹${amount} — reason=${disputeEntity?.reason_code || 'unknown'} — respond by ${respondBy}`, nowIso()]
         );
         console.log(`[PAYMENT] webhook | ⚠ DISPUTE opened | order_id=${payment.order_id} | payment=${rzpPaymentId}`);
+        await flagIfStillLive(payment.order_id, `Chargeback opened for ₹${amount}`);
       } else {
         console.log(`[PAYMENT] webhook | payment.dispute.created | no local payment matches rzpPayment=${rzpPaymentId}`);
       }
