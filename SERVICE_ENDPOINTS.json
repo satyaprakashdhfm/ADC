@@ -1614,7 +1614,9 @@
         "sampleResponse_liveCaptured": {
           "status_code": 200,
           "message": "Order cancelled successfully."
-        }
+        },
+        "gotcha": "Takes THEIR order id (order_id from /orders/create/adhoc), NOT the shipment_id and NOT the AWB. We store it in orders.carrier_order_id at booking time — without it an intracity order cannot be cancelled with them at all. Re-verified 2026-08-06: a bogus id returns {\"message\":\"Order Id does not exist\"}, so auth and shape are good.",
+        "calledFrom": "cancelDownstream() in routes/admin.js (order status -> CANCELLED) and DELETE /api/admin/orders/:id/shipment"
       },
       {
         "purpose": "Tracking webhook — they POST status changes to us",
