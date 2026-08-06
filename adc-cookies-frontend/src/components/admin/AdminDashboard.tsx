@@ -1375,7 +1375,9 @@ export default function AdminDashboard() {
                     ) : (
                       <div style={{ marginTop: 10 }}>
                         {o.shipmentError && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, margin: '0 0 8px' }}>Booking failed: {o.shipmentError}</p>}
-                        {o.paymentStatus === 'PAID' && o.orderStatus !== 'CANCELLED' ? (
+                        {!a ? (
+                          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>This order has no delivery address, so no courier can be booked for it.</p>
+                        ) : o.paymentStatus === 'PAID' && o.orderStatus !== 'CANCELLED' ? (
                           <button disabled={fixing === o.id} onClick={() => rebookShipment(o.id)} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', opacity: fixing === o.id ? 0.5 : 1 }}>
                             <Truck size={14} /> {fixing === o.id ? 'Booking…' : 'Book courier now'}
                           </button>
@@ -1483,10 +1485,16 @@ function AttentionPanel({ report, busy, onRebook, onRetryPos, onOpen, onRefresh 
           <div key={o.id} style={line}>
             <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
             <span>{money(o.total_amount)}</span>
-            <span style={why}>{o.shipment_error || 'No booking attempt recorded yet.'}</span>
-            <button disabled={busy === o.id} onClick={() => onRebook(o.id)} style={{ ...actionBtn(), opacity: busy === o.id ? 0.5 : 1 }}>
-              <Truck size={13} /> {busy === o.id ? 'Booking…' : 'Book courier'}
-            </button>
+            {/* No address = nothing to ship to, and no retry can ever fix it. Say so instead of
+                offering a button that is guaranteed to fail. */}
+            <span style={why}>{o.has_address === false ? 'No delivery address on this order — it cannot be shipped.' : (o.shipment_error || 'No booking attempt recorded yet.')}</span>
+            {o.has_address === false ? (
+              <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>Not shippable</span>
+            ) : (
+              <button disabled={busy === o.id} onClick={() => onRebook(o.id)} style={{ ...actionBtn(), opacity: busy === o.id ? 0.5 : 1 }}>
+                <Truck size={13} /> {busy === o.id ? 'Booking…' : 'Book courier'}
+              </button>
+            )}
           </div>
         ))}
       </>}

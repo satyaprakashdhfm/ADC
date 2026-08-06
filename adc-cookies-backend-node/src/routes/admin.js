@@ -266,8 +266,10 @@ router.post('/petpooja/orders/:id/retry', async (req, res) => {
  */
 router.get('/attention', async (_req, res) => {
   const [noShipment, noRelay, cancelStuck, disputes] = await Promise.all([
-    // Paid, not cancelled, and no courier booked.
-    getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error, o.carrier
+    // Paid, not cancelled, and no courier booked. `has_address` matters: an order with no address
+    // can NEVER be booked, so the UI must explain that rather than offer a retry that always fails.
+    getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error, o.carrier,
+                   (o.address_id IS NOT NULL) AS has_address
               FROM orders o
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
                AND o.delhivery_waybill IS NULL
@@ -753,6 +755,23 @@ router.delete('/orders/:id/shipment', async (req, res) => {
  * otherwise Delhivery), so an order whose booking failed at payment time is retried exactly as it
  * would have been booked then — no manual carrier choice, and no wrong-carrier bookings.
  */
+/*
+ * Turn autoCreateShipment's internal reason code into something an operator can act on, and pick a
+ * status that reflects WHOSE problem it is: 409 when the order itself cannot be shipped (nothing to
+ * retry until the data is fixed), 502 when the carrier refused or was unreachable (retrying may
+ * work). Returning a bare reason code was useless — the frontend reads `message`/`error`, so a
+ * failure surfaced in the UI as an unexplained "HTTP 502".
+ */
+function shipmentFailureResponse(reason) {
+  const r = String(reason || '');
+  if (r === 'no_address') return { status: 409, message: 'This order has no delivery address, so there is nowhere to ship it. Orders created directly for testing (and any placed without an address) can never be booked — this is not a carrier problem.' };
+  if (r === 'order_not_found') return { status: 404, message: 'Order not found.' };
+  if (r === 'not_configured') return { status: 503, message: 'No courier is configured on this environment, so nothing can be booked here.' };
+  if (r === 'no_warehouse') return { status: 409, message: 'No active default warehouse — set one under Delivery → Warehouses before booking Delhivery.' };
+  if (r.startsWith('waybill_fetch:')) return { status: 502, message: `Delhivery would not issue a waybill (${r.slice(14)}). This is usually a wallet balance or account issue on their side.` };
+  return { status: 502, message: `The carrier refused the booking: ${r}` };
+}
+
 router.post('/orders/:id/rebook', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
   if (!order) throw new ApiError('Order not found', 404);
@@ -761,7 +780,10 @@ router.post('/orders/:id/rebook', async (req, res) => {
   if (order.order_status === 'CANCELLED') throw new ApiError('Order is cancelled.', 409);
 
   const r = await autoCreateShipment(order.id);
-  if (!r.ok) return res.status(502).json({ ok: false, reason: r.reason });
+  if (!r.ok) {
+    const { status, message } = shipmentFailureResponse(r.reason);
+    return res.status(status).json({ ok: false, reason: r.reason, error: message, message });
+  }
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [order.id, 'SHIPMENT_CREATED', `${r.carrier || 'Carrier'} waybill ${r.waybill} (re-booked by admin)`, nowIso()]).catch(() => {});
   res.json(r);
