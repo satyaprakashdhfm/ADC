@@ -3,8 +3,11 @@ import { getOne } from '../db.js';
 import { ApiError } from '../middleware.js';
 import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhivery.js';
 // Aliased: delhivery.js already exports a checkServiceability with a different signature.
-import { checkServiceability as srServiceability, shiprocketConfigured, SHIPROCKET_ORIGIN } from '../shiprocket.js';
-import { nearestStore } from '../shadowfax.js';
+// Quoting uses pickServiceableStore — the SAME routine the booking uses — so the store and rate the
+// shopper is shown are the ones the order will actually be dispatched from. Quoting against a single
+// fixed origin is what let checkout advertise a store we then could not collect from.
+import { pickServiceableStore, shiprocketConfigured } from '../shiprocket.js';
+import { nearestStore, zoneStores, orderStoresByProximity } from '../shadowfax.js';
 
 const router = Router();
 
@@ -77,26 +80,48 @@ router.get('/check', async (req, res) => {
   // (Shiprocket) is live and we have coordinates, we quote its real rate/ETA; otherwise we promise a
   // store-fulfilled ~1h delivery at the configured intracity fee (the shipment is created at order
   // time, trying the carrier first and falling back to the store's own rider).
+  /*
+   * Intracity. A store-zone pincode is served SAME-DAY by the hyperlocal carrier or it is not served
+   * at all — it is never quoted as a multi-day Delhivery parcel, because the shopper chose us for
+   * "within ~1 hour" and quietly substituting a three-day courier is not the thing they bought.
+   *
+   * This check therefore refuses to promise anything it has not actually confirmed. It used to
+   * answer "same-day, ~1h" purely from the pincode PREFIX, before any carrier was asked, which meant
+   * checkout happily took money for a lane the carrier would later refuse. Now the promise is only
+   * made on the back of a live serviceable quote from a store we can genuinely collect from; every
+   * other case reports unserviceable, with a reason the UI can act on.
+   */
   const pickup = nearestStore(pin);
   if (pickup) {
-    const hyperlocalLive = shiprocketConfigured() && !SHIPROCKET_DISABLED;
-    let quotedFee = null, etaHours = 1, carrier = 'STORE';
-    if (hyperlocalLive && lat && lng) {
-      try {
-        const q = await srServiceability({
-          pickupPin: SHIPROCKET_ORIGIN.pin, deliveryPin: pin,
-          latFrom: SHIPROCKET_ORIGIN.lat, longFrom: SHIPROCKET_ORIGIN.long, latTo: lat, longTo: lng,
-        });
-        if (q.serviceable) { quotedFee = q.rate; etaHours = q.couriers?.[0]?.etd_hours ?? 1; carrier = 'SHIPROCKET'; }
-      } catch (e) {
-        // A failed quote isn't fatal — the zone is still same-day serviceable; only the live rate is
-        // missing, so we leave the fee to the configured default and promise store-fulfilled ~1h.
-        console.log(`[DELIVERY] check | pin=${pin} | hyperlocal quote failed (${e?.message || e}) → store same-day`);
-      }
+    const unavailable = (reason, message) => {
+      console.log(`[DELIVERY] check | pin=${pin} | intracity UNAVAILABLE (${reason})`);
+      return res.json({ serviceable: false, intracity: true, sameDay: false, reason, message, pincode: pin, city: pickup.city });
+    };
+
+    if (!shiprocketConfigured() || SHIPROCKET_DISABLED) {
+      return unavailable('same_day_unavailable', 'Same-day delivery is paused for this area right now. Please try again shortly.');
     }
-    console.log(`[DELIVERY] check | pin=${pin} | carrier=${carrier} | SAME-DAY ~${etaHours}h from ${pickup.name} | fee=${quotedFee ?? 'default'}`);
-    return res.json({ serviceable: true, intracity: true, sameDay: true, carrier, store: pickup.name, city: pickup.city,
-      deliveryFee: quotedFee, etaHours, etaLabel: 'within ~1 hour', tat: null, expectedDeliveryDate: null, pincode: pin });
+    if (!lat || !lng) {
+      // We cannot quote hyperlocal without coordinates, and we will not guess. Ask for the location
+      // rather than promise a delivery we have not priced.
+      return unavailable('location_required', 'Share your location so we can confirm same-day delivery to this address.');
+    }
+    try {
+      const stores = zoneStores(pin);
+      const chosen = await pickServiceableStore(orderStoresByProximity(stores, lat, lng), { pin, lat, lng });
+      if (!chosen) {
+        return unavailable('out_of_range', 'This address is outside same-day range from our stores. We are unable to deliver here yet.');
+      }
+      const etaHours = chosen.etdHours ?? 1;
+      console.log(`[DELIVERY] check | pin=${pin} | carrier=SHIPROCKET | SAME-DAY ~${etaHours}h from ${chosen.store.name} | fee=${chosen.rate}`);
+      return res.json({ serviceable: true, intracity: true, sameDay: true, carrier: 'SHIPROCKET',
+        store: chosen.store.name, city: chosen.store.city, deliveryFee: chosen.rate, etaHours,
+        etaLabel: 'within ~1 hour', tat: null, expectedDeliveryDate: null, pincode: pin });
+    } catch (e) {
+      // A carrier outage must not silently become a Delhivery quote — say we cannot confirm.
+      console.log(`[DELIVERY] check | pin=${pin} | hyperlocal quote errored (${e?.message || e})`);
+      return unavailable('same_day_unavailable', 'We could not confirm same-day delivery just now. Please try again in a moment.');
+    }
   }
 
   console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | out-of-town`);

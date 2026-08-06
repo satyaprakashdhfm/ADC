@@ -82,7 +82,11 @@ async function attemptShipment(orderId, addressArg) {
    */
   if (stores.length && shiprocketConfigured() && !SHIPROCKET_DISABLED) {
     if (address.latitude == null || address.longitude == null) {
-      console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity but address has no lat/long → Delhivery`);
+      // NEVER Delhivery. This order was sold as same-day, ~1 hour, from a nearby store. Handing it
+      // to a multi-day courier would silently turn the promise the customer paid for into something
+      // else entirely — worse than not booking at all. Leave it unbooked and let the admin
+      // "Needs attention" list surface it so a person decides what to do.
+      return { ok: false, reason: 'intracity_no_coordinates: address has no lat/long, so the same-day carrier cannot be quoted. Add coordinates to the address, then re-book.' };
     } else {
       /*
        * Nearest store the carrier can ACTUALLY serve.
@@ -95,8 +99,9 @@ async function attemptShipment(orderId, addressArg) {
       const ordered = orderStoresByProximity(stores, address.latitude, address.longitude);
       const chosen = await pickServiceableStore(ordered, { pin: destPin, lat: address.latitude, lng: address.longitude });
       if (!chosen) {
-        // Fall through to Delhivery below rather than failing: slower beats nothing on a paid order.
-        console.log(`[SHIPMENT] auto | order=${order.order_number} | no ADC store can serve ${destPin} → Delhivery`);
+        // Same rule as above: no Delhivery for an order sold as same-day. Fails visibly instead.
+        console.log(`[SHIPMENT] auto | order=${order.order_number} | ✗ no verified ADC store can serve ${destPin} — NOT falling back to Delhivery`);
+        return { ok: false, reason: `intracity_unserviceable: no verified store can reach ${destPin} on the same-day carrier. Verify a nearer pickup location in the Shiprocket panel, then re-book.` };
       } else {
       const pickup = chosen.store;
       console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | store=${pickup.name} | ₹${chosen.rate} | ${chosen.distance} km`);
@@ -125,9 +130,23 @@ async function attemptShipment(orderId, addressArg) {
         console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=SHIPROCKET | shipment=${created.shipmentId} | sr_order=${created.srOrderId || '?'} | awb=${awb || 'pending'}`);
         return { ok: true, waybill: awb, shipmentId: created.shipmentId, carrier: 'SHIPROCKET' };
       }
-      console.log(`[SHIPMENT] auto | order=${order.order_number} | shiprocket failed=${JSON.stringify(created.reason).slice(0, 120)} → Delhivery`);
+      console.log(`[SHIPMENT] auto | order=${order.order_number} | ✗ shiprocket refused=${JSON.stringify(created.reason).slice(0, 120)} — NOT falling back to Delhivery`);
+      return { ok: false, reason: `intracity_booking_refused: ${JSON.stringify(created.reason).slice(0, 300)}` };
       }
     }
+  }
+
+  /*
+   * Reaching here means the destination is NOT in a store zone, or the same-day carrier is switched
+   * off entirely. Delhivery is the right answer for out-of-town, and it is the only path that can
+   * get here — every intracity branch above returns rather than falling through, so a same-day order
+   * can never quietly become a multi-day parcel.
+   */
+  if (stores.length && SHIPROCKET_DISABLED) {
+    return { ok: false, reason: 'intracity_disabled: SHIPROCKET_DISABLED is set, so same-day cannot be booked. This order must not ship by multi-day courier — cancel and refund, or clear the flag and re-book.' };
+  }
+  if (stores.length && !shiprocketConfigured()) {
+    return { ok: false, reason: 'intracity_not_configured: the same-day carrier has no credentials on this environment, so this order cannot be booked as sold.' };
   }
 
   // ---- Out-of-city (or Shadowfax unavailable) → Delhivery ----
