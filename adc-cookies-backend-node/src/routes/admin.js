@@ -763,9 +763,14 @@ router.delete('/orders/:id/shipment', async (req, res) => {
 
   if (!result.ok) {
     console.log(`[ADMIN-SHIPMENT] cancel FAILED | ref=${ref} | reason=${JSON.stringify(result.reason)}`);
+    const carrier = order.carrier || 'DELHIVERY';
+    const raw = typeof result.reason === 'string' ? result.reason : JSON.stringify(result.reason ?? '');
     await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-      [order.id, 'SHIPMENT_CANCEL_FAILED', `⚠ ${order.carrier || 'DELHIVERY'} refused to cancel ${ref}: ${JSON.stringify(result.reason).slice(0, 300)}`, nowIso()]).catch(() => {});
-    return res.status(502).json({ error: result.reason, detail: result.detail });
+      [order.id, 'SHIPMENT_CANCEL_FAILED', `⚠ ${carrier} refused to cancel ${ref}: ${raw.slice(0, 300)}`, nowIso()]).catch(() => {});
+    // A human sentence, not a reason code — this is read by whoever now has to go and cancel it by
+    // hand, and "the rider is still coming" is the part that matters.
+    const message = `${carrier} refused to cancel ${ref}: ${raw.slice(0, 300)}. The booking is still LIVE — a rider may still collect this order. Cancel it directly in the ${carrier === 'SHIPROCKET' ? 'Shiprocket' : 'Delhivery'} dashboard.`;
+    return res.status(502).json({ ok: false, error: message, message, carrier, reason: result.reason, detail: result.detail });
   }
 
   await query(`UPDATE orders SET shipment_status='CANCELLED', updated_at=$1 WHERE id=$2`, [nowIso(), order.id]);
