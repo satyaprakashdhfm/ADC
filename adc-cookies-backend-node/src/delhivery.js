@@ -194,6 +194,22 @@ export async function createWarehouseOnDelhivery(w) {
       body: JSON.stringify(payload),
     });
     if (!ok) {
+      /*
+       * Delhivery returns a generic 400 "some error while creating/updating warehouse" for a name
+       * that already exists — indistinguishable from a genuine validation failure, and it names no
+       * field. Since the edit endpoint is idempotent and updates an existing warehouse in place,
+       * retry through it: if the warehouse was simply already registered we end up in exactly the
+       * intended state, and if it truly does not exist the edit fails too and we report that.
+       *
+       * This mattered on 2026-08-07: ADC-BEGUR was already registered, create 400'd, and the
+       * warehouse looked unregistered while shipment creation would have worked all along.
+       */
+      log('warehouse-create', `"${w.name}" pin=${w.pincode} | create ${status} — may already exist, trying edit`);
+      const edited = await updateWarehouseOnDelhivery(w);
+      if (edited.ok) {
+        log('warehouse-create', `"${w.name}" pin=${w.pincode} | ✓ already registered, updated in place`);
+        return { ok: true, data: edited.data, alreadyExisted: true };
+      }
       log('warehouse-create', `"${w.name}" pin=${w.pincode} | ✗ api_error_${status} | ${JSON.stringify(data).slice(0, 120)}`);
       return { ok: false, reason: `api_error_${status}`, detail: data };
     }

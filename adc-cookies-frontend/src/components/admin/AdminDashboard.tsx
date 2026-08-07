@@ -686,27 +686,30 @@ export default function AdminDashboard() {
               </div>
               {purResult && <div style={{ marginTop: 10, fontSize: 'var(--text-sm)', color: purResult.startsWith('Error') ? 'var(--status-error)' : 'var(--status-success)', fontWeight: 700 }}>{purResult}</div>}
 
-              {/* Delhivery's pickup API books an empty slot — it takes a date, time and a package
-                  COUNT, with no field for waybills. Attaching the actual parcels is a separate
-                  action that only exists in their panel, and a pickup with nothing attached is why
-                  a rider turns up and leaves empty-handed.
-                  Cancelling is the same story: Delhivery's public API (all on track.delhivery.com)
-                  has cancel-SHIPMENT but no cancel-PICKUP. one.delhivery.com/v2/pickup-requests/
-                  domestic is a browser page, not an endpoint — it serves text/html and ignores our
-                  API token entirely; its Cancel button is authenticated by a panel login session
-                  our server doesn't have. So both links below deep-link into the panel. */}
+              {/* Delhivery's rules, from their own Pickup Request Creation docs. An earlier version
+                  of this box claimed the waybills had to be attached by hand in their panel and that
+                  a pickup with none attached collects nothing. That was wrong: their documentation
+                  states the request is raised against the WAREHOUSE, not the waybill, and one
+                  request therefore covers every parcel ready at that location. */}
               <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--amber-50)', border: '1px solid var(--border-brand)' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
                   <AlertTriangle size={16} style={{ color: 'var(--brand-secondary)', flex: 'none', marginTop: 2 }} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: 4 }}>
-                      After scheduling, add the packages in the Delhivery app
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: 6 }}>
+                      How Delhivery pickups work
                     </div>
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: 1.6, margin: '0 0 8px' }}>
-                      This books the <strong>slot only</strong> — Delhivery&apos;s API has no field for waybills. Open the
-                      Delhivery One panel → <strong>Pickup Requests</strong> → open today&apos;s request → <strong>Add to Pickup</strong>,
-                      and add all {Math.max(1, pending.length)} waybill{pending.length !== 1 ? 's' : ''} listed above. A pickup with no
-                      packages attached means the rider collects nothing.
+                    <ul style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: 1.7, margin: '0 0 8px', paddingLeft: 18 }}>
+                      <li><strong>One request covers every parcel at this warehouse.</strong> It is raised against the pickup location, not against waybills — you do not need one request per shipment.</li>
+                      <li><strong>Only one open request per warehouse per day.</strong> A second can be raised only after the existing one is closed, so schedule once the day&apos;s parcels are ready rather than per order.</li>
+                      <li><strong>Raise it when the parcels are packed</strong> and ready to hand to the field executive — not at the moment the order is placed.</li>
+                      <li><strong>Count</strong> is how many packages the rider should collect. Use the button above to fill in the {Math.max(1, pending.length)} awaiting pickup.</li>
+                      <li>Each parcel needs its <strong>shipping label</strong> printed — recipient address and scannable tracking barcode. Download them from the shipments list.</li>
+                      <li>Parcels at a <strong>different location</strong> need their own request from that warehouse.</li>
+                    </ul>
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.6, margin: '0 0 8px' }}>
+                      This step is optional: your Delhivery account POC can enable <strong>auto-pickup</strong>, after which collections are
+                      scheduled for you and this panel is only needed for an ad-hoc slot. Delhivery has no cancel-pickup API, so cancelling
+                      is done in their panel.
                     </p>
                     <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                       <a href="https://one.delhivery.com/v2/pickup-requests/domestic" target="_blank" rel="noopener noreferrer"
@@ -1587,7 +1590,7 @@ const actionBtn = (danger = false): React.CSSProperties => ({
  * Admin-facing shipment status. Delhivery's own wording is misleading at the start of the journey:
  * "CREATED"/"Manifested" only means a waybill exists, which happens automatically on payment while
  * the parcel is still on the counter. Spelling that out as "Awaiting pickup" is what tells the
- * operator there is still something to DO (attach it to a pickup request).
+ * operator there is still something to DO (schedule a pickup for the warehouse).
  */
 function shipStatusLabel(s?: string | null): string {
   const t = (s || '').trim();
