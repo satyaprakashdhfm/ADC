@@ -10,10 +10,10 @@ import {
   adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
-  adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument, adminFetchShadowfaxDoc, adminGetShadowfaxStores,
+  adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
   adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
   type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type CouponInput, type AdminMessage,
-  type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput, type ShadowfaxDocResult, type ShadowfaxStore,
+  type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
   type AttentionReport, type StoreReadinessReport,
 } from '@/lib/api';
 import {
@@ -23,46 +23,25 @@ import {
   FileText, AlertTriangle,
 } from 'lucide-react';
 
+/*
+ * Shiprocket Hyperlocal tracking statuses and what each one does to the order. Mirrors
+ * shiprocketStatusToOrderStatus() in adc-cookies-backend-node/src/shiprocket.js — if that mapping
+ * changes, change this too, since this table is what an operator trusts when reading a status.
+ */
+const SR_ORDER_STATES = [
+  { id: 'RIDER ASSIGNED', status: 'PACKED', description: 'A rider has been allocated. Nothing has left the store yet.' },
+  { id: 'PICKUP SCHEDULED', status: 'PACKED', description: 'Collection is booked; the rider is on the way to the store.' },
+  { id: 'AWB ASSIGNED', status: 'PACKED', description: 'The tracking number exists. Assignment is asynchronous, so this can lag the order by a minute or two.' },
+  { id: 'PICKED UP', status: 'OUT_FOR_DELIVERY', description: 'The rider has collected the order from the store.' },
+  { id: 'IN TRANSIT', status: 'OUT_FOR_DELIVERY', description: 'On the way to the customer.' },
+  { id: 'OUT FOR DELIVERY', status: 'OUT_FOR_DELIVERY', description: 'On the final leg to the drop address.' },
+  { id: 'RIDER REACHED DROP', status: '(no change)', description: 'The rider is at the door. Deliberately not marked delivered — at the door is not delivered.' },
+  { id: 'DELIVERED', status: 'DELIVERED', description: 'Handed to the customer. Terminal state.' },
+  { id: 'CANCELLED / RTO', status: 'CANCELLED', description: 'Cancelled, or returned to origin.' },
+];
+
 const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 
-// Shadowfax's official Marketplace order-lifecycle states (forward flow only — we don't use
-// COD/reverse) verbatim from their API docs, for admin reference. Customers only ever see the
-// small friendly set from sfxStatusLabel() in src/shadowfax.js — this full table is admin-only,
-// so admin can make sense of whatever raw status_id a tracking poll or webhook actually reports.
-const SFX_ORDER_STATES: { id: string; status: string; description: string }[] = [
-  { id: 'new', status: 'New', description: 'When the delivery request is new at Shadowfax facility.' },
-  { id: 'assigned_for_seller_pickup', status: 'Assigned For Pickup', description: 'Order is assigned to a Shadowfax rider for seller (store) pickup.' },
-  { id: 'ofp', status: 'Out For Pickup', description: 'Order is out for seller pickup — rider is on the way to the store.' },
-  { id: 'picked', status: 'Picked', description: 'Order was picked up successfully from the store.' },
-  { id: 'recd_at_rev_hub', status: 'Received At Reverse Hub', description: 'Order was picked and received at the pickup hub.' },
-  { id: 'item_manifested', status: 'Item Added To Bag', description: 'Order was added to a bag (manifest) at a Shadowfax facility.' },
-  { id: 'bag_in_transit', status: 'Bag In Transit', description: 'The bag (master manifest) containing this order is in forward transit.' },
-  { id: 'bag_received_at_via', status: 'Bag Received At Via', description: 'The bag was received at an intermediate facility.' },
-  { id: 'bag_received', status: 'Bag Received', description: 'The bag was received at the destination facility.' },
-  { id: 'recd_at_fwd_hub', status: 'Received At Forward Hub', description: 'Order was received at the destination hub.' },
-  { id: 'recd_at_fwd_dc', status: 'Received At DC', description: 'Order was received at the destination city DC.' },
-  { id: 'assigned_for_delivery', status: 'Assigned For Customer Delivery', description: 'Order is assigned to a Shadowfax rider for customer delivery.' },
-  { id: 'ofd', status: 'Out For Delivery', description: 'Order is out for customer delivery — rider_name/rider_contact are shared at this point.' },
-  { id: 'delivered', status: 'Delivered', description: 'Order has been delivered to the customer. POD (proof of delivery) becomes available.' },
-  { id: 'cid', status: 'Cid (Customer Initiated Delay)', description: 'Customer requested delivery on another day.' },
-  { id: 'seller_initiated_delay', status: 'Seller Initiated Delay', description: 'Seller (us) requested pickup on another day.' },
-  { id: 'nc', status: 'Not Contactable', description: 'Customer is not contactable for delivery — see Shadowfax’s On Hold/Not Contactable remarks appendix for the specific reason.' },
-  { id: 'na', status: 'Not Attempted', description: 'Customer delivery was not attempted by the rider this cycle — see appendix for the specific reason.' },
-  { id: 'pickup_not_attempted', status: 'Pickup Not Attempted', description: 'Seller pickup was not attempted this cycle.' },
-  { id: 'cancelled_by_customer', status: 'Cancelled (by customer)', description: 'Delivery request was cancelled by the customer.' },
-  { id: 'cancelled_by_seller', status: 'Cancelled (by seller)', description: 'We (the seller) requested to cancel the pickup.' },
-  { id: 'on_hold', status: 'On Hold', description: 'Order is on hold due to client/operational concerns — see appendix for the specific reason.' },
-  { id: 'pickup_on_hold', status: 'Pickup On Hold', description: 'Pickup specifically is on hold (marketplace-only status) — see appendix for the specific reason.' },
-  { id: 'reopen_ndr', status: 'Require Delivery (NDR)', description: 'Customer delivery will be reattempted per the customer’s request.' },
-  { id: 'lost', status: 'Lost', description: 'Order was lost in transit.' },
-  { id: 'item_misrouted', status: 'Item Misrouted', description: 'The shipment reached the wrong Shadowfax facility.' },
-  { id: 'pincode_updated', status: 'Pincode Updated', description: 'The destination pincode on this order was updated.' },
-  { id: 'rts', status: 'Return To Seller — initiated', description: 'Order return-to-seller has been initiated (only relevant if we ever accept returns — we currently don’t).' },
-  { id: 'rts_in_process', status: 'RTS In Progress', description: 'Return to seller is in progress.' },
-  { id: 'rts_ofd', status: 'Out For Delivery (RTS)', description: 'Item is out for delivery back to the seller.' },
-  { id: 'rts_d', status: 'Returned To Client', description: 'Order was successfully returned to the seller.' },
-  { id: 'rts_nd', status: 'Undelivered (RTS)', description: 'Order was not successfully returned to the seller.' },
-];
 const PAGE_SIZE = 12; // rows per page in admin list tables
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -177,9 +156,7 @@ export default function AdminDashboard() {
   const [shipmentBusy, setShipmentBusy] = useState<number | null>(null);
   const [trackResult, setTrackResult] = useState<Record<number, unknown>>({});
   const [shipmentWeights, setShipmentWeights] = useState<Record<number, string>>({});
-  const [delivSub, setDelivSub] = useState<'main' | 'shadowfax' | 'delhivery'>('main');
-  const [sfxDoc, setSfxDoc] = useState<Record<number, ShadowfaxDocResult | { error: string }>>({});
-  const [sfxStores, setSfxStores] = useState<ShadowfaxStore[] | null>(null);
+  const [delivSub, setDelivSub] = useState<'main' | 'sameday' | 'delhivery'>('main');
   const [storeReadiness, setStoreReadiness] = useState<StoreReadinessReport | null>(null);
   const [sfxStatesOpen, setSfxStatesOpen] = useState(false);
 
@@ -205,10 +182,9 @@ export default function AdminDashboard() {
     if (tab === 'delivery') {
       if (warehouses === null) adminGetWarehouses().then(setWarehouses).catch(() => setWarehouses([]));
       if (orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
-      if (sfxStores === null) adminGetShadowfaxStores().then(setSfxStores).catch(() => setSfxStores([]));
       if (storeReadiness === null) adminGetStoreReadiness().then(setStoreReadiness).catch(() => setStoreReadiness(null));
     }
-  }, [tab, isAdmin, orders, products, coupons, users, messages, sfxStores]);
+  }, [tab, isAdmin, orders, products, coupons, users, messages, storeReadiness]);
 
   const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); adminDashboard().then(setStats).catch(() => {}); }, []);
 
@@ -487,7 +463,7 @@ export default function AdminDashboard() {
               action={<button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
               <FilterBar search={orderSearch} onSearch={v => { setOrderSearch(v); setPageOf('orders', 1); }} placeholder="Search order #, customer, city…" active={active} onClear={clear}>
                 <Field label="Order status"><select value={orderStatusFilter} onChange={e => { setOrderStatusFilter(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All statuses</option>{ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
-                <Field label="Carrier"><select value={orderCarrier} onChange={e => { setOrderCarrier(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All carriers</option><option value="SHIPROCKET">Shiprocket (intracity)</option><option value="DELHIVERY">Delhivery (outstation)</option><option value="SHADOWFAX">Shadowfax (retired)</option></select></Field>
+                <Field label="Carrier"><select value={orderCarrier} onChange={e => { setOrderCarrier(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All carriers</option><option value="SHIPROCKET">Shiprocket (intracity)</option><option value="DELHIVERY">Delhivery (outstation)</option></select></Field>
                 <Field label="Payment"><select value={orderPayment} onChange={e => { setOrderPayment(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">Any payment</option><option value="PAID">Paid</option><option value="PENDING">Pending</option></select></Field>
               </FilterBar>
               <Table head={['Order', 'Customer', 'Total', 'Payment', 'Shipment', 'POS', 'Status', 'Date']}>
@@ -633,9 +609,9 @@ export default function AdminDashboard() {
         {tab === 'delivery' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-            {/* Sub-nav: all shipments · Shadowfax intracity · Delhivery outstation */}
+            {/* Sub-nav: all shipments · same-day intracity · Delhivery outstation */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {([['main', 'All shipments'], ['shadowfax', 'Same-day · Intracity'], ['delhivery', 'Delhivery · Outstation']] as const).map(([id, label]) => {
+              {([['main', 'All shipments'], ['sameday', 'Same-day · Intracity'], ['delhivery', 'Delhivery · Outstation']] as const).map(([id, label]) => {
                 const on = delivSub === id;
                 return <button key={id} onClick={() => setDelivSub(id)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: on ? 'none' : '1.5px solid var(--border-default)', background: on ? 'var(--gradient-warm)' : 'var(--surface-card)', color: on ? 'var(--white)' : 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{label}</button>;
               })}
@@ -678,7 +654,7 @@ export default function AdminDashboard() {
             <Panel title="Schedule a Delhivery pickup">
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
                 Delhivery collects <strong>all manifested outstation packages</strong> from your default warehouse at the chosen slot.
-                Shadowfax (intracity) needs no pickup request — a rider is dispatched to the store automatically once the order is confirmed.
+                Intracity needs no pickup request — Shiprocket dispatches a rider to the store automatically once the order is confirmed.
               </p>
               <div style={{ marginBottom: 14, background: 'var(--surface-sunken)', borderRadius: 10, padding: '10px 14px' }}>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: pending.length ? 6 : 0 }}>
@@ -754,7 +730,7 @@ export default function AdminDashboard() {
                   {(delivSub === 'delhivery' ? (orders || []).filter(o => o.carrier === 'DELHIVERY') : (orders || [])).map(o => {
                     const w = shipmentWeights[o.id] ?? '0.5';
                     const trackData = trackResult[o.id] as { status?: string; note?: string; scans?: { time: string; event: string }[] } | undefined;
-                    const service = o.carrier === 'SHADOWFAX' ? { kind: 'Intracity', name: 'Shadowfax' }
+                    const service = o.carrier === 'SHIPROCKET' ? { kind: 'Intracity', name: 'Shiprocket' }
                       : o.carrier === 'DELHIVERY' ? { kind: 'Intercity', name: 'Delhivery' } : null;
                     return (
                       <tr key={o.id}>
@@ -790,8 +766,8 @@ export default function AdminDashboard() {
                             /* Labelled pills rather than bare icons — four unlabelled glyphs in a row
                                gave no clue which one cancelled a shipment. */
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {o.carrier !== 'SHADOWFAX' && <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={actionBtn()} title="Download the shipping label PDF"><Download size={13} /> Label</button>}
-                              {o.carrier !== 'SHADOWFAX' && (
+                              {o.carrier === 'DELHIVERY' && <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={actionBtn()} title="Download the shipping label PDF"><Download size={13} /> Label</button>}
+                              {o.carrier === 'DELHIVERY' && (
                                 <button title="Proof of delivery / signature (available after delivery)" onClick={async () => {
                                   setErr('');
                                   for (const t of ['EPOD', 'SIGNATURE_URL'] as const) {
@@ -804,7 +780,7 @@ export default function AdminDashboard() {
                               <button title="Fetch the latest carrier status" onClick={async () => {
                                 const r = await adminTrackOrder(o.id).catch(() => null);
                                 if (!r?.ok) { if (r) setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${r.reason || 'unknown'}` } })); return; }
-                                if (r.carrier === 'SHADOWFAX') {
+                                if (r.carrier === 'SHIPROCKET') {
                                   setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', note: '', scans: r.scans || [] } }));
                                 } else {
                                   type ShipmentData = { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
@@ -852,12 +828,11 @@ export default function AdminDashboard() {
             </Panel>
             </>)}
 
-            {delivSub === 'shadowfax' && (
+            {delivSub === 'sameday' && (
               <>
-              {/* Shiprocket pickup readiness. This replaced a Shadowfax serviceability table that
-                  showed every store as "Serviceable" in green while four of the five could not
-                  dispatch at all — Shadowfax is retired, and what decides a store's usability now is
-                  whether its Shiprocket pickup location is VERIFIED. */}
+              {/* Pickup readiness. What decides whether a store can take a same-day order is
+                  whether its Shiprocket pickup location is VERIFIED — an unverified one quotes a
+                  price and then refuses the booking, so it must never read as available. */}
               <Panel title="Same-day stores — Shiprocket pickup readiness" loading={storeReadiness === null}
                 action={storeReadiness === null ? undefined : <button onClick={() => adminGetStoreReadiness().then(setStoreReadiness).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
                 {storeReadiness && (
@@ -900,15 +875,17 @@ export default function AdminDashboard() {
                   </>
                 )}
               </Panel>
-              <Panel title="Shadowfax — order status reference (admin only)"
+              <Panel title="Shiprocket — status reference (admin only)"
                 action={<button onClick={() => setSfxStatesOpen(v => !v)} style={{ ...iconBtn, width: 'auto', padding: '4px 10px', fontSize: 'var(--text-xs)', fontWeight: 700 }}>{sfxStatesOpen ? 'Hide' : 'Show'}</button>}>
                 {sfxStatesOpen ? (
                   <>
                     <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      Every raw status Shadowfax can report for a marketplace (forward) order, straight from their official docs. Customers only ever see a small friendly subset (New / Confirmed / Out for delivery / Delivered) — this full list is for admin so a raw status_id from a tracking poll or webhook always makes sense.
+                      What each Shiprocket tracking status does to the order. Anything not listed leaves the order untouched rather than
+                      guessing. Note &quot;Rider assigned&quot; only means a rider was allocated — nothing has left the store yet, so it must
+                      not read as shipped to the customer.
                     </p>
-                    <Table head={['status_id', 'Label', 'What it means']}>
-                      {SFX_ORDER_STATES.map((s) => (
+                    <Table head={['Shiprocket status', 'Order becomes', 'What it means']}>
+                      {SR_ORDER_STATES.map((s) => (
                         <tr key={s.id}>
                           <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{s.id}</span></td>
                           <td style={td}><strong>{s.status}</strong></td>
@@ -916,23 +893,28 @@ export default function AdminDashboard() {
                         </tr>
                       ))}
                     </Table>
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '10px 0 0', lineHeight: 1.5 }}>
+                      Observed on a real delivery (1 Aug 2026, Rapido rider, 10.61 km): Rider reached pickup 18:33:01 → Picked up 18:33:28
+                      → Rider reached drop 18:57:12 → Delivered 19:46:05. Every webhook arrived within seconds of the event.
+                    </p>
                   </>
                 ) : (
-                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>{SFX_ORDER_STATES.length} known statuses — click Show to view the full reference.</p>
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>{SR_ORDER_STATES.length} mapped statuses — click Show to view the full reference.</p>
                 )}
               </Panel>
-              <Panel title="Shadowfax — intracity orders" loading={orders === null}
+              <Panel title="Same-day — intracity orders" loading={orders === null}
                 action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
                 {orders && (() => {
-                  const sfx = orders.filter(o => o.carrier === 'SHADOWFAX');
-                  if (!sfx.length) return <Empty text="No intracity (Shadowfax) orders yet." />;
+                  // Was filtered to the retired carrier, so every real intracity order since the
+                  // carrier changed was invisible on this screen.
+                  const sfx = orders.filter(o => o.carrier === 'SHIPROCKET');
+                  if (!sfx.length) return <Empty text="No intracity orders yet." />;
                   return (
                     <>
-                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>Same-city orders shipped by Shadowfax. There is no printable shipping label (the rider collects from the store) — the available documents are the live tracking link and the proof-of-delivery signature (after delivery).</p>
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>Same-city orders delivered by a rider from the nearest store, on Shiprocket Hyperlocal. There is no shipping label to print — the rider collects from the store — so tracking is the live status trail.</p>
                       <Table head={['Order', 'Customer', 'AWB', 'Status', 'Documents']}>
                         {sfx.map(o => {
                           const trackData = trackResult[o.id] as { status?: string; scans?: { time: string; event: string }[] } | undefined;
-                          const doc = sfxDoc[o.id];
                           return (
                             <tr key={o.id}>
                               <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{o.orderStatus}</span></td>
@@ -947,11 +929,11 @@ export default function AdminDashboard() {
                                       if (r?.ok) setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', scans: r.scans || [] } }));
                                       else setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${r?.reason || 'unknown'}` } }));
                                     }} style={iconBtn}><ExternalLink size={14} /></button>
-                                    <button title="Fetch documents (tracking link + POD)" onClick={async () => {
-                                      setErr('');
-                                      const r = await adminFetchShadowfaxDoc(o.id).catch(() => null);
-                                      setSfxDoc(p => ({ ...p, [o.id]: r || { error: 'Could not fetch documents' } }));
-                                    }} style={iconBtn}><FileText size={14} /></button>
+                                    {/* Hyperlocal has no printable document — the rider collects
+                                        from the store — so the public tracking page is the artefact. */}
+                                    {o.trackingUrl && (
+                                      <a href={o.trackingUrl} target="_blank" rel="noreferrer" title="Open Shiprocket tracking page" style={{ ...iconBtn, display: 'inline-grid' }}><FileText size={14} /></a>
+                                    )}
                                   </div>
                                 ) : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>No shipment</span>}
                                 {trackData && (
@@ -963,21 +945,6 @@ export default function AdminDashboard() {
                                         <span>{s.event}</span>
                                       </div>
                                     ))}
-                                  </div>
-                                )}
-                                {doc && (
-                                  <div style={{ marginTop: 6, fontSize: 'var(--text-2xs)', whiteSpace: 'normal', maxWidth: 340 }}>
-                                    {'error' in doc ? (
-                                      <span style={{ color: 'var(--status-error)', fontWeight: 700 }}>{doc.error}</span>
-                                    ) : (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                        {/* Shadowfax's customer_track_url has never once come back non-null in real testing, so
-                                            we don't know what it actually shows — not surfacing it until confirmed. Status/scans
-                                            (rendered by the Track button above) are the only tracking info we show for now. */}
-                                        {doc.pod?.urls?.length ? doc.pod.urls.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ color: 'var(--text-link)', fontWeight: 700 }}>↗ Proof of delivery (PDF)</a>) : <span style={{ color: 'var(--text-muted)' }}>POD available after delivery.</span>}
-                                        {doc.pod?.recipient && <span style={{ color: 'var(--text-muted)' }}>Received by {doc.pod.recipient}</span>}
-                                      </div>
-                                    )}
                                   </div>
                                 )}
                               </td>
@@ -1371,7 +1338,7 @@ export default function AdminDashboard() {
               {/* Shipment — read-only summary; create/cancel/label live in the Delivery tab (no duplication) */}
               {(() => {
                 const modalTrack = trackResult[o.id] as { status?: string; note?: string; scans?: { time: string; event: string }[] } | undefined;
-                const service = o.carrier === 'SHIPROCKET' ? 'Intracity (Shiprocket)' : o.carrier === 'SHADOWFAX' ? 'Intracity (Shadowfax, retired)' : o.carrier === 'DELHIVERY' ? 'Intercity (Delhivery)' : null;
+                const service = o.carrier === 'SHIPROCKET' ? 'Intracity (Shiprocket)' : o.carrier === 'DELHIVERY' ? 'Intercity (Delhivery)' : null;
                 return (
                   <div style={{ ...card, padding: 14, marginBottom: 14 }}>
                     <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Shipment</div>
@@ -1385,9 +1352,9 @@ export default function AdminDashboard() {
                         <button onClick={async () => {
                           const r = await adminTrackOrder(o.id).catch(() => null);
                           if (!r?.ok) return;
-                          // Shiprocket and Shadowfax are pre-normalised by the backend into
-                          // { status, scans }; only Delhivery returns its own raw envelope.
-                          if (r.carrier === 'SHADOWFAX' || r.carrier === 'SHIPROCKET') {
+                          // Shiprocket is pre-normalised by the backend into { status, scans };
+                          // only Delhivery returns its own raw envelope.
+                          if (r.carrier === 'SHIPROCKET') {
                             setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', note: '', scans: r.scans || [] } }));
                           } else {
                             type ShipmentData = { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };

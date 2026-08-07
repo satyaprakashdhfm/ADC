@@ -18,7 +18,6 @@ import couponRoutes from './routes/coupons.js';
 import adminRoutes from './routes/admin.js';
 import contactRoutes from './routes/contact.js';
 import deliveryRoutes from './routes/delivery.js';
-import shadowfaxWebhookRoutes from './routes/shadowfax.js';
 import petpoojaRoutes from './routes/petpooja.js';
 import hyperlocalRoutes from './routes/hyperlocal.js';
 import { paymentWebhook } from './routes/paymentsWebhook.js';
@@ -99,7 +98,6 @@ app.use('/api/addresses', addressRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/delivery', deliveryRoutes);
-app.use('/api/shadowfax', shadowfaxWebhookRoutes);
 app.use('/api/petpooja', petpoojaRoutes);
 // Shiprocket Hyperlocal tracking. NOT /api/shiprocket — their panel rejects webhook URLs
 // containing shiprocket / kartrocket / sr / kr / localhost.

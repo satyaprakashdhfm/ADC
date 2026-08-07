@@ -16,7 +16,7 @@ import {
   fetchDocument,
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
-import { shadowfaxConfigured, trackShadowfax, getShadowfaxPod, sfxStatusLabel, SFX_STORES, sfxServiceability } from '../shadowfax.js';
+import { ADC_STORES } from '../stores.js';
 import { cancelShiprocketOrder, trackShiprocket, listPickups, shiprocketConfigured } from '../shiprocket.js';
 import { cancelOrder as petpoojaCancelOrder, relayOrder, unmappedProducts } from '../petpooja.js';
 import { autoCreateShipment } from './orders.js';
@@ -532,20 +532,6 @@ router.get('/analytics', async (req, res) => {
    Delivery — Warehouses
    ====================================================================== */
 
-// All Shadowfax pickup stores + whether each one's pincode is CURRENTLY serviceable on the
-// connected Shadowfax environment (staging today) — so admin can see at a glance which stores
-// actually work as an intracity pickup point right now vs which ones are only real-store
-// listings that the sandbox doesn't service yet. Live-checked on every call (cheap, no caching)
-// so this reflects reality immediately, not a stale snapshot.
-router.get('/delivery/shadowfax-stores', async (_req, res) => {
-  if (!shadowfaxConfigured()) return res.json(SFX_STORES.map((s) => ({ ...s, serviceable: null, services: [] })));
-  const results = await Promise.all(SFX_STORES.map(async (s) => {
-    const r = await sfxServiceability(s.pincode);
-    return { ...s, serviceable: r.ok ? r.serviceable : null, services: r.services || [] };
-  }));
-  res.json(results);
-});
-
 /*
  * GET /api/admin/delivery/stores — can each ADC store ACTUALLY dispatch a same-day order today?
  *
@@ -557,11 +543,11 @@ router.get('/delivery/shadowfax-stores', async (_req, res) => {
  */
 router.get('/delivery/stores', async (_req, res) => {
   if (!shiprocketConfigured()) {
-    return res.json({ configured: false, stores: SFX_STORES.map((s) => ({ ...s, verified: null })), verifiedCount: 0 });
+    return res.json({ configured: false, stores: ADC_STORES.map((s) => ({ ...s, verified: null })), verifiedCount: 0 });
   }
   const { ok, reason, pickups } = await listPickups();
   const byNick = new Map(pickups.map((p) => [p.nickname.toLowerCase(), p]));
-  const stores = SFX_STORES.map((s) => {
+  const stores = ADC_STORES.map((s) => {
     const nick = String(s.pickupName || '').trim().toLowerCase();
     const p = nick ? byNick.get(nick) : null;
     return {
@@ -585,7 +571,7 @@ router.get('/delivery/stores', async (_req, res) => {
     configured: true, ok, reason: reason ?? null, stores,
     verifiedCount: stores.filter((s) => s.verified).length,
     // Orphans: registered with Shiprocket but not mapped to any store of ours.
-    unmappedPickups: pickups.filter((p) => !SFX_STORES.some((s) => String(s.pickupName || '').toLowerCase() === p.nickname.toLowerCase())),
+    unmappedPickups: pickups.filter((p) => !ADC_STORES.some((s) => String(s.pickupName || '').toLowerCase() === p.nickname.toLowerCase())),
   });
 });
 
@@ -770,8 +756,6 @@ router.delete('/orders/:id/shipment', async (req, res) => {
       throw new ApiError('This Shiprocket booking predates us storing their order id — cancel it in the Shiprocket panel.', 409);
     }
     result = await cancelShiprocketOrder(order.carrier_order_id);
-  } else if (order.carrier === 'SHADOWFAX') {
-    throw new ApiError('Shadowfax is retired — cancel this one in their dashboard.', 409);
   } else {
     if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
     result = await cancelShipment(order.delhivery_waybill);
@@ -852,23 +836,6 @@ router.get('/orders/:id/track', async (req, res) => {
     return res.json({ ok: result.ok, carrier: 'SHIPROCKET', status: result.status || null, awb: result.awb || order.delhivery_waybill, scans });
   }
 
-  // Shadowfax (retired) — normalize into { ok, carrier, status, scans } for the admin UI.
-  if (order.carrier === 'SHADOWFAX') {
-    if (!shadowfaxConfigured()) throw new ApiError('Shadowfax not configured', 503);
-    const result = await trackShadowfax(order.delhivery_waybill);
-    if (result.ok && result.status) {
-      // Store the friendly label, not the raw status_id — the customer-facing track route
-      // (routes/orders.js) stores sfxStatusLabel(result.status) here too; storing the raw slug
-      // instead would leave shipment_status inconsistently formatted depending on which route
-      // last touched it.
-      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [sfxStatusLabel(result.status), nowIso(), order.id]);
-    }
-    const scans = (result.data?.tracking_details || [])
-      .map(t => ({ time: t.created, event: sfxStatusLabel(t.status_id) || t.status || t.remarks }))
-      .reverse();
-    return res.json({ ok: result.ok, carrier: 'SHADOWFAX', status: sfxStatusLabel(result.status) || result.status || null, scans });
-  }
-
   // Delhivery (outstation)
   if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
   const result = await trackShipment(order.delhivery_waybill);
@@ -894,26 +861,6 @@ function firstUrl(v) {
   if (typeof v === 'object') { for (const x of Object.values(v)) { const u = firstUrl(x); if (u) return u; } return null; }
   return null;
 }
-
-// GET /api/admin/orders/:id/shadowfax-doc — Shadowfax documents for an intracity order:
-// proof-of-delivery signature (after delivery) + the shareable customer tracking link.
-router.get('/orders/:id/shadowfax-doc', async (req, res) => {
-  const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
-  if (!order) throw new ApiError('Order not found', 404);
-  if (order.carrier !== 'SHADOWFAX') return res.json({ ok: false, reason: 'not_shadowfax' });
-  if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
-  if (!shadowfaxConfigured()) throw new ApiError('Shadowfax not configured', 503);
-
-  const awb = order.delhivery_waybill;
-  const [pod, track] = await Promise.all([getShadowfaxPod(awb), trackShadowfax(awb)]);
-  res.json({
-    ok: true,
-    awb,
-    status: track.ok ? (track.status || null) : null,
-    trackUrl: track.ok ? (track.trackUrl || null) : null,
-    pod: pod.ok ? { recipient: pod.recipient, urls: pod.urls } : null,
-  });
-});
 
 // GET /api/admin/orders/:id/document?type=EPOD — fetch a B2C document (proof of delivery,
 // signature, return-QC image) for a Delhivery order. Only after the shipment exists.

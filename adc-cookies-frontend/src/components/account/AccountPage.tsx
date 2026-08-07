@@ -184,10 +184,10 @@ function ShipmentTracker({ order }: { order: Order }) {
     await doTrack();
   };
 
-  // Backend normalizes BOTH carriers (Delhivery + Shadowfax) into { status, scans:[{time,event}] }.
+  // Backend normalizes BOTH carriers (Delhivery + Shiprocket) into { status, scans:[{time,event}] }.
   const latestStatus = trackResult?.status || trackResult?.data?.ShipmentData?.[0]?.Shipment?.Status?.Status || null;
   const rawScans = trackResult?.scans ?? [];
-  const isShadowfax = order.carrier === 'SHADOWFAX';
+  const isIntracity = order.carrier === 'SHIPROCKET';
   const delivered = order.orderStatus === 'DELIVERED' || shipStage(latestStatus || order.shipmentStatus) >= 3;
   const address = order.address;
   const mapQuery = address
@@ -211,7 +211,7 @@ function ShipmentTracker({ order }: { order: Order }) {
             Waybill: <span style={{ fontFamily: 'monospace', color: 'var(--text-strong)' }}>{order.delhiveryWaybill}</span>
           </span>
         )}
-        {order.delhiveryWaybill && isShadowfax && !delivered ? (
+        {order.delhiveryWaybill && isIntracity && !delivered ? (
           <button onClick={openLiveTracking} disabled={tracking} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'var(--brand-secondary)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: tracking ? 'default' : 'pointer' }}>
             <MapPin size={14} /> {tracking ? 'Loading live…' : 'Live tracking'}
           </button>
@@ -227,7 +227,7 @@ function ShipmentTracker({ order }: { order: Order }) {
         </a>
       </div>
       {err && <p style={{ color: 'var(--status-error)', fontSize: 'var(--text-sm)', marginTop: 8, fontWeight: 700 }}>{err}</p>}
-      {isShadowfax && liveOpen && !delivered && (
+      {isIntracity && liveOpen && !delivered && (
         <div style={{ marginTop: 12, borderRadius: 14, overflow: 'hidden', background: 'var(--surface-card)', border: '1px solid var(--border-soft)' }}>
           <iframe
             title={`Live delivery area for ${order.orderNumber}`}
@@ -250,7 +250,7 @@ function ShipmentTracker({ order }: { order: Order }) {
               </p>
             )}
             <p style={{ margin: '7px 0 0', color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.45 }}>
-              Map shows the delivery area. Rider GPS is not exposed by Shadowfax, so live movement updates appear as status scans here.
+              Map shows the delivery area. Rider GPS is not exposed by the carrier, so live movement updates appear as status scans here.
             </p>
           </div>
         </div>
@@ -388,8 +388,8 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-base)', marginBottom: 9, flexWrap: 'wrap' }}>
               <Truck size={17} /> Delivery details
               {order.carrier && (
-                <span style={{ padding: '2px 9px', borderRadius: 'var(--radius-pill)', background: order.carrier === 'SHADOWFAX' ? 'var(--amber-100)' : 'var(--surface-card)', border: order.carrier === 'SHADOWFAX' ? 'none' : '1px solid var(--border-default)', color: order.carrier === 'SHADOWFAX' ? 'var(--amber-800)' : 'var(--text-muted)', fontSize: 'var(--text-2xs)', fontWeight: 900 }}>
-                  {order.carrier === 'SHADOWFAX' ? 'Intracity · Shadowfax' : 'Pan-India · Delhivery'}
+                <span style={{ padding: '2px 9px', borderRadius: 'var(--radius-pill)', background: order.carrier === 'SHIPROCKET' ? 'var(--amber-100)' : 'var(--surface-card)', border: order.carrier === 'SHIPROCKET' ? 'none' : '1px solid var(--border-default)', color: order.carrier === 'SHIPROCKET' ? 'var(--amber-800)' : 'var(--text-muted)', fontSize: 'var(--text-2xs)', fontWeight: 900 }}>
+                  {order.carrier === 'SHIPROCKET' ? 'Intracity · Same-day' : 'Pan-India · Delhivery'}
                 </span>
               )}
             </h3>

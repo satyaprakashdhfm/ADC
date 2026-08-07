@@ -264,7 +264,7 @@ export interface Order {
   couponCode?: string | null; shipmentStatus?: string; trackingUrl?: string | null;
   delhiveryWaybill?: string | null; delhiveryShipmentId?: string | null; labelGenerated?: boolean;
   carrierOrderId?: string | null;   // the carrier's own order id — Shiprocket's cancel API keys off it
-  carrier?: string | null; // 'SHIPROCKET' (intracity) | 'DELHIVERY' (outstation) | 'SHADOWFAX' (retired)
+  carrier?: string | null; // 'SHIPROCKET' (intracity, same-day) | 'DELHIVERY' (outstation)
   shipmentError?: string | null;    // why the automatic courier booking failed, if it did
   estimatedDelivery?: string | null; // carrier promised date from webhook (YYYY-MM-DD HH:MM:SS)
   payment?: OrderPayment | null;
@@ -305,7 +305,7 @@ export async function getOrder(id: number): Promise<Order> { return request(`/or
 
 export interface DelhiveryTrackResult {
   tracked: boolean; waybill?: string; reason?: string;
-  // Normalized fields returned for BOTH carriers (Delhivery + Shadowfax).
+  // Normalized fields returned for BOTH carriers (Delhivery + Shiprocket).
   carrier?: string; status?: string | null; trackUrl?: string | null;
   scans?: { time: string; event: string }[];
   data?: { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
@@ -323,19 +323,19 @@ export interface DeliveryCheck {
   pincode?: string;
   tat?: number | null;
   expectedDeliveryDate?: string | null;
-  intracity?: boolean;          // near one of our stores → ships same-day via Shadowfax
-  carrier?: string;             // 'SHADOWFAX' when intracity
+  intracity?: boolean;          // near one of our stores → same-day from that store
+  carrier?: string;             // 'SHIPROCKET' when intracity
   store?: string;               // nearest store name (intracity)
   city?: string;
   sameDay?: boolean;
-  maintenanceMessage?: string;  // shown when reason === 'shadowfax_paused' — Shadowfax is down, checkout blocked
+  maintenanceMessage?: string;  // shown when same-day is unavailable and checkout is blocked
 }
 
 /** Combined serviceability + TAT check — used at checkout when an address is selected. */
 export async function checkDeliveryPin(pincode: string): Promise<DeliveryCheck> {
   console.log(`[delivery] checking pincode ${pincode} …`);
   const r = await request<DeliveryCheck>(`/delivery/check?pincode=${encodeURIComponent(pincode)}`);
-  console.log(`[delivery] pincode ${pincode} →`, r.intracity ? `SHADOWFAX (intracity, ${r.store})` : r.serviceable ? 'DELHIVERY (pan-India)' : 'not serviceable', r);
+  console.log(`[delivery] pincode ${pincode} →`, r.intracity ? `SHIPROCKET (intracity, ${r.store})` : r.serviceable ? 'DELHIVERY (pan-India)' : 'not serviceable', r);
   return r;
 }
 
@@ -496,14 +496,6 @@ export async function adminToggleWarehouse(id: number): Promise<Warehouse> {
   return request(`/admin/delivery/warehouses/${id}/toggle`, { method: 'PATCH' });
 }
 
-/* ---- Admin: Delivery — Shadowfax stores ---- */
-export interface ShadowfaxStore {
-  name: string; city: string; state: string; pincode: number;
-  serviceable: boolean | null; // null = couldn't check (Shadowfax not configured)
-  services: string[];
-}
-/** All Shadowfax pickup stores, each live-checked against Shadowfax's serviceability API. */
-export async function adminGetShadowfaxStores(): Promise<ShadowfaxStore[]> { return request('/admin/delivery/shadowfax-stores'); }
 
 /* ---- Admin: Delivery — Shipping cost ---- */
 export interface ShippingCostResult { ok: boolean; data?: unknown; reason?: string; }
@@ -533,11 +525,6 @@ export async function adminFetchOrderDocument(orderId: number, docType: Delhiver
   return request(`/admin/orders/${orderId}/document?type=${encodeURIComponent(docType)}`);
 }
 
-/** Shadowfax (intracity) documents: proof-of-delivery signature + shareable customer tracking link. */
-export interface ShadowfaxDocResult { ok: boolean; awb?: string; status?: string | null; trackUrl?: string | null; pod?: { recipient?: string | null; urls: string[] } | null; reason?: string; }
-export async function adminFetchShadowfaxDoc(orderId: number): Promise<ShadowfaxDocResult> {
-  return request(`/admin/orders/${orderId}/shadowfax-doc`);
-}
 
 /**
  * Open the shipping-label PDF in a new tab. The label route is admin-protected, so a plain

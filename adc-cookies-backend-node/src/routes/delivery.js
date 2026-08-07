@@ -7,7 +7,7 @@ import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhiv
 // shopper is shown are the ones the order will actually be dispatched from. Quoting against a single
 // fixed origin is what let checkout advertise a store we then could not collect from.
 import { pickServiceableStore, shiprocketConfigured } from '../shiprocket.js';
-import { nearestStore, zoneStores, orderStoresByProximity } from '../shadowfax.js';
+import { nearestStore, zoneStores, orderStoresByProximity } from '../stores.js';
 
 const router = Router();
 
