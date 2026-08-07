@@ -1338,6 +1338,15 @@
         },
         "statusMapping": "RIDER ASSIGNED -> PACKED | PICKED UP / OUT FOR DELIVERY -> OUT_FOR_DELIVERY | RIDER REACHED DROP -> no change (at the door is not delivered) | DELIVERED -> DELIVERED | CANCELLED/RTO -> CANCELLED",
         "realSequenceCaptured_2026-08-01": "RIDER REACHED PICKUP 18:33:01 -> PICKED UP 18:33:28 -> RIDER REACHED DROP 18:57:12 -> DELIVERED 19:46:05. All four arrived within seconds of the event."
+      },
+      {
+        "purpose": "List pickup locations (admin readiness screen + routing guard)",
+        "used": true,
+        "liveTested": true,
+        "direction": "we call them",
+        "theirEndpoint": "GET /settings/company/pickup",
+        "criticalGotcha": "Their  is NOT a verification flag. It reads 2 on the PRIMARY location and 1 on every other, while their panel's own Verification Status column shows VERIFIED for all of them. Gating routing on status===2 excluded four usable stores, took Chennai offline entirely and forced every Bengaluru order through Begur at a longer distance. Proven wrong on 2026-08-07: bookings from jayanagar and besant, both status=1, were ACCEPTED (sr orders 1500476783 and 1500476800, both cancelled after). Gate only on the nickname EXISTING.",
+        "note": "Also note the API returns fewer addresses than the panel shows — a 6th address (\"home\") present in the panel was absent from this response, so do not treat the API list as the full picture for anything except nickname resolution."
       }
     ]
   }

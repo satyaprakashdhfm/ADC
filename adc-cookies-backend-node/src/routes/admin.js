@@ -533,13 +533,15 @@ router.get('/analytics', async (req, res) => {
    ====================================================================== */
 
 /*
- * GET /api/admin/delivery/stores — can each ADC store ACTUALLY dispatch a same-day order today?
+ * GET /api/admin/delivery/stores — can each ADC store dispatch a same-day order?
  *
- * The old Shadowfax panel answered a question that no longer matters: Shadowfax is retired and
- * intracity runs on Shiprocket. What decides whether a store can be used now is whether its pickup
- * location is VERIFIED with Shiprocket — an unverified one quotes perfectly and then refuses the
- * booking, which is exactly the kind of failure that must not be invisible. Chennai went dark this
- * way with nothing on any screen to say so.
+ * What matters is that the store's pickup nickname EXISTS in Shiprocket, because orders are
+ * collected from whatever that name resolves to on their side. A missing or misspelt nickname means
+ * we would quote a store we cannot collect from.
+ *
+ * Their `status` field is reported for reference only and is NOT used to gate anything: it reads 2
+ * on the primary location and 1 on every other, while their panel shows all of them VERIFIED, and
+ * bookings from status=1 locations were accepted in a live test on 2026-08-07.
  */
 router.get('/delivery/stores', async (_req, res) => {
   if (!shiprocketConfigured()) {
@@ -555,21 +557,23 @@ router.get('/delivery/stores', async (_req, res) => {
       latitude: s.latitude, longitude: s.longitude,
       pickupName: s.pickupName || null,
       registered: !!p,
-      verified: p ? p.verified : false,
+      verified: p ? p.verified : false,   // their status===2 — informational only, gates nothing
       isPrimary: p?.isPrimary ?? false,
       phoneVerified: p?.phoneVerified ?? false,
       pickupId: p?.id ?? null,
       contact: p?.contact ?? null,
       // Exactly why this store cannot take an order right now, in the operator's language.
-      blockedReason: !nick ? 'No Shiprocket pickup nickname configured for this store.'
-        : !p ? `No pickup location named "${s.pickupName}" exists in Shiprocket.`
-        : p.verified ? null
-        : 'Awaiting Shiprocket approval — phone is verified but the location is still status 1, so bookings from it are refused. Shiprocket support must activate it.',
+      // Only a genuinely unusable store gets a reason. A status of 1 is normal for every
+      // non-primary location and does not stop it being booked.
+      blockedReason: !nick ? 'No Shiprocket pickup nickname configured for this store — it cannot be used for same-day.'
+        : !p ? `No pickup location named "${s.pickupName}" exists in Shiprocket. Add it in their panel, or correct the nickname.`
+        : null,
+      usable: !!nick && !!p,
     };
   });
   res.json({
     configured: true, ok, reason: reason ?? null, stores,
-    verifiedCount: stores.filter((s) => s.verified).length,
+    verifiedCount: stores.filter((s) => s.usable).length,
     // Orphans: registered with Shiprocket but not mapped to any store of ours.
     unmappedPickups: pickups.filter((p) => !ADC_STORES.some((s) => String(s.pickupName || '').toLowerCase() === p.nickname.toLowerCase())),
   });
