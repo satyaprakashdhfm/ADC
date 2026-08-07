@@ -233,6 +233,37 @@ router.get('/petpooja/mapping', async (_req, res) => {
 });
 
 /*
+ * Link from OUR side: given one of our products, choose which Petpooja item it is.
+ *
+ * The item-first direction reads backwards in practice. Our catalogue is the fixed, known set —
+ * thirteen products we actually sell — while theirs is larger and includes things we never list
+ * online (coffees, combo packs). Working product-by-product means every row is one you care about,
+ * and "which of our products still has no POS item" is answerable at a glance.
+ *
+ * A product maps to exactly one item, so any previous link for that product is cleared first —
+ * otherwise re-pointing a product would silently leave two items claiming it, and relayOrder would
+ * pick whichever the query happened to return.
+ */
+router.post('/petpooja/mapping/by-product', async (req, res) => {
+  const restId = process.env.PETPOOJA_REST_ID || '';
+  const { productId, itemId, variationId = '' } = req.body || {};
+  if (!productId) throw new ApiError('productId is required');
+  const ts = nowIso();
+
+  await query('UPDATE petpooja_items SET product_id = NULL, updated_at = $1 WHERE rest_id = $2 AND product_id = $3',
+    [ts, restId, Number(productId)]);
+
+  if (itemId) {
+    const r = await query(
+      `UPDATE petpooja_items SET product_id = $1, updated_at = $2
+        WHERE rest_id = $3 AND item_id = $4 AND variation_id = $5`,
+      [Number(productId), ts, restId, String(itemId), String(variationId)]);
+    if (!r.rowCount) throw new ApiError('That Petpooja item is not in the synced menu', 404);
+  }
+  res.json({ ok: true });
+});
+
+/*
  * Create one of OUR products straight from a Petpooja item, and link the two.
  *
  * Mapping assumes a matching product already exists on our side. For a catalogue that lives in the
