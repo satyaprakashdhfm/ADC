@@ -17,7 +17,7 @@ import {
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
 import { shadowfaxConfigured, trackShadowfax, getShadowfaxPod, sfxStatusLabel, SFX_STORES, sfxServiceability } from '../shadowfax.js';
-import { cancelShiprocketOrder, trackShiprocket } from '../shiprocket.js';
+import { cancelShiprocketOrder, trackShiprocket, listPickups, shiprocketConfigured } from '../shiprocket.js';
 import { cancelOrder as petpoojaCancelOrder, relayOrder, unmappedProducts } from '../petpooja.js';
 import { autoCreateShipment } from './orders.js';
 
@@ -544,6 +544,49 @@ router.get('/delivery/shadowfax-stores', async (_req, res) => {
     return { ...s, serviceable: r.ok ? r.serviceable : null, services: r.services || [] };
   }));
   res.json(results);
+});
+
+/*
+ * GET /api/admin/delivery/stores — can each ADC store ACTUALLY dispatch a same-day order today?
+ *
+ * The old Shadowfax panel answered a question that no longer matters: Shadowfax is retired and
+ * intracity runs on Shiprocket. What decides whether a store can be used now is whether its pickup
+ * location is VERIFIED with Shiprocket — an unverified one quotes perfectly and then refuses the
+ * booking, which is exactly the kind of failure that must not be invisible. Chennai went dark this
+ * way with nothing on any screen to say so.
+ */
+router.get('/delivery/stores', async (_req, res) => {
+  if (!shiprocketConfigured()) {
+    return res.json({ configured: false, stores: SFX_STORES.map((s) => ({ ...s, verified: null })), verifiedCount: 0 });
+  }
+  const { ok, reason, pickups } = await listPickups();
+  const byNick = new Map(pickups.map((p) => [p.nickname.toLowerCase(), p]));
+  const stores = SFX_STORES.map((s) => {
+    const nick = String(s.pickupName || '').trim().toLowerCase();
+    const p = nick ? byNick.get(nick) : null;
+    return {
+      name: s.name, city: s.city, state: s.state, pincode: s.pincode,
+      latitude: s.latitude, longitude: s.longitude,
+      pickupName: s.pickupName || null,
+      registered: !!p,
+      verified: p ? p.verified : false,
+      isPrimary: p?.isPrimary ?? false,
+      phoneVerified: p?.phoneVerified ?? false,
+      pickupId: p?.id ?? null,
+      contact: p?.contact ?? null,
+      // Exactly why this store cannot take an order right now, in the operator's language.
+      blockedReason: !nick ? 'No Shiprocket pickup nickname configured for this store.'
+        : !p ? `No pickup location named "${s.pickupName}" exists in Shiprocket.`
+        : p.verified ? null
+        : 'Awaiting Shiprocket approval — phone is verified but the location is still status 1, so bookings from it are refused. Shiprocket support must activate it.',
+    };
+  });
+  res.json({
+    configured: true, ok, reason: reason ?? null, stores,
+    verifiedCount: stores.filter((s) => s.verified).length,
+    // Orphans: registered with Shiprocket but not mapped to any store of ours.
+    unmappedPickups: pickups.filter((p) => !SFX_STORES.some((s) => String(s.pickupName || '').toLowerCase() === p.nickname.toLowerCase())),
+  });
 });
 
 router.get('/delivery/warehouses', async (_req, res) => {

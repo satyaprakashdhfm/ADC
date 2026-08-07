@@ -11,10 +11,10 @@ import {
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
   adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument, adminFetchShadowfaxDoc, adminGetShadowfaxStores,
-  adminAttention, adminRebookShipment, adminRetryPosRelay,
+  adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
   type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type CouponInput, type AdminMessage,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput, type ShadowfaxDocResult, type ShadowfaxStore,
-  type AttentionReport,
+  type AttentionReport, type StoreReadinessReport,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
@@ -180,6 +180,7 @@ export default function AdminDashboard() {
   const [delivSub, setDelivSub] = useState<'main' | 'shadowfax' | 'delhivery'>('main');
   const [sfxDoc, setSfxDoc] = useState<Record<number, ShadowfaxDocResult | { error: string }>>({});
   const [sfxStores, setSfxStores] = useState<ShadowfaxStore[] | null>(null);
+  const [storeReadiness, setStoreReadiness] = useState<StoreReadinessReport | null>(null);
   const [sfxStatesOpen, setSfxStatesOpen] = useState(false);
 
   const EMPTY_WH: WarehouseInput = { name: '', registeredName: '', pickupLocation: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', returnPincode: '', phone: '', email: '', isDefault: false, skipDelhivery: false };
@@ -205,6 +206,7 @@ export default function AdminDashboard() {
       if (warehouses === null) adminGetWarehouses().then(setWarehouses).catch(() => setWarehouses([]));
       if (orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
       if (sfxStores === null) adminGetShadowfaxStores().then(setSfxStores).catch(() => setSfxStores([]));
+      if (storeReadiness === null) adminGetStoreReadiness().then(setStoreReadiness).catch(() => setStoreReadiness(null));
     }
   }, [tab, isAdmin, orders, products, coupons, users, messages, sfxStores]);
 
@@ -633,7 +635,7 @@ export default function AdminDashboard() {
 
             {/* Sub-nav: all shipments · Shadowfax intracity · Delhivery outstation */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {([['main', 'All shipments'], ['shadowfax', 'Shadowfax · Intracity'], ['delhivery', 'Delhivery · Outstation']] as const).map(([id, label]) => {
+              {([['main', 'All shipments'], ['shadowfax', 'Same-day · Intracity'], ['delhivery', 'Delhivery · Outstation']] as const).map(([id, label]) => {
                 const on = delivSub === id;
                 return <button key={id} onClick={() => setDelivSub(id)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: on ? 'none' : '1.5px solid var(--border-default)', background: on ? 'var(--gradient-warm)' : 'var(--surface-card)', color: on ? 'var(--white)' : 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{label}</button>;
               })}
@@ -852,26 +854,49 @@ export default function AdminDashboard() {
 
             {delivSub === 'shadowfax' && (
               <>
-              <Panel title="Shadowfax — pickup stores" loading={sfxStores === null}
-                action={sfxStores === null ? undefined : <button onClick={() => adminGetShadowfaxStores().then(setSfxStores).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-                {sfxStores && (
+              {/* Shiprocket pickup readiness. This replaced a Shadowfax serviceability table that
+                  showed every store as "Serviceable" in green while four of the five could not
+                  dispatch at all — Shadowfax is retired, and what decides a store's usability now is
+                  whether its Shiprocket pickup location is VERIFIED. */}
+              <Panel title="Same-day stores — Shiprocket pickup readiness" loading={storeReadiness === null}
+                action={storeReadiness === null ? undefined : <button onClick={() => adminGetStoreReadiness().then(setStoreReadiness).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+                {storeReadiness && (
                   <>
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      Our real stores that can act as a Shadowfax pickup point. &quot;Not serviceable&quot; means Shadowfax doesn&apos;t currently service that store&apos;s pincode on the connected environment — orders will automatically fall back to the next in-zone store, or to Delhivery if none work. Checked live against Shadowfax just now, not cached.
-                    </p>
-                    <Table head={['Store', 'City', 'Pincode', 'Status', 'Services']}>
-                      {sfxStores.map((s) => (
-                        <tr key={s.pincode} style={{ opacity: s.serviceable === false ? 0.45 : 1 }}>
-                          <td style={td}><strong style={{ color: 'var(--text-strong)' }}>{s.name}</strong></td>
-                          <td style={td}>{s.city}, {s.state}</td>
-                          <td style={td}><span style={{ fontFamily: 'monospace' }}>{s.pincode}</span></td>
-                          <td style={td}>
-                            {s.serviceable === null ? <Badge text="Unknown" /> : s.serviceable ? <Badge text="Serviceable" ok /> : <Badge text="Not serviceable" />}
-                          </td>
-                          <td style={td}>{s.services.length ? s.services.join(' / ') : '—'}</td>
-                        </tr>
-                      ))}
-                    </Table>
+                    {!storeReadiness.configured ? (
+                      <Empty text="Shiprocket is not configured on this environment, so no store can take a same-day order." />
+                    ) : (
+                      <>
+                        <div style={{ ...card, padding: '10px 14px', marginBottom: 12, borderColor: storeReadiness.verifiedCount === storeReadiness.stores.length ? 'var(--border-default)' : 'var(--status-error)' }}>
+                          <strong style={{ color: storeReadiness.verifiedCount === storeReadiness.stores.length ? 'var(--text-strong)' : 'var(--status-error)', fontSize: 'var(--text-sm)' }}>
+                            {storeReadiness.verifiedCount} of {storeReadiness.stores.length} stores can dispatch today
+                          </strong>
+                          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '4px 0 0', lineHeight: 1.5 }}>
+                            Only a <strong>verified</strong> Shiprocket pickup location can be booked. An unverified one still returns a
+                            price, then refuses the order — so unverified stores are never quoted at checkout. Addresses in a city with no
+                            verified store cannot be delivered same-day at all. Read live from Shiprocket, not cached.
+                          </p>
+                        </div>
+                        <Table head={['Store', 'City', 'Pincode', 'Pickup name', 'Can dispatch?']}>
+                          {storeReadiness.stores.map((s) => (
+                            <tr key={s.pincode} style={{ opacity: s.verified ? 1 : 0.75 }}>
+                              <td style={td}><strong style={{ color: 'var(--text-strong)' }}>{s.name}</strong>{s.isPrimary && <span style={{ marginLeft: 6, fontSize: 'var(--text-2xs)', fontWeight: 800, color: 'var(--text-subtle)' }}>PRIMARY</span>}</td>
+                              <td style={td}>{s.city}, {s.state}</td>
+                              <td style={td}><span style={{ fontFamily: 'monospace' }}>{s.pincode}</span></td>
+                              <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{s.pickupName || '—'}</span>{s.pickupId ? <><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>id {s.pickupId}</span></> : null}</td>
+                              <td style={td}>
+                                {s.verified ? <Badge text="Yes" ok /> : <Badge text="No" />}
+                                {s.blockedReason && <div style={{ marginTop: 4, fontSize: 'var(--text-2xs)', color: 'var(--status-error)', maxWidth: 320, lineHeight: 1.45 }}>{s.blockedReason}</div>}
+                              </td>
+                            </tr>
+                          ))}
+                        </Table>
+                        {!!storeReadiness.unmappedPickups?.length && (
+                          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '10px 0 0' }}>
+                            Registered in Shiprocket but not mapped to any ADC store: {storeReadiness.unmappedPickups.map(p => p.nickname).join(', ')}.
+                          </p>
+                        )}
+                      </>
+                    )}
                   </>
                 )}
               </Panel>
