@@ -116,6 +116,9 @@ export default function AdminDashboard() {
   const [couponForm, setCouponForm] = useState<CouponDraft | null>(null);
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [attention, setAttention] = useState<AttentionReport | null>(null);
+  // Outcome of a cancel — shown as a modal rather than a banner, because a REFUSED cancel means a
+  // rider is still coming and must not be something you can scroll past.
+  const [cancelInfo, setCancelInfo] = useState<{ orderNumber: string; ok: boolean; message: string } | null>(null);
   const [fixing, setFixing] = useState<number | null>(null);   // order id currently being re-booked/re-relayed
   const [err, setErr] = useState('');
   const [notice, setNotice] = useState('');
@@ -198,7 +201,9 @@ export default function AdminDashboard() {
     refreshAttention();
     // Cancelling also cancels the POS ticket and the courier booking. If either refused, say so
     // loudly — otherwise the operator assumes the rider was called off when they were not.
-    if (updated.cancelWarnings?.length) setErr(updated.cancelWarnings.join('  •  '));
+    if (updated.cancelWarnings?.length) {
+      setCancelInfo({ orderNumber: updated.orderNumber, ok: false, message: updated.cancelWarnings.join(String.fromCharCode(10, 10)) });
+    }
   };
 
   /** Retry the automatic courier booking for a paid order that never got one. */
@@ -793,9 +798,17 @@ export default function AdminDashboard() {
                                 <button disabled={shipmentBusy === o.id} onClick={async () => {
                                   if (!confirm(`Cancel shipment ${o.delhiveryWaybill}?\n\nThis cancels the parcel with the carrier and refunds the shipping charge to your wallet. It does NOT refund the customer's payment.`)) return;
                                   setShipmentBusy(o.id); setErr('');
-                                  await adminCancelShipment(o.id).catch(e => { setErr(String(e.message || e)); });
-                                  setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
-                                  setShipmentBusy(null);
+                                  try {
+                                    await adminCancelShipment(o.id);
+                                    // Only NOW is it actually cancelled. This used to mark the row
+                                    // CANCELLED even when the carrier refused, so a failed cancel
+                                    // looked identical to a successful one — while a rider was still
+                                    // on the way.
+                                    setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
+                                    setCancelInfo({ orderNumber: o.orderNumber, ok: true, message: `Booking ${o.delhiveryWaybill} cancelled with ${o.carrier || 'the carrier'}. The shipping charge returns to your wallet; the customer's payment is not refunded.` });
+                                  } catch (e: unknown) {
+                                    setCancelInfo({ orderNumber: o.orderNumber, ok: false, message: e instanceof Error ? e.message : 'The carrier refused to cancel this booking.' });
+                                  } finally { setShipmentBusy(null); }
                                 }} style={actionBtn(true)} title="Cancel this shipment with the carrier">
                                   {shipmentBusy === o.id ? '…' : <><X size={13} /> Cancel</>}
                                 </button>
@@ -1269,6 +1282,23 @@ export default function AdminDashboard() {
       )}
 
       {/* Order detail popup */}
+      {cancelInfo && (
+        <div onClick={() => setCancelInfo(null)} style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'var(--surface-overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 'min(460px,96vw)', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: 24, borderTop: `4px solid ${cancelInfo.ok ? 'var(--status-success, #1a7f4b)' : 'var(--status-error)'}` }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+              {cancelInfo.ok ? <Check size={20} style={{ color: 'var(--status-success, #1a7f4b)', flex: 'none', marginTop: 2 }} /> : <AlertTriangle size={20} style={{ color: 'var(--status-error)', flex: 'none', marginTop: 2 }} />}
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: 'var(--text-h5, 1.05rem)', color: 'var(--text-strong)' }}>{cancelInfo.ok ? 'Cancelled' : 'Not cancelled'}</h3>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 2 }}>{cancelInfo.orderNumber}</div>
+              </div>
+              <button onClick={() => setCancelInfo(null)} style={iconBtn}><X size={18} /></button>
+            </div>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.6, whiteSpace: 'pre-line', margin: '0 0 16px' }}>{cancelInfo.message}</p>
+            <button onClick={() => setCancelInfo(null)} style={{ ...addBtn, width: '100%', justifyContent: 'center' }}>Got it</button>
+          </div>
+        </div>
+      )}
+
       {viewOrder && (() => {
         const o = viewOrder;
         const items = o.items || [];
