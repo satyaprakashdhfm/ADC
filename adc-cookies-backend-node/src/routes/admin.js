@@ -218,13 +218,62 @@ router.patch('/orders/:id/status', async (req, res) => {
 // still unlinked. An order cannot relay until every product it contains has a Petpooja item id.
 router.get('/petpooja/mapping', async (_req, res) => {
   const restId = process.env.PETPOOJA_REST_ID || '';
-  const [items, products, unmapped] = await Promise.all([
-    getAll(`SELECT item_id, variation_id, name, variation_name, price, in_stock, product_id
+  const [items, products, unmapped, pushes, taxes] = await Promise.all([
+    getAll(`SELECT item_id, variation_id, name, variation_name, price, in_stock, product_id, category_id
               FROM petpooja_items WHERE rest_id = $1 ORDER BY name, variation_name`, [restId]),
     getAll('SELECT id, name, price, is_available FROM products ORDER BY id'),
     unmappedProducts(restId),
+    // Every menu Petpooja has ever pushed. Kept because a push that arrives malformed is otherwise
+    // invisible — their dashboard only ever says "Menu trigger failed" with no detail.
+    getAll(`SELECT id, rest_id, source, item_count, received_at FROM petpooja_menu_snapshots
+             ORDER BY id DESC LIMIT 10`),
+    getAll('SELECT tax_id, name, percentage FROM petpooja_taxes WHERE rest_id = $1 ORDER BY tax_id', [restId]),
   ]);
-  res.json({ restId, items, products, unmapped, menuSynced: items.length > 0 });
+  res.json({ restId, items, products, unmapped, taxes, pushes, menuSynced: items.length > 0 });
+});
+
+/*
+ * Create one of OUR products straight from a Petpooja item, and link the two.
+ *
+ * Mapping assumes a matching product already exists on our side. For a catalogue that lives in the
+ * POS first — which is the normal direction here, since the kitchen owns the menu — it usually does
+ * not, and the alternative is retyping every name and price into the Products tab and coming back.
+ */
+router.post('/petpooja/mapping/create-product', async (req, res) => {
+  const restId = process.env.PETPOOJA_REST_ID || '';
+  const { itemId, variationId = '' } = req.body || {};
+  if (!itemId) throw new ApiError('itemId is required');
+
+  const item = await getOne(
+    `SELECT * FROM petpooja_items WHERE rest_id = $1 AND item_id = $2 AND variation_id = $3`,
+    [restId, String(itemId), String(variationId)]);
+  if (!item) throw new ApiError('That Petpooja item is not in the synced menu', 404);
+  if (item.product_id) throw new ApiError('This item is already linked to a product', 409);
+
+  // Their variation name belongs in the product name — "Choco Chip" and "Choco Chip (500g)" are
+  // different products to a customer, and identical ones would be impossible to tell apart.
+  const name = [item.name, item.variation_name].filter(Boolean).join(' — ');
+  const existing = await getOne('SELECT id FROM products WHERE lower(name) = lower($1)', [name]);
+  const ts = nowIso();
+  let productId;
+  if (existing) {
+    productId = existing.id;   // don't duplicate a product that is already there — just link it
+  } else {
+    const row = await getOne(
+      `INSERT INTO products (name, category, description, price, stock_quantity, images, options,
+                             is_available, menu_group, tag, featured, created_at, updated_at)
+       VALUES ($1,'COOKIES',$2,$3,0,NULL,NULL,$4,NULL,NULL,FALSE,$5,$5) RETURNING id`,
+      [name, `Imported from Petpooja (item ${item.item_id})`, Number(item.price) || 0, !!item.in_stock, ts]);
+    productId = row.id;
+  }
+
+  await query(
+    `UPDATE petpooja_items SET product_id = $1, updated_at = $2
+      WHERE rest_id = $3 AND item_id = $4 AND variation_id = $5`,
+    [productId, ts, restId, String(itemId), String(variationId)]);
+
+  const product = await getOne('SELECT * FROM products WHERE id = $1', [productId]);
+  res.json({ ok: true, created: !existing, product: serializeProduct(product) });
 });
 
 // Link or unlink one of their items to one of our products. product_id null clears the link.

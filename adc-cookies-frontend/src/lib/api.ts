@@ -427,6 +427,43 @@ export interface StoreReadinessReport {
 }
 export async function adminGetStoreReadiness(): Promise<StoreReadinessReport> { return request('/admin/delivery/stores'); }
 
+/* ---- Admin: Petpooja (POS) ---- */
+
+/** One row of Petpooja's catalogue. `productId` null means it is not yet linked to a product. */
+export interface PetpoojaItem {
+  item_id: string; variation_id: string; name: string; variation_name: string | null;
+  price: number | null; in_stock: boolean; product_id: number | null; category_id: string | null;
+}
+export interface PetpoojaMapping {
+  restId: string;
+  items: PetpoojaItem[];
+  products: { id: number; name: string; price: number; is_available: boolean }[];
+  unmapped: { id: number; name: string }[];
+  taxes: { tax_id: string; name: string; percentage: number }[];
+  /** Every menu Petpooja has pushed us, newest first. */
+  pushes: { id: number; rest_id: string; source: string; item_count: number; received_at: string }[];
+  menuSynced: boolean;
+}
+export async function adminGetPetpoojaMapping(): Promise<PetpoojaMapping> { return request('/admin/petpooja/mapping'); }
+
+/** Link a Petpooja item to one of our products, or pass null to unlink. */
+export async function adminSetPetpoojaMapping(itemId: string, variationId: string, productId: number | null): Promise<{ ok: boolean }> {
+  return request('/admin/petpooja/mapping', { method: 'POST', body: JSON.stringify({ itemId, variationId, productId }) });
+}
+
+/** Create one of our products from a Petpooja item and link the two in one step. */
+export async function adminCreateProductFromPetpooja(itemId: string, variationId: string): Promise<{ ok: boolean; created: boolean; product: Product }> {
+  return request('/admin/petpooja/mapping/create-product', { method: 'POST', body: JSON.stringify({ itemId, variationId }) });
+}
+
+/** Which orders reached the POS, which failed, and why. */
+export interface PetpoojaRelay {
+  order_id: number; order_number: string; total_amount: number; relay_ok: boolean;
+  petpooja_order_id: string | null; petpooja_status: string | null; attempts: number;
+  last_error: string | null; updated_at: string;
+}
+export async function adminGetPetpoojaRelays(): Promise<PetpoojaRelay[]> { return request('/admin/petpooja/orders'); }
+
 /** Re-run the AUTOMATIC carrier routing (intracity → Shiprocket, else Delhivery) for a paid order. */
 export async function adminRebookShipment(orderId: number): Promise<{ ok: boolean; reason?: string; waybill?: string; carrier?: string }> {
   return request(`/admin/orders/${orderId}/rebook`, { method: 'POST' });
