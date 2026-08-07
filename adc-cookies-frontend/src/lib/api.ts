@@ -410,6 +410,23 @@ export interface AttentionReport {
 }
 export async function adminAttention(): Promise<AttentionReport> { return request('/admin/attention'); }
 
+/**
+ * Can each store ACTUALLY dispatch a same-day order right now? `verified` is the only thing that
+ * matters — an unverified Shiprocket pickup quotes fine and then refuses the booking.
+ */
+export interface StoreReadiness {
+  name: string; city: string; state: string; pincode: number;
+  pickupName: string | null; registered: boolean; verified: boolean | null;
+  isPrimary: boolean; phoneVerified: boolean; pickupId: number | null;
+  contact: string | null; blockedReason: string | null;
+}
+export interface StoreReadinessReport {
+  configured: boolean; ok?: boolean; reason?: string | null;
+  stores: StoreReadiness[]; verifiedCount: number;
+  unmappedPickups?: { id: number; nickname: string; city: string; pincode: string; verified: boolean }[];
+}
+export async function adminGetStoreReadiness(): Promise<StoreReadinessReport> { return request('/admin/delivery/stores'); }
+
 /** Re-run the AUTOMATIC carrier routing (intracity → Shiprocket, else Delhivery) for a paid order. */
 export async function adminRebookShipment(orderId: number): Promise<{ ok: boolean; reason?: string; waybill?: string; carrier?: string }> {
   return request(`/admin/orders/${orderId}/rebook`, { method: 'POST' });

@@ -180,6 +180,31 @@ export async function checkServiceability({ pickupPin, deliveryPin, latFrom, lon
  */
 let verifiedCache = null;
 let verifiedExpiry = 0;
+
+/**
+ * Every pickup location as Shiprocket reports it, verified or not — for the admin screen, which
+ * needs to show WHY a store cannot dispatch, not merely that it can't. Uncached: this is an
+ * operator pressing refresh, and a stale answer is exactly what makes this screen useless.
+ */
+export async function listPickups() {
+  const r = await srRequest('GET', '/settings/company/pickup');
+  if (!r.ok) return { ok: false, reason: r.reason, pickups: [] };
+  const list = r.data?.data?.shipping_address || r.data?.shipping_address || [];
+  return {
+    ok: true,
+    pickups: list.map((p) => ({
+      id: p.id,
+      nickname: String(p.pickup_location || '').trim(),
+      verified: Number(p.status) === 2,
+      status: Number(p.status),
+      isPrimary: !!Number(p.is_primary_location),
+      phoneVerified: !!Number(p.phone_verified),
+      city: p.city, pincode: p.pin_code, address: p.address,
+      contact: [p.name, p.phone].filter(Boolean).join(' / '),
+    })),
+  };
+}
+
 export async function verifiedPickups({ force = false } = {}) {
   if (!force && verifiedCache && Date.now() < verifiedExpiry) return verifiedCache;
   const r = await srRequest('GET', '/settings/company/pickup');
