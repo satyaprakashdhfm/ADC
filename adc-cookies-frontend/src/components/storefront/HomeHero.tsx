@@ -54,7 +54,7 @@ export default function HomeHero() {
           <Image src="/assets/adc-logo.png" width={480} height={347} alt="a dough cookie" priority
             style={{ width: 'clamp(230px,36vw,400px)', height: 'auto', margin: '0 auto 10px', filter: 'brightness(0) invert(1)' }} />
           <h1 style={{ font: '900 clamp(1.35rem,1.05rem + 1.7vw,2.2rem)/1.08 var(--font-display)', letterSpacing: '-.02em', color: 'var(--text-strong)', margin: '0 0 12px', textWrap: 'balance' }}>
-            Chunky, gooey cookies — baked fresh, delivered warm.
+            Chunky, gooey, eggless cookies — baked fresh, delivered warm.
           </h1>
           <p style={{ fontSize: 'clamp(.9rem,.85rem + .3vw,1.05rem)', color: 'var(--text-body)', lineHeight: 1.55, maxWidth: 500, margin: '0 auto 18px', fontWeight: 600 }}>
             Handcrafted in small batches with real butter, couverture chocolate &amp; 100% real fillings.

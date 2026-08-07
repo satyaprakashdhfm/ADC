@@ -25,70 +25,7 @@ export default function Footer() {
         padding: '72px 0 120px',
       }}
     >
-      {/* Soft radial glow behind the watermark for depth (Swish-style: the background isn't flat,
-          it brightens toward the mark). Sits below the watermark mask, above the base gradient. */}
-      <span
-        aria-hidden
-        style={{
-          position: 'absolute',
-          left: '50%',
-          bottom: '-15%',
-          transform: 'translateX(-50%)',
-          width: 'min(1400px, 140vw)',
-          height: '75%',
-          background: 'radial-gradient(ellipse 55% 60% at 50% 100%, var(--amber-500), transparent 70%)',
-          opacity: 0.32,
-          pointerEvents: 'none',
-          userSelect: 'none',
-          zIndex: 0,
-        }}
-      />
-
-      {/* Ghosted brand mark — the ADC logo, anchored to the bottom and bleeding off the base of
-          the footer (Swish-style). White fill via a CSS mask so the wordmark shows through as a
-          clean, faint watermark against the orange. Kept crisp (barely any blur) and low-opacity
-          so it reads as an elegant brand texture, not a loud smear. */}
-      <span
-        aria-hidden
-        style={{
-          position: 'absolute',
-          left: '50%',
-          bottom: 'clamp(-24px, -1.5vw, -8px)',
-          transform: 'translateX(-50%)',
-          width: 'clamp(340px, 62vw, 620px)',
-          height: 'clamp(190px, 30vw, 320px)',
-          background: 'var(--white)',
-          WebkitMaskImage: 'url(/assets/adc-logo.png)',
-          maskImage: 'url(/assets/adc-logo.png)',
-          WebkitMaskSize: 'contain',
-          maskSize: 'contain',
-          WebkitMaskRepeat: 'no-repeat',
-          maskRepeat: 'no-repeat',
-          WebkitMaskPosition: 'bottom center',
-          maskPosition: 'bottom center',
-          opacity: 0.18,
-          pointerEvents: 'none',
-          userSelect: 'none',
-          zIndex: 0,
-        }}
-      />
-      {/* Fade the bottom of the watermark into the footer's own background colour (Swish-style
-          sink-into-the-page effect) — a plain gradient overlay is more reliable cross-browser
-          than stacking a second CSS mask on top of the logo silhouette mask. */}
-      <span
-        aria-hidden
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: '42%',
-          background: 'linear-gradient(to bottom, transparent, var(--orange-600) 96%)',
-          pointerEvents: 'none',
-          userSelect: 'none',
-          zIndex: 1,
-        }}
-      />
+      {/* Footer background is clean — the old ghosted-logo watermark + glow were removed per request. */}
 
       <div style={{ position: 'relative', zIndex: 2 }}>
         <h2 style={srOnly}>a dough cookie</h2>
@@ -182,23 +119,14 @@ export default function Footer() {
         </div>
 
         {/* Baseline bar */}
-        <div
-          style={{
-            maxWidth: 1180,
-            margin: '30px auto 0',
-            padding: '15px var(--gutter) 0',
-            borderTop: '1px solid var(--white-16)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px 16px',
-            color: 'var(--white-60)',
-            fontSize: 'var(--text-xs)',
-            flexWrap: 'wrap',
-          }}
-        >
-          <span>© 2026 a dough cookie. All rights reserved.</span>
-          <span>{SITE_EMAIL} · {SITE_PHONE}</span>
-          <span style={{ marginLeft: 'auto' }}><CookiesSoldCounter /></span>
+        <div style={{ maxWidth: 1180, margin: '30px auto 0', padding: '15px var(--gutter) 0', borderTop: '1px solid var(--white-16)' }}>
+          {/* Live cookies-sold count on its own line (left) so it reads clearly and never sits
+              under the floating dock in the bottom-right corner. */}
+          <div style={{ marginBottom: 10 }}><CookiesSoldCounter /></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px 16px', color: 'var(--white-60)', fontSize: 'var(--text-xs)', flexWrap: 'wrap' }}>
+            <span>© 2026 a dough cookie. All rights reserved.</span>
+            <span>{SITE_EMAIL} · {SITE_PHONE}</span>
+          </div>
         </div>
       </div>
     </footer>

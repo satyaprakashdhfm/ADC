@@ -6,9 +6,16 @@ import { getPromoProduct, getAnnouncement } from '@/lib/api';
 // line is admin-controlled (see AdminDashboard "Header banner offer") so it only ever advertises
 // a real, currently-active discount — never a hardcoded code that doesn't work at checkout.
 const MESSAGES = [
-  '🌱 100% Pure Veg · All our cookies are eggless',
+  '100% Pure Veg · All our cookies are eggless',
   'Log in to save favourites & track your orders',
 ];
+
+// The Indian veg mark — a green dot inside a green-bordered square — instead of a plant emoji.
+const VegMark = () => (
+  <span aria-label="Pure veg" style={{ display: 'inline-flex', width: 13, height: 13, border: '1.6px solid #2e8b3d', borderRadius: 2, background: '#fff', alignItems: 'center', justifyContent: 'center', verticalAlign: '-2px', marginRight: 6, flex: 'none' }}>
+    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2e8b3d' }} />
+  </span>
+);
 
 export default function AnnouncementBar() {
   const [i, setI] = useState(0);
@@ -53,7 +60,7 @@ export default function AnnouncementBar() {
           fontWeight: 700, letterSpacing: '.01em', animation: 'annSlide .5s var(--ease-out) both',
         }}
       >
-        {messages[i % messages.length]}
+        {/^\s*100% Pure Veg/i.test(messages[i % messages.length]) && <VegMark />}{messages[i % messages.length]}
       </span>
     </div>
   );

@@ -154,7 +154,9 @@ body::before {
 
 /* Order / checkout / account pages — mirror the "Finest Ingredients" look: gold page
    background (--gold) with lighter vanilla cards (--vanilla) on top. */
-.order-cards { background: var(--gold); --surface-card: var(--peach-300); }
+/* Checkout / order pages — clean, flat look: soft cream page with warm-white panels (see card$)
+   and thin borders instead of chunky orange cards. */
+.order-cards { background: var(--cream-bg); --surface-card: #fffdf8; }
 
 /* Home page keeps its ORIGINAL warm-beige cards (--vanilla) — the FFCD90 card colour above
    is only for the inner/checkout pages. (Home <main> also carries .adc-pattern-page.) */

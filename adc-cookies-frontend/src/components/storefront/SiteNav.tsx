@@ -246,9 +246,10 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
           maxWidth: 1680, margin: '0 auto', padding: 'clamp(8px,1.6vw,12px) var(--gutter) 10px',
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          {/* Search (left) · logo (centre) · cart + menu (right) — mirrors the desktop layout. */}
+          {/* Search + location-pin (left) · logo (centre) · cart + menu (right). Location is just a
+              small pin here — no full-width row below — so the mobile header stays short. */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8 }}>
-            <div style={{ justifySelf: 'start' }}>
+            <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 6 }}>
               <button
                 onClick={() => setSearchOpen(v => !v)}
                 className="nav-round-btn"
@@ -258,6 +259,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
               >
                 {searchOpen ? <X size={20} /> : <Search size={20} />}
               </button>
+              <LocationPill iconOnly />
             </div>
 
             <a href="/" aria-label="a dough cookie home" style={{ justifySelf: 'center', display: 'flex', alignItems: 'center' }}>
@@ -287,8 +289,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
             </div>
           </div>
 
-          {/* Location + search reveal below the top row when tapped */}
-          <LocationPill compact />
+          {/* Search reveals below the top row when tapped (location is the pin icon above). */}
           {searchOpen && (
             <SearchBox products={products} compact autoFocus onNavigate={() => setSearchOpen(false)} />
           )}

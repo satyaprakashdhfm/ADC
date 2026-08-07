@@ -823,7 +823,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     }
   };
 
-  const card$: React.CSSProperties = { background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-soft)', padding: 24 };
+  // Flat warm-white panels (explicit, so it never picks up the peach --surface-card on this page) —
+  // thin border, no chunky shadow, closer to the clean Forever21 / Baudville checkout look.
+  const card$: React.CSSProperties = { background: '#fffdf8', borderRadius: 'var(--radius-card)', boxShadow: 'none', border: '1px solid var(--border-default)', padding: 22 };
   const head = (icon: React.ReactNode, label: string) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>{icon}<span style={{ font: 'var(--weight-bold) var(--text-base)/1 var(--font-body)', color: 'var(--text-strong)' }}>{label}</span></div>
   );
