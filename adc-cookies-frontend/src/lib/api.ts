@@ -451,6 +451,11 @@ export async function adminSetPetpoojaMapping(itemId: string, variationId: strin
   return request('/admin/petpooja/mapping', { method: 'POST', body: JSON.stringify({ itemId, variationId, productId }) });
 }
 
+/** Link from OUR side: pick which Petpooja item a product is. Pass itemId null to unlink. */
+export async function adminLinkProductToPetpooja(productId: number, itemId: string | null, variationId = ''): Promise<{ ok: boolean }> {
+  return request('/admin/petpooja/mapping/by-product', { method: 'POST', body: JSON.stringify({ productId, itemId, variationId }) });
+}
+
 /** Create one of our products from a Petpooja item and link the two in one step. */
 export async function adminCreateProductFromPetpooja(itemId: string, variationId: string): Promise<{ ok: boolean; created: boolean; product: Product }> {
   return request('/admin/petpooja/mapping/create-product', { method: 'POST', body: JSON.stringify({ itemId, variationId }) });
