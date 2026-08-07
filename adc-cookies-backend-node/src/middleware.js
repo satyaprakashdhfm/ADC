@@ -7,19 +7,22 @@ import { adminClient, supabaseConfigured } from './supabaseAdmin.js';
  * "Authorization: Bearer <token>" — a JWT signed (HS256) with the project's JWT secret,
  * which we keep in JWT_SECRET. We verify it, mirror the identity into our own `users`
  * table (so orders/addresses/admin keep working), and read the app role from there.
+ *
+ * ADMIN IS GRANTED IN THE DATABASE, NOWHERE ELSE.
+ *
+ * There used to be ADMIN_EMAILS and ADMIN_PHONES allowlists that promoted anyone who logged in with
+ * a matching address or number. Two problems with that: the answer to "who can administer this
+ * shop" lived in an env var on each deploy rather than with the data, so it could differ per
+ * environment and nothing in the app could show it; and promotion happened automatically on login,
+ * so anyone who obtained that mailbox or SIM became an admin without a deliberate act by anyone.
+ *
+ * Every account is now created as CUSTOMER. To grant admin, set it on the row by hand:
+ *
+ *   UPDATE users SET role = 'ADMIN' WHERE email = 'someone@example.com';
+ *
+ * Nothing in the code path can raise a role, so an accidental deploy or a stray env var cannot
+ * hand out access.
  */
-
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
-  .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-
-// Phone numbers that should get the ADMIN role when they log in via OTP. Compared on the last
-// 10 digits so country-code formatting (91…) doesn't matter.
-const ADMIN_PHONES = (process.env.ADMIN_PHONES || '')
-  .split(',').map((p) => p.replace(/\D/g, '').slice(-10)).filter((p) => p.length === 10);
-function isAdminPhone(phone) {
-  const p = String(phone || '').replace(/\D/g, '').slice(-10);
-  return p.length === 10 && ADMIN_PHONES.includes(p);
-}
 
 // Supabase creates phone-OTP accounts under a synthetic email (so the always-on Email provider
 // works without SMS config). We must never mirror that fake address into our users table.
@@ -56,7 +59,6 @@ async function absorbAccount(intoId, fromId) {
 async function syncUser({ email, phone, name }) {
   // Email identity — keyed by email.
   if (email) {
-    const isAdmin = ADMIN_EMAILS.includes(email);
     let user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
     if (!user) {
       const ts = nowIso();
@@ -65,10 +67,8 @@ async function syncUser({ email, phone, name }) {
         `INSERT INTO users (name, email, phone, password, role, created_at, updated_at)
          VALUES ($1,$2,$3,'supabase-auth',$4,$5,$5)
          ON CONFLICT (email) DO UPDATE SET updated_at = $5 RETURNING *`,
-        [name || email.split('@')[0], email, phone || null, isAdmin ? 'ADMIN' : 'CUSTOMER', ts]
+        [name || email.split('@')[0], email, phone || null, 'CUSTOMER', ts]
       );
-    } else if (isAdmin && user.role !== 'ADMIN') {
-      user = await getOne('UPDATE users SET role = $2, updated_at = $3 WHERE email = $1 RETURNING *', [email, 'ADMIN', nowIso()]);
     }
 
     // If this Google/email user has a phone number in their token metadata, and there's a
@@ -84,9 +84,8 @@ async function syncUser({ email, phone, name }) {
     return user;
   }
   // Phone identity — keyed by phone. Email stays NULL: phone users have no email unless they
-  // choose to add a real one later. Admins are matched from the ADMIN_PHONES allowlist.
+  // choose to add a real one later.
   if (phone) {
-    const admin = isAdminPhone(phone);
     let user = await getOne('SELECT * FROM users WHERE phone = $1', [phone]);
     if (!user) {
       const ts = nowIso();
@@ -94,10 +93,8 @@ async function syncUser({ email, phone, name }) {
         `INSERT INTO users (name, email, phone, password, role, created_at, updated_at)
          VALUES ($1, NULL, $2, 'otp-auth', $3, $4, $4)
          ON CONFLICT (phone) DO UPDATE SET updated_at = $4 RETURNING *`,
-        [name || '', phone, admin ? 'ADMIN' : 'CUSTOMER', ts]
+        [name || '', phone, 'CUSTOMER', ts]
       );
-    } else if (admin && user.role !== 'ADMIN') {
-      user = await getOne('UPDATE users SET role = $2, updated_at = $3 WHERE id = $1 RETURNING *', [user.id, 'ADMIN', nowIso()]);
     }
     return user;
   }
