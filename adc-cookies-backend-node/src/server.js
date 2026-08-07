@@ -5,7 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 
-import { initSchema } from './db.js';
+import { initSchema, getOne } from './db.js';
 import { seedIfEmpty } from './seed.js';
 import { parseAuth } from './middleware.js';
 
@@ -142,7 +142,9 @@ if (!process.env.VERCEL) {
       console.log(`[CONFIG] DELHIVERY_TOKEN=${process.env.DELIVERY_API_TOKEN || process.env.DELHIVERY_API_TOKEN ? 'set' : 'MISSING'}`);
       console.log(`[CONFIG] DELHIVERY_BASE_URL=${process.env.DELHIVERY_BASE_URL || '(default: track.delhivery.com)'}`);
       console.log(`[CONFIG] RESEND=${process.env.RESEND_API_KEY ? 'set' : 'MISSING'}`);
-      console.log(`[CONFIG] ADMIN_EMAILS=${process.env.ADMIN_EMAILS || 'MISSING'}`);
+      // Admin is granted on the users row, not by env var — see the note in middleware.js.
+      getOne("SELECT count(*)::int AS n FROM users WHERE role = 'ADMIN'")
+        .then((r) => console.log(`[CONFIG] ADMIN accounts in DB=${r?.n ?? '?'}`)).catch(() => {});
     });
   })().catch(err => { console.error('Startup failed:', err); process.exit(1); });
 }
