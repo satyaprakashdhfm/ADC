@@ -417,7 +417,7 @@ export async function adminAttention(): Promise<AttentionReport> { return reques
 export interface StoreReadiness {
   name: string; city: string; state: string; pincode: number;
   pickupName: string | null; registered: boolean; verified: boolean | null;
-  isPrimary: boolean; phoneVerified: boolean; pickupId: number | null;
+  isPrimary: boolean; phoneVerified: boolean; pickupId: number | null; usable?: boolean;
   contact: string | null; blockedReason: string | null;
 }
 export interface StoreReadinessReport {

@@ -867,12 +867,13 @@ export default function AdminDashboard() {
                       <>
                         <div style={{ ...card, padding: '10px 14px', marginBottom: 12, borderColor: storeReadiness.verifiedCount === storeReadiness.stores.length ? 'var(--border-default)' : 'var(--status-error)' }}>
                           <strong style={{ color: storeReadiness.verifiedCount === storeReadiness.stores.length ? 'var(--text-strong)' : 'var(--status-error)', fontSize: 'var(--text-sm)' }}>
-                            {storeReadiness.verifiedCount} of {storeReadiness.stores.length} stores can dispatch today
+                            {storeReadiness.verifiedCount} of {storeReadiness.stores.length} stores can dispatch
                           </strong>
                           <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '4px 0 0', lineHeight: 1.5 }}>
-                            Only a <strong>verified</strong> Shiprocket pickup location can be booked. An unverified one still returns a
-                            price, then refuses the order — so unverified stores are never quoted at checkout. Addresses in a city with no
-                            verified store cannot be delivered same-day at all. Read live from Shiprocket, not cached.
+                            A store can take same-day orders when its pickup nickname exists in Shiprocket — that is where the rider
+                            collects from. Shiprocket&apos;s own <em>status</em> is shown for reference only: it reads 2 on your primary
+                            location and 1 on the rest, while their panel marks all of them verified, and bookings from status-1
+                            locations are accepted. Read live from Shiprocket, not cached.
                           </p>
                         </div>
                         <Table head={['Store', 'City', 'Pincode', 'Pickup name', 'Can dispatch?']}>
@@ -883,7 +884,8 @@ export default function AdminDashboard() {
                               <td style={td}><span style={{ fontFamily: 'monospace' }}>{s.pincode}</span></td>
                               <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{s.pickupName || '—'}</span>{s.pickupId ? <><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>id {s.pickupId}</span></> : null}</td>
                               <td style={td}>
-                                {s.verified ? <Badge text="Yes" ok /> : <Badge text="No" />}
+                                {s.usable ? <Badge text="Yes" ok /> : <Badge text="No" />}
+                                {s.usable && !s.verified && <div style={{ marginTop: 3, fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>Shiprocket status 1 (normal for a non-primary location)</div>}
                                 {s.blockedReason && <div style={{ marginTop: 4, fontSize: 'var(--text-2xs)', color: 'var(--status-error)', maxWidth: 320, lineHeight: 1.45 }}>{s.blockedReason}</div>}
                               </td>
                             </tr>
