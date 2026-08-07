@@ -1305,7 +1305,11 @@
           "message": "Order cancelled successfully."
         },
         "gotcha": "Takes THEIR order id (order_id from /orders/create/adhoc), NOT the shipment_id and NOT the AWB. We store it in orders.carrier_order_id at booking time — without it an intracity order cannot be cancelled with them at all. Re-verified 2026-08-06: a bogus id returns {\"message\":\"Order Id does not exist\"}, so auth and shape are good.",
-        "calledFrom": "cancelDownstream() in routes/admin.js (order status -> CANCELLED) and DELETE /api/admin/orders/:id/shipment"
+        "calledFrom": "cancelDownstream() in routes/admin.js (order status -> CANCELLED) and DELETE /api/admin/orders/:id/shipment",
+        "liveTestedOnRealOrder_2026-08-07": "Create -> assign AWB -> cancel, order 1500449420 / shipment 1496672060. Cancel returned {\"status_code\":200,\"message\":\"Order cancelled successfully.\"} and their activity log recorded \"Order Canceled\" ONE SECOND later. Confirmed working.",
+        "criticalGotcha": "Their orders/show  stays NEW after a successful cancel — their OWN panel shows the NEW badge on an order its activity log says is cancelled. There is no reliable cancelled flag on the API (no is_cancelled; master_status/fulfillment_status empty; seller_can_cancell=false). So the 200 response is the only signal available: do NOT \"verify\" a cancel by re-reading status, or every successful cancellation reads as a failure.",
+        "billing": "Nothing is charged until a rider is actually ALLOCATED. A create+assign+cancel cycle cancelled during \"Searching For Rider\" left the wallet unchanged at Rs.82.38. AWB present therefore means rider allocated AND money spent — the admin UI uses that to warn before cancelling a dispatched rider.",
+        "untested": "Cancel AFTER a rider is allocated and moving. The 2026-08-07 test cancelled during the rider search, so the post-dispatch path remains unproven."
       },
       {
         "purpose": "Tracking webhook — they POST status changes to us",

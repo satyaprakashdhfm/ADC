@@ -507,7 +507,12 @@ export async function adminGetShippingCost(destPin: string, weight = 0.5): Promi
 export async function adminCreateShipment(orderId: number, weight = 0.5): Promise<Order> {
   return request(`/admin/orders/${orderId}/shipment`, { method: 'POST', body: JSON.stringify({ weight }) });
 }
-export async function adminCancelShipment(orderId: number): Promise<{ ok: boolean; waybill: string }> {
+/**
+ * Cancel with whichever carrier booked it. `dispatched` says whether a rider had already been
+ * allocated — for Shiprocket that is the AWB existing, which only happens once a real rider is
+ * found, so it also means the delivery charge has already been taken.
+ */
+export async function adminCancelShipment(orderId: number): Promise<{ ok: boolean; waybill: string; carrier?: string; dispatched?: boolean; message?: string }> {
   return request(`/admin/orders/${orderId}/shipment`, { method: 'DELETE' });
 }
 export async function adminTrackOrder(orderId: number): Promise<{ ok: boolean; data?: unknown; reason?: string; carrier?: string; status?: string | null; scans?: { time: string; event: string }[] }> {

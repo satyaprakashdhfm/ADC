@@ -796,16 +796,27 @@ export default function AdminDashboard() {
                               }} style={actionBtn()}><ExternalLink size={13} /> Status</button>
                               {o.shipmentStatus !== 'CANCELLED' && (
                                 <button disabled={shipmentBusy === o.id} onClick={async () => {
-                                  if (!confirm(`Cancel shipment ${o.delhiveryWaybill}?\n\nThis cancels the parcel with the carrier and refunds the shipping charge to your wallet. It does NOT refund the customer's payment.`)) return;
+                                  // For Shiprocket the AWB only exists once a real rider has been
+                                  // found — so its presence means someone is already on their way
+                                  // AND the delivery charge has been taken. That is a different
+                                  // decision from cancelling a booking still searching for a rider,
+                                  // and must not sit behind the same casual confirm.
+                                  const riderOut = o.carrier === 'SHIPROCKET' && !!o.delhiveryWaybill;
+                                  const q = riderOut
+                                    ? `A RIDER HAS ALREADY BEEN DISPATCHED for ${o.orderNumber}.\n\nThey may be at the store or on the way to the customer, and the delivery charge has already been taken. The carrier may refuse to call them off this late.\n\nStill try to cancel?`
+                                    : `Cancel shipment ${o.delhiveryWaybill}?\n\nThis cancels the parcel with the carrier. It does NOT refund the customer's payment.`;
+                                  if (!confirm(q)) return;
                                   setShipmentBusy(o.id); setErr('');
                                   try {
-                                    await adminCancelShipment(o.id);
+                                    const r = await adminCancelShipment(o.id);
                                     // Only NOW is it actually cancelled. This used to mark the row
                                     // CANCELLED even when the carrier refused, so a failed cancel
                                     // looked identical to a successful one — while a rider was still
                                     // on the way.
                                     setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
-                                    setCancelInfo({ orderNumber: o.orderNumber, ok: true, message: `Booking ${o.delhiveryWaybill} cancelled with ${o.carrier || 'the carrier'}. The shipping charge returns to your wallet; the customer's payment is not refunded.` });
+                                    // Prefer the backend's sentence: it knows whether a rider was
+                                    // out, and therefore whether anything was actually charged.
+                                    setCancelInfo({ orderNumber: o.orderNumber, ok: true, message: r?.message || `Booking ${o.delhiveryWaybill} cancelled with ${o.carrier || 'the carrier'}. The customer's payment is not refunded by this.` });
                                   } catch (e: unknown) {
                                     setCancelInfo({ orderNumber: o.orderNumber, ok: false, message: e instanceof Error ? e.message : 'The carrier refused to cancel this booking.' });
                                   } finally { setShipmentBusy(null); }

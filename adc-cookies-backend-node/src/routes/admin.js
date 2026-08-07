@@ -742,11 +742,29 @@ router.post('/orders/:id/shipment', async (req, res) => {
 // DELETE /api/admin/orders/:id/shipment — cancel the shipment WITH WHOEVER BOOKED IT.
 // This used to always call Delhivery, so cancelling an intracity order sent a Shiprocket AWB to
 // Delhivery's edit endpoint, which rejected it while the rider was still on the way.
+/*
+ * Has a rider actually been allocated to this order?
+ *
+ * For Shiprocket the AWB is the tell, and it is a reliable one: assignment is asynchronous and the
+ * AWB only appears once a real rider has been found. Confirmed live on 2026-08-07 — a create +
+ * assign + cancel cycle that was cancelled during "Searching For Rider" never produced an AWB and
+ * never charged the wallet. So AWB present = rider allocated = money already spent = someone is on
+ * their way to the store, which is a materially different thing to cancel than a pending search.
+ *
+ * The status text is checked too, for orders whose AWB arrived by webhook before we stored it.
+ */
+function riderDispatched(order) {
+  if (order.carrier !== 'SHIPROCKET') return false;
+  if (order.delhivery_waybill) return true;
+  return /RIDER ASSIGNED|PICKED ?UP|IN TRANSIT|OUT FOR DELIVERY|REACHED/i.test(String(order.shipment_status || ''));
+}
+
 router.delete('/orders/:id/shipment', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
   if (!order) throw new ApiError('Order not found', 404);
   if (!order.delhivery_waybill && !order.carrier_order_id) throw new ApiError('No shipment exists for this order', 400);
 
+  const dispatched = riderDispatched(order);
   const ref = order.delhivery_waybill || order.carrier_order_id;
   console.log(`[ADMIN-SHIPMENT] cancel | order=${order.order_number} | carrier=${order.carrier || 'DELHIVERY'} | ref=${ref}`);
 
@@ -769,14 +787,26 @@ router.delete('/orders/:id/shipment', async (req, res) => {
       [order.id, 'SHIPMENT_CANCEL_FAILED', `⚠ ${carrier} refused to cancel ${ref}: ${raw.slice(0, 300)}`, nowIso()]).catch(() => {});
     // A human sentence, not a reason code — this is read by whoever now has to go and cancel it by
     // hand, and "the rider is still coming" is the part that matters.
-    const message = `${carrier} refused to cancel ${ref}: ${raw.slice(0, 300)}. The booking is still LIVE — a rider may still collect this order. Cancel it directly in the ${carrier === 'SHIPROCKET' ? 'Shiprocket' : 'Delhivery'} dashboard.`;
-    return res.status(502).json({ ok: false, error: message, message, carrier, reason: result.reason, detail: result.detail });
+    const panel = carrier === 'SHIPROCKET' ? 'Shiprocket' : 'Delhivery';
+    const message = dispatched
+      ? `A rider has already been dispatched for this order, and ${carrier} refused to call them off: ${raw.slice(0, 240)}. The rider is still on their way to the store. Phone the store and the rider to stop the handover, then cancel it in the ${panel} dashboard. The delivery charge has already been taken and will not come back on its own.`
+      : `${carrier} refused to cancel ${ref}: ${raw.slice(0, 300)}. The booking is still LIVE — a rider may still collect this order. Cancel it directly in the ${panel} dashboard.`;
+    return res.status(502).json({ ok: false, error: message, message, carrier, dispatched, reason: result.reason, detail: result.detail });
   }
 
   await query(`UPDATE orders SET shipment_status='CANCELLED', updated_at=$1 WHERE id=$2`, [nowIso(), order.id]);
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-    [order.id, 'SHIPMENT_CANCELLED', `${order.carrier || 'DELHIVERY'} booking ${ref} cancelled`, nowIso()]).catch(() => {});
-  res.json({ ok: true, waybill: order.delhivery_waybill, carrier: order.carrier || 'DELHIVERY' });
+    [order.id, 'SHIPMENT_CANCELLED', `${order.carrier || 'DELHIVERY'} booking ${ref} cancelled${dispatched ? ' (rider had already been dispatched)' : ''}`, nowIso()]).catch(() => {});
+  /*
+   * Shiprocket accepts the cancel but leaves `status` reading NEW — their own panel shows the same,
+   * and only the activity log records "Order Canceled" (verified live 2026-08-07). So a 200 is the
+   * best confirmation their API offers, and we do not try to re-read the status to "verify": doing
+   * so would report every successful cancellation as a failure.
+   */
+  const message = dispatched
+    ? `Booking ${ref} cancelled and the rider called off. Please confirm with the store that nobody collects it — the delivery charge was already taken, so check whether it is refunded to your wallet.`
+    : `Booking ${ref} cancelled with ${order.carrier || 'the carrier'}. No rider had been allocated yet, so nothing was charged. The customer's payment is NOT refunded by this.`;
+  res.json({ ok: true, waybill: order.delhivery_waybill, carrier: order.carrier || 'DELHIVERY', dispatched, message });
 });
 
 /*
