@@ -559,7 +559,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const pinOk = PIN_RE.test(aform.pincode.trim());
   const phoneOk = PHONE_RE.test(aform.phone.replace(/\D/g, ''));
   const stateOk = INDIAN_STATES.some(s => s.toLowerCase() === aform.state.trim().toLowerCase());
-  // A phone number is required — Delhivery/Shadowfax can't create a shipment without one, so an
+  // A phone number is required — Delhivery/Shiprocket can't create a shipment without one, so an
   // address saved without a valid one would silently never ship.
   const aValid = !!(aform.fullName.trim() && phoneOk && aform.addressLine1.trim() && aform.city.trim() && pinOk && stateOk);
   // Can't head to payment without a selected, PIN-valid, serviceable address with a real phone
@@ -1069,11 +1069,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.intracity && delivCheck.store ? `Ordering from ${delivCheck.store} · Pincode ${chosen?.pincode}` : `Express delivery (all India) · Pincode ${chosen?.pincode}`}</div>
                       </div>
                     </div>
-                  ) : delivCheck.reason === 'shadowfax_paused' ? (
+                  ) : delivCheck.reason === 'same_day_unavailable' ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
                       <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Clock size={16} style={{ color: 'var(--white)' }} /></span>
                       <div>
-                        <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Shadowfax is down — please wait</div>
+                        <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Same-day delivery is paused</div>
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.maintenanceMessage || 'Same-day delivery to this area is temporarily paused.'}</div>
                       </div>
                     </div>
