@@ -96,8 +96,8 @@ export function LocationPill({ block = false, compact = false, iconOnly = false 
     return (
       <>
         <button onClick={() => setOpen(true)} title={store ? label : 'Set location'} aria-label={store ? `Delivering to ${label}. Change location` : 'Set delivery location'}
-          style={{ position: 'relative', width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}>
-          <MapPin size={20} />
+          style={{ position: 'relative', width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}>
+          <MapPin size={19} />
           {store && <span aria-hidden style={{ position: 'absolute', top: 0, right: 0, width: 9, height: 9, borderRadius: '50%', background: '#3ad06a', border: '2px solid var(--navbar-bg)' }} />}
         </button>
         <LocationModal open={open} onClose={() => setOpen(false)} />

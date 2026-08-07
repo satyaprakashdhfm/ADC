@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Menu, User, Search, ShoppingBag, ChevronDown, X } from 'lucide-react';
+import { Menu, User, Search, ShoppingBag, ChevronDown, X, Truck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { getProducts, firstImage, type Product } from '@/lib/api';
@@ -210,12 +210,12 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
             {searchExpanded ? (
               <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
                 <div style={{ flex: 1, maxWidth: 640 }}><SearchBox products={products} autoFocus onNavigate={() => setSearchExpanded(false)} /></div>
-                <button onClick={() => setSearchExpanded(false)} aria-label="Close search" style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><X size={20} /></button>
+                <button onClick={() => setSearchExpanded(false)} aria-label="Close search" style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><X size={20} /></button>
               </div>
             ) : (
               <>
                 <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <button onClick={() => setSearchExpanded(true)} aria-label="Search" style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Search size={20} /></button>
+                  <button onClick={() => setSearchExpanded(true)} aria-label="Search" style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Search size={20} /></button>
                 </div>
                 <a href="/" aria-label="a dough cookie home" style={{ justifySelf: 'center', display: 'flex', alignItems: 'center' }}>
                   <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 78, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }} />
@@ -223,6 +223,8 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
                 <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 12 }}>
                   {/* Location sits to the left of the account icon (per request). */}
                   <LocationPill />
+                  {/* Track Order — quick access to the account/orders page for delivery tracking. */}
+                  <button onClick={() => router.push('/account')} aria-label="Track your order" title="Track order" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 46, padding: '0 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}><Truck size={18} /> Track</button>
                   <button onClick={accountClick} className="nav-round-btn" aria-label={user ? 'My account' : 'Log in'} style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)' }}><User size={20} /></button>
                   <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)' }}>
                     <ShoppingBag size={20} />
@@ -255,7 +257,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
                 className="nav-round-btn"
                 aria-label={searchOpen ? 'Close search' : 'Search'}
                 aria-expanded={searchOpen}
-                style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: searchOpen ? 'var(--white-16)' : 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}
+                style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: searchOpen ? 'var(--white-16)' : 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}
               >
                 {searchOpen ? <X size={20} /> : <Search size={20} />}
               </button>
@@ -273,8 +275,9 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
               />
             </a>
 
-            <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
-              <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}>
+            <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
+              <button onClick={() => router.push('/account')} className="nav-round-btn" aria-label="Track your order" title="Track order" style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}><Truck size={19} /></button>
+              <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}>
                 <ShoppingBag size={20} />
                 {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 19, height: 19, padding: '0 5px', borderRadius: 10, background: 'var(--white)', color: 'var(--orange-600)', fontSize: 11, fontWeight: 900, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>}
               </button>
@@ -282,7 +285,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
                 onClick={() => setMenuOpen(true)}
                 className="nav-round-btn"
                 aria-label="Open menu"
-                style={{ width: 44, height: 44, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}
+                style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}
               >
                 <Menu size={20} />
               </button>
