@@ -681,7 +681,12 @@ export default function AdminDashboard() {
                 <button onClick={async () => {
                   setPurResult('Submitting…');
                   const r = await adminCreatePickupRequest(purDate, purTime, Number(purCount)).catch(e => ({ ok: false, reason: String(e.message || e), data: undefined }));
-                  setPurResult(r.ok ? `Pickup scheduled for ${purDate} at ${purTime} · ${purCount} package(s).` : `Error: ${(r as { ok: boolean; reason?: string }).reason}`);
+                  // The backend translates Delhivery's terse refusals — a wallet under the Rs.500
+                  // minimum, or a slot already open for this warehouse today — into a sentence worth
+                  // reading, so prefer it over the raw reason.
+                  setPurResult(r.ok
+                    ? `Pickup scheduled for ${purDate} at ${purTime} · ${purCount} package(s). Delhivery sometimes moves the date — check their panel to confirm the slot.`
+                    : `Error: ${(r as { ok: boolean; reason?: string }).reason}`);
                 }} disabled={!purDate || !purTime} style={{ ...addBtn, opacity: !purDate ? 0.5 : 1 }}>Request pickup</button>
               </div>
               {purResult && <div style={{ marginTop: 10, fontSize: 'var(--text-sm)', color: purResult.startsWith('Error') ? 'var(--status-error)' : 'var(--status-success)', fontWeight: 700 }}>{purResult}</div>}
@@ -705,6 +710,8 @@ export default function AdminDashboard() {
                       <li><strong>Count</strong> is how many packages the rider should collect. Use the button above to fill in the {Math.max(1, pending.length)} awaiting pickup.</li>
                       <li>Each parcel needs its <strong>shipping label</strong> printed — recipient address and scannable tracking barcode. Download them from the shipments list.</li>
                       <li>Parcels at a <strong>different location</strong> need their own request from that warehouse.</li>
+                      <li><strong>Your Delhivery wallet must hold at least ₹500</strong> or the request is rejected. This applies to Prepaid and COD alike — confirmed live. Shipment creation also debits the wallet at the time the parcel is created, not on delivery.</li>
+                      <li>Delhivery may <strong>move the date</strong> you ask for — a request for one day has come back scheduled for the next. Check the confirmation rather than assuming the slot you chose.</li>
                     </ul>
                     <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.6, margin: '0 0 8px' }}>
                       This step is optional: your Delhivery account POC can enable <strong>auto-pickup</strong>, after which collections are

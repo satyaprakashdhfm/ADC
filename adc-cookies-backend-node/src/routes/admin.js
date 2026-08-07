@@ -972,7 +972,25 @@ router.post('/delivery/pickup-request', async (req, res) => {
   const result = await createPickupRequest({
     pickupDate, pickupTime, pickupLocation: wh.pickup_location, packageCount: Number(packageCount || 1),
   });
-  res.json(result);
+
+  /*
+   * Delhivery's rejections are terse and name no cause, so translate the two that actually happen.
+   * A wallet under ₹500 is the common one — it applies to Prepaid and COD alike (confirmed live) —
+   * and the other is a slot already open for this warehouse today, since only one pickup request
+   * per location per day is allowed until the existing one is closed.
+   */
+  if (!result.ok) {
+    const raw = JSON.stringify(result.reason ?? result.detail ?? '').toLowerCase();
+    let hint = null;
+    if (/balance|wallet|insufficient|recharge|fund/.test(raw)) {
+      hint = 'Your Delhivery wallet is below the ₹500 minimum needed to book a pickup. Top it up in the Delhivery panel and try again. (Prepaid and COD both require this.)';
+    } else if (/already|exist|duplicate|open|pending/.test(raw)) {
+      hint = `A pickup request is already open for ${wh.pickup_location} today. Delhivery allows only one per warehouse per day — the existing one must be closed before another can be raised. Check it in their panel.`;
+    }
+    const message = hint || `Delhivery refused the pickup request: ${JSON.stringify(result.reason ?? '').slice(0, 300)}`;
+    return res.status(502).json({ ...result, error: message, message, warehouse: wh.pickup_location });
+  }
+  res.json({ ...result, warehouse: wh.pickup_location });
 });
 
 export default router;
