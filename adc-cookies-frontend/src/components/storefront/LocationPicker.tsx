@@ -86,9 +86,24 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
 
 /* ---- Pill: the header "Deliver to …" control.
    `compact` = tiny inline pin-link (mobile navbar) · `block` = full-width row · default = desktop pill. ---- */
-export function LocationPill({ block = false, compact = false }: { block?: boolean; compact?: boolean }) {
+export function LocationPill({ block = false, compact = false, iconOnly = false }: { block?: boolean; compact?: boolean; iconOnly?: boolean }) {
   const { store, label } = useLocation();
   const [open, setOpen] = useState(false);
+
+  // Tiny map-pin button for the mobile header top row — no text, just the pin (green dot once a
+  // location is set); tapping it opens the same picker popup, so the header stays short.
+  if (iconOnly) {
+    return (
+      <>
+        <button onClick={() => setOpen(true)} title={store ? label : 'Set location'} aria-label={store ? `Delivering to ${label}. Change location` : 'Set delivery location'}
+          style={{ position: 'relative', width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}>
+          <MapPin size={20} />
+          {store && <span aria-hidden style={{ position: 'absolute', top: 0, right: 0, width: 9, height: 9, borderRadius: '50%', background: '#3ad06a', border: '2px solid var(--navbar-bg)' }} />}
+        </button>
+        <LocationModal open={open} onClose={() => setOpen(false)} />
+      </>
+    );
+  }
 
   if (compact) {
     return (
