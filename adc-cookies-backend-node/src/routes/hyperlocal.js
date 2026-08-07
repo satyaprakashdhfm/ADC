@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getOne, query, nowIso } from '../db.js';
 import { shiprocketStatusToOrderStatus } from '../shiprocket.js';
+import { riderStatus } from '../petpooja.js';
 
 /*
  * Shiprocket Hyperlocal webhook — the ONLY way tracking reaches us.
@@ -87,12 +88,50 @@ router.post('/webhook', async (req, res) => {
       await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
         [order.id, order.order_status, note, ts]);
     }
+
+    /*
+     * Forward the rider's progress to the POS.
+     *
+     * Petpooja's Rider Info endpoint existed in our client from the start but nothing ever called
+     * it, so the merchant's own dashboard showed a paid order and then silence — no rider assigned,
+     * no picked up, no delivered. Their screen is where the shop actually watches orders, so that
+     * silence is the difference between the integration being useful and being decorative.
+     *
+     * Fire-and-forget, deliberately after our own state is committed: the POS is a mirror, and a
+     * problem there must never make us 500 a webhook Shiprocket would then retry forever.
+     */
+    const posStatus = petpoojaRiderStatus(status);
+    if (posStatus) {
+      riderStatus(order.order_number, posStatus, {
+        name: b.courier_name || 'Shiprocket',
+        contact: String(b.rider_contact ?? b.rider_phone ?? ''),
+        waybill: awb || '',
+      }).catch((err) => console.log(`[HYPERLOCAL] rider->POS failed | order=${order.order_number} | ${err?.message || err}`));
+    }
     return res.json({ ok: true, matched: true });
   } catch (err) {
     console.log(`[HYPERLOCAL] webhook | ✗ ${err.message}`);
     return res.json({ ok: false, error: 'could not process' });
   }
 });
+
+/*
+ * Shiprocket's tracking status -> Petpooja's rider status.
+ *
+ * Petpooja accepts exactly four values and nothing else: rider-assigned, rider-arrived, pickedup,
+ * delivered. Anything we cannot map to one of those returns null and is simply not forwarded —
+ * inventing a value would be rejected, and guessing a nearby one would misreport the order.
+ *
+ * "Rider reached drop" is deliberately NOT delivered: at the door is not handed over.
+ */
+function petpoojaRiderStatus(srStatus) {
+  const s = String(srStatus || '').toUpperCase();
+  if (/DELIVERED/.test(s)) return 'delivered';
+  if (/PICKED ?UP|OUT FOR DELIVERY|IN TRANSIT|DISPATCH/.test(s)) return 'pickedup';
+  if (/REACHED PICKUP|RIDER ARRIVED/.test(s)) return 'rider-arrived';
+  if (/RIDER ASSIGNED|AWB ASSIGNED|PICKUP SCHEDULED/.test(s)) return 'rider-assigned';
+  return null;
+}
 
 // Lets us confirm the URL is reachable before wiring it into their panel, and gives their
 // "Test Webhook" button something friendly to hit.

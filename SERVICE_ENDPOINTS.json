@@ -1076,7 +1076,9 @@
           "message": "Your reuqest received succesfully",
           "code": 200
         },
-        "gotchas": "`success` is the string 'success' here, NOT '1' as on every other endpoint — a check for success==='1' silently treats every successful call as a failure. Their response also contains two typos ('reuqest', 'succesfully'); match loosely if ever matching on text."
+        "gotchas": "`success` is the string 'success' here, NOT '1' as on every other endpoint — a check for success==='1' silently treats every successful call as a failure. Their response also contains two typos ('reuqest', 'succesfully'); match loosely if ever matching on text.",
+        "calledFrom": "routes/hyperlocal.js — the Shiprocket tracking webhook forwards each rider event to the POS (added 2026-08-07; before this nothing called it, so the merchant dashboard showed a paid order and then silence)",
+        "statusMapping": "RIDER/AWB ASSIGNED, PICKUP SCHEDULED -> rider-assigned | RIDER REACHED PICKUP -> rider-arrived | PICKED UP, IN TRANSIT, OUT FOR DELIVERY -> pickedup | DELIVERED -> delivered | RIDER REACHED DROP, CANCELLED -> not forwarded (Petpooja accepts only those four values)"
       },
       {
         "purpose": "Item / add-on stock toggle",
