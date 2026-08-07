@@ -12,9 +12,10 @@ import {
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
   adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
   adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
+  adminGetPetpoojaMapping, adminSetPetpoojaMapping, adminCreateProductFromPetpooja, adminGetPetpoojaRelays,
   type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type CouponInput, type AdminMessage,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
-  type AttentionReport, type StoreReadinessReport,
+  type AttentionReport, type StoreReadinessReport, type PetpoojaMapping, type PetpoojaRelay,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
@@ -48,6 +49,7 @@ const TABS = [
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
   { id: 'products', label: 'Products', icon: Package },
   { id: 'delivery', label: 'Delivery', icon: Truck },
+  { id: 'petpooja', label: 'Petpooja', icon: FileText },
   { id: 'coupons', label: 'Coupons', icon: Ticket },
   { id: 'users', label: 'Customers', icon: Users },
   { id: 'messages', label: 'Messages', icon: MessageSquare },
@@ -161,6 +163,11 @@ export default function AdminDashboard() {
   const [shipmentWeights, setShipmentWeights] = useState<Record<number, string>>({});
   const [delivSub, setDelivSub] = useState<'main' | 'sameday' | 'delhivery'>('main');
   const [storeReadiness, setStoreReadiness] = useState<StoreReadinessReport | null>(null);
+  const [ppMap, setPpMap] = useState<PetpoojaMapping | null>(null);
+  const [ppRelays, setPpRelays] = useState<PetpoojaRelay[] | null>(null);
+  const [ppBusy, setPpBusy] = useState<string | null>(null);   // "itemId|variationId" being saved
+  const [ppSearch, setPpSearch] = useState('');
+  const [ppOnlyUnlinked, setPpOnlyUnlinked] = useState(false);
   const [sfxStatesOpen, setSfxStatesOpen] = useState(false);
 
   const EMPTY_WH: WarehouseInput = { name: '', registeredName: '', pickupLocation: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', returnPincode: '', phone: '', email: '', isDefault: false, skipDelhivery: false };
@@ -182,12 +189,16 @@ export default function AdminDashboard() {
     if (tab === 'coupons' && coupons === null) adminGetCoupons().then(setCoupons).catch(() => setCoupons([]));
     if (tab === 'users' && users === null) adminGetUsers().then(setUsers).catch(() => setUsers([]));
     if (tab === 'messages' && messages === null) adminGetMessages().then(setMessages).catch(() => setMessages([]));
+    if (tab === 'petpooja') {
+      if (ppMap === null) adminGetPetpoojaMapping().then(setPpMap).catch(() => setPpMap(null));
+      if (ppRelays === null) adminGetPetpoojaRelays().then(setPpRelays).catch(() => setPpRelays([]));
+    }
     if (tab === 'delivery') {
       if (warehouses === null) adminGetWarehouses().then(setWarehouses).catch(() => setWarehouses([]));
       if (orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
       if (storeReadiness === null) adminGetStoreReadiness().then(setStoreReadiness).catch(() => setStoreReadiness(null));
     }
-  }, [tab, isAdmin, orders, products, coupons, users, messages, storeReadiness]);
+  }, [tab, isAdmin, orders, products, coupons, users, messages, storeReadiness, ppMap, ppRelays]);
 
   const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); adminDashboard().then(setStats).catch(() => {}); }, []);
 
@@ -998,6 +1009,153 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* ===== Petpooja (POS) ===== */}
+        {tab === 'petpooja' && (() => {
+          const key = (i: { item_id: string; variation_id: string }) => `${i.item_id}|${i.variation_id}`;
+          const reload = () => { adminGetPetpoojaMapping().then(setPpMap).catch(() => {}); refreshAttention(); };
+          const link = async (i: { item_id: string; variation_id: string }, productId: number | null) => {
+            setPpBusy(key(i)); setErr('');
+            try { await adminSetPetpoojaMapping(i.item_id, i.variation_id, productId); reload(); }
+            catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Could not save the link'); }
+            finally { setPpBusy(null); }
+          };
+          const createAndLink = async (i: { item_id: string; variation_id: string; name: string }) => {
+            setPpBusy(key(i)); setErr(''); setNotice('');
+            try {
+              const r = await adminCreateProductFromPetpooja(i.item_id, i.variation_id);
+              setNotice(r.created ? `Created "${r.product.name}" and linked it.` : `Linked to the existing product "${r.product.name}".`);
+              reload(); adminGetProducts().then(setProducts).catch(() => {});
+            } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Could not create the product'); }
+            finally { setPpBusy(null); }
+          };
+          const q = ppSearch.trim().toLowerCase();
+          const rows = (ppMap?.items || []).filter(i => {
+            if (ppOnlyUnlinked && i.product_id) return false;
+            if (!q) return true;
+            return i.name.toLowerCase().includes(q) || (i.variation_name || '').toLowerCase().includes(q) || i.item_id.includes(q);
+          });
+          const linked = (ppMap?.items || []).filter(i => i.product_id).length;
+          const total = ppMap?.items.length || 0;
+          const lastPush = ppMap?.pushes?.[0];
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Menu status. Petpooja PUSHES the catalogue to us — menu fetch is deprecated on their
+                  side — so this panel is the only place the arrival of a menu is visible. */}
+              <Panel title="Menu from Petpooja" loading={ppMap === null}
+                action={<button onClick={reload} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+                {ppMap && (!ppMap.menuSynced ? (
+                  <Empty text="No menu received yet. Petpooja pushes the catalogue to us — ask them to trigger it, we cannot pull it." />
+                ) : (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 14 }}>
+                      <MiniStat label="Items in menu" value={String(total)} />
+                      <MiniStat label="Linked to products" value={`${linked} / ${total}`} bad={linked < total} />
+                      <MiniStat label="Restaurant code" value={ppMap.restId} />
+                      <MiniStat label="Last received" value={lastPush ? fmtDate(lastPush.received_at) : '—'} />
+                    </div>
+                    {linked < total && (
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, margin: '0 0 12px', lineHeight: 1.5 }}>
+                        {total - linked} item{total - linked !== 1 ? 's are' : ' is'} not linked to a product. An order reaches the kitchen only when
+                        every product it contains has a Petpooja item — one unlinked product fails the whole relay.
+                      </p>
+                    )}
+                    <details>
+                      <summary style={{ cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--text-muted)' }}>
+                        Push history ({ppMap.pushes.length}) and taxes ({ppMap.taxes.length})
+                      </summary>
+                      <div style={{ marginTop: 10 }}>
+                        <Table head={['Received', 'Restaurant', 'Source', 'Items']}>
+                          {ppMap.pushes.map(p => (
+                            <tr key={p.id}>
+                              <td style={td}>{fmtDate(p.received_at)}</td>
+                              <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{p.rest_id}</span></td>
+                              <td style={td}>{p.source}</td>
+                              <td style={td}>{p.item_count}</td>
+                            </tr>
+                          ))}
+                        </Table>
+                        <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', marginTop: 8 }}>
+                          Taxes: {ppMap.taxes.map(t => `${t.name} ${t.percentage}%`).join(' · ') || 'none'}
+                        </p>
+                      </div>
+                    </details>
+                  </>
+                ))}
+              </Panel>
+
+              {ppMap?.menuSynced && (
+                <Panel title="Link Petpooja items to your products">
+                  <FilterBar search={ppSearch} onSearch={setPpSearch} placeholder="Search item name or id…"
+                    active={ppOnlyUnlinked} onClear={() => { setPpSearch(''); setPpOnlyUnlinked(false); }}>
+                    <Field label="Show">
+                      <select value={ppOnlyUnlinked ? 'unlinked' : 'all'} onChange={e => setPpOnlyUnlinked(e.target.value === 'unlinked')}
+                        style={{ ...inp, cursor: 'pointer' }}>
+                        <option value="all">All items</option>
+                        <option value="unlinked">Not linked only</option>
+                      </select>
+                    </Field>
+                  </FilterBar>
+                  <Table head={['Petpooja item', 'Their price', 'Stock', 'Linked product', '']}>
+                    {rows.map(i => {
+                      const busy = ppBusy === key(i);
+                      return (
+                        <tr key={key(i)} style={{ opacity: busy ? 0.5 : 1 }}>
+                          <td style={td}>
+                            <strong style={{ color: 'var(--text-strong)' }}>{i.name}</strong>
+                            {i.variation_name && <span style={{ color: 'var(--text-muted)' }}> — {i.variation_name}</span>}
+                            <br /><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>{i.item_id}{i.variation_id ? `/${i.variation_id}` : ''}</span>
+                          </td>
+                          <td style={td}>{i.price != null ? money(i.price) : '—'}</td>
+                          <td style={td}>{i.in_stock ? <Badge text="In stock" ok /> : <Badge text="Out" />}</td>
+                          <td style={td}>
+                            <select value={i.product_id ?? ''} disabled={busy}
+                              onChange={e => link(i, e.target.value ? Number(e.target.value) : null)}
+                              style={{ ...inp, cursor: 'pointer', minWidth: 190, padding: '7px 10px' }}>
+                              <option value="">— not linked —</option>
+                              {(ppMap.products || []).map(pr => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                            {!i.product_id && (
+                              <button disabled={busy} onClick={() => createAndLink(i)} style={actionBtn()}
+                                title="Create one of our products from this Petpooja item and link the two">
+                                <Plus size={13} /> Create and link
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Table>
+                  {!rows.length && <Empty text="No items match." />}
+                </Panel>
+              )}
+
+              <Panel title="Orders sent to the POS" loading={ppRelays === null}
+                action={<button onClick={() => adminGetPetpoojaRelays().then(setPpRelays).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+                {ppRelays && (ppRelays.length ? (
+                  <Table head={['Order', 'Total', 'Reached kitchen?', 'Their order id', 'Attempts', 'When']}>
+                    {ppRelays.map(r => (
+                      <tr key={r.order_id}>
+                        <td style={td}><strong style={{ color: 'var(--text-link)' }}>{r.order_number}</strong></td>
+                        <td style={td}>{money(r.total_amount)}</td>
+                        <td style={td}>
+                          {r.relay_ok ? <Badge text="Yes" ok /> : <Badge text="Failed" />}
+                          {!r.relay_ok && r.last_error && <div style={{ marginTop: 3, fontSize: 'var(--text-2xs)', color: 'var(--status-error)', maxWidth: 300 }}>{r.last_error}</div>}
+                        </td>
+                        <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{r.petpooja_order_id || '—'}</span></td>
+                        <td style={td}>{r.attempts}</td>
+                        <td style={td}>{fmtDate(r.updated_at)}</td>
+                      </tr>
+                    ))}
+                  </Table>
+                ) : <Empty text="No orders have been sent to the POS yet." />)}
+              </Panel>
+            </div>
+          );
+        })()}
+
         {/* ===== Coupons ===== */}
         {tab === 'coupons' && (() => {
           const cq = couponSearch.trim().toLowerCase();
@@ -1577,6 +1735,15 @@ function AttentionPanel({ report, busy, onRebook, onRetryPos, onOpen, onRefresh 
           </div>
         ))}
       </>}
+    </div>
+  );
+}
+
+function MiniStat({ label, value, bad }: { label: string; value: string; bad?: boolean }) {
+  return (
+    <div style={{ ...card, padding: '10px 14px' }}>
+      <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
+      <div style={{ fontSize: 'var(--text-base)', fontWeight: 800, color: bad ? 'var(--status-error)' : 'var(--text-strong)', marginTop: 2 }}>{value}</div>
     </div>
   );
 }
