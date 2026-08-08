@@ -14,7 +14,10 @@ export default function CartBar() {
   const { count, total } = useCart();
   // /store is the staff order board on a shop terminal, not a shopfront — a checkout bar there is
   // a mis-tap waiting to happen on a tablet somebody else left a cart on.
-  const hiddenHere = pathname === '/checkout' || pathname === '/payment' || pathname?.startsWith('/store') === true;
+  // /store is the staff order board and /admin is the back office — neither is a shopfront, so a
+  // checkout bar there is a mis-tap waiting to happen on a shared tablet.
+  const hiddenHere = pathname === '/checkout' || pathname === '/payment'
+    || pathname?.startsWith('/store') === true || pathname?.startsWith('/admin') === true;
   if (count <= 0 || hiddenHere) return null;
   return (
     <button
