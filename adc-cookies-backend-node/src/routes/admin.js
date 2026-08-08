@@ -16,7 +16,7 @@ import {
   fetchDocument,
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
-import { ADC_STORES } from '../stores.js';
+import { ADC_STORES, storeProductAvailable } from '../stores.js';
 import { hashPassword, defaultPasswordFor } from '../storeAuth.js';
 import { cancelShiprocketOrder, trackShiprocket, listPickups, shiprocketConfigured } from '../shiprocket.js';
 import { cancelOrder as petpoojaCancelOrder, relayOrder, unmappedProducts } from '../petpooja.js';
@@ -35,11 +35,12 @@ router.post('/products', async (req, res) => {
   const b = req.body || {};
   const ts = nowIso();
   const row = await getOne(
-    `INSERT INTO products (name, category, description, price, stock_quantity, images, options, is_available, menu_group, tag, featured, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    `INSERT INTO products (name, category, description, price, stock_quantity, images, options, is_available, menu_group, tag, featured, same_day_only, restrict_cities, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
     [b.name, b.category, b.description ?? null, b.price, b.stockQuantity ?? 0,
      b.images ?? null, b.options ?? null, b.isAvailable !== false,
-     b.menuGroup ?? null, b.tag ?? null, !!b.featured, ts, ts]
+     b.menuGroup ?? null, b.tag ?? null, !!b.featured,
+     !!b.sameDayOnly, b.restrictCities ?? null, ts, ts]
   );
   res.json(serializeProduct(row));
 });
@@ -50,10 +51,12 @@ router.put('/products/:id', async (req, res) => {
   const b = req.body || {};
   const row = await getOne(
     `UPDATE products SET name=$1, category=$2, description=$3, price=$4, stock_quantity=$5,
-       images=$6, options=$7, is_available=$8, menu_group=$9, tag=$10, featured=$11, updated_at=$12 WHERE id=$13 RETURNING *`,
+       images=$6, options=$7, is_available=$8, menu_group=$9, tag=$10, featured=$11,
+       same_day_only=$12, restrict_cities=$13, updated_at=$14 WHERE id=$15 RETURNING *`,
     [b.name, b.category, b.description ?? null, b.price, b.stockQuantity ?? 0,
      b.images ?? null, b.options ?? null, b.isAvailable !== false,
-     b.menuGroup ?? null, b.tag ?? null, !!b.featured, nowIso(), req.params.id]
+     b.menuGroup ?? null, b.tag ?? null, !!b.featured,
+     !!b.sameDayOnly, b.restrictCities ?? null, nowIso(), req.params.id]
   );
   res.json(serializeProduct(row));
 });
@@ -352,12 +355,16 @@ router.get('/attention', async (_req, res) => {
   const [noShipment, noRelay, cancelStuck, disputes, manualUnbilled] = await Promise.all([
     // Paid, not cancelled, and no courier booked. `has_address` matters: an order with no address
     // can NEVER be booked, so the UI must explain that rather than offer a retry that always fails.
+    // A MANUAL store's order sitting unbooked because nobody there has tapped Accept yet is NOT a
+    // failure — that's the deliberate deferred-booking flow (see finalizePaidOrder) — so it's
+    // excluded here; if booking itself then fails after acceptance, it reappears normally.
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error, o.carrier,
                    (o.address_id IS NOT NULL) AS has_address
               FROM orders o
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
                AND o.delhivery_waybill IS NULL
-             ORDER BY o.created_at DESC LIMIT 100`),
+               AND NOT (o.store_code IS NOT NULL AND NOT (o.store_code = ANY($1::text[])) AND o.store_accepted_at IS NULL)
+             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores]),
     // Paid, not cancelled, relayed by us, and the kitchen never got the ticket.
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at,
                    p.last_error, COALESCE(p.attempts, 0) AS attempts
@@ -407,7 +414,7 @@ router.get('/attention', async (_req, res) => {
  * it; once either has, it cannot, and the UI says so rather than showing a stale one.
  */
 router.get('/stores', async (_req, res) => {
-  const [staff, counts] = await Promise.all([
+  const [staff, counts, products] = await Promise.all([
     getAll('SELECT * FROM store_users ORDER BY store_code, username'),
     getAll(`SELECT store_code,
                    COUNT(*) FILTER (WHERE payment_status = 'PAID' AND order_status <> 'CANCELLED') AS paid,
@@ -415,10 +422,16 @@ router.get('/stores', async (_req, res) => {
                    COUNT(*) FILTER (WHERE payment_status = 'PAID' AND order_status <> 'CANCELLED' AND (store_pos_bill_no IS NULL OR store_pos_bill_no = '')) AS unbilled
               FROM orders WHERE created_at >= $1 GROUP BY store_code`,
       [new Date(Date.now() - 30 * 864e5).toISOString()]),
+    // For "does this store even carry it" — same-day-only, city-restricted products (Red Velvet:
+    // Bengaluru only) are a flat no at some stores regardless of storewide availability.
+    getAll('SELECT id, name, same_day_only, restrict_cities FROM products WHERE is_available = TRUE AND same_day_only = TRUE'),
   ]);
   const countBy = new Map(counts.map((c) => [c.store_code, c]));
   res.json({
-    stores: ADC_STORES.map((s) => {
+    // Begur is AUTO — we relay it ourselves and it has no accept/bill step, so there is nothing for
+    // a staff portal to do there. It never appears here; a login for it can't be created either
+    // (see POST /stores/:code/staff below).
+    stores: ADC_STORES.filter((s) => s.posMode === 'MANUAL').map((s) => {
       const c = countBy.get(s.code) || {};
       return {
         code: s.code, name: s.name, city: s.city, state: s.state, pincode: s.pincode,
@@ -426,6 +439,9 @@ router.get('/stores', async (_req, res) => {
         pickupName: s.pickupName,
         portalPath: `/store/${s.code}`,
         last30Days: { paid: Number(c.paid || 0), unaccepted: Number(c.unaccepted || 0), unbilled: Number(c.unbilled || 0) },
+        // Kept in sync with exactly the rule the store's own /menu view and the checkout guard use
+        // (storeProductAvailable in stores.js) — nothing here is computed a second, different way.
+        doesNotCarry: products.filter((p) => !storeProductAvailable(s.code, p)).map((p) => p.name),
         staff: staff.filter((u) => u.store_code === s.code).map((u) => ({
           id: u.id, username: u.username, name: u.name, isActive: !!u.is_active,
           lastLoginAt: u.last_login_at, passwordSetAt: u.password_set_at,
@@ -444,6 +460,7 @@ router.get('/stores', async (_req, res) => {
 router.post('/stores/:code/staff', async (req, res) => {
   const store = ADC_STORES.find((s) => s.code === String(req.params.code).toLowerCase());
   if (!store) throw new ApiError('No such store');
+  if (store.posMode !== 'MANUAL') throw new ApiError('This store is automatic — it has no staff portal to log in to');
   const username = String(req.body?.username || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
   if (!/^[a-z0-9._-]{3,40}$/.test(username)) throw new ApiError('Username: 3–40 characters, letters/numbers/._- only');

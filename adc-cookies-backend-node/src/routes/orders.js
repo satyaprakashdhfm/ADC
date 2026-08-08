@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { zoneStores, nearestStoreToCoords, orderStoresByProximity, storeForAddress } from '../stores.js';
+import { zoneStores, storeForAddress, storeByCode, sameDayEligible } from '../stores.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -83,27 +83,34 @@ async function attemptShipment(orderId, addressArg) {
       return { ok: false, reason: 'intracity_no_coordinates: address has no lat/long, so the same-day carrier cannot be quoted. Add coordinates to the address, then re-book.' };
     } else {
       /*
-       * Nearest store the carrier can ACTUALLY serve.
+       * Book from the store ALREADY ON THE ORDER — never a different one.
        *
-       * Sorting by distance to the customer is right — the rider's journey is what the delivery
-       * costs — but nearest is not the same as serviceable. Measured live: a Kadugodi drop is
-       * serviceable from Begur at 18.69 km yet not from S.G. Palya at 17.59 km. So we quote each in
-       * order and take the first that answers, rather than picking one and hoping.
+       * store_code is decided ONCE, at order creation (storeForAddress), and stays fixed from then
+       * on: for a MANUAL store this is the kitchen that has (or is about to) physically bake the
+       * order, so the rider has to collect from THERE, not from whichever zone store merely turns
+       * out to be Shiprocket-serviceable for this address.
+       *
+       * This used to try every zone store nearest-first and silently move store_code to whichever
+       * one answered (a Kadugodi drop was serviceable from Begur at 18.69 km but not from S.G. Palya
+       * at 17.59 km, for instance). That was tolerable while booking always ran within seconds of
+       * payment, before any human had seen the order — but it became actively dangerous once a
+       * MANUAL store's booking moved to Accept time: by then staff have already committed to making
+       * it, and moving the pickup point after that sends a rider to a kitchen holding nothing while
+       * the real food sits uncollected. So this store is not swapped: it either works or it fails
+       * visibly, and a human (admin, or the store re-registering their Shiprocket pickup) fixes it.
        */
-      const ordered = orderStoresByProximity(stores, address.latitude, address.longitude);
-      const chosen = await pickServiceableStore(ordered, { pin: destPin, lat: address.latitude, lng: address.longitude });
+      const assignedStore = storeByCode(order.store_code);
+      if (!assignedStore) {
+        console.log(`[SHIPMENT] auto | order=${order.order_number} | ✗ store_code "${order.store_code}" is not a known store`);
+        return { ok: false, reason: `intracity_store_missing: order.store_code (${order.store_code}) is not a known store.` };
+      }
+      const chosen = await pickServiceableStore([assignedStore], { pin: destPin, lat: address.latitude, lng: address.longitude });
       if (!chosen) {
         // Same rule as above: no Delhivery for an order sold as same-day. Fails visibly instead.
-        console.log(`[SHIPMENT] auto | order=${order.order_number} | ✗ no verified ADC store can serve ${destPin} — NOT falling back to Delhivery`);
-        return { ok: false, reason: `intracity_unserviceable: no verified store can reach ${destPin} on the same-day carrier. Verify a nearer pickup location in the Shiprocket panel, then re-book.` };
+        console.log(`[SHIPMENT] auto | order=${order.order_number} | ✗ ${assignedStore.name} cannot serve ${destPin} — NOT rerouting to a different store, NOT falling back to Delhivery`);
+        return { ok: false, reason: `intracity_unserviceable: ${assignedStore.name} — the store already holding this order — cannot reach ${destPin} on the same-day carrier. Check its Shiprocket pickup registration, or contact the customer; it will not be silently moved to a different store.` };
       } else {
-      const pickup = chosen.store;
-      // The carrier picked this store, so it is the one actually baking the order — write it over
-      // whatever the address-only guess at order creation said. Done BEFORE the booking call: if
-      // that call fails, the right kitchen is still the one holding the order on its board.
-      if (pickup.code && pickup.code !== order.store_code) {
-        await query('UPDATE orders SET store_code = $1, updated_at = $2 WHERE id = $3', [pickup.code, nowIso(), orderId]).catch(() => {});
-      }
+      const pickup = chosen.store; // always === assignedStore
       console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | store=${pickup.name} | ₹${chosen.rate} | ${chosen.distance} km`);
       const created = await createHyperlocalOrder({
         order, items,
@@ -254,10 +261,37 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
     }
   }
 
-  // Create the Delhivery shipment + label in the BACKGROUND so payment confirmation returns
-  // to the shopper immediately (the carrier round-trip used to block the response ~5s).
-  // A carrier hiccup can neither fail nor delay payment; the Razorpay webhook is a backstop
-  // and the admin can also create the shipment manually from the Delivery tab.
+  /*
+   * Booking the courier is gated on WHO fulfils the order, decided at creation (store_code, set by
+   * storeForAddress — zone/proximity only, no carrier call, so it's known immediately):
+   *
+   *   AUTO (Begur)   — the one outlet we relay to Petpooja ourselves and the only one with no manual
+   *                    accept step. Book the same-day rider right away, exactly as before.
+   *   MANUAL (every  — staff key the order into their OWN Petpooja terminal and hand it to whichever
+   *   other store)     rider Shiprocket sends round; nothing here calls their kitchen a customer. A
+   *                    same-day order booked before a human at that shop has even seen it is a rider
+   *                    promise nobody there agreed to yet. So for these we leave the shipment
+   *                    unbooked — order_tracking gets a row saying so, and the customer's "what's
+   *                    next" copy reads it via order.store.acceptedAt — and POST /store/orders/:id/
+   *                    accept books it the moment a real person there taps Accept.
+   */
+  const assignedStore = storeByCode(order.store_code);
+  if (assignedStore && assignedStore.posMode === 'MANUAL') {
+    await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+      [orderId, 'AWAITING_STORE_ACCEPT', `Waiting for ${assignedStore.name} to accept the order`, ts]);
+  } else {
+    bookShipmentAndRelay(orderId);
+  }
+
+  return { ok: true };
+}
+
+// Create the courier shipment + label, then relay to the POS, both in the BACKGROUND — the caller
+// (payment confirmation, or a store's Accept tap) returns immediately rather than blocking on a
+// carrier round-trip (~5s). A carrier hiccup can neither fail nor delay that response; the Razorpay
+// webhook and the admin's manual "create shipment" are the backstops for the former, and staff
+// retyping the bill number covers the latter.
+export function bookShipmentAndRelay(orderId) {
   autoCreateShipment(orderId)
     .then((ship) => {
       if (ship?.ok && ship.waybill) {
@@ -269,10 +303,9 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
     // Relay to the POS only AFTER the shipment attempt, so the courier fee on the bill is the real
     // one. Deliberately chained rather than run in parallel, and deliberately last: the money is
     // taken and the parcel is booked by this point, so a POS problem must never fail either. It
-    // records itself in petpooja_orders for the admin to retry.
+    // records itself in petpooja_orders for the admin to retry. (No-ops for a MANUAL store — see
+    // storeRelaysToPos — so calling this from the Accept handler for one is harmless.)
     .finally(() => relayOrder(orderId).catch(() => {}));
-
-  return { ok: true };
 }
 
 async function userByEmail(email) {
@@ -331,6 +364,24 @@ router.post('/', async (req, res) => {
   // Scope the address to the caller so an order can never reference another user's address.
   const address = await getOne('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [addressId, user.id]);
   if (!address) { console.log(`[ORDER] create | ✗ address_not_found | addressId=${addressId} user=${user?.id}`); throw new ApiError('Address not found'); }
+
+  /*
+   * A same-day-only product (Red Velvet: 24-hour shelf life) can never ride a multi-day Delhivery
+   * parcel — it would arrive spoiled. This is the ONE place that guarantee actually holds: rejected
+   * here, before payment, an order can never exist in a state where money is taken for something
+   * that cannot honestly be delivered. Checked with the exact same routine booking later uses
+   * (sameDayEligible -> zoneStores), so "accepted here" and "bookable later" cannot disagree.
+   */
+  const restricted = lineItems.filter((li) => li.product?.same_day_only);
+  if (restricted.length) {
+    const destPin = String(address.pincode || '').replace(/\D/g, '');
+    const failing = restricted.filter((li) => !sameDayEligible(destPin, li.product.restrict_cities));
+    if (failing.length) {
+      const names = [...new Set(failing.map((li) => li.productName))].join(', ');
+      console.log(`[ORDER] create | ✗ same_day_only_unreachable | pin=${destPin} | products=${names}`);
+      throw new ApiError(`${names} must be enjoyed within 24 hours, so we only deliver ${failing.length === 1 ? 'it' : 'them'} same-day within our Bengaluru delivery area. This address is outside that range — remove ${failing.length === 1 ? 'it' : 'them'} to continue, or choose an address we can reach same-day.`);
+    }
+  }
 
   const subtotal = lineItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
   let discount = 0, coupon = null;

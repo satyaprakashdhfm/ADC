@@ -67,7 +67,7 @@ const fmtDate = (s: string) => { const d = new Date(s); return isNaN(d.getTime()
 const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text-muted)', fontWeight: 800, borderBottom: '1px solid var(--border-default)' };
 const td: React.CSSProperties = { padding: '12px', fontSize: 'var(--text-sm)', color: 'var(--text-body)', borderBottom: '1px solid var(--border-soft)', verticalAlign: 'middle' };
 
-const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, stockQuantity: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, images: '' };
+const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, stockQuantity: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, images: '', sameDayOnly: false, restrictCities: '' };
 
 // Coupon create/edit form uses string fields (easy inputs); converted to CouponInput on save.
 // `editId` is set when editing an existing coupon (PUT) instead of creating a new one (POST).
@@ -609,13 +609,20 @@ export default function AdminDashboard() {
             <Table head={['Name', 'Category', 'Price', 'Stock', 'Tag', '']}>
               {paginate(list, 'products').map(p => (
                 <tr key={p.id}>
-                  <td style={td}><strong>{p.name}</strong></td>
+                  <td style={td}>
+                    <strong>{p.name}</strong>
+                    {p.sameDayOnly && (
+                      <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>
+                        Same-day only{p.restrictCities ? ` — ${p.restrictCities}` : ''}
+                      </div>
+                    )}
+                  </td>
                   <td style={td}>{p.category}</td>
                   <td style={td}>{money(p.price)}</td>
                   <td style={td}><span style={{ color: p.stockQuantity <= 10 ? 'var(--status-error)' : 'var(--text-body)', fontWeight: p.stockQuantity <= 10 ? 800 : 400 }}>{p.stockQuantity}</span></td>
                   <td style={td}>{p.tag || '—'}</td>
                   <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                    <button onClick={() => setEditing({ id: p.id, data: { name: p.name, category: p.category, description: p.description, price: p.price, stockQuantity: p.stockQuantity, images: p.images, options: p.options, isAvailable: p.isAvailable, menuGroup: p.menuGroup, tag: p.tag, featured: p.featured } })} aria-label="Edit" style={iconBtn}><Pencil size={15} /></button>
+                    <button onClick={() => setEditing({ id: p.id, data: { name: p.name, category: p.category, description: p.description, price: p.price, stockQuantity: p.stockQuantity, images: p.images, options: p.options, isAvailable: p.isAvailable, menuGroup: p.menuGroup, tag: p.tag, featured: p.featured, sameDayOnly: p.sameDayOnly, restrictCities: p.restrictCities || '' } })} aria-label="Edit" style={iconBtn}><Pencil size={15} /></button>
                     <button onClick={() => removeProduct(p.id)} aria-label="Delete" style={{ ...iconBtn, color: 'var(--status-error)' }}><Trash2 size={15} /></button>
                   </td>
                 </tr>
@@ -1610,6 +1617,25 @@ export default function AdminDashboard() {
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={!!editing.data.featured} onChange={e => setEditing({ ...editing, data: { ...editing.data, featured: e.target.checked } })} /> Featured
               </label>
+              <div style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-input)', padding: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer', marginBottom: editing.data.sameDayOnly ? 10 : 0 }}>
+                  <input type="checkbox" checked={!!editing.data.sameDayOnly}
+                    onChange={e => setEditing({ ...editing, data: { ...editing.data, sameDayOnly: e.target.checked } })} />
+                  Perishable — same-day delivery only
+                </label>
+                {editing.data.sameDayOnly && (
+                  <>
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: '0 0 8px', lineHeight: 1.5 }}>
+                      Blocks this product from any order that could ship by multi-day courier — checked at checkout,
+                      not just labelled. Leave the city blank to allow it same-day from any of our stores.
+                    </p>
+                    <Field label="Only deliver same-day within (city, optional)">
+                      <input style={inp} placeholder="e.g. Bengaluru" value={editing.data.restrictCities || ''}
+                        onChange={e => setEditing({ ...editing, data: { ...editing.data, restrictCities: e.target.value } })} />
+                    </Field>
+                  </>
+                )}
+              </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                 <button onClick={saveProduct} disabled={!editing.data.name || !editing.data.price} style={{ ...addBtn, flex: 1, justifyContent: 'center', opacity: (!editing.data.name || !editing.data.price) ? 0.5 : 1 }}><Check size={16} /> Save</button>
                 <button onClick={() => setEditing(null)} style={{ padding: '12px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
@@ -1967,6 +1993,14 @@ function StoreCard({ store, busy, setBusy, onChanged, setErr, setNotice }: {
         )}
       </div>
 
+      {/* Same rule the store's own /menu view and the checkout guard enforce — shown here so admin
+          sees, without opening the store portal, exactly what each shop cannot sell. */}
+      {store.doesNotCarry.length > 0 && (
+        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 14px', padding: '8px 12px', background: 'var(--surface-sunken)', borderRadius: 8 }}>
+          Does not carry (same-day delivery restricted elsewhere): <strong style={{ color: 'var(--text-body)' }}>{store.doesNotCarry.join(', ')}</strong>
+        </p>
+      )}
+
       <Table head={['Username', 'Last signed in', 'Status', '']}>
         {store.staff.map(u => (
           <tr key={u.id} style={{ opacity: busy === u.id ? 0.5 : 1 }}>
@@ -2194,7 +2228,10 @@ function Panel({ title, children, loading, action }: { title: string; children: 
         <h3 style={{ flex: 1, fontSize: 'var(--text-h4)' }}>{title}</h3>
         {action}
       </div>
-      {loading ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div> : <div style={{ overflowX: 'auto' }} className="hide-sb">{children}</div>}
+      {/* minWidth:0 is what actually makes the horizontal scroll work on a phone: without it a wide
+          table stretches this flex/grid child instead of scrolling inside it, and the whole admin
+          page ends up wider than the screen. */}
+      {loading ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div> : <div style={{ overflowX: 'auto', minWidth: 0, maxWidth: '100%' }} className="hide-sb">{children}</div>}
     </div>
   );
 }

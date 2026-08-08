@@ -84,6 +84,21 @@ export async function initSchema() {
     ALTER TABLE products ADD COLUMN IF NOT EXISTS menu_group TEXT;
     ALTER TABLE products ADD COLUMN IF NOT EXISTS tag TEXT;
     ALTER TABLE products ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT FALSE;
+    -- A perishable item (Red Velvet: 24-hour shelf life) cannot survive a multi-day Delhivery
+    -- parcel, so it must never be sold on an order that could route that way. same_day_only forces
+    -- the order-creation guard to require a genuinely same-day-capable destination; restrict_cities
+    -- (comma-separated, e.g. 'Bengaluru') narrows WHICH intracity cities count, since a store's own
+    -- same-day network is not necessarily where a given item is even made — Besant Nagar (Chennai)
+    -- is intracity-capable in general but does not carry Red Velvet. NULL/empty restrict_cities with
+    -- same_day_only=true means "any intracity city is fine, just never outstation".
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS same_day_only BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS restrict_cities TEXT;
+
+    -- One-time: Red Velvet's 24-hour shelf life means it can never go by Delhivery. Guarded by
+    -- "same_day_only = FALSE" so this sets the rule once and never fights an admin who edits it
+    -- afterward via the Products tab — a later boot sees same_day_only already TRUE and skips it.
+    UPDATE products SET same_day_only = TRUE, restrict_cities = 'Bengaluru'
+      WHERE name IN ('Red Velvet Filled Cookie', 'Red Velvet Cookie Tin') AND same_day_only = FALSE;
 
     CREATE TABLE IF NOT EXISTS coupons (
       id SERIAL PRIMARY KEY,
@@ -253,6 +268,11 @@ export async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_spin_draws_device_id ON spin_draws(device_id);
     CREATE INDEX IF NOT EXISTS idx_spin_draws_user_id ON spin_draws(user_id);
+    -- Clearing site data or opening a private window mints a fresh device id, which was enough to
+    -- keep re-spinning until a good prize came up. The origin IP is the one identifier the browser
+    -- can't rewrite, so the cooldown checks it too.
+    ALTER TABLE spin_draws ADD COLUMN IF NOT EXISTS ip TEXT;
+    CREATE INDEX IF NOT EXISTS idx_spin_draws_ip ON spin_draws(ip);
 
     -- Email-subscribe spin claims: a guest who wins subscribes with their email to claim the coupon
     -- (instead of logging in). We email them the code and, once they sign in with that same email,

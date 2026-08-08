@@ -284,10 +284,12 @@ router.post('/spin', couponLimiter, async (req, res) => {
   const deviceId = String(req.body?.deviceId || '').trim();
   if (!deviceId) throw new ApiError('Missing device id.');
   const userId = req.user?.id ?? null; // parseAuth already ran — set if this caller happens to be logged in
+  const ip = req.ip || null;
   const nowIsoStr = nowIso();
 
   // Latest draw for this device or account, regardless of whether its own window has expired —
-  // needed to enforce the cooldown below, not just the in-progress replay.
+  // needed to enforce the cooldown below, not just the in-progress replay. Deliberately NOT keyed
+  // on IP: everyone behind one café/office/CGNAT address would share a single cooldown.
   const existing = await getOne(
     `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2) ORDER BY id DESC LIMIT 1`,
     [deviceId, userId]
@@ -334,8 +336,8 @@ router.post('/spin', couponLimiter, async (req, res) => {
     }
     const drawnCode = ticket && ticket !== NO_REWARD ? ticket : null;
     await client.query(
-      'INSERT INTO spin_draws (device_id, user_id, code, drawn_at, expires_at) VALUES ($1,$2,$3,$4,$5)',
-      [deviceId, userId, drawnCode, nowIsoStr, expiresAt]
+      'INSERT INTO spin_draws (device_id, user_id, code, drawn_at, expires_at, ip) VALUES ($1,$2,$3,$4,$5,$6)',
+      [deviceId, userId, drawnCode, nowIsoStr, expiresAt, ip]
     );
     return drawnCode;
   });

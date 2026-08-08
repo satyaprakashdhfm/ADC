@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Store, LogOut, RefreshCw, Check, Package, Truck, Phone, MapPin, Receipt,
-  AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink,
+  AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink, Volume2,
 } from 'lucide-react';
 import StoreSignIn from './StoreSignIn';
 import {
@@ -148,16 +148,17 @@ function OrderCard({
         </div>
       )}
 
-      {/* Rider / courier. A store cannot fix a failed booking, but being told one failed is the
-          difference between waiting for a rider and asking someone why none is coming. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', fontSize: 14, marginBottom: 14 }}>
+      {/* Rider / courier. Refreshes on its own (see refresh() in the parent) the moment a booking
+          exists — nobody has to remember to tap anything to find out whether a rider is coming. A
+          store cannot fix a failed booking, but being told one failed is the difference between
+          waiting for a rider and asking someone why none is coming. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', fontSize: 14, marginBottom: 8 }}>
         <Truck size={16} style={{ color: 'var(--text-muted, #7b6a58)' }} />
         {order.delivery.carrier ? (
           <>
-            <span style={{ fontWeight: 800 }}>{order.delivery.carrier}</span>
-            <span>{order.delivery.shipmentStatus || 'booked'}</span>
-            {order.delivery.waybill && <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{order.delivery.waybill}</span>}
-            <button onClick={onTrack} style={btn()}><RefreshCw size={14} /> Check rider</button>
+            <span style={{ fontWeight: 800 }}>{order.delivery.carrier} order created</span>
+            {order.delivery.shipmentId && <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted, #7b6a58)' }}>#{order.delivery.shipmentId}</span>}
+            <button onClick={onTrack} style={btn()} title="Refresh now"><RefreshCw size={14} /></button>
             {order.delivery.trackingUrl && (
               <a href={order.delivery.trackingUrl} target="_blank" rel="noreferrer" style={{ ...btn(), textDecoration: 'none' }}>
                 <ExternalLink size={14} /> Track
@@ -171,28 +172,28 @@ function OrderCard({
         )}
       </div>
 
-      {track && (
-        <div style={{ background: 'var(--surface-sunken, #f7f2e9)', borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 14 }}>
-          {track.ok ? (
-            <>
+      {/* Live rider status — the whole point of showing this card is answering "is someone coming".
+          Three states: searching (booked, no rider yet), assigned (name + a tappable phone number),
+          or unreachable (courier API hiccup — the stored waybill/shipment id above still stands). */}
+      {order.delivery.carrier && (
+        <div style={{ background: track?.rider?.name ? '#eef8f0' : 'var(--surface-sunken, #f7f2e9)', border: track?.rider?.name ? '1px solid #bfe3c8' : 'none', borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 14 }}>
+          {!track ? (
+            <span style={{ color: 'var(--text-muted, #7b6a58)' }}>Checking for a rider…</span>
+          ) : track.ok ? (
+            track.rider?.name ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-                <Bike size={16} />
-                <strong>{track.status || 'No status yet'}</strong>
-                {track.courier && <span style={{ color: 'var(--text-muted, #7b6a58)' }}>{track.courier}</span>}
+                <Bike size={18} style={{ color: '#1c7a3d' }} />
+                <span>Rider <strong>{track.rider.name}</strong> is assigned{track.status ? ` — ${track.status}` : ''}</span>
+                {track.rider.phone && <a href={`tel:${track.rider.phone}`} style={{ ...btn('primary'), textDecoration: 'none' }}><Phone size={13} /> {track.rider.phone}</a>}
               </div>
-              {track.rider?.name ? (
-                <p style={{ margin: '8px 0 0' }}>
-                  Rider <strong>{track.rider.name}</strong>
-                  {track.rider.phone && <> · <a href={`tel:${track.rider.phone}`} style={{ color: 'var(--text-link, #1558b0)', fontWeight: 800 }}>{track.rider.phone}</a></>}
-                </p>
-              ) : (
-                <p style={{ margin: '8px 0 0', color: 'var(--text-muted, #7b6a58)' }}>
-                  No rider allocated yet — they are still searching. Keep the order packed and ready.
-                </p>
-              )}
-            </>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', color: 'var(--text-muted, #7b6a58)' }}>
+                <Bike size={16} />
+                <span>{track.status || 'Searching for a rider'} — keep the order packed and ready.</span>
+              </div>
+            )
           ) : (
-            <span style={{ color: 'var(--text-muted, #7b6a58)' }}>Could not reach the courier just now ({track.reason}).</span>
+            <span style={{ color: 'var(--text-muted, #7b6a58)' }}>Could not reach the courier just now ({track.reason}). The booking above still stands — try the refresh button.</span>
           )}
         </div>
       )}
@@ -213,22 +214,26 @@ function OrderCard({
         </div>
       )}
 
-      {/* Exactly one obvious next action. */}
+      {/* Accepting is the one action that matters — it is what starts baking and, for a MANUAL
+          store, what triggers the Shiprocket booking above. "Ready for pickup" affects nothing
+          downstream (the rider comes whether it is tapped or not), so once accepted the real
+          status to show is the live carrier/rider block above; this is just an optional prep-done
+          marker for the store's own bookkeeping, sized down so it doesn't compete with that. */}
       {order.status !== 'CANCELLED' && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           {!order.workflow.acceptedAt && (
             <button disabled={busy} onClick={onAccept} style={{ ...btn('primary', true), flex: '1 1 200px', opacity: busy ? 0.6 : 1 }}>
               <Check size={19} /> Accept this order
             </button>
           )}
           {order.workflow.acceptedAt && !order.workflow.readyAt && (
-            <button disabled={busy} onClick={onReady} style={{ ...btn('primary', true), flex: '1 1 200px', opacity: busy ? 0.6 : 1 }}>
-              <Package size={19} /> Ready for pickup
+            <button disabled={busy} onClick={onReady} style={{ ...btn(), opacity: busy ? 0.6 : 1 }}>
+              <Package size={14} /> Mark packed &amp; ready
             </button>
           )}
           {order.workflow.readyAt && (
             <span style={{ fontSize: 14, color: 'var(--text-muted, #7b6a58)', alignSelf: 'center' }}>
-              Packed and waiting for the rider. The courier closes it off from here.
+              Packed — the courier above closes this out.
             </span>
           )}
         </div>
@@ -251,36 +256,143 @@ export default function StorePortal({ code }: { code: string }) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [err, setErr] = useState('');
   const [alerting, setAlerting] = useState<StoreOrder[]>([]);
+  // After accepting from the alert, a manual-POS store still has to key the order into Petpooja and
+  // type the bill number back — these are the orders waiting for that number.
+  const [billFor, setBillFor] = useState<StoreOrder[]>([]);
+  const [billDrafts, setBillDrafts] = useState<Record<number, string>>({});
+  const [acceptBusy, setAcceptBusy] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
   // Ids we have already announced. A ref, not state: it must not trigger a re-render, and the
   // polling closure has to read the CURRENT value rather than the one captured when it was created.
   const announced = useRef<Set<number> | null>(null);
   const audio = useRef<AudioContext | null>(null);
+  // True when the browser will not let us make a sound yet. Shown on screen, because a shop that
+  // believes it has an audible alarm and does not is worse off than one that knows it is silent.
+  const [soundBlocked, setSoundBlocked] = useState(false);
+  // A RESTORED session (the normal case — a tablet signed in once and left that way) involves no
+  // click at all, so soundBlocked can be true the instant the board first renders with nothing on
+  // screen yet having asked for a tap. A banner further down the page does not help if nobody looks
+  // at the screen before backgrounding the tab — this makes the one required tap impossible to miss,
+  // once, per fresh load. Dismissible either way so it can never trap someone on a browser that
+  // genuinely cannot grant audio (rare, but real).
+  const [soundGateDismissed, setSoundGateDismissed] = useState(false);
 
-  /* A short two-note chime, synthesised rather than loaded — a kitchen tablet may be offline from
-     everything except our own API, and an <audio src> that 404s alerts nobody. Browsers only allow
-     audio after a user gesture, so the context is created on the sign-in click and reused. */
-  const chime = useCallback(() => {
+  /*
+   * The alert tone, synthesised rather than loaded — a kitchen tablet may be offline from
+   * everything except our own API, and an <audio src> that 404s alerts nobody.
+   *
+   * Browsers refuse to run an AudioContext until the page has had a user gesture. Priming it on the
+   * sign-in click alone was not enough and was the bug: a tablet left signed in restores its session
+   * from storage and never clicks anything, so the context was first created at alert time, arrived
+   * `suspended`, and the notes were scheduled against a clock that was not running. Silent, exactly
+   * when it mattered.
+   *
+   * So: ANY tap or key anywhere unlocks it, we re-check the state on every alert, and if it is still
+   * blocked we say so on screen rather than pretending the shop has a working alarm.
+   */
+  const ensureAudio = useCallback(async () => {
     try {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!Ctx) return;
+      if (!Ctx) return null;
       audio.current ??= new Ctx();
       const ctx = audio.current;
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-      [0, 0.18].forEach((offset, n) => {
-        const osc = ctx.createOscillator(); const gain = ctx.createGain();
-        osc.frequency.value = n === 0 ? 880 : 1175;
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime + offset);
-        gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + offset + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + offset + 0.16);
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + offset); osc.stop(ctx.currentTime + offset + 0.18);
-      });
-    } catch { /* audio is a nicety; the banner is the guarantee */ }
+      if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+      setSoundBlocked(ctx.state !== 'running');
+      return ctx.state === 'running' ? ctx : null;
+    } catch { return null; }
   }, []);
 
+  // Capture phase, so a tap anywhere counts even when a child stops propagation.
+  useEffect(() => {
+    const unlock = () => { void ensureAudio(); };
+    const opts = { capture: true } as const;
+    for (const ev of ['pointerdown', 'keydown', 'touchstart'] as const) window.addEventListener(ev, unlock, opts);
+    void ensureAudio();   // may well fail on a restored session; that is what the banner is for
+    return () => { for (const ev of ['pointerdown', 'keydown', 'touchstart'] as const) window.removeEventListener(ev, unlock, opts); };
+  }, [ensureAudio]);
+
+  /*
+   * The alarm RINGS UNTIL SOMEONE ACCEPTS. A single ~1s blip is missed in a kitchen with an oven
+   * running and a mixer going, so bursts repeat on an interval and only stop when staff actually
+   * accept the order in the alert (or the safety cap below trips, so a tablet nobody is standing
+   * at doesn't ring for the rest of the day).
+   */
+  const alarmTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const alarmCap = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alarmNodes = useRef<OscillatorNode[]>([]);
+  const ALARM_CAP_MS = 120_000;
+
+  // Bumped every time an alarm STARTS. A one-off test chime schedules its own stop a moment later —
+  // without this, a real order landing inside that window would start its own alarm and then have it
+  // killed early by the test chime's stale stop, which is silent exactly when it must not be.
+  // stopAlarm() itself does not check this: it always means "silence right now" and is also what an
+  // unmount and a genuine accept rely on.
+  const alarmSession = useRef(0);
+
+  const stopAlarm = useCallback(() => {
+    if (alarmTimer.current) { clearInterval(alarmTimer.current); alarmTimer.current = null; }
+    if (alarmCap.current) { clearTimeout(alarmCap.current); alarmCap.current = null; }
+    for (const osc of alarmNodes.current) { try { osc.stop(); } catch { /* already ended */ } }
+    alarmNodes.current = [];
+  }, []);
+
+  const startAlarm = useCallback(async () => {
+    const ctx = await ensureAudio();
+    const mySession = ++alarmSession.current;
+    stopAlarm();
+    // No audio (blocked, or a browser without WebAudio) — buzz on a loop instead where that exists.
+    // A phone or tablet in an apron pocket is felt even when the room is loud.
+    if (!ctx) {
+      const buzz = () => { try { navigator.vibrate?.([300, 150, 300]); } catch { /* not supported */ } };
+      buzz();
+      alarmTimer.current = setInterval(buzz, 1500);
+      alarmCap.current = setTimeout(stopAlarm, ALARM_CAP_MS);
+      return mySession;
+    }
+    // Three rising pairs per burst (~1.3s), repeated every 1.5s for a continuous alarm.
+    const burst = () => {
+      const start = ctx.currentTime + 0.05;
+      [880, 1175, 880, 1175, 880, 1175].forEach((freq, i) => {
+        const t0 = start + i * 0.22;
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(0.6, t0 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(t0); osc.stop(t0 + 0.22);
+        alarmNodes.current.push(osc);
+        osc.onended = () => { alarmNodes.current = alarmNodes.current.filter(n => n !== osc); };
+      });
+      try { navigator.vibrate?.([120, 60, 120]); } catch { /* not supported */ }
+    };
+    burst();
+    alarmTimer.current = setInterval(burst, 1500);
+    alarmCap.current = setTimeout(stopAlarm, ALARM_CAP_MS);
+    return mySession;
+  }, [ensureAudio, stopAlarm]);
+
+  // Never leave an alarm ringing behind a closed/navigated-away board.
+  useEffect(() => stopAlarm, [stopAlarm]);
+
+  // One burst only — for the "test the sound" / "turn the sound on" buttons, which should confirm
+  // audio works without starting the full until-accepted alarm.
+  const chime = useCallback(async () => {
+    const mySession = await startAlarm();
+    // Only stop if nothing newer has started an alarm since — a real order landing inside this
+    // window must keep ringing, not be silenced by this one-off test/prime chime finishing up.
+    setTimeout(() => { if (alarmSession.current === mySession) stopAlarm(); }, 1500);
+  }, [startAlarm, stopAlarm]);
+
   const signOut = useCallback(() => { clearStoreToken(code); setSession(null); setOrders(null); }, [code]);
+
+  const doTrack = useCallback(async (id: number) => {
+    try {
+      const t = await storeTrack(code, id);
+      setTracks(prev => ({ ...prev, [id]: t }));
+    } catch { /* the card keeps showing our stored status */ }
+  }, [code]);
 
   /* Pull the board. `announce` is false on the very first load: staff opening the portal to a queue
      of waiting orders should see the NEW list, not be alarmed at orders that arrived hours ago. */
@@ -292,15 +404,21 @@ export default function StorePortal({ code }: { code: string }) {
       const ids = new Set(waiting.map(o => o.id));
       if (announce && announced.current) {
         const fresh = waiting.filter(o => !announced.current!.has(o.id));
-        if (fresh.length) { setAlerting(fresh); chime(); }
+        if (fresh.length) { setAlerting(fresh); void startAlarm(); }
       }
       announced.current = ids;
+      // Live carrier/rider status, automatically — nobody should have to remember to tap "Check
+      // rider" to find out whether one has even been booked yet. Every order that has a booking
+      // and is not yet finished gets refreshed on the same cadence the board already polls at.
+      for (const o of r.orders) {
+        if (o.delivery.carrier && o.status !== 'CANCELLED' && o.status !== 'DELIVERED') void doTrack(o.id);
+      }
       setErr('');
     } catch (e: unknown) {
       if (e instanceof StoreAuthError) { signOut(); return; }
       setErr(e instanceof Error ? e.message : 'Could not load orders');
     }
-  }, [code, chime, signOut]);
+  }, [code, startAlarm, signOut, doTrack]);
 
   // Restore an existing session on load — a tablet is signed in once and left that way.
   useEffect(() => {
@@ -339,19 +457,43 @@ export default function StorePortal({ code }: { code: string }) {
     } finally { setBusyId(null); }
   };
 
-  const doTrack = async (id: number) => {
-    try {
-      const t = await storeTrack(code, id);
-      setTracks(prev => ({ ...prev, [id]: t }));
-    } catch { /* the card keeps showing our stored status */ }
-  };
-
   if (booting) return <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><p>Loading…</p></main>;
   // Signing in is the user gesture that lets the browser play sound at all — prime the audio
   // context here or the first new-order chime is silently dropped by the autoplay policy.
   if (!session) return <StoreSignIn code={code} onSignedIn={(s) => { setSession(s); chime(); }} />;
 
   const manual = !session.store.relaysToPos;
+
+  /* Accept straight from the alert — that IS the acknowledgement, so the alarm stops here rather
+     than on a separate "got it". A manual-POS store is then asked for the bill number, which is the
+     only link between the money Razorpay settled and the bill their kitchen printed. */
+  const acceptAlerted = async () => {
+    setAcceptBusy(true); setErr('');
+    const accepted = alerting;
+    try {
+      for (const o of accepted) await storeAcceptOrder(code, o.id);
+      stopAlarm();
+      setAlerting([]);
+      setBillFor(manual ? accepted : []);
+      await refresh(false);
+    } catch (e: unknown) {
+      if (e instanceof StoreAuthError) { signOut(); return; }
+      setErr(e instanceof Error ? e.message : 'Could not accept the order');
+    } finally { setAcceptBusy(false); }
+  };
+
+  const saveBill = async (orderId: number, no: string) => {
+    setAcceptBusy(true); setErr('');
+    try {
+      await storeSetPosBill(code, orderId, no);
+      setBillFor(prev => prev.filter(o => o.id !== orderId));
+      await refresh(false);
+    } catch (e: unknown) {
+      if (e instanceof StoreAuthError) { signOut(); return; }
+      setErr(e instanceof Error ? e.message : 'Could not save the bill number');
+    } finally { setAcceptBusy(false); }
+  };
+
   const list = orders || [];
   const waiting = list.filter(o => !o.workflow.acceptedAt && o.status !== 'CANCELLED');
   const working = list.filter(o => o.workflow.acceptedAt && !o.workflow.readyAt && o.status !== 'CANCELLED');
@@ -391,6 +533,9 @@ export default function StorePortal({ code }: { code: string }) {
             {view === 'orders' ? <><BookOpen size={15} /> Menu</> : <><ClipboardList size={15} /> Orders</>}
           </button>
           <button onClick={() => refresh(false)} style={btn()} title="Refresh"><RefreshCw size={15} /></button>
+          {/* Lets staff confirm the alarm actually works, at the start of a shift, without waiting
+              for a real order to find out that it doesn't. */}
+          <button onClick={() => void chime()} style={btn()} title="Test the new-order sound"><Volume2 size={15} /></button>
           <button onClick={() => setPwOpen(true)} style={btn()} title="Change password"><KeyRound size={15} /></button>
           <button onClick={signOut} style={btn()}><LogOut size={15} /></button>
         </div>
@@ -403,6 +548,18 @@ export default function StorePortal({ code }: { code: string }) {
           </p>
         )}
 
+        {/* A quiet fallback for after the gate below has been dismissed once but sound is still
+            blocked — never leave a counter believing it will be alerted when it will not be. */}
+        {soundBlocked && soundGateDismissed && (
+          <div style={{ ...wrap, background: '#fff8ec', borderColor: '#f0d9ae', padding: 14, marginBottom: 18, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <AlertTriangle size={18} style={{ color: '#9a5a00', flexShrink: 0 }} />
+            <span style={{ fontSize: 15, fontWeight: 700, flex: 1, minWidth: 200 }}>
+              New orders will show on screen but make no sound until you tap once.
+            </span>
+            <button onClick={() => void chime()} style={btn('primary')}>Turn the sound on</button>
+          </div>
+        )}
+
         {view === 'menu' ? (
           <>
             <h2 style={{ fontSize: 20, fontWeight: 900, margin: '0 0 6px' }}>Menu</h2>
@@ -412,13 +569,16 @@ export default function StorePortal({ code }: { code: string }) {
             {menu === null ? <p>Loading…</p> : (
               <div style={{ ...wrap, overflow: 'hidden' }}>
                 {menu.map((m, i) => (
-                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderTop: i ? '1px solid var(--border-soft, #f0ebe1)' : 'none' }}>
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderTop: i ? '1px solid var(--border-soft, #f0ebe1)' : 'none', opacity: m.availableHere ? 1 : 0.55 }}>
                     <div style={{ flex: 1 }}>
                       <strong style={{ fontSize: 15 }}>{m.name}</strong>
                       {m.posItemId && <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-subtle, #a4988a)' }}>POS code {m.posItemId}</div>}
+                      {m.available && !m.availableHere && (
+                        <div style={{ fontSize: 11, color: '#9a5a00', fontWeight: 700, marginTop: 2 }}>Not carried at this store — same-day delivery is restricted elsewhere</div>
+                      )}
                     </div>
                     <span style={{ fontSize: 15, fontWeight: 800 }}>{money(m.price)}</span>
-                    {m.available ? <Chip text="On sale" tone="ok" /> : <Chip text="Off" tone="bad" />}
+                    {!m.available ? <Chip text="Off" tone="bad" /> : m.availableHere ? <Chip text="On sale" tone="ok" /> : <Chip text="Not here" tone="warn" />}
                   </div>
                 ))}
               </div>
@@ -437,25 +597,96 @@ export default function StorePortal({ code }: { code: string }) {
           side of a kitchen, and dismissing it must be deliberate. */}
       {alerting.length > 0 && (
         <div role="alertdialog" aria-label="New order" style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,12,4,.6)', display: 'grid', placeItems: 'center', padding: 20 }}>
-          <div style={{ ...wrap, padding: 26, width: 'min(460px, 100%)', textAlign: 'center' }}>
-            <div style={{ fontSize: 42, marginBottom: 6 }}>🍪</div>
-            <h2 style={{ fontSize: 24, fontWeight: 900, margin: '0 0 6px' }}>
-              {alerting.length === 1 ? 'New order' : `${alerting.length} new orders`}
-            </h2>
-            <p style={{ fontSize: 15, color: 'var(--text-muted, #7b6a58)', margin: '0 0 18px' }}>
-              {alerting.map(o => o.orderNumber).join(', ')}
-            </p>
-            <div style={{ textAlign: 'left', marginBottom: 20 }}>
-              {alerting.flatMap(o => o.items).map((i, n) => (
-                <div key={n} style={{ fontSize: 16, padding: '5px 0' }}><strong>{i.quantity}×</strong> {i.name}</div>
-              ))}
+          <div className="hide-sb" style={{ ...wrap, padding: 24, width: 'min(560px, 100%)', maxHeight: '92vh', overflowY: 'auto' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 40, marginBottom: 4 }}>🍪</div>
+              <h2 style={{ fontSize: 23, fontWeight: 900, margin: '0 0 14px' }}>
+                {alerting.length === 1 ? 'New order' : `${alerting.length} new orders`}
+              </h2>
             </div>
-            <button onClick={() => setAlerting([])} style={{ ...btn('primary', true), width: '100%' }}>Got it</button>
+
+            {/* Everything the kitchen needs to key this in — items, notes, customer and address —
+                so nobody has to dismiss the alert and hunt for the order on the board. */}
+            {alerting.map(o => (
+              <div key={o.id} style={{ textAlign: 'left', border: '1px solid var(--border-default, #e7dccd)', borderRadius: 14, padding: 14, marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                  <strong style={{ fontSize: 16 }}>{o.orderNumber}</strong>
+                  <span style={{ fontSize: 16, fontWeight: 900 }}>{money(o.totalAmount)}</span>
+                </div>
+                {o.items.map((i, n) => (
+                  <div key={n} style={{ fontSize: 15, padding: '4px 0', display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                    <span><strong>{i.quantity}×</strong> {i.name}
+                      {i.specialNotes && <em style={{ display: 'block', fontSize: 12, color: 'var(--text-muted, #7b6a58)' }}>Note: {i.specialNotes}</em>}
+                    </span>
+                    <span style={{ flex: 'none' }}>{money(i.totalPrice)}</span>
+                  </div>
+                ))}
+                {o.customer && (
+                  <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted, #7b6a58)' }}>
+                    {o.customer.name}{o.customer.phone ? ` · ${o.customer.phone}` : ''}
+                  </div>
+                )}
+                {o.address && (
+                  <div style={{ fontSize: 13, color: 'var(--text-muted, #7b6a58)' }}>
+                    {[o.address.line1, o.address.line2, o.address.city, o.address.pincode].filter(Boolean).join(', ')}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <button disabled={acceptBusy} onClick={acceptAlerted} style={{ ...btn('primary', true), width: '100%', opacity: acceptBusy ? 0.6 : 1 }}>
+              <Check size={19} /> {acceptBusy ? 'Accepting…' : alerting.length === 1 ? 'Accept order' : `Accept ${alerting.length} orders`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Straight after accepting: the bill number from their own Petpooja terminal. */}
+      {billFor.length > 0 && (
+        <div role="dialog" aria-label="Bill number" style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,12,4,.6)', display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div className="hide-sb" style={{ ...wrap, padding: 24, width: 'min(460px, 100%)', maxHeight: '92vh', overflowY: 'auto' }}>
+            <h2 style={{ fontSize: 21, fontWeight: 900, margin: '0 0 6px' }}>Accepted — now bill it</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-muted, #7b6a58)', margin: '0 0 16px' }}>
+              Key the order into your Petpooja terminal, then type the bill number here.
+            </p>
+            {billFor.map(o => (
+              <div key={o.id} style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>{o.orderNumber} · {money(o.totalAmount)}</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={billDrafts[o.id] || ''} onChange={e => setBillDrafts(d => ({ ...d, [o.id]: e.target.value }))} placeholder="Bill number"
+                    style={{ flex: 1, minWidth: 0, padding: '11px 13px', borderRadius: 12, border: '1.5px solid var(--border-default, #e7dccd)', fontSize: 15 }} />
+                  <button disabled={!(billDrafts[o.id] || '').trim() || acceptBusy} onClick={() => saveBill(o.id, (billDrafts[o.id] || '').trim())}
+                    style={{ ...btn('primary'), opacity: !(billDrafts[o.id] || '').trim() || acceptBusy ? 0.6 : 1 }}>Save</button>
+                </div>
+              </div>
+            ))}
+            <button onClick={() => setBillFor([])} style={{ ...btn(), width: '100%', marginTop: 4 }}>I&apos;ll do it later</button>
           </div>
         </div>
       )}
 
       {pwOpen && <PasswordModal code={code} onClose={() => setPwOpen(false)} />}
+
+      {/* One mandatory tap before the board is usable, shown only when sound genuinely is not
+          working yet. Skipped while an order alert or bill prompt is already on screen — tapping
+          either of THOSE also satisfies the browser's gesture requirement, so stacking this gate on
+          top of an order someone needs to act on right now would only be in the way. */}
+      {session && soundBlocked && !soundGateDismissed && !alerting.length && !billFor.length && (
+        <div role="dialog" aria-label="Enable order alerts" style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(20,12,4,.75)', display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div style={{ ...wrap, padding: 28, width: 'min(420px, 100%)', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🔔</div>
+            <h2 style={{ fontSize: 21, fontWeight: 900, margin: '0 0 10px' }}>Turn on order alerts</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-muted, #7b6a58)', margin: '0 0 22px', lineHeight: 1.5 }}>
+              Your browser only allows sound after a tap. Tap below once at the start of your shift —
+              every new order then rings until it is accepted, even while this tab sits in the background.
+            </p>
+            <button onClick={() => { void chime(); setSoundGateDismissed(true); }} style={{ ...btn('primary', true), width: '100%', marginBottom: 10 }}>
+              <Volume2 size={19} /> Enable sound
+            </button>
+            <button onClick={() => setSoundGateDismissed(true)} style={{ ...btn(), width: '100%' }}>Continue without sound</button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
