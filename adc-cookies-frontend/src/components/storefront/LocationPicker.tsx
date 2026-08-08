@@ -95,7 +95,7 @@ export function LocationPill({ block = false, compact = false, iconOnly = false 
   if (iconOnly) {
     return (
       <>
-        <button onClick={() => setOpen(true)} title={store ? label : 'Set location'} aria-label={store ? `Delivering to ${label}. Change location` : 'Set delivery location'}
+        <button onClick={() => setOpen(true)} className="nav-round-btn" title={store ? label : 'Set location'} aria-label={store ? `Delivering to ${label}. Change location` : 'Set delivery location'}
           style={{ position: 'relative', width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}>
           <MapPin size={19} />
           {store && <span aria-hidden style={{ position: 'absolute', top: 0, right: 0, width: 9, height: 9, borderRadius: '50%', background: '#3ad06a', border: '2px solid var(--navbar-bg)' }} />}

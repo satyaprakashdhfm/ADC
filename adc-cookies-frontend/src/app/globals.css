@@ -198,7 +198,15 @@ body::before {
      makes rem inputs ~14px, so force real 16px on form fields to stop the zoom-in/out on focus. */
   input, select, textarea { font-size: 16px !important; }
   .floating-dock { right: 14px !important; bottom: 14px !important; gap: 10px !important; }
-  .floating-dock > * { width: 46px !important; height: 46px !important; }
+  /* Target the launchers themselves, not their wrappers: the chatbot sits inside a positioning
+     div (for its speech bubble), so a `> *` rule shrank the wrapper and left the button full size —
+     which is why the mascot looked bigger than the other two on a phone. */
+  .floating-dock > button,
+  .floating-dock > a,
+  .floating-dock > div > button { width: 46px !important; height: 46px !important; }
+  /* Header icons sit bare on the orange band — the ring outlines read as hard white circles on a
+     phone, which they don't on the roomier desktop bar. */
+  .nav-round-btn { border-color: transparent !important; }
   .nav-round-btn { width: 40px !important; height: 40px !important; }
   /* Compact cart bar, bottom-LEFT and only as wide as its content — small & precise, well clear of
      the floating dock on the right (no more stretched full-width bar colliding with it). */

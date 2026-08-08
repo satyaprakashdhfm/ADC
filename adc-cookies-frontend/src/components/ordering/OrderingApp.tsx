@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, ChevronDown, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, PackageCheck } from 'lucide-react';
+import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, ChevronDown, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, PackageCheck } from 'lucide-react';
 import { STORES } from '@/lib/stores';
 import { LocationPill, LocationBanner } from '@/components/storefront/LocationPicker';
 import SiteHeader from '@/components/storefront/SiteHeader';
@@ -931,7 +931,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         {!desktop && <CheckoutStepper current={step} />}
       </div>
 
-      <div style={{ flex: 1, padding: '24px var(--gutter) 28px' }}>
+      {/* Bottom padding clears the sticky CTA, which floats with no panel behind it — without this
+          the last card (bill details / secure-payment note) scrolls under the button. */}
+      <div style={{ flex: 1, padding: '24px var(--gutter) 96px' }}>
         {step === 'review' ? (
           <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {payFailMsg && (
@@ -1331,9 +1333,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             <button onClick={() => user ? handlePlace() : setLoginOpen(true)} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
               {user ? <>Pay ₹{grand} <Lock size={18} /></> : <>Log in to place order <Lock size={18} /></>}
             </button>
-            <div style={{ textAlign: 'center', marginTop: 8, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-              <ShieldCheck size={13} /> 100% secure &amp; encrypted payments
-            </div>
+            {/* The "secure payments" reassurance lives in the payment-method card above, not here:
+                the CTA floats over the page, so a caption under it printed on top of the bill. */}
           </>
         )}
       </div>
