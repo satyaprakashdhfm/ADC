@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Store, LogOut, RefreshCw, Check, Package, Truck, Phone, MapPin, Receipt,
-  AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink,
+  AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink, Volume2,
 } from 'lucide-react';
 import StoreSignIn from './StoreSignIn';
 import {
@@ -257,28 +257,64 @@ export default function StorePortal({ code }: { code: string }) {
   // polling closure has to read the CURRENT value rather than the one captured when it was created.
   const announced = useRef<Set<number> | null>(null);
   const audio = useRef<AudioContext | null>(null);
+  // True when the browser will not let us make a sound yet. Shown on screen, because a shop that
+  // believes it has an audible alarm and does not is worse off than one that knows it is silent.
+  const [soundBlocked, setSoundBlocked] = useState(false);
 
-  /* A short two-note chime, synthesised rather than loaded — a kitchen tablet may be offline from
-     everything except our own API, and an <audio src> that 404s alerts nobody. Browsers only allow
-     audio after a user gesture, so the context is created on the sign-in click and reused. */
-  const chime = useCallback(() => {
+  /*
+   * The alert tone, synthesised rather than loaded — a kitchen tablet may be offline from
+   * everything except our own API, and an <audio src> that 404s alerts nobody.
+   *
+   * Browsers refuse to run an AudioContext until the page has had a user gesture. Priming it on the
+   * sign-in click alone was not enough and was the bug: a tablet left signed in restores its session
+   * from storage and never clicks anything, so the context was first created at alert time, arrived
+   * `suspended`, and the notes were scheduled against a clock that was not running. Silent, exactly
+   * when it mattered.
+   *
+   * So: ANY tap or key anywhere unlocks it, we re-check the state on every alert, and if it is still
+   * blocked we say so on screen rather than pretending the shop has a working alarm.
+   */
+  const ensureAudio = useCallback(async () => {
     try {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!Ctx) return;
+      if (!Ctx) return null;
       audio.current ??= new Ctx();
       const ctx = audio.current;
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-      [0, 0.18].forEach((offset, n) => {
-        const osc = ctx.createOscillator(); const gain = ctx.createGain();
-        osc.frequency.value = n === 0 ? 880 : 1175;
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime + offset);
-        gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + offset + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + offset + 0.16);
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + offset); osc.stop(ctx.currentTime + offset + 0.18);
-      });
-    } catch { /* audio is a nicety; the banner is the guarantee */ }
+      if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+      setSoundBlocked(ctx.state !== 'running');
+      return ctx.state === 'running' ? ctx : null;
+    } catch { return null; }
   }, []);
+
+  // Capture phase, so a tap anywhere counts even when a child stops propagation.
+  useEffect(() => {
+    const unlock = () => { void ensureAudio(); };
+    const opts = { capture: true } as const;
+    for (const ev of ['pointerdown', 'keydown', 'touchstart'] as const) window.addEventListener(ev, unlock, opts);
+    void ensureAudio();   // may well fail on a restored session; that is what the banner is for
+    return () => { for (const ev of ['pointerdown', 'keydown', 'touchstart'] as const) window.removeEventListener(ev, unlock, opts); };
+  }, [ensureAudio]);
+
+  const chime = useCallback(async () => {
+    const ctx = await ensureAudio();
+    // No audio (blocked, or a browser without WebAudio) — buzz instead where that exists. A phone
+    // or tablet in an apron pocket is felt even when the room is loud.
+    if (!ctx) { try { navigator.vibrate?.([250, 120, 250]); } catch { /* not supported */ } return; }
+    // Three rising pairs rather than one, and loud: this has to carry across a kitchen with an oven
+    // running, and a single short blip is easy to miss entirely.
+    const start = ctx.currentTime + 0.05;
+    [880, 1175, 880, 1175, 880, 1175].forEach((freq, i) => {
+      const t0 = start + i * 0.22;
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.6, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t0); osc.stop(t0 + 0.22);
+    });
+    try { navigator.vibrate?.([120, 60, 120]); } catch { /* not supported */ }
+  }, [ensureAudio]);
 
   const signOut = useCallback(() => { clearStoreToken(code); setSession(null); setOrders(null); }, [code]);
 
@@ -391,6 +427,9 @@ export default function StorePortal({ code }: { code: string }) {
             {view === 'orders' ? <><BookOpen size={15} /> Menu</> : <><ClipboardList size={15} /> Orders</>}
           </button>
           <button onClick={() => refresh(false)} style={btn()} title="Refresh"><RefreshCw size={15} /></button>
+          {/* Lets staff confirm the alarm actually works, at the start of a shift, without waiting
+              for a real order to find out that it doesn't. */}
+          <button onClick={() => void chime()} style={btn()} title="Test the new-order sound"><Volume2 size={15} /></button>
           <button onClick={() => setPwOpen(true)} style={btn()} title="Change password"><KeyRound size={15} /></button>
           <button onClick={signOut} style={btn()}><LogOut size={15} /></button>
         </div>
@@ -401,6 +440,19 @@ export default function StorePortal({ code }: { code: string }) {
           <p style={{ ...wrap, background: '#fdecec', borderColor: '#f3c9c6', color: '#a4231d', padding: 14, fontWeight: 700, marginBottom: 18 }}>
             <AlertTriangle size={16} style={{ verticalAlign: -3, marginRight: 8 }} />{err}
           </p>
+        )}
+
+        {/* Never leave a counter believing it will be alerted when it will not be. The browser only
+            lets a page make noise after someone has interacted with it, and a tablet left signed in
+            may go all shift without a single tap. */}
+        {soundBlocked && (
+          <div style={{ ...wrap, background: '#fff8ec', borderColor: '#f0d9ae', padding: 14, marginBottom: 18, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <AlertTriangle size={18} style={{ color: '#9a5a00', flexShrink: 0 }} />
+            <span style={{ fontSize: 15, fontWeight: 700, flex: 1, minWidth: 200 }}>
+              New orders will show on screen but make no sound until you tap once.
+            </span>
+            <button onClick={() => void chime()} style={btn('primary')}>Turn the sound on</button>
+          </div>
         )}
 
         {view === 'menu' ? (
