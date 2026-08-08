@@ -265,6 +265,13 @@ export default function StorePortal({ code }: { code: string }) {
   // True when the browser will not let us make a sound yet. Shown on screen, because a shop that
   // believes it has an audible alarm and does not is worse off than one that knows it is silent.
   const [soundBlocked, setSoundBlocked] = useState(false);
+  // A RESTORED session (the normal case — a tablet signed in once and left that way) involves no
+  // click at all, so soundBlocked can be true the instant the board first renders with nothing on
+  // screen yet having asked for a tap. A banner further down the page does not help if nobody looks
+  // at the screen before backgrounding the tab — this makes the one required tap impossible to miss,
+  // once, per fresh load. Dismissible either way so it can never trap someone on a browser that
+  // genuinely cannot grant audio (rare, but real).
+  const [soundGateDismissed, setSoundGateDismissed] = useState(false);
 
   /*
    * The alert tone, synthesised rather than loaded — a kitchen tablet may be offline from
@@ -530,10 +537,9 @@ export default function StorePortal({ code }: { code: string }) {
           </p>
         )}
 
-        {/* Never leave a counter believing it will be alerted when it will not be. The browser only
-            lets a page make noise after someone has interacted with it, and a tablet left signed in
-            may go all shift without a single tap. */}
-        {soundBlocked && (
+        {/* A quiet fallback for after the gate below has been dismissed once but sound is still
+            blocked — never leave a counter believing it will be alerted when it will not be. */}
+        {soundBlocked && soundGateDismissed && (
           <div style={{ ...wrap, background: '#fff8ec', borderColor: '#f0d9ae', padding: 14, marginBottom: 18, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <AlertTriangle size={18} style={{ color: '#9a5a00', flexShrink: 0 }} />
             <span style={{ fontSize: 15, fontWeight: 700, flex: 1, minWidth: 200 }}>
@@ -646,6 +652,27 @@ export default function StorePortal({ code }: { code: string }) {
       )}
 
       {pwOpen && <PasswordModal code={code} onClose={() => setPwOpen(false)} />}
+
+      {/* One mandatory tap before the board is usable, shown only when sound genuinely is not
+          working yet. Skipped while an order alert or bill prompt is already on screen — tapping
+          either of THOSE also satisfies the browser's gesture requirement, so stacking this gate on
+          top of an order someone needs to act on right now would only be in the way. */}
+      {session && soundBlocked && !soundGateDismissed && !alerting.length && !billFor.length && (
+        <div role="dialog" aria-label="Enable order alerts" style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(20,12,4,.75)', display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div style={{ ...wrap, padding: 28, width: 'min(420px, 100%)', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🔔</div>
+            <h2 style={{ fontSize: 21, fontWeight: 900, margin: '0 0 10px' }}>Turn on order alerts</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-muted, #7b6a58)', margin: '0 0 22px', lineHeight: 1.5 }}>
+              Your browser only allows sound after a tap. Tap below once at the start of your shift —
+              every new order then rings until it is accepted, even while this tab sits in the background.
+            </p>
+            <button onClick={() => { void chime(); setSoundGateDismissed(true); }} style={{ ...btn('primary', true), width: '100%', marginBottom: 10 }}>
+              <Volume2 size={19} /> Enable sound
+            </button>
+            <button onClick={() => setSoundGateDismissed(true)} style={{ ...btn(), width: '100%' }}>Continue without sound</button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
