@@ -253,6 +253,11 @@ export async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_spin_draws_device_id ON spin_draws(device_id);
     CREATE INDEX IF NOT EXISTS idx_spin_draws_user_id ON spin_draws(user_id);
+    -- Clearing site data or opening a private window mints a fresh device id, which was enough to
+    -- keep re-spinning until a good prize came up. The origin IP is the one identifier the browser
+    -- can't rewrite, so the cooldown checks it too.
+    ALTER TABLE spin_draws ADD COLUMN IF NOT EXISTS ip TEXT;
+    CREATE INDEX IF NOT EXISTS idx_spin_draws_ip ON spin_draws(ip);
 
     -- Email-subscribe spin claims: a guest who wins subscribes with their email to claim the coupon
     -- (instead of logging in). We email them the code and, once they sign in with that same email,
