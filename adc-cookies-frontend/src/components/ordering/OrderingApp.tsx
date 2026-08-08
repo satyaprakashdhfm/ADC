@@ -542,14 +542,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   }, [chosen?.pincode]);
 
   const lines = Object.values(cart);
-  // Intra-city (a store-zone pincode → same-day) ships FREE; everywhere else is a flat ₹100.
-  // Both amounts are env-overridable so the separate test deployment can show ₹1; production keeps
-  // the real defaults (0 / 100). NEXT_PUBLIC_* is baked in at build time, so these come from the
-  // Vercel env of whichever branch built this bundle — the test env sets them to 1.
-  const feeIntracity = Number(process.env.NEXT_PUBLIC_DELIVERY_FEE_INTRACITY ?? 0) || 0;
-  const feeOutstation = Number(process.env.NEXT_PUBLIC_DELIVERY_FEE_OUTSTATION ?? 100) || 100;
+  // The real charge, straight from the backend's own quote: Shiprocket's live per-order rate for
+  // intracity (varies by address/distance), or the admin-set flat fee for outstation. This is a
+  // preview for display only — orders.js recomputes and charges the exact same number
+  // authoritatively at order-creation, never trusting whatever the client shows here.
   const intracity = !!(delivCheck && delivCheck.serviceable && delivCheck.intracity);
-  const delivery = total > 0 ? (intracity ? feeIntracity : feeOutstation) : 0;
+  const delivery = total > 0 ? (delivCheck?.deliveryFee ?? (intracity ? 0 : 100)) : 0;
   const gstIncl = total > 0 ? Math.round(total - total / 1.05) : 0;  // 5% GST is already inside the prices
   const giftFee = gift ? GIFT_FEE : 0;
   const grand = total + delivery + giftFee - discount;               // GST included in `total`, not added on top
@@ -1088,7 +1086,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                           : deliverBy
                             ? <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Arrives {fmtDay(deliverBy)}{delivCheck.tat != null ? ` · in ${delivCheck.tat} day${delivCheck.tat !== 1 ? 's' : ''}` : ''}</div>
                             : <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)' }}>Delivery available{delivCheck.embargo ? ' — minor delays possible' : ''}</div>}
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.intracity && delivCheck.store ? `Ordering from ${delivCheck.store} · Pincode ${chosen?.pincode}` : `Express delivery (all India) · Pincode ${chosen?.pincode}`}</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.intracity && delivCheck.store ? `${delivCheck.etaLabel || 'Same-day'} from ${delivCheck.store} · Pincode ${chosen?.pincode}` : `Express delivery (all India) · Pincode ${chosen?.pincode}`}</div>
                       </div>
                     </div>
                   ) : delivCheck.reason === 'same_day_unavailable' ? (

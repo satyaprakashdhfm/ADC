@@ -337,6 +337,9 @@ export interface DeliveryCheck {
   store?: string;               // nearest store name (intracity)
   city?: string;
   sameDay?: boolean;
+  deliveryFee?: number;         // the REAL charge: Shiprocket's live quote (intracity) or the admin-set flat outstation fee
+  etaHours?: number;            // intracity only — real ETA from the carrier quote
+  etaLabel?: string;            // e.g. "within ~1 hour" — same-day intracity promise
   maintenanceMessage?: string;  // shown when same-day is unavailable and checkout is blocked
 }
 
@@ -377,7 +380,7 @@ export interface AdminAnalytics {
   topProducts: { name: string; qty: number; revenue: number }[];
 }
 
-interface SiteSettings { promoProductId: number | null; headerOffer: string | null; stallInfo: string | null; }
+interface SiteSettings { promoProductId: number | null; headerOffer: string | null; stallInfo: string | null; deliveryFeeOutstation: number; }
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
 export async function adminGetSettings(): Promise<SiteSettings> { return request('/admin/settings'); }
 export async function adminSetPromoProduct(promoProductId: number | null): Promise<SiteSettings> {
@@ -390,6 +393,26 @@ export async function adminSetHeaderOffer(headerOffer: string | null): Promise<S
 // Free-text "today's stall / visit us" note shown as a homepage card. null/empty hides the card.
 export async function adminSetStallInfo(stallInfo: string | null): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ stallInfo }) });
+}
+// Flat fee customers pay for outstation (Delhivery) delivery. Intracity is never set here — it's
+// Shiprocket's own live per-order quote, charged exactly as quoted (see orders.js).
+export async function adminSetDeliveryFeeOutstation(deliveryFeeOutstation: number): Promise<SiteSettings> {
+  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ deliveryFeeOutstation }) });
+}
+
+/* ---- Store online/offline, and per-store product availability ---- */
+export interface AdminStoreStatus { code: string; name: string; city: string; posMode: 'AUTO' | 'MANUAL'; isActive: boolean; }
+export async function adminGetStoreStatus(): Promise<{ stores: AdminStoreStatus[] }> { return request('/admin/store-status'); }
+export async function adminToggleStoreStatus(code: string): Promise<{ ok: boolean; code: string; isActive: boolean }> {
+  return request(`/admin/store-status/${code}/toggle`, { method: 'PATCH' });
+}
+export interface AdminStoreProduct { id: number; name: string; available: boolean; isOverride: boolean; automaticallyAvailable: boolean; }
+export async function adminGetStoreProducts(code: string): Promise<{ products: AdminStoreProduct[] }> {
+  return request(`/admin/store-products/${code}`);
+}
+// available: true/false sets an explicit override; null clears it, reverting to the automatic rule.
+export async function adminSetStoreProductOverride(code: string, productId: number, available: boolean | null): Promise<{ ok: boolean }> {
+  return request(`/admin/store-products/${code}/${productId}`, { method: 'PUT', body: JSON.stringify({ available }) });
 }
 // Public: the current header-banner offer text (or null if the admin hasn't set one).
 export async function getAnnouncement(): Promise<{ text: string | null }> { return request('/products/announcement'); }

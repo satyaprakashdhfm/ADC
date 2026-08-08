@@ -27,6 +27,8 @@
  *   'MANUAL' — the staff at that store key the order into their own Petpooja terminal and print the
  *              bill there. Our job is to show them everything they need to do that accurately.
  */
+import { getOne } from './db.js';
+
 export const ADC_STORES = [
   { code: 'begur', posMode: 'AUTO', name: 'A Dough Cookie — Begur (Warehouse)', contact: '9381502998', address_line_1: '167/3, First floor, Chickbegur Village, Singasandra Post, Manipal County Rd', city: 'Bengaluru', state: 'Karnataka', pincode: 560114, latitude: 12.8845, longitude: 77.6270, pickupName: process.env.SHIPROCKET_PICKUP_BEGUR || null },
   { code: 'jayanagar', posMode: 'MANUAL', name: 'A Dough Cookie — Jayanagar', contact: '9381502998', address_line_1: 'Jain University, 1314, 24th Main Rd, Jayanagar 9th Block', city: 'Bengaluru', state: 'Karnataka', pincode: 560041, latitude: 12.9250, longitude: 77.5938, pickupName: process.env.SHIPROCKET_PICKUP_JAYANAGAR || null },
@@ -51,6 +53,17 @@ export function storeByCode(code) {
 /** True when WE push this store's orders to Petpooja; false when its staff key them in by hand. */
 export function storeRelaysToPos(code) {
   return storeByCode(code)?.posMode === 'AUTO';
+}
+
+/**
+ * Is this store currently taking orders? The one function here that touches the database
+ * (store_status) — kept in this file rather than duplicated across orders.js/delivery.js/admin.js,
+ * which all need the same answer before routing or quoting against a store. No row means active:
+ * every store starts on, and this table only ever records an explicit admin flip.
+ */
+export async function isStoreActive(code) {
+  const row = await getOne('SELECT is_active FROM store_status WHERE store_code = $1', [String(code || '').trim().toLowerCase()]);
+  return row ? !!row.is_active : true;
 }
 
 /**
@@ -83,6 +96,19 @@ export function storeProductAvailable(storeCode, product) {
   if (!store) return false;
   const allowed = String(product.restrict_cities || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
   return !allowed.length || allowed.includes(store.city.toLowerCase());
+}
+
+/**
+ * The same question, but honouring a manual admin override first (see store_product_overrides in
+ * db.js) — an explicit "on" or "off" for this exact store/product always wins over the automatic
+ * same_day_only/restrict_cities rule, since it's what lets an admin handle a one-off case (a
+ * specific store out of an ingredient today) that a city-name rule can't express. `override` is
+ * `true`/`false` when a row exists for this store+product, or `null`/`undefined` when it doesn't —
+ * callers fetch that themselves (stores.js stays DB-free) and pass it straight through.
+ */
+export function resolveProductAvailability(storeCode, product, override) {
+  if (override != null) return !!override;
+  return storeProductAvailable(storeCode, product);
 }
 
 const R_KM = 6371;

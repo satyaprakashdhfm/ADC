@@ -100,6 +100,31 @@ export async function initSchema() {
     UPDATE products SET same_day_only = TRUE, restrict_cities = 'Bengaluru'
       WHERE name IN ('Red Velvet Filled Cookie', 'Red Velvet Cookie Tin') AND same_day_only = FALSE;
 
+    -- A store not currently taking orders (closed for the day, out of stock entirely, whatever the
+    -- reason) — distinct from posMode/staff login state, which is about HOW it fulfils, not WHETHER
+    -- it currently can. Checked at order-creation and by the delivery quote, same idea as
+    -- SHIPROCKET_DISABLED but scoped to one store instead of the whole carrier. No row = active
+    -- (every ADC_STORES entry starts on; this only ever records an explicit admin flip).
+    CREATE TABLE IF NOT EXISTS store_status (
+      store_code TEXT PRIMARY KEY,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at TEXT NOT NULL
+    );
+
+    -- Manual per-store product availability — generalizes same_day_only/restrict_cities (which only
+    -- ever understands "restricted to city X") to any product/store combination an admin wants to
+    -- flip directly, no code change needed: "Jayanagar is out of Red Velvet today", or the reverse,
+    -- turning something ordinarily city-restricted back on for one specific store. No row for a
+    -- store/product pair means "no override" — the automatic same_day_only/restrict_cities rule (or
+    -- plain storewide availability) still decides it.
+    CREATE TABLE IF NOT EXISTS store_product_overrides (
+      store_code TEXT NOT NULL,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      is_available BOOLEAN NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (store_code, product_id)
+    );
+
     CREATE TABLE IF NOT EXISTS coupons (
       id SERIAL PRIMARY KEY,
       code TEXT NOT NULL UNIQUE,

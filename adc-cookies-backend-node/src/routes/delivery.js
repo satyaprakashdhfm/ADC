@@ -7,7 +7,7 @@ import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhiv
 // shopper is shown are the ones the order will actually be dispatched from. Quoting against a single
 // fixed origin is what let checkout advertise a store we then could not collect from.
 import { pickServiceableStore, shiprocketConfigured } from '../shiprocket.js';
-import { nearestStore, zoneStores, orderStoresByProximity } from '../stores.js';
+import { nearestStore, zoneStores, orderStoresByProximity, isStoreActive } from '../stores.js';
 
 const router = Router();
 
@@ -54,10 +54,16 @@ router.get('/check', async (req, res) => {
 
   // Delhivery pan-India quote — used both for out-of-town pincodes and as the fallback for an
   // intracity zone whenever same-day can't be quoted, so a store-city pincode is never hard-blocked.
+  const outstationFee = async () => {
+    const row = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
+    return row?.value != null ? Number(row.value) : 100;
+  };
+
   const delhiveryQuote = async () => {
+    const deliveryFee = await outstationFee();
     if (!delhiveryConfigured()) {
       console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | delhivery=unconfigured → serviceable=true`);
-      return { serviceable: true, reason: 'unconfigured', carrier: 'DELHIVERY', pincode: pin, tat: null, expectedDeliveryDate: null };
+      return { serviceable: true, reason: 'unconfigured', carrier: 'DELHIVERY', pincode: pin, tat: null, expectedDeliveryDate: null, deliveryFee };
     }
     const origin = await getOriginPin();
     const [svc, tat] = await Promise.all([
@@ -71,6 +77,7 @@ router.get('/check', async (req, res) => {
     return {
       serviceable: svc.serviceable, embargo: svc.embargo || false, reason: svc.reason, cod: svc.cod,
       carrier: 'DELHIVERY', pincode: pin, tat: tat.ok ? tat.tat : null, expectedDeliveryDate: tat.ok ? tat.expectedDeliveryDate : null,
+      deliveryFee,
     };
   };
 
@@ -98,6 +105,9 @@ router.get('/check', async (req, res) => {
       return res.json({ serviceable: false, intracity: true, sameDay: false, reason, message, pincode: pin, city: pickup.city });
     };
 
+    if (!(await isStoreActive(pickup.code))) {
+      return unavailable('same_day_unavailable', 'Same-day delivery is paused for this area right now. Please try again shortly.');
+    }
     if (!shiprocketConfigured() || SHIPROCKET_DISABLED) {
       return unavailable('same_day_unavailable', 'Same-day delivery is paused for this area right now. Please try again shortly.');
     }

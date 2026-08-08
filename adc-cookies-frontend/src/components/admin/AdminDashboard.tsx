@@ -14,10 +14,11 @@ import {
   adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
   adminGetPetpoojaMapping, adminCreateProductFromPetpooja, adminGetPetpoojaRelays, adminLinkProductToPetpooja,
   adminGetStores, adminCreateStoreStaff, adminSetStoreStaffPassword, adminToggleStoreStaff, adminDeleteStoreStaff,
+  adminSetDeliveryFeeOutstation, adminGetStoreStatus, adminToggleStoreStatus, adminGetStoreProducts, adminSetStoreProductOverride,
   type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type CouponInput, type AdminMessage,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
   type AttentionReport, type StoreReadinessReport, type PetpoojaMapping, type PetpoojaRelay, type PetpoojaItem,
-  type AdminStoresReport, type AdminStore,
+  type AdminStoresReport, type AdminStore, type AdminStoreStatus, type AdminStoreProduct,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
@@ -114,6 +115,8 @@ export default function AdminDashboard() {
   const [headerOfferSaved, setHeaderOfferSaved] = useState(false);
   const [stallInfo, setStallInfo] = useState('');
   const [stallInfoSaved, setStallInfoSaved] = useState(false);
+  const [deliveryFeeOutstation, setDeliveryFeeOutstation] = useState('100');
+  const [deliveryFeeSaved, setDeliveryFeeSaved] = useState(false);
   const [coupons, setCoupons] = useState<AdminCoupon[] | null>(null);
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [messages, setMessages] = useState<AdminMessage[] | null>(null);
@@ -182,7 +185,7 @@ export default function AdminDashboard() {
   const isAdmin = !!user && user.role === 'ADMIN';
 
   useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
-  useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); setStallInfo(s.stallInfo || ''); }).catch(() => {}); }, [isAdmin]);
+  useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); setStallInfo(s.stallInfo || ''); setDeliveryFeeOutstation(String(s.deliveryFeeOutstation ?? 100)); }).catch(() => {}); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminAnalytics(range.from, range.to).then(setAnalytics).catch(() => {}); }, [isAdmin, range.from, range.to]);
   // Loaded on every admin visit, not lazily per tab: an order that took money but never reached the
   // kitchen or a courier is the one thing that must not wait for someone to click the right tab.
@@ -598,6 +601,30 @@ export default function AdminDashboard() {
                 }}
                 style={addBtn}
               >{stallInfoSaved ? 'Saved ✓' : 'Save'}</button>
+            </div>
+          </Panel>
+          <Panel title="Delivery fee — outstation">
+            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>
+              What a customer pays for outstation (Delhivery) delivery. Same-day intracity is never set here —
+              that&apos;s charged exactly what Shiprocket quotes for each address, live at checkout.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>₹</span>
+              <input
+                type="number" min="0" step="1"
+                value={deliveryFeeOutstation}
+                onChange={e => { setDeliveryFeeOutstation(e.target.value); setDeliveryFeeSaved(false); }}
+                style={{ ...inp, width: 120 }}
+              />
+              <button
+                onClick={async () => {
+                  const n = Number(deliveryFeeOutstation);
+                  if (!Number.isFinite(n) || n < 0) { setErr('Enter a valid, non-negative delivery fee.'); return; }
+                  await adminSetDeliveryFeeOutstation(n).catch(err => setErr(String(err.message || err)));
+                  setDeliveryFeeSaved(true);
+                }}
+                style={addBtn}
+              >{deliveryFeeSaved ? 'Saved ✓' : 'Save'}</button>
             </div>
           </Panel>
           {(() => {
@@ -1054,6 +1081,8 @@ export default function AdminDashboard() {
                 it is chased in <em>Needs attention</em>.
               </p>
             </Panel>
+
+            <StoreAvailabilityPanel setErr={setErr} setNotice={setNotice} />
 
             <Panel title="Stores" loading={storeReport === null}
               action={<button onClick={() => adminGetStores().then(setStoreReport).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
@@ -1956,6 +1985,101 @@ function AttentionPanel({ report, busy, onRebook, onRetryPos, onOpen, onRefresh 
         ))}
       </>}
     </div>
+  );
+}
+
+/*
+ * Every store, online or off (including Begur, which has no staff portal so it never appears in the
+ * "Stores" panel below) — and, per store, a flat on/off for each product. This generalizes
+ * same_day_only/restrict_cities (which only ever understands "restricted to city X") to any one-off
+ * case an admin wants to flip directly, no code change: a store fully out of an ingredient today, or
+ * the reverse. An explicit override here always wins over the automatic rule.
+ */
+function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: (s: string) => void; setNotice: (s: string) => void }) {
+  const [stores, setStores] = useState<AdminStoreStatus[] | null>(null);
+  const [openCode, setOpenCode] = useState<string | null>(null);
+  const [products, setProducts] = useState<AdminStoreProduct[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null); // a store code, or "code:productId", currently saving
+
+  const load = () => adminGetStoreStatus().then(r => setStores(r.stores)).catch(() => setStores([]));
+  useEffect(() => { load(); }, []);
+
+  const toggleStore = async (code: string) => {
+    setBusy(code); setErr('');
+    try { const r = await adminToggleStoreStatus(code); setNotice(r.isActive ? 'Store is back online.' : 'Store taken offline — it will stop receiving new orders.'); load(); }
+    catch (e: unknown) { setErr(e instanceof Error ? e.message : 'That did not work'); }
+    finally { setBusy(null); }
+  };
+
+  const toggleProducts = async (code: string) => {
+    if (openCode === code) { setOpenCode(null); return; }
+    setOpenCode(code); setProducts(null);
+    try { setProducts((await adminGetStoreProducts(code)).products); }
+    catch { setProducts([]); }
+  };
+
+  const setOverride = async (code: string, productId: number, available: boolean | null) => {
+    setBusy(`${code}:${productId}`); setErr('');
+    try {
+      await adminSetStoreProductOverride(code, productId, available);
+      setProducts((await adminGetStoreProducts(code)).products);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'That did not work'); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <Panel title="Store &amp; product availability" loading={stores === null} action={<button onClick={load} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.6 }}>
+        Take a whole store offline (it stops receiving new orders) or turn one product on/off for just one store —
+        e.g. Red Velvet already hides outside Bengaluru automatically, but this also lets you turn it off at a
+        single Bengaluru store specifically, for a one-off reason like running out of it for the day.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {stores?.map(s => (
+          <div key={s.code} style={{ ...card, padding: 14, opacity: busy === s.code ? 0.6 : 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>{s.name}</strong>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{s.city}</span>
+              <Badge text={s.isActive ? 'Online' : 'Offline'} ok={s.isActive} />
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={() => toggleProducts(s.code)} style={actionBtn()}>
+                  {openCode === s.code ? 'Hide products' : 'Products'}
+                </button>
+                <button disabled={busy === s.code} onClick={() => toggleStore(s.code)} style={actionBtn(s.isActive)}>
+                  {s.isActive ? <ToggleRight size={13} /> : <ToggleLeft size={13} />} {s.isActive ? 'Take offline' : 'Bring online'}
+                </button>
+              </div>
+            </div>
+            {openCode === s.code && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-soft)' }}>
+                {products === null ? (
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Loading…</span>
+                ) : !products.length ? (
+                  <Empty text="No available products." />
+                ) : (
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {products.map(p => (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0' }}>
+                        <span style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>{p.name}</span>
+                        {p.isOverride
+                          ? <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--brand-secondary)', fontWeight: 800 }}>manual override</span>
+                          : !p.automaticallyAvailable && <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 800 }}>auto-restricted here</span>}
+                        <button disabled={busy === `${s.code}:${p.id}`} onClick={() => setOverride(s.code, p.id, !p.available)} style={actionBtn(!p.available)}>
+                          {p.available ? <ToggleRight size={13} /> : <ToggleLeft size={13} />} {p.available ? 'On' : 'Off'}
+                        </button>
+                        {p.isOverride && (
+                          <button disabled={busy === `${s.code}:${p.id}`} onClick={() => setOverride(s.code, p.id, null)} style={actionBtn()}>Reset</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Panel>
   );
 }
 

@@ -16,7 +16,7 @@ import {
   fetchDocument,
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
-import { ADC_STORES, storeProductAvailable } from '../stores.js';
+import { ADC_STORES, storeProductAvailable, resolveProductAvailability } from '../stores.js';
 import { hashPassword, defaultPasswordFor } from '../storeAuth.js';
 import { cancelShiprocketOrder, trackShiprocket, listPickups, shiprocketConfigured } from '../shiprocket.js';
 import { cancelOrder as petpoojaCancelOrder, relayOrder, unmappedProducts } from '../petpooja.js';
@@ -457,6 +457,86 @@ router.get('/stores', async (_req, res) => {
   });
 });
 
+/*
+ * Every store, online or off — including Begur (AUTO), which the staff-portal /stores endpoint
+ * above deliberately excludes. Distinct concept: this is "is it currently taking new orders", not
+ * "does it have a staff portal". No row in store_status means active — see isStoreActive in
+ * stores.js, which orders.js and delivery.js's checkout quote both already consult.
+ */
+router.get('/store-status', async (_req, res) => {
+  const rows = await getAll('SELECT store_code, is_active FROM store_status');
+  const byCode = new Map(rows.map((r) => [r.store_code, !!r.is_active]));
+  res.json({
+    stores: ADC_STORES.map((s) => ({
+      code: s.code, name: s.name, city: s.city, posMode: s.posMode,
+      isActive: byCode.has(s.code) ? byCode.get(s.code) : true,
+    })),
+  });
+});
+
+router.patch('/store-status/:code/toggle', async (req, res) => {
+  const code = String(req.params.code).trim().toLowerCase();
+  const store = ADC_STORES.find((s) => s.code === code);
+  if (!store) throw new ApiError('No such store');
+  const existing = await getOne('SELECT is_active FROM store_status WHERE store_code = $1', [code]);
+  const next = existing ? !existing.is_active : false; // no row yet = currently active, so toggling means turning it off
+  await query(
+    `INSERT INTO store_status (store_code, is_active, updated_at) VALUES ($1, $2, $3)
+     ON CONFLICT (store_code) DO UPDATE SET is_active = EXCLUDED.is_active, updated_at = EXCLUDED.updated_at`,
+    [code, next, nowIso()]
+  );
+  res.json({ ok: true, code, isActive: next });
+});
+
+/*
+ * Per-store product availability — a manual override generalizing same_day_only/restrict_cities
+ * (which only understands "restricted to city X") to any product/store an admin wants to flip
+ * directly, e.g. "Jayanagar is out of Red Velvet today". Returns EVERY available product for the
+ * given store with its resolved availability and whether that's an explicit override or the
+ * automatic rule, so the admin UI can show one flat on/off list per store.
+ */
+router.get('/store-products/:code', async (req, res) => {
+  const code = String(req.params.code).trim().toLowerCase();
+  const store = ADC_STORES.find((s) => s.code === code);
+  if (!store) throw new ApiError('No such store');
+  const [products, overrides] = await Promise.all([
+    getAll('SELECT id, name, same_day_only, restrict_cities FROM products WHERE is_available = TRUE ORDER BY name'),
+    getAll('SELECT product_id, is_available FROM store_product_overrides WHERE store_code = $1', [code]),
+  ]);
+  const overrideBy = new Map(overrides.map((o) => [o.product_id, o.is_available]));
+  res.json({
+    products: products.map((p) => {
+      const override = overrideBy.has(p.id) ? overrideBy.get(p.id) : null;
+      return {
+        id: p.id, name: p.name,
+        available: resolveProductAvailability(code, p, override),
+        isOverride: override != null,
+        automaticallyAvailable: storeProductAvailable(code, p),
+      };
+    }),
+  });
+});
+
+// body: { available: true | false | null } — null clears the override, reverting to the
+// automatic same_day_only/restrict_cities rule (or plain availability) for this store/product.
+router.put('/store-products/:code/:productId', async (req, res) => {
+  const code = String(req.params.code).trim().toLowerCase();
+  const store = ADC_STORES.find((s) => s.code === code);
+  if (!store) throw new ApiError('No such store');
+  const productId = Number(req.params.productId);
+  const available = req.body?.available;
+  if (available === null) {
+    await query('DELETE FROM store_product_overrides WHERE store_code = $1 AND product_id = $2', [code, productId]);
+  } else {
+    await query(
+      `INSERT INTO store_product_overrides (store_code, product_id, is_available, updated_at) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (store_code, product_id) DO UPDATE SET is_available = EXCLUDED.is_available, updated_at = EXCLUDED.updated_at`,
+      [code, productId, !!available, nowIso()]
+    );
+  }
+  res.json({ ok: true });
+});
+
 router.post('/stores/:code/staff', async (req, res) => {
   const store = ADC_STORES.find((s) => s.code === String(req.params.code).toLowerCase());
   if (!store) throw new ApiError('No such store');
@@ -596,7 +676,13 @@ router.get('/settings', async (_req, res) => {
   const row = await getOne("SELECT value FROM site_settings WHERE key = 'promo_product_id'");
   const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
   const stall = await getOne("SELECT value FROM site_settings WHERE key = 'stall_info'");
-  res.json({ promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null, stallInfo: stall?.value || null });
+  const outstationFee = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
+  res.json({
+    promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null, stallInfo: stall?.value || null,
+    // Intracity is never a flat setting — it's Shiprocket's own live per-order quote (see
+    // orders.js/delivery.js). Only outstation is a single admin-set number.
+    deliveryFeeOutstation: outstationFee?.value != null ? Number(outstationFee.value) : 100,
+  });
 });
 router.put('/settings', async (req, res) => {
   if (req.body?.promoProductId !== undefined) {
@@ -639,10 +725,26 @@ router.put('/settings', async (req, res) => {
       );
     }
   }
+  // A flat, admin-set number the customer actually gets charged for outstation (Delhivery) delivery
+  // — see the matching read in orders.js's order-creation charge and delivery.js's checkout quote,
+  // so a change here takes effect on the very next quote/order with no redeploy.
+  if (req.body?.deliveryFeeOutstation !== undefined) {
+    const n = Number(req.body.deliveryFeeOutstation);
+    if (!Number.isFinite(n) || n < 0) throw new ApiError('Delivery fee must be a non-negative number');
+    await query(
+      `INSERT INTO site_settings (key, value) VALUES ('delivery_fee_outstation', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [String(n)]
+    );
+  }
   const row = await getOne("SELECT value FROM site_settings WHERE key = 'promo_product_id'");
   const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
   const stall = await getOne("SELECT value FROM site_settings WHERE key = 'stall_info'");
-  res.json({ promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null, stallInfo: stall?.value || null });
+  const outstationFee = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
+  res.json({
+    promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null, stallInfo: stall?.value || null,
+    deliveryFeeOutstation: outstationFee?.value != null ? Number(outstationFee.value) : 100,
+  });
 });
 
 /* ---------- Dashboard ---------- */
