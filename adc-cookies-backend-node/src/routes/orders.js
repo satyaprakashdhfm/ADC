@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { zoneStores, nearestStoreToCoords, orderStoresByProximity, storeForAddress } from '../stores.js';
+import { zoneStores, nearestStoreToCoords, orderStoresByProximity, storeForAddress, storeByCode } from '../stores.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -254,10 +254,37 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
     }
   }
 
-  // Create the Delhivery shipment + label in the BACKGROUND so payment confirmation returns
-  // to the shopper immediately (the carrier round-trip used to block the response ~5s).
-  // A carrier hiccup can neither fail nor delay payment; the Razorpay webhook is a backstop
-  // and the admin can also create the shipment manually from the Delivery tab.
+  /*
+   * Booking the courier is gated on WHO fulfils the order, decided at creation (store_code, set by
+   * storeForAddress — zone/proximity only, no carrier call, so it's known immediately):
+   *
+   *   AUTO (Begur)   — the one outlet we relay to Petpooja ourselves and the only one with no manual
+   *                    accept step. Book the same-day rider right away, exactly as before.
+   *   MANUAL (every  — staff key the order into their OWN Petpooja terminal and hand it to whichever
+   *   other store)     rider Shiprocket sends round; nothing here calls their kitchen a customer. A
+   *                    same-day order booked before a human at that shop has even seen it is a rider
+   *                    promise nobody there agreed to yet. So for these we leave the shipment
+   *                    unbooked — order_tracking gets a row saying so, and the customer's "what's
+   *                    next" copy reads it via order.store.acceptedAt — and POST /store/orders/:id/
+   *                    accept books it the moment a real person there taps Accept.
+   */
+  const assignedStore = storeByCode(order.store_code);
+  if (assignedStore && assignedStore.posMode === 'MANUAL') {
+    await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+      [orderId, 'AWAITING_STORE_ACCEPT', `Waiting for ${assignedStore.name} to accept the order`, ts]);
+  } else {
+    bookShipmentAndRelay(orderId);
+  }
+
+  return { ok: true };
+}
+
+// Create the courier shipment + label, then relay to the POS, both in the BACKGROUND — the caller
+// (payment confirmation, or a store's Accept tap) returns immediately rather than blocking on a
+// carrier round-trip (~5s). A carrier hiccup can neither fail nor delay that response; the Razorpay
+// webhook and the admin's manual "create shipment" are the backstops for the former, and staff
+// retyping the bill number covers the latter.
+export function bookShipmentAndRelay(orderId) {
   autoCreateShipment(orderId)
     .then((ship) => {
       if (ship?.ok && ship.waybill) {
@@ -269,10 +296,9 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
     // Relay to the POS only AFTER the shipment attempt, so the courier fee on the bill is the real
     // one. Deliberately chained rather than run in parallel, and deliberately last: the money is
     // taken and the parcel is booked by this point, so a POS problem must never fail either. It
-    // records itself in petpooja_orders for the admin to retry.
+    // records itself in petpooja_orders for the admin to retry. (No-ops for a MANUAL store — see
+    // storeRelaysToPos — so calling this from the Accept handler for one is harmless.)
     .finally(() => relayOrder(orderId).catch(() => {}));
-
-  return { ok: true };
 }
 
 async function userByEmail(email) {
