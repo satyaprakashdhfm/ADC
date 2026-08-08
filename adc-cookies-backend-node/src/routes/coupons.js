@@ -226,10 +226,9 @@ const NO_REWARD = '__NONE__';
 // How long a draw (win or miss) — and separately, a claimed reward — is honoured before it
 // expires. Shared by /spin's device-lock and claim-spin's claim window (see spin_claims in db.js).
 const CLAIM_WINDOW_HOURS = 12;
-// One spin per device/account per day: even after a draw's own 12h window has expired, they must
-// wait the rest of this cooldown (24h from the ORIGINAL draw) before a fresh spin is allowed.
-// Without this, the moment the 12h window lapsed the very next click just drew again immediately.
-const SPIN_COOLDOWN_HOURS = 24;
+// One spin per device/account, period — not a daily reset. Once a draw's own CLAIM_WINDOW_HOURS
+// window lapses, that device/account is done until an admin opens a fresh round for everyone at
+// once (POST /admin/coupons/reset-spins wipes spin_draws). There is no per-user timed cooldown.
 
 // A stable fingerprint of the current odds config — if the admin changes a weight, adds, removes,
 // or deactivates a wheel coupon, this changes too, which tells /spin to reshuffle a fresh batch
@@ -273,11 +272,9 @@ router.get('/spin-cooldown', couponLimiter, async (req, res) => {
     [deviceId, userId]
   );
   if (!existing || existing.expires_at > nowIsoStr) return res.json({ completed: false });
-  const nextSpinAtMs = new Date(existing.drawn_at).getTime() + SPIN_COOLDOWN_HOURS * 3600_000;
-  if (nextSpinAtMs > Date.now()) {
-    return res.json({ completed: true, nextSpinAt: new Date(nextSpinAtMs).toISOString() });
-  }
-  res.json({ completed: false });
+  // Their one spin is done and its window has passed — permanently, until an admin resets
+  // spin_draws for a fresh round. No nextSpinAt: there is no time-based reset to count down to.
+  res.json({ completed: true });
 });
 
 router.post('/spin', couponLimiter, async (req, res) => {
@@ -301,13 +298,9 @@ router.post('/spin', couponLimiter, async (req, res) => {
     if (existing.expires_at > nowIsoStr) {
       return res.json({ code: existing.code, expiresAt: existing.expires_at });
     }
-    // That window is over, but the daily cooldown (from the ORIGINAL draw, not the window's end)
-    // hasn't — tell the client this spin is done and when the next one opens up, rather than
-    // silently allowing another draw the moment the 12h window lapsed.
-    const nextSpinAtMs = new Date(existing.drawn_at).getTime() + SPIN_COOLDOWN_HOURS * 3600_000;
-    if (nextSpinAtMs > Date.now()) {
-      return res.json({ code: null, completed: true, nextSpinAt: new Date(nextSpinAtMs).toISOString() });
-    }
+    // That window is over — this device/account has had its one spin and there is no daily
+    // reset. Done until an admin wipes spin_draws for a fresh round (POST /admin/coupons/reset-spins).
+    return res.json({ code: null, completed: true });
   }
 
   const coupons = await getUsableSpinCoupons();

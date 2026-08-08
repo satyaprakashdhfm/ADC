@@ -7,7 +7,7 @@ import {
   adminDashboard, adminAnalytics, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
   adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
-  adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
+  adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminResetAllSpins, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
   adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
@@ -306,6 +306,19 @@ export default function AdminDashboard() {
     if (!confirm('Delete this coupon? This cannot be undone.')) return;
     await adminDeleteCoupon(id).catch(() => {});
     setCoupons(c => (c || []).filter(x => x.id !== id));
+  };
+  const [resettingSpins, setResettingSpins] = useState(false);
+  const resetAllSpins = async () => {
+    if (!confirm("Reset every customer's spin? It's one spin per customer — this lets everyone play again, effective immediately.")) return;
+    setResettingSpins(true);
+    try {
+      const r = await adminResetAllSpins();
+      alert(`Done — ${r.cleared} spin record(s) cleared. Everyone can spin again.`);
+    } catch {
+      alert('Could not reset spins right now — please try again.');
+    } finally {
+      setResettingSpins(false);
+    }
   };
   const markHandled = async (id: number) => {
     await adminMarkMessageHandled(id).catch(() => {});
@@ -1367,7 +1380,14 @@ export default function AdminDashboard() {
               award, each with its own odds (weight %), usage limit, active window, and terms. ===== */}
           <div style={{ marginTop: 24 }}>
             <Panel title={`Spin Wheel Offers${coupons ? ` (${spinCoupons.length})` : ''}`} loading={coupons === null}
-              action={<button onClick={() => setCouponForm({ ...EMPTY_SPIN_COUPON })} style={addBtn}><Plus size={16} /> New offer</button>}>
+              action={
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button onClick={resetAllSpins} disabled={resettingSpins} style={{ ...iconBtn, width: 'auto', padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 700, fontSize: 'var(--text-xs)', opacity: resettingSpins ? 0.6 : 1 }}>
+                    <RefreshCw size={14} /> {resettingSpins ? 'Resetting…' : 'Reset all spins'}
+                  </button>
+                  <button onClick={() => setCouponForm({ ...EMPTY_SPIN_COUPON })} style={addBtn}><Plus size={16} /> New offer</button>
+                </div>
+              }>
               <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 6px', lineHeight: 1.5 }}>
                 Each offer's <strong>Weight</strong> is its % chance of landing when someone spins. Weights across active offers currently sum to <strong>{totalSpinWeight.toFixed(1)}%</strong> — the remaining <strong>{noRewardChance.toFixed(1)}%</strong> is &quot;Better luck next time&quot;.
               </p>
@@ -1375,7 +1395,7 @@ export default function AdminDashboard() {
                 <strong>How odds are guaranteed:</strong> every 1,000 spins draw from one shuffled batch pre-built to these exact weights (e.g. 5% weight = exactly 50 of the 1,000) — a real ratio per batch, not just an average over time. The batch auto-rebuilds the moment you change a weight here, and again once it runs out.
               </p>
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '0 0 14px', lineHeight: 1.5 }}>
-                <strong>Anti-abuse:</strong> re-spinning (reload, reopen) doesn't draw again — each device/account gets one locked-in result (win or miss) per 12h window, replayed if they retry, so no one can re-roll for a better prize or burn through other customers' tickets.
+                <strong>One spin per customer:</strong> it's a single lifetime spin per device/account, not a daily reset — once their result (win or miss) is drawn, that's it for good. Use <strong>Reset all spins</strong> above to wipe everyone's record at once and open a fresh round (already-won coupons aren't affected).
               </p>
               <Table head={['Wheel label', 'Code', 'Discount', 'Weight', 'Uses', 'Status', '']}>
                 {spinCoupons.map(c => {
