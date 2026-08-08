@@ -848,18 +848,26 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       {head(<ShoppingBag size={18} color="var(--brand-secondary)" />, 'Order summary')}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {lines.map((l, i) => (
-          <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < lines.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
+          <div key={l.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 0', borderBottom: i < lines.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
             {l.img
-              ? <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} title={`View ${l.name}`} style={{ width: 62, height: 62, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none', cursor: 'pointer' }}><Image src={l.img} alt={l.name} width={62} height={62} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
-              : <Thumb size={62} seed={i} />}
+              ? <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} title={`View ${l.name}`} style={{ width: 92, height: 92, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none', cursor: 'pointer' }}><Image src={l.img} alt={l.name} width={92} height={92} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+              : <Thumb size={92} seed={i} />}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} role="link" tabIndex={0} title={`View ${l.name}`} style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}>{l.name}</div>
-              {l.addOns && l.addOns.length > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 600 }}>+ {l.addOns.join(', ')}</div>}
+              <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} role="link" tabIndex={0} title={`View ${l.name}`} style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)', lineHeight: 1.25, cursor: 'pointer' }}>{l.name}</div>
+              {/* The catalog blurb, so the summary reads like the product card rather than a bare
+                  line item — it also fills the column instead of leaving a tall empty gap. */}
+              {(() => {
+                const desc = catalog.find(p => String(p.id) === String(l.id) || p.name === l.name)?.description;
+                return desc ? <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.45, marginTop: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{desc}</div> : null;
+              })()}
+              {l.addOns && l.addOns.length > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 600, marginTop: 3 }}>+ {l.addOns.join(', ')}</div>}
               {l.note && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', fontStyle: 'italic' }}>&ldquo;{l.note}&rdquo;</div>}
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>₹{l.price}</div>
-              {applied && l.id === giftLineId && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--green-success)', fontWeight: 800, marginTop: 2 }}>🎁 Free — your spin reward</div>}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 8 }}>
+                <span style={{ fontSize: 'var(--text-base)', fontWeight: 900, color: 'var(--text-strong)' }}>₹{l.price}</span>
+                <QStepper value={l.qty} onChange={n => setQty(l.id, n, l.name, l.price, l.img)} size="sm" />
+              </div>
+              {applied && l.id === giftLineId && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--green-success)', fontWeight: 800, marginTop: 4 }}>🎁 Free — your spin reward</div>}
             </div>
-            <QStepper value={l.qty} onChange={n => setQty(l.id, n, l.name, l.price, l.img)} size="sm" />
           </div>
         ))}
         {lines.length === 0 && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', padding: '8px 0' }}>Your cart is empty.</div>}
@@ -1276,8 +1284,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         )}
       </div>
 
-      {/* Sticky so "Proceed to Pay" stays reachable while the page scrolls normally under the header. */}
-      <div style={{ position: 'sticky', bottom: 0, zIndex: 20, padding: '14px var(--gutter)', borderTop: '1px solid var(--border-soft)', background: 'var(--surface-card)', flex: 'none', boxShadow: '0 -6px 18px rgba(0,0,0,.06)' }}>
+      {/* Sticky so "Proceed to Pay" stays reachable while the page scrolls normally under the header.
+          No panel behind it — the button floats on the page so it reads as a button, not a white bar
+          pasted across the bottom (which looked especially odd sitting on top of the footer). */}
+      <div style={{ position: 'sticky', bottom: 0, zIndex: 20, padding: '14px var(--gutter) 18px', background: 'transparent', flex: 'none' }}>
         {step === 'review' ? (
           <>
             {hydrated && lines.length > 0 && user && !chosen && (
@@ -1287,11 +1297,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             )}
             {hydrated && !user ? (
               // Guests: prompt login before anything else (the address card also shows a log-in prompt).
-              <button onClick={() => setLoginOpen(true)} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <button onClick={() => setLoginOpen(true)} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: 'var(--shadow-xl)' }}>
                 <Lock size={18} /> Log in to continue
               </button>
             ) : (
-              <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!canProceed} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: canProceed ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: canProceed ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!canProceed} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-pill)', border: 'none', background: canProceed ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: canProceed ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: canProceed ? 'var(--shadow-xl)' : 'var(--shadow-md)' }}>
                 {STALL_MODE ? <>Continue <ArrowRight size={18} /></> : <>Proceed to Pay · ₹{grand} <ArrowRight size={18} /></>}
               </button>
             )}
