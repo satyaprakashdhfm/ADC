@@ -64,6 +64,12 @@ export default function FloatingDock() {
     return () => window.removeEventListener(OPEN_CHAT_EVENT, open);
   }, []);
 
+  // The staff order board is not the storefront: a spin-wheel and a chat mascot floating over a
+  // kitchen's live orders are just things to tap by accident. Scoped to /store, so no page the
+  // public sees is affected. Hooks all run above this line, so the early return cannot change
+  // hook order.
+  if (pathname?.startsWith('/store')) return null;
+
   return (
     <>
       <div className="floating-dock" style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
