@@ -8,6 +8,7 @@ import {
 import { storeRelaysToPos } from '../stores.js';
 import { trackShiprocket, getRiderData, shiprocketConfigured } from '../shiprocket.js';
 import { trackShipment, delhiveryConfigured } from '../delhivery.js';
+import { bookShipmentAndRelay } from './orders.js';
 
 /*
  * The store portal — /store/<code> on the frontend, /api/store here.
@@ -18,9 +19,12 @@ import { trackShipment, delhiveryConfigured } from '../delhivery.js';
  * customers, no products beyond the menu, no takings, no admin actions. Two rules make that hold:
  *
  *   1. Every query is filtered by the store code on the token, never by one from the request.
- *   2. Nothing here can change money, cancel an order, or touch a carrier booking. Those stay in
+ *   2. Nothing here can change money, cancel an order, or REROUTE a carrier booking — that stays in
  *      /admin, because a mis-tap on a shared counter tablet must not be able to call off a rider or
- *      cancel a paid order.
+ *      cancel a paid order. Accepting an order is the one exception that CREATES a booking (see
+ *      bookShipmentAndRelay in orders.js): a manual store's same-day rider is deliberately not
+ *      booked at payment time, only once a real person here confirms the order — Accept is that
+ *      confirmation, not a courier action staff are choosing to take.
  */
 
 const router = Router();
@@ -268,6 +272,10 @@ router.post('/orders/:id/accept', async (req, res) => {
   }
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [order.id, 'PREPARING', `Accepted at ${req.storeUser.store.name} by ${req.storeUser.username}`, ts]);
+  // NOW book the same-day rider — a manual store's order was deliberately left unbooked at payment
+  // time until a real person here confirmed it (see finalizePaidOrder). Idempotent/no-op if this
+  // store happens to be AUTO (Begur never reaches this screen, but nothing breaks if it somehow did).
+  bookShipmentAndRelay(order.id);
   res.json({ ok: true, acceptedAt: ts });
 });
 

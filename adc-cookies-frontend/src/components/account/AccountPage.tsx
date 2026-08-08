@@ -204,7 +204,7 @@ function ShipmentTracker({ order }: { order: Order }) {
 
   return (
     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
-      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} style={{ marginBottom: 12 }} />
+      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ marginBottom: 12 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {order.delhiveryWaybill && (
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>

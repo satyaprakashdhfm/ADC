@@ -352,12 +352,16 @@ router.get('/attention', async (_req, res) => {
   const [noShipment, noRelay, cancelStuck, disputes, manualUnbilled] = await Promise.all([
     // Paid, not cancelled, and no courier booked. `has_address` matters: an order with no address
     // can NEVER be booked, so the UI must explain that rather than offer a retry that always fails.
+    // A MANUAL store's order sitting unbooked because nobody there has tapped Accept yet is NOT a
+    // failure — that's the deliberate deferred-booking flow (see finalizePaidOrder) — so it's
+    // excluded here; if booking itself then fails after acceptance, it reappears normally.
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error, o.carrier,
                    (o.address_id IS NOT NULL) AS has_address
               FROM orders o
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
                AND o.delhivery_waybill IS NULL
-             ORDER BY o.created_at DESC LIMIT 100`),
+               AND NOT (o.store_code IS NOT NULL AND NOT (o.store_code = ANY($1::text[])) AND o.store_accepted_at IS NULL)
+             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores]),
     // Paid, not cancelled, relayed by us, and the kitchen never got the ticket.
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at,
                    p.last_error, COALESCE(p.attempts, 0) AS attempts
@@ -418,7 +422,10 @@ router.get('/stores', async (_req, res) => {
   ]);
   const countBy = new Map(counts.map((c) => [c.store_code, c]));
   res.json({
-    stores: ADC_STORES.map((s) => {
+    // Begur is AUTO — we relay it ourselves and it has no accept/bill step, so there is nothing for
+    // a staff portal to do there. It never appears here; a login for it can't be created either
+    // (see POST /stores/:code/staff below).
+    stores: ADC_STORES.filter((s) => s.posMode === 'MANUAL').map((s) => {
       const c = countBy.get(s.code) || {};
       return {
         code: s.code, name: s.name, city: s.city, state: s.state, pincode: s.pincode,
@@ -444,6 +451,7 @@ router.get('/stores', async (_req, res) => {
 router.post('/stores/:code/staff', async (req, res) => {
   const store = ADC_STORES.find((s) => s.code === String(req.params.code).toLowerCase());
   if (!store) throw new ApiError('No such store');
+  if (store.posMode !== 'MANUAL') throw new ApiError('This store is automatic — it has no staff portal to log in to');
   const username = String(req.body?.username || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
   if (!/^[a-z0-9._-]{3,40}$/.test(username)) throw new ApiError('Username: 3–40 characters, letters/numbers/._- only');
