@@ -165,7 +165,10 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
     let lastY = typeof window !== 'undefined' ? window.scrollY : 0;
     const onScroll = () => {
       const y = window.scrollY;
-      if (y < 90) setHidden(false);            // always show near the top
+      // Reaching the bottom brings it back too: that's where people go looking for the nav again
+      // (footer/checkout CTA), and a header that stayed tucked away there felt broken.
+      const atBottom = window.innerHeight + y >= document.documentElement.scrollHeight - 90;
+      if (y < 90 || atBottom) setHidden(false); // always show near the top, and at the very end
       else if (y > lastY + 6) setHidden(true);  // scrolling down → tuck away
       else if (y < lastY - 6) setHidden(false); // scrolling up → reveal
       lastY = y;

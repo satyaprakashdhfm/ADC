@@ -406,15 +406,12 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             No thanks, maybe later
           </button>
 
-          {/* Terms for only the reward this shopper got. */}
+          {/* Just a link — the full terms are a wall of text in a modal that's already busy, so
+              they open on demand as a plain list instead of being dumped inline. */}
           {wonPrize && (
-            <div style={{ margin: `${desktop ? 12 : 8}px 0 0`, padding: desktop ? '12px 14px' : '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-raised)', border: '1px solid var(--border-default)', textAlign: 'left' }}>
-              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 3 }}>Terms</div>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.4, margin: 0 }}>{wonPrize.terms || valueSummary(wonPrize)}</p>
-              <button onClick={() => setShowTerms(true)} style={{ marginTop: 4, background: 'none', border: 'none', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-2xs)', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>
-                View coupon details
-              </button>
-            </div>
+            <button onClick={() => setShowTerms(true)} style={{ margin: `${desktop ? 10 : 6}px auto 0`, display: 'block', background: 'none', border: 'none', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', textDecoration: 'underline', cursor: 'pointer', padding: 4 }}>
+              Terms &amp; conditions
+            </button>
           )}
 
           {/* Social links */}
@@ -438,10 +435,27 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
               <h3 style={{ flex: 1, fontSize: 'var(--text-base)', fontWeight: 800, color: 'var(--text-strong)', textAlign: 'left' }}>Coupon Terms</h3>
               <button onClick={() => setShowTerms(false)} aria-label="Close" style={{ width: 30, height: 30, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><X size={15} /></button>
             </div>
-            <div style={{ minHeight: 112, textAlign: 'left' }}>
-              <h4 style={{ font: '900 var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>{wonPrize.label}</h4>
-              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--brand-secondary)', margin: '0 0 10px' }}>{valueSummary(wonPrize)}</p>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55, margin: 0 }}>{wonPrize.terms || 'No additional terms.'}</p>
+            {/* One rule per row rather than a paragraph — the admin writes terms as a single
+                sentence-run, which nobody reads. Split on sentence/bullet breaks and list them. */}
+            <div style={{ textAlign: 'left' }}>
+              <h4 style={{ font: '900 var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>{wonPrize.label}</h4>
+              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--brand-secondary)', margin: '0 0 12px' }}>{valueSummary(wonPrize)}</p>
+              <div style={{ borderTop: '1px solid var(--border-default)' }}>
+                {(() => {
+                  const rules = [
+                    wonPrize.minimumOrderAmount ? `Minimum order ₹${wonPrize.minimumOrderAmount}` : null,
+                    wonPrize.discountType === 'PERCENTAGE' && wonPrize.maximumDiscount ? `Maximum discount ₹${wonPrize.maximumDiscount}` : null,
+                    ...String(wonPrize.terms || '').split(/[.;•\n]+/).map(s => s.trim()).filter(Boolean),
+                  ].filter(Boolean) as string[];
+                  if (!rules.length) return <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', padding: '10px 0', margin: 0 }}>No additional terms.</p>;
+                  return rules.map((r, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '9px 0', borderBottom: '1px solid var(--border-soft)' }}>
+                      <span aria-hidden style={{ flex: 'none', width: 5, height: 5, borderRadius: '50%', background: 'var(--brand-secondary)', marginTop: 7 }} />
+                      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.45 }}>{r}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
             </div>
           </div>
         </div>

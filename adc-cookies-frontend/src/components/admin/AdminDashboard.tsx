@@ -2194,7 +2194,10 @@ function Panel({ title, children, loading, action }: { title: string; children: 
         <h3 style={{ flex: 1, fontSize: 'var(--text-h4)' }}>{title}</h3>
         {action}
       </div>
-      {loading ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div> : <div style={{ overflowX: 'auto' }} className="hide-sb">{children}</div>}
+      {/* minWidth:0 is what actually makes the horizontal scroll work on a phone: without it a wide
+          table stretches this flex/grid child instead of scrolling inside it, and the whole admin
+          page ends up wider than the screen. */}
+      {loading ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div> : <div style={{ overflowX: 'auto', minWidth: 0, maxWidth: '100%' }} className="hide-sb">{children}</div>}
     </div>
   );
 }
