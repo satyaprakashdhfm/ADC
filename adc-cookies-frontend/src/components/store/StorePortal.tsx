@@ -311,6 +311,13 @@ export default function StorePortal({ code }: { code: string }) {
   const alarmNodes = useRef<OscillatorNode[]>([]);
   const ALARM_CAP_MS = 120_000;
 
+  // Bumped every time an alarm STARTS. A one-off test chime schedules its own stop a moment later —
+  // without this, a real order landing inside that window would start its own alarm and then have it
+  // killed early by the test chime's stale stop, which is silent exactly when it must not be.
+  // stopAlarm() itself does not check this: it always means "silence right now" and is also what an
+  // unmount and a genuine accept rely on.
+  const alarmSession = useRef(0);
+
   const stopAlarm = useCallback(() => {
     if (alarmTimer.current) { clearInterval(alarmTimer.current); alarmTimer.current = null; }
     if (alarmCap.current) { clearTimeout(alarmCap.current); alarmCap.current = null; }
@@ -320,6 +327,7 @@ export default function StorePortal({ code }: { code: string }) {
 
   const startAlarm = useCallback(async () => {
     const ctx = await ensureAudio();
+    const mySession = ++alarmSession.current;
     stopAlarm();
     // No audio (blocked, or a browser without WebAudio) — buzz on a loop instead where that exists.
     // A phone or tablet in an apron pocket is felt even when the room is loud.
@@ -328,7 +336,7 @@ export default function StorePortal({ code }: { code: string }) {
       buzz();
       alarmTimer.current = setInterval(buzz, 1500);
       alarmCap.current = setTimeout(stopAlarm, ALARM_CAP_MS);
-      return;
+      return mySession;
     }
     // Three rising pairs per burst (~1.3s), repeated every 1.5s for a continuous alarm.
     const burst = () => {
@@ -350,6 +358,7 @@ export default function StorePortal({ code }: { code: string }) {
     burst();
     alarmTimer.current = setInterval(burst, 1500);
     alarmCap.current = setTimeout(stopAlarm, ALARM_CAP_MS);
+    return mySession;
   }, [ensureAudio, stopAlarm]);
 
   // Never leave an alarm ringing behind a closed/navigated-away board.
@@ -358,8 +367,10 @@ export default function StorePortal({ code }: { code: string }) {
   // One burst only — for the "test the sound" / "turn the sound on" buttons, which should confirm
   // audio works without starting the full until-accepted alarm.
   const chime = useCallback(async () => {
-    await startAlarm();
-    setTimeout(stopAlarm, 1500);
+    const mySession = await startAlarm();
+    // Only stop if nothing newer has started an alarm since — a real order landing inside this
+    // window must keep ringing, not be silenced by this one-off test/prime chime finishing up.
+    setTimeout(() => { if (alarmSession.current === mySession) stopAlarm(); }, 1500);
   }, [startAlarm, stopAlarm]);
 
   const signOut = useCallback(() => { clearStoreToken(code); setSession(null); setOrders(null); }, [code]);
