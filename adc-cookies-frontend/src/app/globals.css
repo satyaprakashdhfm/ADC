@@ -214,8 +214,6 @@ body::before {
   /* The Doughie greeting bubble crowds the tight bottom-right on phones — hide it there (the
      mascot itself is still tappable to open the chat). */
   .doughie-bubble { display: none !important; }
-  /* Hero copy needs a soft cream halo to stay readable over the ringed cookies on a narrow screen. */
-  .home-hero-copy h1, .home-hero-copy p { text-shadow: 0 0 14px rgba(255,244,224,.9), 0 1px 3px rgba(255,244,224,.95) !important; }
 }
 @media (max-width:760px) { :root { --hc: 300px; } }
 @media (max-width:480px) { :root { --hc: 240px; } }
