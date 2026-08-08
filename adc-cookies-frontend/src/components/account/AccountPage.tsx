@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { getOrders, getAddresses, addAddress, trackOrderShipment, getSpinStatus, type DelhiveryTrackResult, type Address, type Order, type OrderItem, type SpinClaim } from '@/lib/api';
 import { OrderNextStep } from '@/lib/orderNextStep';
+import LoginModal from '@/components/ordering/LoginModal';
 import {
   ChevronLeft, Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
   Info, LifeBuoy, ChevronRight, LogOut, ShoppingBag, MapPin, Gift,
@@ -443,7 +444,11 @@ export default function AccountPage() {
   const router = useRouter();
   const { user, loading, updateProfile, logout } = useAuth();
 
-  useEffect(() => { if (!loading && !user) router.replace('/'); }, [loading, user, router]);
+  // Arriving here signed out (e.g. tapping "Orders" in the navbar) used to silently bounce back
+  // to the homepage with no explanation. Ask them to log in instead — that's what they came here
+  // to do — and open the modal immediately since seeing past orders was the whole point of the click.
+  const [loginOpen, setLoginOpen] = useState(false);
+  useEffect(() => { if (!loading && !user) setLoginOpen(true); }, [loading, user]);
 
   const [editing, setEditing] = useState(false);
   const [profileErr, setProfileErr] = useState('');
@@ -471,7 +476,28 @@ export default function AccountPage() {
     try { await navigator.clipboard.writeText(code); setCopiedSpin(true); setTimeout(() => setCopiedSpin(false), 1800); } catch { /* ignore */ }
   };
 
-  if (loading || !user) return null;
+  if (loading) return null;
+
+  if (!user) {
+    return (
+      <main className="adc-pattern-page" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 'var(--gutter)' }}>
+        <div style={{ ...card, padding: 32, maxWidth: 420, width: '100%', textAlign: 'center', display: 'grid', gap: 14, justifyItems: 'center' }}>
+          <Image src="/assets/adc-logo.png" height={56} width={95} alt="a dough cookie" style={{ objectFit: 'contain' }} />
+          <h1 style={{ ...sectionTitle, fontSize: 'var(--text-h4)' }}>Log in to see your orders</h1>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0 }}>
+            Sign in to view past orders, track deliveries, and manage your saved addresses.
+          </p>
+          <button onClick={() => setLoginOpen(true)} style={{ marginTop: 4, padding: '11px 22px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
+            Log in
+          </button>
+          <button onClick={() => router.push('/')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', cursor: 'pointer', textDecoration: 'underline' }}>
+            Back to home
+          </button>
+        </div>
+        <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      </main>
+    );
+  }
 
   const startEdit = () => { setProfileErr(''); setName(user.name); setPhone(national10(user.phone)); setEditing(true); };
   const saveProfile = async () => {
