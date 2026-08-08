@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { zoneStores, storeForAddress, storeByCode, sameDayEligible, isStoreActive } from '../stores.js';
+import { zoneStores, storeForAddress, storeByCode, deliveryEligible, isStoreActive } from '../stores.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -367,25 +367,25 @@ router.post('/', async (req, res) => {
   const destPin = String(address.pincode || '').replace(/\D/g, '');
 
   /*
-   * A same-day-only product (Red Velvet: 24-hour shelf life) can never ride a multi-day Delhivery
-   * parcel — it would arrive spoiled. This is the ONE place that guarantee actually holds: rejected
-   * here, before payment, an order can never exist in a state where money is taken for something
-   * that cannot honestly be delivered. Checked with the exact same routine booking later uses
-   * (sameDayEligible -> zoneStores), so "accepted here" and "bookable later" cannot disagree.
+   * A product with either delivery mode switched off (structurally, like Red Velvet's 24h shelf
+   * life, or just an operational pause) can never ride the OTHER mode to reach an address it does
+   * not cover. This is the ONE place that guarantee actually holds: rejected here, before payment,
+   * an order can never exist in a state where money is taken for something that cannot honestly be
+   * delivered. Checked with the exact same routine booking later uses (deliveryEligible ->
+   * zoneStores), so "accepted here" and "bookable later" cannot disagree.
    *
-   * The storefront already hides this product outside its eligible cities (see productAvailableFor
-   * on the frontend), so this only fires on the rare path where someone added it, then switched to
-   * an ineligible address before paying — a plain "not available here" is enough; no need to walk
-   * them through the shelf-life/city reasoning they were never shown to begin with.
+   * The storefront already disables a product the customer's known location can't reach, so this
+   * only fires on the rare path where someone added it, then switched to a bad address before
+   * paying — the admin-supplied reason is shown when there is one; a plain fallback otherwise.
    */
-  const restricted = lineItems.filter((li) => li.product?.same_day_only);
-  if (restricted.length) {
-    const failing = restricted.filter((li) => !sameDayEligible(destPin, li.product.restrict_cities));
-    if (failing.length) {
-      const names = [...new Set(failing.map((li) => li.productName))].join(', ');
-      console.log(`[ORDER] create | ✗ same_day_only_unreachable | pin=${destPin} | products=${names}`);
-      throw new ApiError(`${names} ${failing.length === 1 ? "isn't" : "aren't"} available for delivery to this address — remove ${failing.length === 1 ? 'it' : 'them'} to continue, or choose a different address.`);
-    }
+  const failing = lineItems.filter((li) => li.product && !deliveryEligible(destPin, li.product));
+  if (failing.length) {
+    const reasonFor = (p) => (zoneStores(destPin).length ? p.intracity_unavailable_reason : p.intercity_unavailable_reason)
+      || 'not available for delivery to this address';
+    const lines = [...new Map(failing.map((li) => [li.productName, reasonFor(li.product)])).entries()]
+      .map(([name, reason]) => `${name} — ${reason}`);
+    console.log(`[ORDER] create | ✗ delivery_ineligible | pin=${destPin} | ${lines.join(' | ')}`);
+    throw new ApiError(`${lines.join('. ')}. Remove ${failing.length === 1 ? 'it' : 'them'} to continue, or choose a different address.`);
   }
 
   const subtotal = lineItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);

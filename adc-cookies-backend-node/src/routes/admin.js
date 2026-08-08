@@ -35,12 +35,15 @@ router.post('/products', async (req, res) => {
   const b = req.body || {};
   const ts = nowIso();
   const row = await getOne(
-    `INSERT INTO products (name, category, description, price, stock_quantity, images, options, is_available, menu_group, tag, featured, same_day_only, restrict_cities, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+    `INSERT INTO products (name, category, description, price, stock_quantity, images, options, is_available, menu_group, tag, featured,
+       intracity_available, intracity_unavailable_reason, intercity_available, intercity_unavailable_reason, restrict_cities, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
     [b.name, b.category, b.description ?? null, b.price, b.stockQuantity ?? 0,
      b.images ?? null, b.options ?? null, b.isAvailable !== false,
      b.menuGroup ?? null, b.tag ?? null, !!b.featured,
-     !!b.sameDayOnly, b.restrictCities ?? null, ts, ts]
+     b.intracityAvailable !== false, b.intracityUnavailableReason || null,
+     b.intercityAvailable !== false, b.intercityUnavailableReason || null,
+     b.restrictCities || null, ts, ts]
   );
   res.json(serializeProduct(row));
 });
@@ -52,11 +55,15 @@ router.put('/products/:id', async (req, res) => {
   const row = await getOne(
     `UPDATE products SET name=$1, category=$2, description=$3, price=$4, stock_quantity=$5,
        images=$6, options=$7, is_available=$8, menu_group=$9, tag=$10, featured=$11,
-       same_day_only=$12, restrict_cities=$13, updated_at=$14 WHERE id=$15 RETURNING *`,
+       intracity_available=$12, intracity_unavailable_reason=$13,
+       intercity_available=$14, intercity_unavailable_reason=$15,
+       restrict_cities=$16, updated_at=$17 WHERE id=$18 RETURNING *`,
     [b.name, b.category, b.description ?? null, b.price, b.stockQuantity ?? 0,
      b.images ?? null, b.options ?? null, b.isAvailable !== false,
      b.menuGroup ?? null, b.tag ?? null, !!b.featured,
-     !!b.sameDayOnly, b.restrictCities ?? null, nowIso(), req.params.id]
+     b.intracityAvailable !== false, b.intracityUnavailableReason || null,
+     b.intercityAvailable !== false, b.intercityUnavailableReason || null,
+     b.restrictCities || null, nowIso(), req.params.id]
   );
   res.json(serializeProduct(row));
 });
@@ -422,9 +429,10 @@ router.get('/stores', async (_req, res) => {
                    COUNT(*) FILTER (WHERE payment_status = 'PAID' AND order_status <> 'CANCELLED' AND (store_pos_bill_no IS NULL OR store_pos_bill_no = '')) AS unbilled
               FROM orders WHERE created_at >= $1 GROUP BY store_code`,
       [new Date(Date.now() - 30 * 864e5).toISOString()]),
-    // For "does this store even carry it" — same-day-only, city-restricted products (Red Velvet:
-    // Bengaluru only) are a flat no at some stores regardless of storewide availability.
-    getAll('SELECT id, name, same_day_only, restrict_cities FROM products WHERE is_available = TRUE AND same_day_only = TRUE'),
+    // For "does this store even carry it" — an intracity-disabled or city-restricted product
+    // (Red Velvet: Bengaluru only) is a flat no at some stores regardless of storewide availability.
+    getAll(`SELECT id, name, intracity_available, restrict_cities FROM products
+             WHERE is_available = TRUE AND (intracity_available = FALSE OR restrict_cities IS NOT NULL)`),
   ]);
   const countBy = new Map(counts.map((c) => [c.store_code, c]));
   res.json({
@@ -489,18 +497,18 @@ router.patch('/store-status/:code/toggle', async (req, res) => {
 });
 
 /*
- * Per-store product availability — a manual override generalizing same_day_only/restrict_cities
- * (which only understands "restricted to city X") to any product/store an admin wants to flip
- * directly, e.g. "Jayanagar is out of Red Velvet today". Returns EVERY available product for the
- * given store with its resolved availability and whether that's an explicit override or the
- * automatic rule, so the admin UI can show one flat on/off list per store.
+ * Per-store product availability — a manual override generalizing the intracity_available/
+ * restrict_cities rule (which only understands "restricted to city X") to any product/store an
+ * admin wants to flip directly, e.g. "Jayanagar is out of Red Velvet today". Returns EVERY
+ * available product for the given store with its resolved availability and whether that's an
+ * explicit override or the automatic rule, so the admin UI can show one flat on/off list per store.
  */
 router.get('/store-products/:code', async (req, res) => {
   const code = String(req.params.code).trim().toLowerCase();
   const store = ADC_STORES.find((s) => s.code === code);
   if (!store) throw new ApiError('No such store');
   const [products, overrides] = await Promise.all([
-    getAll('SELECT id, name, same_day_only, restrict_cities FROM products WHERE is_available = TRUE ORDER BY name'),
+    getAll('SELECT id, name, intracity_available, restrict_cities FROM products WHERE is_available = TRUE ORDER BY name'),
     getAll('SELECT product_id, is_available FROM store_product_overrides WHERE store_code = $1', [code]),
   ]);
   const overrideBy = new Map(overrides.map((o) => [o.product_id, o.is_available]));
@@ -518,7 +526,7 @@ router.get('/store-products/:code', async (req, res) => {
 });
 
 // body: { available: true | false | null } — null clears the override, reverting to the
-// automatic same_day_only/restrict_cities rule (or plain availability) for this store/product.
+// automatic intracity_available/restrict_cities rule (or plain availability) for this store/product.
 router.put('/store-products/:code/:productId', async (req, res) => {
   const code = String(req.params.code).trim().toLowerCase();
   const store = ADC_STORES.find((s) => s.code === code);
