@@ -214,22 +214,26 @@ function OrderCard({
         </div>
       )}
 
-      {/* Exactly one obvious next action. */}
+      {/* Accepting is the one action that matters — it is what starts baking and, for a MANUAL
+          store, what triggers the Shiprocket booking above. "Ready for pickup" affects nothing
+          downstream (the rider comes whether it is tapped or not), so once accepted the real
+          status to show is the live carrier/rider block above; this is just an optional prep-done
+          marker for the store's own bookkeeping, sized down so it doesn't compete with that. */}
       {order.status !== 'CANCELLED' && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           {!order.workflow.acceptedAt && (
             <button disabled={busy} onClick={onAccept} style={{ ...btn('primary', true), flex: '1 1 200px', opacity: busy ? 0.6 : 1 }}>
               <Check size={19} /> Accept this order
             </button>
           )}
           {order.workflow.acceptedAt && !order.workflow.readyAt && (
-            <button disabled={busy} onClick={onReady} style={{ ...btn('primary', true), flex: '1 1 200px', opacity: busy ? 0.6 : 1 }}>
-              <Package size={19} /> Ready for pickup
+            <button disabled={busy} onClick={onReady} style={{ ...btn(), opacity: busy ? 0.6 : 1 }}>
+              <Package size={14} /> Mark packed &amp; ready
             </button>
           )}
           {order.workflow.readyAt && (
             <span style={{ fontSize: 14, color: 'var(--text-muted, #7b6a58)', alignSelf: 'center' }}>
-              Packed and waiting for the rider. The courier closes it off from here.
+              Packed — the courier above closes this out.
             </span>
           )}
         </div>
