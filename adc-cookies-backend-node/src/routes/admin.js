@@ -557,6 +557,15 @@ router.delete('/coupons/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// The wheel is one spin per device/account for good (see coupons.js POST /spin) — this is the
+// only way to open a fresh round for everyone at once, short of a redeploy. Deliberately only
+// touches spin_draws (who has already spun): already-issued coupons in spin_claims /
+// spin_email_claims are real discount codes someone may still redeem, so they're left alone.
+router.post('/coupons/reset-spins', async (_req, res) => {
+  const result = await query('DELETE FROM spin_draws');
+  res.json({ ok: true, cleared: result.rowCount });
+});
+
 /* ---------- Users ---------- */
 router.get('/users', async (_req, res) => {
   // Customers only — admin accounts are separated out and never listed here.

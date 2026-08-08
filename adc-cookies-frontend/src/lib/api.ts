@@ -214,19 +214,20 @@ function getDeviceId(): string {
 // Server-authoritative draw from the shuffled ticket pool — guarantees exact odds across every
 // batch of spins. Returns the winning coupon code (or null for "no reward"), and when this draw
 // expires — a repeat call before then just replays the SAME result, it doesn't draw again.
-// One spin per device/account per day: once that draw's own window has passed too, `completed`
-// comes back true with `nextSpinAt` — the next spin isn't drawn until then, even on a fresh call.
+// One spin per device/account, period: once that draw's own window has passed too, `completed`
+// comes back true for good — there is no `nextSpinAt` to wait out. The only reset is an admin
+// wiping every spin at once (see adminResetAllSpins).
 export interface SpinDrawResult {
-  code: string | null; expiresAt?: string; completed?: boolean; nextSpinAt?: string;
+  code: string | null; expiresAt?: string; completed?: boolean;
 }
 export async function spinDraw(): Promise<SpinDrawResult> {
   return request('/coupons/spin', { method: 'POST', body: JSON.stringify({ deviceId: getDeviceId() }) });
 }
 
-// Read-only check for the same daily cooldown — lets the wheel show "come back at X" the moment
-// it opens, without the side effect of actually drawing (see the backend route for why POST
-// /spin alone can't safely double as this check).
-export async function getSpinCooldown(): Promise<{ completed: boolean; nextSpinAt?: string }> {
+// Read-only check for the same one-spin lock — lets the wheel show "already spun" the moment it
+// opens, without the side effect of actually drawing (see the backend route for why POST /spin
+// alone can't safely double as this check).
+export async function getSpinCooldown(): Promise<{ completed: boolean }> {
   return request(`/coupons/spin-cooldown?deviceId=${encodeURIComponent(getDeviceId())}`);
 }
 
@@ -557,6 +558,11 @@ export async function adminToggleCoupon(id: number): Promise<AdminCoupon> {
 }
 export async function adminDeleteCoupon(id: number): Promise<{ ok: boolean }> {
   return request(`/admin/coupons/${id}`, { method: 'DELETE' });
+}
+// Wheel is one spin per device/account for good — this is the only way to open a fresh round for
+// everyone at once. Leaves already-issued coupons (spin_claims/spin_email_claims) untouched.
+export async function adminResetAllSpins(): Promise<{ ok: boolean; cleared: number }> {
+  return request('/admin/coupons/reset-spins', { method: 'POST' });
 }
 
 export async function adminGetUsers(): Promise<AdminUser[]> { return request('/admin/users'); }

@@ -105,7 +105,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const [emailClaimed, setEmailClaimed] = useState<EmailSpinClaim | null>(null);
   // One spin per device/account per day: once null (no active reward/result), check whether
   // they're still waiting out yesterday's cooldown before letting the idle spin button show.
-  const [cooldown, setCooldown] = useState<{ completed: boolean; nextSpinAt?: string } | null>(null);
+  const [cooldown, setCooldown] = useState<{ completed: boolean } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRewardRef = useRef<ActiveReward | null>(null);
   // A local per-second tick while the modal is open, so every countdown in it (win reward AND a
@@ -149,13 +149,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     return () => { cancelled = true; };
   }, [open, activeReward, result]);
 
-  // Once the wait is actually over, drop back to the idle spin button on its own rather than
-  // leaving "Next spin in 0s" stuck on screen.
-  useEffect(() => {
-    if (!cooldown?.completed || !cooldown.nextSpinAt) return;
-    const t = setTimeout(() => setCooldown(null), Math.max(0, new Date(cooldown.nextSpinAt).getTime() - Date.now()));
-    return () => clearTimeout(t);
-  }, [cooldown]);
+
 
   // Load the wheel's real offers as soon as this component exists (FloatingDock mounts it on
   // every page, well before anyone opens the modal) — not gated on `open`. Waiting for `open`
@@ -214,7 +208,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
       // animating a spin that never actually happened.
       if (drawn.completed) {
         setSpinning(false);
-        setCooldown({ completed: true, nextSpinAt: drawn.nextSpinAt });
+        setCooldown({ completed: true });
         return;
       }
       code = drawn.code;
@@ -298,7 +292,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             <Gift size={desktop ? 14 : 13} /> Spin &amp; win
           </div>
           <h2 style={{ font: `900 var(${desktop ? '--text-h3' : '--text-h4'})/1.05 var(--font-display)`, color: 'var(--text-strong)', margin: '0 0 5px', letterSpacing: '-.02em' }}>
-            {emailClaimed ? 'Coupon sent! 📧' : (activeReward || result?.win) ? 'You won! 🎉' : result ? 'So close!' : cooldown?.completed ? 'Offer expired' : 'Spin & win a treat!'}
+            {emailClaimed ? 'Coupon sent! 📧' : (activeReward || result?.win) ? 'You won! 🎉' : result ? 'So close!' : cooldown?.completed ? 'Already spun' : 'Spin & win a treat!'}
           </h2>
           <p style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-muted)', margin: `0 auto ${desktop ? 18 : 10}px`, maxWidth: desktop ? 320 : 290, lineHeight: 1.45 }}>
             {emailClaimed
@@ -308,9 +302,9 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
                 : result
                   ? (result.win
                     ? (guestWinNeedsLogin ? 'Enter your email to claim it — we’ll send the coupon straight to your inbox.' : 'Here’s your exclusive discount — use it at checkout.')
-                    : `No prize this time — treats are always fresh though! Try the wheel again in ${formatRemaining((drawExpiresAtMs ?? 0) - nowMs)}.`)
+                    : 'No prize this time — thanks for playing! It’s one spin per customer, so this wheel is done for now.')
                   : cooldown?.completed
-                    ? `Your last spin's reward has expired. Please wait for your next spin — a fresh start — in ${formatRemaining(new Date(cooldown.nextSpinAt ?? 0).getTime() - nowMs)}.`
+                    ? "It's one spin per customer — you've already had yours. Keep an eye out for our next round!"
                     : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
           </p>
 
@@ -391,7 +385,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             </button>
           ) : cooldown?.completed ? (
             <div style={{ width: '100%', boxSizing: 'border-box', padding: desktop ? '16px' : '13px', borderRadius: 'var(--radius-button)', background: 'var(--surface-raised)', border: '1.5px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--text-subtle)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)' }}>
-              <Clock size={18} /> Next spin in {formatRemaining(new Date(cooldown.nextSpinAt ?? 0).getTime() - nowMs)}
+              <Clock size={18} /> One spin per customer
             </div>
           ) : (
             <button onClick={spin} disabled={spinning || !offersLoaded || checkingReward}
