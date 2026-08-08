@@ -32,7 +32,7 @@ export const NAV_DESKTOP: NavLink[] = [
   { label: 'Partner with us', href: '/franchise' },
   { label: 'About Us', href: '/about' },
   { label: 'Contact', href: '/contact' },
-  { label: 'Orders', href: '/account' },
+  { label: 'Orders', href: '/account#orders' },
 ];
 
 const ctaBtn: React.CSSProperties = {
@@ -230,7 +230,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
                   {/* Location sits to the left of the account icon (per request). */}
                   <LocationPill />
                   {/* Track Order — quick access to the account/orders page for delivery tracking. */}
-                  <button onClick={() => router.push('/account')} aria-label="Track your order" title="Track order" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 46, padding: '0 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}><PackageSearch size={18} /> Track</button>
+                  <button onClick={() => router.push('/account#orders')} aria-label="Track your order" title="Track order" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 46, padding: '0 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}><PackageSearch size={18} /> Track</button>
                   <button onClick={accountClick} className="nav-round-btn" aria-label={user ? 'My account' : 'Log in'} style={{ width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)' }}><User size={20} /></button>
                   <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)' }}>
                     <ShoppingCart size={20} />
@@ -282,7 +282,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
             </a>
 
             <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
-              <button onClick={() => router.push('/account')} className="nav-round-btn" aria-label="Track your order" title="Track order" style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}><PackageSearch size={19} /></button>
+              <button onClick={() => router.push('/account#orders')} className="nav-round-btn" aria-label="Track your order" title="Track order" style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}><PackageSearch size={19} /></button>
               <button onClick={() => router.push('/checkout')} className="nav-round-btn" aria-label={`View cart, ${count} item${count === 1 ? '' : 's'}`} style={{ position: 'relative', width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}>
                 <ShoppingCart size={20} />
                 {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 19, height: 19, padding: '0 5px', borderRadius: 10, background: 'var(--white)', color: 'var(--orange-600)', fontSize: 11, fontWeight: 900, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>}

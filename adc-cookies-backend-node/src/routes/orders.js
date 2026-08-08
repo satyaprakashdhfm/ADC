@@ -371,6 +371,11 @@ router.post('/', async (req, res) => {
    * here, before payment, an order can never exist in a state where money is taken for something
    * that cannot honestly be delivered. Checked with the exact same routine booking later uses
    * (sameDayEligible -> zoneStores), so "accepted here" and "bookable later" cannot disagree.
+   *
+   * The storefront already hides this product outside its eligible cities (see productAvailableFor
+   * on the frontend), so this only fires on the rare path where someone added it, then switched to
+   * an ineligible address before paying — a plain "not available here" is enough; no need to walk
+   * them through the shelf-life/city reasoning they were never shown to begin with.
    */
   const restricted = lineItems.filter((li) => li.product?.same_day_only);
   if (restricted.length) {
@@ -379,7 +384,7 @@ router.post('/', async (req, res) => {
     if (failing.length) {
       const names = [...new Set(failing.map((li) => li.productName))].join(', ');
       console.log(`[ORDER] create | ✗ same_day_only_unreachable | pin=${destPin} | products=${names}`);
-      throw new ApiError(`${names} must be enjoyed within 24 hours, so we only deliver ${failing.length === 1 ? 'it' : 'them'} same-day within our Bengaluru delivery area. This address is outside that range — remove ${failing.length === 1 ? 'it' : 'them'} to continue, or choose an address we can reach same-day.`);
+      throw new ApiError(`${names} ${failing.length === 1 ? "isn't" : "aren't"} available for delivery to this address — remove ${failing.length === 1 ? 'it' : 'them'} to continue, or choose a different address.`);
     }
   }
 

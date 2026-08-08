@@ -319,7 +319,7 @@ function ShipmentTracker({ order }: { order: Order }) {
   );
 }
 
-function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; expanded: boolean; onToggle: () => void; onReorder: () => void }) {
+function OrderCard({ order, onReorder }: { order: Order; onReorder: () => void }) {
   // Cancellation is terminal — if either the order OR the shipment is cancelled/RTO/returned,
   // show CANCELLED, never a stale "Delivered". Keeps the badge, meta line and refund note in sync.
   const cancelled = isCancelledStatus(order.orderStatus) || isCancelledStatus(order.shipmentStatus);
@@ -348,12 +348,11 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>{formatMoney(order.totalAmount)}</div>
-          <button onClick={onToggle} style={{ marginTop: 10, padding: '8px 13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 800, color: 'var(--text-body)', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>{expanded ? 'Hide details' : 'View full details'}</button>
         </div>
       </div>
 
       <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
-        {(expanded ? items : items.slice(0, 2)).map((item) => {
+        {items.map((item) => {
           const options = parseOptions(item.selectedOptions);
           const addOns = optionList(options);
           const message = giftMessage(item, options);
@@ -380,11 +379,9 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
             </div>
           );
         })}
-        {!expanded && items.length > 2 && <div style={{ color: 'var(--text-muted)', fontWeight: 700 }}>+ {items.length - 2} more item{items.length - 2 === 1 ? '' : 's'}</div>}
       </div>
 
-      {expanded && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }} className="account-order-detail-grid">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }} className="account-order-detail-grid">
           <div style={{ padding: 14, borderRadius: 18, background: 'var(--surface-sunken)' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-base)', marginBottom: 9, flexWrap: 'wrap' }}>
               <Truck size={17} /> Delivery details
@@ -430,7 +427,6 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
             )}
           </div>
         </div>
-      )}
 
       <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
         <button onClick={onReorder} style={{ padding: '8px 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer', display: 'flex', gap: 7, alignItems: 'center', fontSize: 'var(--text-sm)' }}><RotateCcw size={14} /> Reorder cookies</button>
@@ -456,7 +452,6 @@ export default function AccountPage() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [orders, setOrders] = useState<Order[] | null>(null);
-  const [expanded, setExpanded] = useState<number | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addingAddr, setAddingAddr] = useState(false);
   const [editingAddr, setEditingAddr] = useState<number | null>(null);
@@ -471,6 +466,16 @@ export default function AccountPage() {
     // Any Spin & Win reward they claimed (still within its validity window) — see it here too.
     getSpinStatus().then(r => setSpinClaim(r.active)).catch(() => setSpinClaim(null));
   }, [user]);
+
+  // The header's "Track" button links straight here (/account#orders) so tapping it lands on an
+  // order's actual status, not just the account page in general. Waits for `orders` to render
+  // (the section is empty/loading beforehand) before scrolling, since the browser's own
+  // hash-scroll fires too early against content that hasn't laid out yet.
+  useEffect(() => {
+    if (orders === null || orders.length === 0) return;
+    if (typeof window === 'undefined' || window.location.hash !== '#orders') return;
+    document.getElementById('orders')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [orders]);
 
   const copySpinCode = async (code: string) => {
     try { await navigator.clipboard.writeText(code); setCopiedSpin(true); setTimeout(() => setCopiedSpin(false), 1800); } catch { /* ignore */ }
@@ -613,7 +618,7 @@ export default function AccountPage() {
           </aside>
 
           <div style={{ display: 'grid', gap: 24 }}>
-            <section>
+            <section id="orders">
               <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 14, marginBottom: 12 }}>
                 <div>
                   <p style={{ fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 6 }}>Order history</p>
@@ -633,7 +638,7 @@ export default function AccountPage() {
                     <button onClick={() => router.push('/order')} style={{ padding: '10px 20px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, cursor: 'pointer' }}>Start an order</button>
                   </div>
                 ) : orders.map(o => (
-                  <OrderCard key={o.id} order={o} expanded={expanded === o.id} onToggle={() => setExpanded(expanded === o.id ? null : o.id)} onReorder={() => router.push('/order')} />
+                  <OrderCard key={o.id} order={o} onReorder={() => router.push('/order')} />
                 ))}
               </div>
             </section>

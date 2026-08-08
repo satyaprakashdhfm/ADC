@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, ChevronDown, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, PackageCheck } from 'lucide-react';
-import { STORES } from '@/lib/stores';
+import { STORES, productAvailableFor } from '@/lib/stores';
+import { useLocation } from '@/context/LocationContext';
 import { LocationPill, LocationBanner } from '@/components/storefront/LocationPicker';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import Footer from '@/components/storefront/Footer';
@@ -450,6 +451,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const desktop = useIsDesktop(920);
   const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, giftLineId, setGiftLineId, clearAll } = useCart();
   const { user } = useAuth();
+  const { store: locationStore } = useLocation();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [couponErr, setCouponErr] = useState('');
   const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
@@ -947,7 +949,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               {(() => {
                 // "Goes great with" — a horizontal upsell of available cookies not already in the
                 // cart (Zomato "complete your meal with" style). Quick-add straight from here.
-                const suggestions = catalog.filter(p => p.isAvailable && p.category === 'COOKIES' && !cart[String(p.id)] && !/sundae/i.test(p.name)).slice(0, 8);
+                // A same-day-only product (e.g. Red Velvet) is filtered against the REAL dispatch
+                // city once an address is chosen (delivCheck.city, the actual zone/pincode match),
+                // falling back to the coarser "nearest store" location guess before that.
+                const upsellCity = delivCheck?.city ? { city: delivCheck.city } : locationStore;
+                const suggestions = catalog.filter(p => p.isAvailable && p.category === 'COOKIES' && !cart[String(p.id)] && !/sundae/i.test(p.name) && productAvailableFor(upsellCity, p)).slice(0, 8);
                 if (suggestions.length === 0) return null;
                 return (
                   <div style={card$}>
@@ -1484,6 +1490,7 @@ export default function OrderingApp() {
   const desktop = useIsDesktop(920);
   const { cart, count, total, setQty } = useCart();
   const { user } = useAuth();
+  const { store: deliveryStore } = useLocation();
 
   const [menu, setMenu] = useState<typeof FALLBACK_MENU>([]);
   const [tins, setTins] = useState<typeof FALLBACK_TINS>([]);
@@ -1494,11 +1501,13 @@ export default function OrderingApp() {
   const [tin, setTin] = useState<typeof FALLBACK_TINS[0] | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
 
-  // Load products from backend — faithful mapping (real images, groups, tags, stable ratings)
+  // Load products from backend — faithful mapping (real images, groups, tags, stable ratings).
+  // Re-runs when the delivery location changes so a same-day-only product (e.g. Red Velvet,
+  // Bengaluru-only) drops off the menu the moment someone's outside its allowed cities.
   useEffect(() => {
     getProducts().then(products => {
       if (!products?.length) { setMenu(FALLBACK_MENU); setTins(FALLBACK_TINS); return; }
-      const cookies = products.filter(p => p.category === 'COOKIES');
+      const cookies = products.filter(p => p.category === 'COOKIES' && productAvailableFor(deliveryStore, p));
       const tinProds = products.filter(p => p.category === 'TINS');
 
       // Deterministic decorative rating/review-count from the product id (stable across renders).
@@ -1528,7 +1537,7 @@ export default function OrderingApp() {
       }
     }).catch(() => { setMenu(FALLBACK_MENU); setTins(FALLBACK_TINS); }) // fallback only if the fetch fails
       .finally(() => setLoading(false));
-  }, []);
+  }, [deliveryStore]);
 
   // Deep-link from the home page: category cards (/order?cat=cookies|tins|corporate) and the
   // home search bar (/order?q=<term>). Category words jump to that tab; any other term filters
