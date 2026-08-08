@@ -148,16 +148,17 @@ function OrderCard({
         </div>
       )}
 
-      {/* Rider / courier. A store cannot fix a failed booking, but being told one failed is the
-          difference between waiting for a rider and asking someone why none is coming. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', fontSize: 14, marginBottom: 14 }}>
+      {/* Rider / courier. Refreshes on its own (see refresh() in the parent) the moment a booking
+          exists — nobody has to remember to tap anything to find out whether a rider is coming. A
+          store cannot fix a failed booking, but being told one failed is the difference between
+          waiting for a rider and asking someone why none is coming. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', fontSize: 14, marginBottom: 8 }}>
         <Truck size={16} style={{ color: 'var(--text-muted, #7b6a58)' }} />
         {order.delivery.carrier ? (
           <>
-            <span style={{ fontWeight: 800 }}>{order.delivery.carrier}</span>
-            <span>{order.delivery.shipmentStatus || 'booked'}</span>
-            {order.delivery.waybill && <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{order.delivery.waybill}</span>}
-            <button onClick={onTrack} style={btn()}><RefreshCw size={14} /> Check rider</button>
+            <span style={{ fontWeight: 800 }}>{order.delivery.carrier} order created</span>
+            {order.delivery.shipmentId && <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted, #7b6a58)' }}>#{order.delivery.shipmentId}</span>}
+            <button onClick={onTrack} style={btn()} title="Refresh now"><RefreshCw size={14} /></button>
             {order.delivery.trackingUrl && (
               <a href={order.delivery.trackingUrl} target="_blank" rel="noreferrer" style={{ ...btn(), textDecoration: 'none' }}>
                 <ExternalLink size={14} /> Track
@@ -171,28 +172,28 @@ function OrderCard({
         )}
       </div>
 
-      {track && (
-        <div style={{ background: 'var(--surface-sunken, #f7f2e9)', borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 14 }}>
-          {track.ok ? (
-            <>
+      {/* Live rider status — the whole point of showing this card is answering "is someone coming".
+          Three states: searching (booked, no rider yet), assigned (name + a tappable phone number),
+          or unreachable (courier API hiccup — the stored waybill/shipment id above still stands). */}
+      {order.delivery.carrier && (
+        <div style={{ background: track?.rider?.name ? '#eef8f0' : 'var(--surface-sunken, #f7f2e9)', border: track?.rider?.name ? '1px solid #bfe3c8' : 'none', borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 14 }}>
+          {!track ? (
+            <span style={{ color: 'var(--text-muted, #7b6a58)' }}>Checking for a rider…</span>
+          ) : track.ok ? (
+            track.rider?.name ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-                <Bike size={16} />
-                <strong>{track.status || 'No status yet'}</strong>
-                {track.courier && <span style={{ color: 'var(--text-muted, #7b6a58)' }}>{track.courier}</span>}
+                <Bike size={18} style={{ color: '#1c7a3d' }} />
+                <span>Rider <strong>{track.rider.name}</strong> is assigned{track.status ? ` — ${track.status}` : ''}</span>
+                {track.rider.phone && <a href={`tel:${track.rider.phone}`} style={{ ...btn('primary'), textDecoration: 'none' }}><Phone size={13} /> {track.rider.phone}</a>}
               </div>
-              {track.rider?.name ? (
-                <p style={{ margin: '8px 0 0' }}>
-                  Rider <strong>{track.rider.name}</strong>
-                  {track.rider.phone && <> · <a href={`tel:${track.rider.phone}`} style={{ color: 'var(--text-link, #1558b0)', fontWeight: 800 }}>{track.rider.phone}</a></>}
-                </p>
-              ) : (
-                <p style={{ margin: '8px 0 0', color: 'var(--text-muted, #7b6a58)' }}>
-                  No rider allocated yet — they are still searching. Keep the order packed and ready.
-                </p>
-              )}
-            </>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', color: 'var(--text-muted, #7b6a58)' }}>
+                <Bike size={16} />
+                <span>{track.status || 'Searching for a rider'} — keep the order packed and ready.</span>
+              </div>
+            )
           ) : (
-            <span style={{ color: 'var(--text-muted, #7b6a58)' }}>Could not reach the courier just now ({track.reason}).</span>
+            <span style={{ color: 'var(--text-muted, #7b6a58)' }}>Could not reach the courier just now ({track.reason}). The booking above still stands — try the refresh button.</span>
           )}
         </div>
       )}
@@ -382,6 +383,13 @@ export default function StorePortal({ code }: { code: string }) {
 
   const signOut = useCallback(() => { clearStoreToken(code); setSession(null); setOrders(null); }, [code]);
 
+  const doTrack = useCallback(async (id: number) => {
+    try {
+      const t = await storeTrack(code, id);
+      setTracks(prev => ({ ...prev, [id]: t }));
+    } catch { /* the card keeps showing our stored status */ }
+  }, [code]);
+
   /* Pull the board. `announce` is false on the very first load: staff opening the portal to a queue
      of waiting orders should see the NEW list, not be alarmed at orders that arrived hours ago. */
   const refresh = useCallback(async (announce = true) => {
@@ -395,12 +403,18 @@ export default function StorePortal({ code }: { code: string }) {
         if (fresh.length) { setAlerting(fresh); void startAlarm(); }
       }
       announced.current = ids;
+      // Live carrier/rider status, automatically — nobody should have to remember to tap "Check
+      // rider" to find out whether one has even been booked yet. Every order that has a booking
+      // and is not yet finished gets refreshed on the same cadence the board already polls at.
+      for (const o of r.orders) {
+        if (o.delivery.carrier && o.status !== 'CANCELLED' && o.status !== 'DELIVERED') void doTrack(o.id);
+      }
       setErr('');
     } catch (e: unknown) {
       if (e instanceof StoreAuthError) { signOut(); return; }
       setErr(e instanceof Error ? e.message : 'Could not load orders');
     }
-  }, [code, startAlarm, signOut]);
+  }, [code, startAlarm, signOut, doTrack]);
 
   // Restore an existing session on load — a tablet is signed in once and left that way.
   useEffect(() => {
@@ -437,13 +451,6 @@ export default function StorePortal({ code }: { code: string }) {
       if (e instanceof StoreAuthError) { signOut(); return; }
       setErr(e instanceof Error ? e.message : 'That did not work');
     } finally { setBusyId(null); }
-  };
-
-  const doTrack = async (id: number) => {
-    try {
-      const t = await storeTrack(code, id);
-      setTracks(prev => ({ ...prev, [id]: t }));
-    } catch { /* the card keeps showing our stored status */ }
   };
 
   if (booting) return <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><p>Loading…</p></main>;
@@ -558,13 +565,16 @@ export default function StorePortal({ code }: { code: string }) {
             {menu === null ? <p>Loading…</p> : (
               <div style={{ ...wrap, overflow: 'hidden' }}>
                 {menu.map((m, i) => (
-                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderTop: i ? '1px solid var(--border-soft, #f0ebe1)' : 'none' }}>
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderTop: i ? '1px solid var(--border-soft, #f0ebe1)' : 'none', opacity: m.availableHere ? 1 : 0.55 }}>
                     <div style={{ flex: 1 }}>
                       <strong style={{ fontSize: 15 }}>{m.name}</strong>
                       {m.posItemId && <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-subtle, #a4988a)' }}>POS code {m.posItemId}</div>}
+                      {m.available && !m.availableHere && (
+                        <div style={{ fontSize: 11, color: '#9a5a00', fontWeight: 700, marginTop: 2 }}>Not carried at this store — same-day delivery is restricted elsewhere</div>
+                      )}
                     </div>
                     <span style={{ fontSize: 15, fontWeight: 800 }}>{money(m.price)}</span>
-                    {m.available ? <Chip text="On sale" tone="ok" /> : <Chip text="Off" tone="bad" />}
+                    {!m.available ? <Chip text="Off" tone="bad" /> : m.availableHere ? <Chip text="On sale" tone="ok" /> : <Chip text="Not here" tone="warn" />}
                   </div>
                 ))}
               </div>

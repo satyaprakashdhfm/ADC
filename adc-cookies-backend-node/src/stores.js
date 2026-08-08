@@ -53,6 +53,38 @@ export function storeRelaysToPos(code) {
   return storeByCode(code)?.posMode === 'AUTO';
 }
 
+/**
+ * Can a same-day-only product actually reach this pincode?
+ *
+ * A perishable item can never travel by Delhivery — no destination pincode makes that safe — so the
+ * check is really "is there an intracity store here at all, and if the product also names specific
+ * cities, is one of THOSE the one serving it". zoneStores already answers "which stores could serve
+ * this pincode" for the ordinary courier-routing decision; this reuses it rather than re-deriving
+ * city eligibility a second way that could drift from what booking actually does.
+ *
+ * `restrictCities` is comma-separated (e.g. 'Bengaluru') or null/empty for "any intracity city".
+ */
+export function sameDayEligible(destPincode, restrictCities) {
+  const stores = zoneStores(destPincode);
+  if (!stores.length) return false;               // no intracity store in range at all -> Delhivery-only
+  const allowed = String(restrictCities || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+  if (!allowed.length) return true;                // no city restriction beyond "must be intracity"
+  return stores.some((s) => allowed.includes(s.city.toLowerCase()));
+}
+
+/**
+ * The same rule, asked from the OTHER direction: not "can this pincode be reached", but "can THIS
+ * store sell it at all". Used by the store portal's own menu view — a same-day-only, city-restricted
+ * product is not something Besant Nagar carries, whatever a customer's address happens to be.
+ */
+export function storeProductAvailable(storeCode, product) {
+  if (!product.same_day_only) return true;
+  const store = storeByCode(storeCode);
+  if (!store) return false;
+  const allowed = String(product.restrict_cities || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+  return !allowed.length || allowed.includes(store.city.toLowerCase());
+}
+
 const R_KM = 6371;
 const rad = (d) => (d * Math.PI) / 180;
 
@@ -115,10 +147,12 @@ export function nearestStore(destPincode) {
 /**
  * Which kitchen owns an order, decided from the delivery address alone.
  *
- * This runs the moment an order is placed, BEFORE any courier is booked, because a store has to see
- * its order and start baking whether or not a rider was found. Booking may later move the order to a
- * different store — pickServiceableStore quotes each in turn and the nearest is not always the one
- * the carrier can serve — and that correction is written back over this answer.
+ * This runs the moment an order is placed, BEFORE any courier is booked — a store has to see its
+ * order and start baking whether or not a rider can be found — and the answer is FINAL. Booking
+ * (attemptShipment, in routes/orders.js) only ever tries this exact store; it never reassigns the
+ * order to a different one, even if that other store would have been Shiprocket-serviceable. Once a
+ * kitchen is holding an order (or has accepted it), the rider has to collect from there — moving the
+ * pickup point after the fact means sending them to a kitchen with nothing to hand over.
  *
  * Anything outside a store zone is the warehouse's: outstation parcels leave from Begur.
  */
