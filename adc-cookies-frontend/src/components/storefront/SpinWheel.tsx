@@ -298,19 +298,19 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             <Gift size={desktop ? 14 : 13} /> Spin &amp; win
           </div>
           <h2 style={{ font: `900 var(${desktop ? '--text-h3' : '--text-h4'})/1.05 var(--font-display)`, color: 'var(--text-strong)', margin: '0 0 5px', letterSpacing: '-.02em' }}>
-            {emailClaimed ? 'Coupon sent! 📧' : (activeReward || result?.win) ? 'You won! 🎉' : result ? 'So close!' : cooldown?.completed ? 'Spin completed ✅' : 'Spin & win a treat!'}
+            {emailClaimed ? 'Coupon sent! 📧' : (activeReward || result?.win) ? 'You won! 🎉' : result ? 'So close!' : cooldown?.completed ? 'Offer expired' : 'Spin & win a treat!'}
           </h2>
           <p style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-muted)', margin: `0 auto ${desktop ? 18 : 10}px`, maxWidth: desktop ? 320 : 290, lineHeight: 1.45 }}>
             {emailClaimed
               ? `We’ve emailed your coupon to ${subEmail.trim()}. Sign in with that email to use it at checkout.`
               : activeReward
-                ? (activeReward.claimed ? 'Here’s your exclusive discount — use it at checkout.' : 'Enter your email to claim it — we’ll send the coupon over and save it to your account.')
+                ? (activeReward.claimed ? `Here’s your exclusive discount — use it before it expires in ${formatRemaining(activeReward.expiresAtMs - nowMs)}.` : 'Enter your email to claim it — we’ll send the coupon over and save it to your account.')
                 : result
                   ? (result.win
                     ? (guestWinNeedsLogin ? 'Enter your email to claim it — we’ll send the coupon straight to your inbox.' : 'Here’s your exclusive discount — use it at checkout.')
                     : `No prize this time — treats are always fresh though! Try the wheel again in ${formatRemaining((drawExpiresAtMs ?? 0) - nowMs)}.`)
                   : cooldown?.completed
-                    ? `You've already used today's spin. Please wait until your next spin in ${formatRemaining(new Date(cooldown.nextSpinAt ?? 0).getTime() - nowMs)}.`
+                    ? `Your last spin's reward has expired. Please wait for your next spin — a fresh start — in ${formatRemaining(new Date(cooldown.nextSpinAt ?? 0).getTime() - nowMs)}.`
                     : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
           </p>
 
@@ -360,7 +360,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
                 {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
               </button>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 8 }}>
-                <Clock size={13} /> Valid for {formatRemaining(activeReward.expiresAtMs - nowMs)}
+                <Clock size={13} /> Expires in {formatRemaining(activeReward.expiresAtMs - nowMs)}
               </div>
               <button onClick={() => { close(); router.push('/'); }}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
