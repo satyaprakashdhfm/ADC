@@ -270,6 +270,9 @@ export interface Order {
   payment?: OrderPayment | null;
   /** Petpooja relay state (admin views only) — whether the kitchen actually received the ticket. */
   pos?: { relayed: boolean; petpoojaOrderId: string | null; attempts: number; lastError: string | null } | null;
+  /** Which store is making it and how far they have got. `posBillNo` is the bill from that store's
+   *  own Petpooja terminal — the only link to the POS for every outlet except Begur. */
+  store?: { code: string; acceptedAt: string | null; readyAt: string | null; posBillNo: string | null } | null;
   address?: Address | null; items?: OrderItem[];
   warningFlags?: string[]; // e.g. 'DUPLICATE_CHARGE' — admin-facing alerts, doesn't affect order status
 }
@@ -406,9 +409,51 @@ export interface AttentionReport {
   paidNoPosTicket: { id: number; order_number: string; total_amount: number; created_at: string; last_error: string | null; attempts: number }[];
   cancelStuckDownstream: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
   moneyReversed: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
+  /** Paid, made at a store that bills on its OWN Petpooja terminal, and no bill number typed back —
+   *  so there is nothing to reconcile the Razorpay settlement against. */
+  posManualUnbilled: { id: number; order_number: string; total_amount: number; created_at: string; store_code: string; store_accepted_at: string | null; store_ready_at: string | null }[];
   total: number;
 }
 export async function adminAttention(): Promise<AttentionReport> { return request('/admin/attention'); }
+
+/* ---- Admin: Stores (staff portal) ---- */
+
+export interface StoreStaff {
+  id: number; username: string; name: string | null; isActive: boolean;
+  lastLoginAt: string | null; passwordSetAt: string | null;
+  /** Never signed in and never had its password changed — so the starting password still works. */
+  onStartingPassword: boolean;
+  /** Only present while `onStartingPassword` holds; a hash cannot be read back once it doesn't. */
+  startingPassword: string | null;
+}
+export interface AdminStore {
+  code: string; name: string; city: string; state: string; pincode: number;
+  address: string; phone: string;
+  /** 'AUTO' — we relay to Petpooja. 'MANUAL' — this store bills on its own terminal. */
+  posMode: 'AUTO' | 'MANUAL';
+  pickupName: string | null;
+  portalPath: string;
+  last30Days: { paid: number; unaccepted: number; unbilled: number };
+  staff: StoreStaff[];
+}
+export interface AdminStoresReport {
+  stores: AdminStore[];
+  orphanedStaff: { id: number; username: string; storeCode: string }[];
+}
+export async function adminGetStores(): Promise<AdminStoresReport> { return request('/admin/stores'); }
+
+export async function adminCreateStoreStaff(code: string, username: string, password: string, name?: string): Promise<{ ok: boolean; id: number; username: string }> {
+  return request(`/admin/stores/${code}/staff`, { method: 'POST', body: JSON.stringify({ username, password, name }) });
+}
+export async function adminSetStoreStaffPassword(id: number, password: string): Promise<{ ok: boolean }> {
+  return request(`/admin/stores/staff/${id}/password`, { method: 'POST', body: JSON.stringify({ password }) });
+}
+export async function adminToggleStoreStaff(id: number): Promise<{ ok: boolean; isActive: boolean }> {
+  return request(`/admin/stores/staff/${id}/toggle`, { method: 'PATCH' });
+}
+export async function adminDeleteStoreStaff(id: number): Promise<{ ok: boolean }> {
+  return request(`/admin/stores/staff/${id}`, { method: 'DELETE' });
+}
 
 /**
  * Can each store ACTUALLY dispatch a same-day order right now? `verified` is the only thing that

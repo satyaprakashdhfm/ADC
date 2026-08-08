@@ -57,13 +57,17 @@ export default function Footer() {
           {/* Brand block — fills the left side so the link columns don't cluster in the right
               half with a dead gap. On phones this drops to full width above the columns. */}
           <div className="footer-brand" style={{ flex: '1 1 240px', maxWidth: 300 }}>
-            {/* White wordmark straight on the orange band — no chip or plate behind it. There's only
-                an orange logo asset, so the white variant is produced the same way the navbar does
-                it: crush to black, then invert to a solid white silhouette. */}
+            {/* The secondary mark — the round bitten-cookie badge — rather than the wordmark, which
+                the navbar already carries at the top of every page.
+
+                Same white treatment as before (crush to black, then invert), and this badge is built
+                for it: the "adc" lettering and the stitched border are KNOCKED OUT of the artwork
+                rather than painted white, so inverting turns the cookie white and lets the orange
+                band read straight through the letters. Its own orange would be invisible here. */}
             <Image
-              src="/assets/adc-logo.png"
+              src="/assets/adc-logo-secondary.png"
               height={104}
-              width={176}
+              width={109}
               alt="a dough cookie"
               style={{ height: 104, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }}
             />

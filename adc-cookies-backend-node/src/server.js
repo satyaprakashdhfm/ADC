@@ -20,6 +20,8 @@ import contactRoutes from './routes/contact.js';
 import deliveryRoutes from './routes/delivery.js';
 import petpoojaRoutes from './routes/petpooja.js';
 import hyperlocalRoutes from './routes/hyperlocal.js';
+import storeRoutes from './routes/store.js';
+import { ensureStoreAccounts } from './storeAuth.js';
 import { paymentWebhook } from './routes/paymentsWebhook.js';
 import { paymentCallback } from './routes/orders.js';
 
@@ -99,6 +101,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api/petpooja', petpoojaRoutes);
+// Store staff portal. Its own auth scheme (see storeAuth.js), NOT a Supabase role — counter staff
+// must never hold a token that /api/admin or a customer's account would also accept.
+app.use('/api/store', storeRoutes);
 // Shiprocket Hyperlocal tracking. NOT /api/shiprocket — their panel rejects webhook URLs
 // containing shiprocket / kartrocket / sr / kr / localhost.
 app.use('/api/hyperlocal', hyperlocalRoutes);
@@ -135,6 +140,9 @@ if (!process.env.VERCEL) {
     } else {
       await seedIfEmpty();
     }
+    // Give any store that has no staff login one. Idempotent — an existing account is never
+    // touched, so a password someone changed cannot be reset by a redeploy.
+    await ensureStoreAccounts().catch((e) => console.error('[STORE] account seed failed:', e?.message || e));
     app.listen(PORT, () => {
       console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
       console.log(`[CONFIG] DB=${process.env.DATABASE_URL ? 'supabase-pooler' : 'local-pg'}`);

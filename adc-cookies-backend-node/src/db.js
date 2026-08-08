@@ -449,6 +449,46 @@ export async function initSchema() {
       UNIQUE (order_id)
     );
 
+    /* ---------------- Store staff portal ----------------
+       Each shop-front runs its own kitchen: it takes the order, bakes it, hands it to the rider and
+       (everywhere except Begur) keys the bill into its OWN Petpooja terminal. The portal at
+       /store/<code> is what they work from.
+
+       The store LIST itself is not a table — it lives in src/stores.js, because the same five
+       records also carry coordinates and Shiprocket pickup nicknames that the routing code reads on
+       every quote. Mirroring them into Postgres would create two sources of truth that drift.
+       Credentials are the part that genuinely needs a table, and only that is stored here. */
+    CREATE TABLE IF NOT EXISTS store_users (
+      id SERIAL PRIMARY KEY,
+      store_code TEXT NOT NULL,                   -- matches ADC_STORES[].code in src/stores.js
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      name TEXT,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      -- NULL until the first successful login. The admin screen reads it as "this account is still
+      -- on its handed-out password", which is the only safe way to show that without storing one.
+      last_login_at TEXT,
+      password_set_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_store_users_store_code ON store_users(store_code);
+
+    -- Which kitchen owns an order, and how far that kitchen has got with it. Kept on the orders
+    -- row rather than in a side table because every read of an order needs it and none of it is
+    -- historical — the timeline of who did what is already in order_tracking.
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_code TEXT;
+    -- Set when the store accepts the order. Until then nobody has confirmed they are baking it,
+    -- which is exactly what the portal's unaccepted list is for.
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_accepted_at TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_accepted_by INTEGER REFERENCES store_users(id) ON DELETE SET NULL;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_ready_at TEXT;
+    -- The bill number from the store's own Petpooja terminal, typed in by staff. For every outlet
+    -- except Begur this is the ONLY link between a web order and its POS bill — without it the
+    -- day's takings cannot be reconciled against what Razorpay settled.
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_pos_bill_no TEXT;
+    CREATE INDEX IF NOT EXISTS idx_orders_store_code ON orders(store_code);
+
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This
     -- backend connects as the table owner, which bypasses RLS, so the app is unaffected.

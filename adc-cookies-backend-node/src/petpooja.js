@@ -23,6 +23,7 @@
  */
 import { getAll, getOne, query, nowIso } from './db.js';
 import { logApiCall } from './apiLogger.js';
+import { storeRelaysToPos } from './stores.js';
 
 const BASE = (process.env.PETPOOJA_BASE_URL || 'https://qle1yy2ydc.execute-api.ap-southeast-1.amazonaws.com/V1').replace(/\/+$/, '');
 // Two accepted spellings: the descriptive ones matching Petpooja's own field names, and the
@@ -453,6 +454,26 @@ export async function relayOrder(orderId, { force = false } = {}) {
     // kitchen. `force` exists for the genuine case of a manually reconciled payment.
     if (!force && order.payment_status !== 'PAID') return await fail(`not_paid (payment_status=${order.payment_status})`);
     if (!force && order.order_status === 'CANCELLED') return await fail('order_cancelled');
+
+    /*
+     * Only the warehouse relays over the API.
+     *
+     * Petpooja has configured exactly one outlet for us, and REST_ID names it. Every ticket we send
+     * lands there whatever store is actually baking, so relaying a Jayanagar order would bill it to
+     * Begur — the wrong kitchen gets a KOT it will not make, and the right one gets nothing and is
+     * billed nowhere. Those orders are keyed in at the store's own terminal instead, and the store
+     * portal is where staff see them and type the bill number back.
+     *
+     * This is NOT a failure and must not be recorded as one: `fail()` would put the order in the
+     * admin's "paid but never reached the kitchen" list, where it would sit forever because there
+     * is nothing to retry. It is logged on the timeline so the routing decision is still visible.
+     */
+    if (!force && !storeRelaysToPos(order.store_code)) {
+      await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+        [orderId, 'POS_MANUAL', `Ships from ${order.store_code || 'an unassigned store'} — its staff bill this on their own Petpooja terminal`, ts]).catch(() => {});
+      log('relay', `order=${order.order_number} | skip=manual_pos (store=${order.store_code || 'none'})`);
+      return { ok: true, skipped: true, reason: 'store_bills_manually' };
+    }
 
     const done = await getOne('SELECT relay_ok FROM petpooja_orders WHERE order_id = $1', [orderId]);
     if (done?.relay_ok) { log('relay', `order=${order.order_number} | skip=already_relayed`); return { ok: true, skipped: true }; }
