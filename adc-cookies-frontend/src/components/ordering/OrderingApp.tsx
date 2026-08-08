@@ -5,6 +5,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, ChevronDown, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, ShieldCheck, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, PackageCheck } from 'lucide-react';
 import { STORES } from '@/lib/stores';
 import { LocationPill, LocationBanner } from '@/components/storefront/LocationPicker';
+import SiteHeader from '@/components/storefront/SiteHeader';
+import Footer from '@/components/storefront/Footer';
 import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
@@ -901,25 +903,27 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   );
 
   return (
-    <div className="adc-pattern-page order-cards" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', flex: 'none' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '8px var(--gutter)' }}>
-          <button onClick={() => router.push(step === 'pay' ? '/checkout' : '/order')} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronLeft size={20} /></button>
+    /* A normal page (not a fixed full-screen overlay) so it carries the SAME site header and
+       footer as every other page — only the announcement ribbon is left off, since checkout
+       shouldn't advertise. The Cart › Checkout › Payment flow row sits directly under the nav. */
+    <div className="adc-pattern-page order-cards" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <SiteHeader />
+
+      <div style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-glass)', flex: 'none' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '10px var(--gutter)' }}>
+          <button onClick={() => router.push(step === 'pay' ? '/checkout' : '/order')} aria-label="Go back" style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronLeft size={20} /></button>
           <div style={{ flex: 'none' }}>
-            <div style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>{step === 'pay' ? 'Payment' : 'Checkout'}</div>
-            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{step === 'pay' ? 'Choose how to pay' : `${lines.length} item${lines.length !== 1 ? 's' : ''} · ready to order`}</div>
+            <div style={{ font: 'var(--weight-bold) var(--text-h4)/1.1 var(--font-display)', color: 'var(--text-strong)' }}>{step === 'pay' ? 'Payment' : 'Checkout'}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{step === 'pay' ? 'Choose how to pay' : `${lines.length} item${lines.length !== 1 ? 's' : ''} · ready to order`}</div>
           </div>
-          {/* Desktop: the Cart › Checkout › Payment stepper sits inline so the header stays short */}
+          {/* Desktop: the Cart › Checkout › Payment stepper sits inline so the row stays short */}
           {desktop && <div style={{ flex: 1, display: 'flex', justifyContent: 'center', minWidth: 0 }}><CheckoutStepper current={step} inline /></div>}
-          <a href="/" aria-label="a dough cookie home" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', flex: 'none' }}>
-            <Image src="/assets/adc-logo.png" width={232} height={168} priority alt="a dough cookie" style={desktop ? { height: 56, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -20 } : { height: 46, width: 'auto', objectFit: 'contain', display: 'block' }} />
-          </a>
         </div>
         {/* Mobile keeps the stepper on its own row */}
         {!desktop && <CheckoutStepper current={step} />}
       </div>
 
-      <div className="hide-sb" style={{ flex: 1, overflowY: 'auto', padding: '24px var(--gutter) 120px' }}>
+      <div style={{ flex: 1, padding: '24px var(--gutter) 28px' }}>
         {step === 'review' ? (
           <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {payFailMsg && (
@@ -1272,7 +1276,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         )}
       </div>
 
-      <div style={{ padding: '14px var(--gutter)', borderTop: '1px solid var(--border-soft)', background: 'var(--surface-card)', flex: 'none' }}>
+      {/* Sticky so "Proceed to Pay" stays reachable while the page scrolls normally under the header. */}
+      <div style={{ position: 'sticky', bottom: 0, zIndex: 20, padding: '14px var(--gutter)', borderTop: '1px solid var(--border-soft)', background: 'var(--surface-card)', flex: 'none', boxShadow: '0 -6px 18px rgba(0,0,0,.06)' }}>
         {step === 'review' ? (
           <>
             {hydrated && lines.length > 0 && user && !chosen && (
@@ -1322,6 +1327,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           </>
         )}
       </div>
+      <Footer />
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </div>
   );
