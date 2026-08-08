@@ -95,6 +95,17 @@ export function serializeOrder(order, items = [], address = null, payment = null
     shipmentError: order.shipment_error ?? null,
     carrier: order.carrier ?? null,
     estimatedDelivery: order.estimated_delivery ?? null,
+    // Which kitchen owns this order, and how far it has got with it. Everywhere except Begur the
+    // store bills on its own Petpooja terminal, so posBillNo is the only link between this order
+    // and its POS bill — its absence is a reconciliation gap, not a cosmetic one.
+    store: order.store_code
+      ? {
+          code: order.store_code,
+          acceptedAt: order.store_accepted_at ?? null,
+          readyAt: order.store_ready_at ?? null,
+          posBillNo: order.store_pos_bill_no ?? null,
+        }
+      : null,
     labelGenerated: !!order.label_generated,
     payment: payment
       ? { provider: payment.provider, transactionId: payment.transaction_id, status: payment.status, paidAt: payment.paid_at }

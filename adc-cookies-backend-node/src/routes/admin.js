@@ -17,6 +17,7 @@ import {
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
 import { ADC_STORES } from '../stores.js';
+import { hashPassword, defaultPasswordFor } from '../storeAuth.js';
 import { cancelShiprocketOrder, trackShiprocket, listPickups, shiprocketConfigured } from '../shiprocket.js';
 import { cancelOrder as petpoojaCancelOrder, relayOrder, unmappedProducts } from '../petpooja.js';
 import { autoCreateShipment } from './orders.js';
@@ -345,7 +346,10 @@ router.post('/petpooja/orders/:id/retry', async (req, res) => {
  * kitchen and a courier.
  */
 router.get('/attention', async (_req, res) => {
-  const [noShipment, noRelay, cancelStuck, disputes] = await Promise.all([
+  // Stores whose orders WE relay to Petpooja. Everywhere else the staff bill on their own terminal,
+  // so "no POS ticket" is the normal state there and listing it would bury the real failures.
+  const autoPosStores = ADC_STORES.filter((s) => s.posMode === 'AUTO').map((s) => s.code);
+  const [noShipment, noRelay, cancelStuck, disputes, manualUnbilled] = await Promise.all([
     // Paid, not cancelled, and no courier booked. `has_address` matters: an order with no address
     // can NEVER be booked, so the UI must explain that rather than offer a retry that always fails.
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error, o.carrier,
@@ -354,13 +358,14 @@ router.get('/attention', async (_req, res) => {
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
                AND o.delhivery_waybill IS NULL
              ORDER BY o.created_at DESC LIMIT 100`),
-    // Paid, not cancelled, and the kitchen never got the ticket.
+    // Paid, not cancelled, relayed by us, and the kitchen never got the ticket.
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at,
                    p.last_error, COALESCE(p.attempts, 0) AS attempts
               FROM orders o LEFT JOIN petpooja_orders p ON p.order_id = o.id
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
                AND (p.relay_ok IS NULL OR p.relay_ok = FALSE)
-             ORDER BY o.created_at DESC LIMIT 100`),
+               AND o.store_code = ANY($1::text[])
+             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores]),
     // Cancelled on our side but a downstream leg refused — POS ticket or rider still live.
     getAll(`SELECT DISTINCT o.id, o.order_number, t.status, t.remarks, t.created_at
               FROM orders o JOIN order_tracking t ON t.order_id = o.id
@@ -371,14 +376,110 @@ router.get('/attention', async (_req, res) => {
               FROM orders o JOIN order_tracking t ON t.order_id = o.id
              WHERE t.status IN ('DISPUTE_OPENED','REFUNDED','REFUND_FAILED','FULFILLED_THEN_REFUNDED')
              ORDER BY t.created_at DESC LIMIT 100`),
+    // Billed by a store on its own terminal, but no bill number typed back. Money Razorpay settled
+    // with no POS bill to reconcile it against — the manual flow's one failure mode.
+    getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.store_code,
+                   o.store_accepted_at, o.store_ready_at
+              FROM orders o
+             WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
+               AND o.store_code IS NOT NULL AND NOT (o.store_code = ANY($1::text[]))
+               AND (o.store_pos_bill_no IS NULL OR o.store_pos_bill_no = '')
+             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores]),
   ]);
   res.json({
     paidNoShipment: noShipment,
     paidNoPosTicket: noRelay,
     cancelStuckDownstream: cancelStuck,
     moneyReversed: disputes,
-    total: noShipment.length + noRelay.length + cancelStuck.length + disputes.length,
+    posManualUnbilled: manualUnbilled,
+    total: noShipment.length + noRelay.length + cancelStuck.length + disputes.length + manualUnbilled.length,
   });
+});
+
+/* ---------- Stores (staff portal) ---------- */
+
+/*
+ * Every outlet, its staff logins and what it is currently holding.
+ *
+ * `onStartingPassword` is the closest thing to an honest answer to "what is their password". A hash
+ * cannot be read back, so instead we report whether the account has ever been used or had its
+ * password changed. If neither has happened, the starting password still works and the UI can print
+ * it; once either has, it cannot, and the UI says so rather than showing a stale one.
+ */
+router.get('/stores', async (_req, res) => {
+  const [staff, counts] = await Promise.all([
+    getAll('SELECT * FROM store_users ORDER BY store_code, username'),
+    getAll(`SELECT store_code,
+                   COUNT(*) FILTER (WHERE payment_status = 'PAID' AND order_status <> 'CANCELLED') AS paid,
+                   COUNT(*) FILTER (WHERE payment_status = 'PAID' AND order_status <> 'CANCELLED' AND store_accepted_at IS NULL) AS unaccepted,
+                   COUNT(*) FILTER (WHERE payment_status = 'PAID' AND order_status <> 'CANCELLED' AND (store_pos_bill_no IS NULL OR store_pos_bill_no = '')) AS unbilled
+              FROM orders WHERE created_at >= $1 GROUP BY store_code`,
+      [new Date(Date.now() - 30 * 864e5).toISOString()]),
+  ]);
+  const countBy = new Map(counts.map((c) => [c.store_code, c]));
+  res.json({
+    stores: ADC_STORES.map((s) => {
+      const c = countBy.get(s.code) || {};
+      return {
+        code: s.code, name: s.name, city: s.city, state: s.state, pincode: s.pincode,
+        address: s.address_line_1, phone: s.contact, posMode: s.posMode,
+        pickupName: s.pickupName,
+        portalPath: `/store/${s.code}`,
+        last30Days: { paid: Number(c.paid || 0), unaccepted: Number(c.unaccepted || 0), unbilled: Number(c.unbilled || 0) },
+        staff: staff.filter((u) => u.store_code === s.code).map((u) => ({
+          id: u.id, username: u.username, name: u.name, isActive: !!u.is_active,
+          lastLoginAt: u.last_login_at, passwordSetAt: u.password_set_at,
+          onStartingPassword: !u.last_login_at && !u.password_set_at,
+          startingPassword: (!u.last_login_at && !u.password_set_at) ? defaultPasswordFor(s.code) : null,
+        })),
+      };
+    }),
+    // Accounts pointing at a store code that no longer exists in stores.js. They cannot sign in
+    // (requireStoreUser refuses them), so surfacing them is the only way they get cleaned up.
+    orphanedStaff: staff.filter((u) => !ADC_STORES.some((s) => s.code === u.store_code))
+      .map((u) => ({ id: u.id, username: u.username, storeCode: u.store_code })),
+  });
+});
+
+router.post('/stores/:code/staff', async (req, res) => {
+  const store = ADC_STORES.find((s) => s.code === String(req.params.code).toLowerCase());
+  if (!store) throw new ApiError('No such store');
+  const username = String(req.body?.username || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  if (!/^[a-z0-9._-]{3,40}$/.test(username)) throw new ApiError('Username: 3–40 characters, letters/numbers/._- only');
+  if (password.length < 8) throw new ApiError('Choose a password of at least 8 characters');
+  const ts = nowIso();
+  const row = await getOne(
+    `INSERT INTO store_users (store_code, username, password_hash, name, password_set_at, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$5,$5) RETURNING id, username`,
+    [store.code, username, await hashPassword(password), String(req.body?.name || '').trim() || null, ts]
+  );
+  res.json({ ok: true, id: row.id, username: row.username });
+});
+
+// Set a staff password to something the admin types. There is no "email them a reset link" here —
+// these accounts have no mailbox; the admin hands the password over in person.
+router.post('/stores/staff/:id/password', async (req, res) => {
+  const password = String(req.body?.password || '');
+  if (password.length < 8) throw new ApiError('Choose a password of at least 8 characters');
+  const user = await getOne('SELECT id FROM store_users WHERE id = $1', [req.params.id]);
+  if (!user) throw new ApiError('No such staff account');
+  const ts = nowIso();
+  await query('UPDATE store_users SET password_hash = $1, password_set_at = $2, updated_at = $2 WHERE id = $3',
+    [await hashPassword(password), ts, user.id]);
+  res.json({ ok: true });
+});
+
+router.patch('/stores/staff/:id/toggle', async (req, res) => {
+  const row = await getOne('UPDATE store_users SET is_active = NOT is_active, updated_at = $1 WHERE id = $2 RETURNING id, is_active',
+    [nowIso(), req.params.id]);
+  if (!row) throw new ApiError('No such staff account');
+  res.json({ ok: true, isActive: !!row.is_active });
+});
+
+router.delete('/stores/staff/:id', async (req, res) => {
+  await query('DELETE FROM store_users WHERE id = $1', [req.params.id]);
+  res.json({ ok: true });
 });
 
 /* ---------- Coupons ---------- */

@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { zoneStores, nearestStoreToCoords, orderStoresByProximity } from '../stores.js';
+import { zoneStores, nearestStoreToCoords, orderStoresByProximity, storeForAddress } from '../stores.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -98,6 +98,12 @@ async function attemptShipment(orderId, addressArg) {
         return { ok: false, reason: `intracity_unserviceable: no verified store can reach ${destPin} on the same-day carrier. Verify a nearer pickup location in the Shiprocket panel, then re-book.` };
       } else {
       const pickup = chosen.store;
+      // The carrier picked this store, so it is the one actually baking the order — write it over
+      // whatever the address-only guess at order creation said. Done BEFORE the booking call: if
+      // that call fails, the right kitchen is still the one holding the order on its board.
+      if (pickup.code && pickup.code !== order.store_code) {
+        await query('UPDATE orders SET store_code = $1, updated_at = $2 WHERE id = $3', [pickup.code, nowIso(), orderId]).catch(() => {});
+      }
       console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | store=${pickup.name} | ₹${chosen.rate} | ${chosen.distance} km`);
       const created = await createHyperlocalOrder({
         order, items,
@@ -359,15 +365,21 @@ router.post('/', async (req, res) => {
   const ts = nowIso();
   const orderNumber = await genOrderNumber();
 
+  // Which kitchen this belongs to, from the address alone. Assigned now rather than at booking so
+  // the store owns the order from the moment it is paid for — a courier that cannot be booked must
+  // not also mean no kitchen ever sees it. attemptShipment corrects this if the carrier ends up
+  // serving the drop from a different store.
+  const fulfillingStore = storeForAddress(address);
+
   const orderId = await withTransaction(async (client) => {
     const { rows: [order] } = await client.query(
       `INSERT INTO orders
          (order_number, user_id, address_id, subtotal, discount_amount, delivery_fee, tax_amount,
           total_amount, coupon_code, payment_status, order_status, shipment_status, label_generated,
-          created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING','PLACED','NOT_CREATED',FALSE,$10,$11) RETURNING id`,
+          store_code, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING','PLACED','NOT_CREATED',FALSE,$10,$11,$12) RETURNING id`,
       [orderNumber, user.id, address.id, subtotal, discount, deliveryFee, 0, total,
-       couponCode ?? null, ts, ts]
+       couponCode ?? null, fulfillingStore?.code ?? null, ts, ts]
     );
     const oid = order.id;
     for (const li of lineItems) {
