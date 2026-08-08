@@ -47,8 +47,15 @@ export default function FloatingDock() {
   useEffect(() => {
     if (typeof window === 'undefined' || spinDone.current || pathname !== '/') return;
     let seen = false;
-    try { seen = !!localStorage.getItem('adc_spin_first_seen'); } catch { /* ignore */ }
+    let locationAsked = false;
+    try {
+      seen = !!localStorage.getItem('adc_spin_first_seen');
+      locationAsked = !!localStorage.getItem('adc_location_asked');
+    } catch { /* ignore */ }
     if (seen) { spinDone.current = true; return; }
+    // On a very first landing the "where are we delivering?" prompt takes precedence — stacking a
+    // prize wheel on top of it is how you get both dismissed. The wheel gets the next visit.
+    if (!locationAsked) return;
     spinDone.current = true;
     const t = setTimeout(() => {
       setSpin(true);

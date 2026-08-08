@@ -266,11 +266,12 @@ function buildTickets(coupons) {
 router.get('/spin-cooldown', couponLimiter, async (req, res) => {
   const deviceId = String(req.query.deviceId || '').trim();
   const userId = req.user?.id ?? null;
+  const ip = req.ip || null;
   if (!deviceId && !userId) return res.json({ completed: false });
   const nowIsoStr = nowIso();
   const existing = await getOne(
-    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2) ORDER BY id DESC LIMIT 1`,
-    [deviceId, userId]
+    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2 OR (ip IS NOT NULL AND ip = $3)) ORDER BY id DESC LIMIT 1`,
+    [deviceId, userId, ip]
   );
   if (!existing || existing.expires_at > nowIsoStr) return res.json({ completed: false });
   const nextSpinAtMs = new Date(existing.drawn_at).getTime() + SPIN_COOLDOWN_HOURS * 3600_000;
@@ -284,13 +285,15 @@ router.post('/spin', couponLimiter, async (req, res) => {
   const deviceId = String(req.body?.deviceId || '').trim();
   if (!deviceId) throw new ApiError('Missing device id.');
   const userId = req.user?.id ?? null; // parseAuth already ran — set if this caller happens to be logged in
+  const ip = req.ip || null;
   const nowIsoStr = nowIso();
 
-  // Latest draw for this device or account, regardless of whether its own window has expired —
-  // needed to enforce the cooldown below, not just the in-progress replay.
+  // Latest draw for this device, account OR origin IP, regardless of whether its own window has
+  // expired — needed to enforce the cooldown below, not just the in-progress replay. The IP arm is
+  // what stops "clear site data / open incognito and spin again until I like the prize".
   const existing = await getOne(
-    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2) ORDER BY id DESC LIMIT 1`,
-    [deviceId, userId]
+    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2 OR (ip IS NOT NULL AND ip = $3)) ORDER BY id DESC LIMIT 1`,
+    [deviceId, userId, ip]
   );
   if (existing) {
     // Still within its own 12h window (win or miss) — replay it instead of drawing again. This is
@@ -334,8 +337,8 @@ router.post('/spin', couponLimiter, async (req, res) => {
     }
     const drawnCode = ticket && ticket !== NO_REWARD ? ticket : null;
     await client.query(
-      'INSERT INTO spin_draws (device_id, user_id, code, drawn_at, expires_at) VALUES ($1,$2,$3,$4,$5)',
-      [deviceId, userId, drawnCode, nowIsoStr, expiresAt]
+      'INSERT INTO spin_draws (device_id, user_id, code, drawn_at, expires_at, ip) VALUES ($1,$2,$3,$4,$5,$6)',
+      [deviceId, userId, drawnCode, nowIsoStr, expiresAt, ip]
     );
     return drawnCode;
   });

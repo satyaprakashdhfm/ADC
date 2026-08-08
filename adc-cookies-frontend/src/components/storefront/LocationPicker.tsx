@@ -1,18 +1,33 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Navigation, ChevronDown, X, Check } from 'lucide-react';
-import { STORES } from '@/lib/stores';
-import { useLocation, storeArea } from '@/context/LocationContext';
+import Link from 'next/link';
+import { MapPin, Navigation, ChevronDown, X, Check, Home, Briefcase, Store as StoreIcon } from 'lucide-react';
+import { useLocation, nearestStore } from '@/context/LocationContext';
+import { useAuth } from '@/context/AuthContext';
+import { getAddresses, type Address } from '@/lib/api';
 
 const ASKED_KEY = 'adc_location_asked';
 
-/* ---- Modal: detect location or pick a store ---- */
+/* ---- Modal: where are we delivering? The shopper's OWN addresses, not our shop list — "deliver
+   to" is their doorstep. Which store bakes it is ours to work out (the backend picks the nearest
+   serviceable one at checkout), so the shop list moved behind a "Find a store" link. ---- */
 function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { store, detect, detecting, error, chooseStore } = useLocation();
+  const { user } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [addresses, setAddresses] = useState<Address[]>([]);
 
   useEffect(() => setMounted(true), []);
+
+  // Saved addresses are the primary choice for a signed-in shopper. (Rendering is guarded on
+  // `user` too, so a signed-out visitor never sees a stale list from a previous session.)
+  useEffect(() => {
+    if (!open || !user) return;
+    let cancelled = false;
+    getAddresses().then(a => { if (!cancelled) setAddresses(a || []); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [open, user]);
 
   // Escape closes it, and the page behind is locked from scrolling while it's open.
   useEffect(() => {
@@ -25,8 +40,14 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
   }, [open, onClose]);
 
   if (!open || !mounted) return null;
-  const cities = [...new Set(STORES.map(s => s.city))];
   const onDetect = async () => { const s = await detect(); if (s) onClose(); };
+
+  /* Picking a saved address sets where we're delivering. We resolve its nearest store here only so
+     the header has something to show; the authoritative pick happens backend-side at checkout. */
+  const chooseAddress = (a: Address) => {
+    if (a.latitude != null && a.longitude != null) chooseStore(nearestStore(a.latitude, a.longitude));
+    onClose();
+  };
 
   /* Portalled to <body>. The pill that opens this lives inside the sticky header, which carries a
      `transform` for its show/hide animation — and a transformed ancestor becomes the containing
@@ -41,8 +62,8 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
           style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 34, height: 34, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><X size={17} /></button>
 
         <div style={{ marginBottom: 6, paddingRight: 42 }}>
-          <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>Choose your location</h2>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0 }}>We bake &amp; deliver fresh from your nearest A Dough Cookie store.</p>
+          <h2 style={{ font: 'var(--weight-bold) var(--text-h3)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>Where are we delivering?</h2>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0 }}>We bake fresh at the nearest store and bring it to you.</p>
         </div>
 
         <button onClick={onDetect} disabled={detecting}
@@ -51,33 +72,42 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
         </button>
         {error && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', margin: '4px 2px 0' }}>{error}</p>}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 0 12px' }}>
-          <span style={{ flex: 1, height: 1, background: 'var(--border-default)' }} />
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>or pick a store</span>
-          <span style={{ flex: 1, height: 1, background: 'var(--border-default)' }} />
-        </div>
-
-        {cities.map(city => (
-          <div key={city} style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 'var(--text-2xs)', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--brand-secondary)', fontWeight: 800, margin: '0 2px 8px' }}>{city}</div>
+        {/* The shopper's own saved addresses — what "deliver to" actually means. */}
+        {!!user && addresses.length > 0 && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 0 12px' }}>
+              <span style={{ flex: 1, height: 1, background: 'var(--border-default)' }} />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>or your saved addresses</span>
+              <span style={{ flex: 1, height: 1, background: 'var(--border-default)' }} />
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {STORES.filter(s => s.city === city).map(s => {
-                const on = store?.pincode === s.pincode;
+              {addresses.map(a => {
+                const near = a.latitude != null && a.longitude != null ? nearestStore(a.latitude, a.longitude) : null;
+                const on = !!near && store?.pincode === near.pincode;
+                const Icon = a.label === 'Office' ? Briefcase : a.label === 'Other' ? MapPin : Home;
                 return (
-                  <button key={s.pincode} onClick={() => { chooseStore(s); onClose(); }}
-                    style={{ display: 'flex', gap: 9, alignItems: 'center', textAlign: 'left', padding: '8px 11px', borderRadius: 'var(--radius-button)', border: `1.5px solid ${on ? 'var(--brand-secondary)' : 'var(--border-default)'}`, background: on ? 'var(--amber-50)' : 'var(--surface-card)', cursor: 'pointer' }}>
-                    <MapPin size={15} color="var(--brand-secondary)" style={{ flex: 'none' }} />
+                  <button key={a.id} onClick={() => chooseAddress(a)}
+                    style={{ display: 'flex', gap: 10, alignItems: 'center', textAlign: 'left', padding: '10px 12px', borderRadius: 'var(--radius-button)', border: `1.5px solid ${on ? 'var(--brand-secondary)' : 'var(--border-default)'}`, background: on ? 'var(--amber-50)' : 'var(--surface-card)', cursor: 'pointer' }}>
+                    <Icon size={16} color="var(--brand-secondary)" style={{ flex: 'none' }} />
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', lineHeight: 1.25 }}>{storeArea(s)}</span>
-                      <span style={{ display: 'block', fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.address}</span>
+                      <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', lineHeight: 1.25 }}>{a.label || 'Home'}</span>
+                      <span style={{ display: 'block', fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {[a.addressLine1, a.addressLine2, a.city, a.pincode].filter(Boolean).join(', ')}
+                      </span>
                     </span>
                     {on && <Check size={16} color="var(--brand-secondary)" style={{ flex: 'none' }} />}
                   </button>
                 );
               })}
             </div>
-          </div>
-        ))}
+          </>
+        )}
+
+        {/* Our shops are a separate idea from "deliver to" — link out rather than list them here. */}
+        <Link href="/locations" onClick={onClose}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, padding: '11px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--text-strong)', textDecoration: 'none', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>
+          <StoreIcon size={16} /> Find a store near you
+        </Link>
       </div>
     </div>,
     document.body,

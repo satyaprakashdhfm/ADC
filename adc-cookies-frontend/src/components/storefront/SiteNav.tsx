@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Menu, User, Search, ShoppingCart, ChevronDown, X, PackageSearch } from 'lucide-react';
+import Link from 'next/link';
+import { Menu, User, Search, ShoppingCart, ChevronDown, X, PackageSearch, Store } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { getProducts, firstImage, type Product } from '@/lib/api';
@@ -217,8 +218,10 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
               </div>
             ) : (
               <>
-                <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 10 }}>
                   <button onClick={() => setSearchExpanded(true)} aria-label="Search" style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--white-16)', background: 'transparent', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Search size={20} /></button>
+                  {/* Our shops — kept distinct from "Deliver to", which is the customer's own address. */}
+                  <Link href="/locations" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--white-16)', color: 'var(--white)', textDecoration: 'none', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}><Store size={17} /> Find a store</Link>
                 </div>
                 <a href="/" aria-label="a dough cookie home" style={{ justifySelf: 'center', display: 'flex', alignItems: 'center' }}>
                   <Image src="/assets/adc-logo.png" width={310} height={224} alt="a dough cookie" priority style={{ height: 78, width: 'auto', objectFit: 'contain', display: 'block', filter: 'brightness(0) invert(1)' }} />
