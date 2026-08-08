@@ -63,3 +63,18 @@ export const STORES: Store[] = [
     image: '/assets/stores/besant-nagar.jpeg',
   },
 ];
+
+/**
+ * Mirrors the backend's storeProductAvailable (stores.js) — a same-day-only product (24h shelf
+ * life) only belongs on the menu for a shopper whose resolved store sits in one of its allowed
+ * cities. A lightweight pre-filter so an ineligible shopper never sees it to begin with, rather
+ * than adding it to cart and hitting a rejection later; the backend still has the final word at
+ * order time (sameDayEligible, keyed on the real delivery pincode), since a store here is only
+ * ever "nearest of ours", not a true serviceability check.
+ */
+export function productAvailableFor(store: { city: string } | null, product: { sameDayOnly: boolean; restrictCities: string | null }): boolean {
+  if (!product.sameDayOnly) return true;
+  if (!store) return false;
+  const allowed = String(product.restrictCities || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+  return !allowed.length || allowed.includes(store.city.toLowerCase());
+}
