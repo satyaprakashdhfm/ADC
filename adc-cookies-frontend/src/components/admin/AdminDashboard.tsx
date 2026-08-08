@@ -10,24 +10,49 @@ import {
   adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
-  adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument, adminFetchShadowfaxDoc,
+  adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
+  adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
+  adminGetPetpoojaMapping, adminCreateProductFromPetpooja, adminGetPetpoojaRelays, adminLinkProductToPetpooja,
+  adminGetStores, adminCreateStoreStaff, adminSetStoreStaffPassword, adminToggleStoreStaff, adminDeleteStoreStaff,
   type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type CouponInput, type AdminMessage,
-  type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput, type ShadowfaxDocResult,
+  type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
+  type AttentionReport, type StoreReadinessReport, type PetpoojaMapping, type PetpoojaRelay, type PetpoojaItem,
+  type AdminStoresReport, type AdminStore,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
   IndianRupee, Plus, Pencil, Trash2, Check, X, LogOut, Gift,
   Truck, Warehouse as WarehouseIcon, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download, Search, Filter, CalendarRange,
-  FileText, AlertTriangle,
+  FileText, AlertTriangle, Store as StoreIcon, KeyRound,
 } from 'lucide-react';
 
+/*
+ * Shiprocket Hyperlocal tracking statuses and what each one does to the order. Mirrors
+ * shiprocketStatusToOrderStatus() in adc-cookies-backend-node/src/shiprocket.js — if that mapping
+ * changes, change this too, since this table is what an operator trusts when reading a status.
+ */
+const SR_ORDER_STATES = [
+  { id: 'RIDER ASSIGNED', status: 'PACKED', description: 'A rider has been allocated. Nothing has left the store yet.' },
+  { id: 'PICKUP SCHEDULED', status: 'PACKED', description: 'Collection is booked; the rider is on the way to the store.' },
+  { id: 'AWB ASSIGNED', status: 'PACKED', description: 'The tracking number exists. Assignment is asynchronous, so this can lag the order by a minute or two.' },
+  { id: 'PICKED UP', status: 'OUT_FOR_DELIVERY', description: 'The rider has collected the order from the store.' },
+  { id: 'IN TRANSIT', status: 'OUT_FOR_DELIVERY', description: 'On the way to the customer.' },
+  { id: 'OUT FOR DELIVERY', status: 'OUT_FOR_DELIVERY', description: 'On the final leg to the drop address.' },
+  { id: 'RIDER REACHED DROP', status: '(no change)', description: 'The rider is at the door. Deliberately not marked delivered — at the door is not delivered.' },
+  { id: 'DELIVERED', status: 'DELIVERED', description: 'Handed to the customer. Terminal state.' },
+  { id: 'CANCELLED / RTO', status: 'CANCELLED', description: 'Cancelled, or returned to origin.' },
+];
+
 const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+
 const PAGE_SIZE = 12; // rows per page in admin list tables
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
   { id: 'products', label: 'Products', icon: Package },
   { id: 'delivery', label: 'Delivery', icon: Truck },
+  { id: 'stores', label: 'Stores', icon: StoreIcon },
+  { id: 'petpooja', label: 'Petpooja', icon: FileText },
   { id: 'coupons', label: 'Coupons', icon: Ticket },
   { id: 'users', label: 'Customers', icon: Users },
   { id: 'messages', label: 'Messages', icon: MessageSquare },
@@ -95,7 +120,13 @@ export default function AdminDashboard() {
   const [editing, setEditing] = useState<{ id?: number; data: ProductInput } | null>(null);
   const [couponForm, setCouponForm] = useState<CouponDraft | null>(null);
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
+  const [attention, setAttention] = useState<AttentionReport | null>(null);
+  // Outcome of a cancel — shown as a modal rather than a banner, because a REFUSED cancel means a
+  // rider is still coming and must not be something you can scroll past.
+  const [cancelInfo, setCancelInfo] = useState<{ orderNumber: string; ok: boolean; message: string } | null>(null);
+  const [fixing, setFixing] = useState<number | null>(null);   // order id currently being re-booked/re-relayed
   const [err, setErr] = useState('');
+  const [notice, setNotice] = useState('');
   const [loginOpen, setLoginOpen] = useState(false);
 
   // Orders filter state
@@ -133,8 +164,18 @@ export default function AdminDashboard() {
   const [shipmentBusy, setShipmentBusy] = useState<number | null>(null);
   const [trackResult, setTrackResult] = useState<Record<number, unknown>>({});
   const [shipmentWeights, setShipmentWeights] = useState<Record<number, string>>({});
-  const [delivSub, setDelivSub] = useState<'main' | 'shadowfax' | 'delhivery'>('main');
-  const [sfxDoc, setSfxDoc] = useState<Record<number, ShadowfaxDocResult | { error: string }>>({});
+  const [delivSub, setDelivSub] = useState<'main' | 'sameday' | 'delhivery'>('main');
+  const [storeReadiness, setStoreReadiness] = useState<StoreReadinessReport | null>(null);
+  const [ppMap, setPpMap] = useState<PetpoojaMapping | null>(null);
+  const [ppRelays, setPpRelays] = useState<PetpoojaRelay[] | null>(null);
+  const [ppBusy, setPpBusy] = useState<string | null>(null);   // "itemId|variationId" being saved
+  const [ppSearch, setPpSearch] = useState('');
+  const [ppOnlyUnlinked, setPpOnlyUnlinked] = useState(false);
+  const [sfxStatesOpen, setSfxStatesOpen] = useState(false);
+
+  // Stores tab
+  const [storeReport, setStoreReport] = useState<AdminStoresReport | null>(null);
+  const [staffBusy, setStaffBusy] = useState<number | null>(null);
 
   const EMPTY_WH: WarehouseInput = { name: '', registeredName: '', pickupLocation: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', returnPincode: '', phone: '', email: '', isDefault: false, skipDelhivery: false };
 
@@ -143,6 +184,9 @@ export default function AdminDashboard() {
   useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); setStallInfo(s.stallInfo || ''); }).catch(() => {}); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminAnalytics(range.from, range.to).then(setAnalytics).catch(() => {}); }, [isAdmin, range.from, range.to]);
+  // Loaded on every admin visit, not lazily per tab: an order that took money but never reached the
+  // kitchen or a courier is the one thing that must not wait for someone to click the right tab.
+  useEffect(() => { if (isAdmin) adminAttention().then(setAttention).catch(() => {}); }, [isAdmin]);
 
   // Lazy-load each tab's data the first time it's opened.
   useEffect(() => {
@@ -152,17 +196,62 @@ export default function AdminDashboard() {
     if (tab === 'coupons' && coupons === null) adminGetCoupons().then(setCoupons).catch(() => setCoupons([]));
     if (tab === 'users' && users === null) adminGetUsers().then(setUsers).catch(() => setUsers([]));
     if (tab === 'messages' && messages === null) adminGetMessages().then(setMessages).catch(() => setMessages([]));
+    if (tab === 'petpooja') {
+      if (ppMap === null) adminGetPetpoojaMapping().then(setPpMap).catch(() => setPpMap(null));
+      if (ppRelays === null) adminGetPetpoojaRelays().then(setPpRelays).catch(() => setPpRelays([]));
+    }
     if (tab === 'delivery') {
       if (warehouses === null) adminGetWarehouses().then(setWarehouses).catch(() => setWarehouses([]));
       if (orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
+      if (storeReadiness === null) adminGetStoreReadiness().then(setStoreReadiness).catch(() => setStoreReadiness(null));
     }
-  }, [tab, isAdmin, orders, products, coupons, users, messages]);
+    if (tab === 'stores' && storeReport === null) adminGetStores().then(setStoreReport).catch(() => setStoreReport(null));
+  }, [tab, isAdmin, orders, products, coupons, users, messages, storeReadiness, ppMap, ppRelays, storeReport]);
 
   const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); adminDashboard().then(setStats).catch(() => {}); }, []);
 
+  const refreshAttention = useCallback(() => { adminAttention().then(setAttention).catch(() => {}); }, []);
+
   const changeOrderStatus = async (id: number, status: string) => {
     const updated = await adminUpdateOrderStatus(id, status).catch(() => null);
-    if (updated) { setOrders(o => (o || []).map(x => x.id === id ? updated : x)); adminDashboard().then(setStats).catch(() => {}); }
+    if (!updated) return;
+    setOrders(o => (o || []).map(x => x.id === id ? updated : x));
+    adminDashboard().then(setStats).catch(() => {});
+    refreshAttention();
+    // Cancelling also cancels the POS ticket and the courier booking. If either refused, say so
+    // loudly — otherwise the operator assumes the rider was called off when they were not.
+    if (updated.cancelWarnings?.length) {
+      setCancelInfo({ orderNumber: updated.orderNumber, ok: false, message: updated.cancelWarnings.join(String.fromCharCode(10, 10)) });
+    }
+  };
+
+  /** Retry the automatic courier booking for a paid order that never got one. */
+  const rebookShipment = async (id: number) => {
+    setFixing(id); setErr(''); setNotice('');
+    try {
+      const r = await adminRebookShipment(id);
+      setNotice(`Courier booked — ${r.carrier} ${r.waybill}`);
+      // Refresh the open modal too, or it keeps showing the failure that was just fixed.
+      adminGetOrders().then(list => { setOrders(list); setViewOrder(v => (v ? list.find(x => x.id === v.id) ?? v : v)); }).catch(() => {});
+      refreshAttention();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Could not book a courier');
+    } finally { setFixing(null); }
+  };
+
+  /** Push a paid order to the Petpooja POS again — after fixing an item mapping, typically. */
+  const retryPosRelay = async (id: number) => {
+    setFixing(id); setErr(''); setNotice('');
+    try {
+      const r = await adminRetryPosRelay(id);
+      if (r.ok) setNotice(r.skipped ? 'Already on the POS.' : 'Sent to the Petpooja POS.');
+      else setErr(`POS refused it: ${r.reason}`);
+      // Refresh the open modal too, or it keeps showing the failure that was just fixed.
+      adminGetOrders().then(list => { setOrders(list); setViewOrder(v => (v ? list.find(x => x.id === v.id) ?? v : v)); }).catch(() => {});
+      refreshAttention();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Could not reach the POS');
+    } finally { setFixing(null); }
   };
   const saveProduct = async () => {
     if (!editing) return;
@@ -261,7 +350,12 @@ export default function AdminDashboard() {
       </header>
 
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '22px var(--gutter) 64px' }}>
-        {err && <div style={{ ...card, padding: '12px 16px', marginBottom: 16, color: 'var(--status-error)', borderColor: 'var(--status-error)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>{err}</div>}
+        {err && <div onClick={() => setErr('')} style={{ ...card, padding: '12px 16px', marginBottom: 16, color: 'var(--status-error)', borderColor: 'var(--status-error)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{err}</div>}
+        {notice && <div onClick={() => setNotice('')} style={{ ...card, padding: '12px 16px', marginBottom: 16, color: 'var(--status-success, #1a7f4b)', borderColor: 'var(--status-success, #1a7f4b)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{notice}</div>}
+
+        {/* Needs attention — orders that took money but did not complete downstream. Sits above the
+            tabs because it applies to every screen, and is hidden entirely when there is nothing. */}
+        {!!attention?.total && <AttentionPanel report={attention} busy={fixing} onRebook={rebookShipment} onRetryPos={retryPosRelay} onOpen={id => { const o = (orders || []).find(x => x.id === id); if (o) setViewOrder(o); else { setTab('orders'); setOrderSearch(String(id)); } }} onRefresh={refreshAttention} />}
 
         {/* Tabs */}
         <div className="hide-sb" style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 22, paddingBottom: 4 }}>
@@ -393,17 +487,37 @@ export default function AdminDashboard() {
               action={<button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
               <FilterBar search={orderSearch} onSearch={v => { setOrderSearch(v); setPageOf('orders', 1); }} placeholder="Search order #, customer, city…" active={active} onClear={clear}>
                 <Field label="Order status"><select value={orderStatusFilter} onChange={e => { setOrderStatusFilter(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All statuses</option>{ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
-                <Field label="Carrier"><select value={orderCarrier} onChange={e => { setOrderCarrier(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All carriers</option><option value="SHADOWFAX">Shadowfax (intracity)</option><option value="DELHIVERY">Delhivery (outstation)</option></select></Field>
+                <Field label="Carrier"><select value={orderCarrier} onChange={e => { setOrderCarrier(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">All carriers</option><option value="SHIPROCKET">Shiprocket (intracity)</option><option value="DELHIVERY">Delhivery (outstation)</option></select></Field>
                 <Field label="Payment"><select value={orderPayment} onChange={e => { setOrderPayment(e.target.value); setPageOf('orders', 1); }} style={selStyle}><option value="">Any payment</option><option value="PAID">Paid</option><option value="PENDING">Pending</option></select></Field>
               </FilterBar>
-              <Table head={['Order', 'Customer', 'Total', 'Payment', 'Shipment', 'Status', 'Date']}>
+              <Table head={['Order', 'Customer', 'Total', 'Payment', 'Shipment', 'POS', 'Status', 'Date']}>
                 {paginate(filtered, 'orders').map(o => (
                   <tr key={o.id} onClick={() => setViewOrder(o)} style={{ cursor: 'pointer' }}>
                     <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{(o.items || []).length} item{(o.items || []).length !== 1 ? 's' : ''} · tap for details</span></td>
                     <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city || ''}</span></td>
                     <td style={td}>{money(o.totalAmount)}</td>
-                    <td style={td}><Badge text={o.paymentStatus} ok={o.paymentStatus === 'PAID'} /></td>
-                    <td style={td}><Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} /></td>
+                    <td style={td}>
+                      <Badge text={o.paymentStatus} ok={o.paymentStatus === 'PAID'} />
+                      {o.warningFlags?.includes('DUPLICATE_CHARGE') && (
+                        <div title="More than one captured payment was found against this order's Razorpay order — review in the Razorpay dashboard before refunding/shipping." style={{ marginTop: 4, fontSize: 'var(--text-2xs)', fontWeight: 800, color: 'var(--status-danger, #C0392B)' }}>
+                          ⚠ Possible duplicate charge
+                        </div>
+                      )}
+                    </td>
+                    <td style={td}>
+                      <Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} />
+                      {/* A paid order with no courier is money taken for an undelivered parcel — say why. */}
+                      {o.shipmentError && !o.delhiveryWaybill && (
+                        <div title={o.shipmentError} style={{ color: 'var(--status-error)', fontSize: 'var(--text-2xs)', fontWeight: 700, marginTop: 3, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.shipmentError}</div>
+                      )}
+                    </td>
+                    {/* Did the kitchen actually get this ticket? Blank for unpaid orders, which are
+                        never relayed by design, so a dash there is correct rather than a failure. */}
+                    <td style={td}>
+                      {o.paymentStatus !== 'PAID' ? <span style={{ color: 'var(--text-subtle)' }}>—</span>
+                        : o.pos?.relayed ? <Badge text="On POS" ok />
+                        : <span title={o.pos?.lastError || 'Not sent to the POS yet.'}><Badge text={o.pos ? 'FAILED' : 'NOT SENT'} /></span>}
+                    </td>
                     <td style={td} onClick={e => e.stopPropagation()}>
                       <select value={o.orderStatus} onChange={e => changeOrderStatus(o.id, e.target.value)} style={{ padding: '7px 10px', borderRadius: 10, border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', cursor: 'pointer' }}>
                         {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -519,9 +633,9 @@ export default function AdminDashboard() {
         {tab === 'delivery' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-            {/* Sub-nav: all shipments · Shadowfax intracity · Delhivery outstation */}
+            {/* Sub-nav: all shipments · same-day intracity · Delhivery outstation */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {([['main', 'All shipments'], ['shadowfax', 'Shadowfax · Intracity'], ['delhivery', 'Delhivery · Outstation']] as const).map(([id, label]) => {
+              {([['main', 'All shipments'], ['sameday', 'Same-day · Intracity'], ['delhivery', 'Delhivery · Outstation']] as const).map(([id, label]) => {
                 const on = delivSub === id;
                 return <button key={id} onClick={() => setDelivSub(id)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: on ? 'none' : '1.5px solid var(--border-default)', background: on ? 'var(--gradient-warm)' : 'var(--surface-card)', color: on ? 'var(--white)' : 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{label}</button>;
               })}
@@ -564,7 +678,7 @@ export default function AdminDashboard() {
             <Panel title="Schedule a Delhivery pickup">
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
                 Delhivery collects <strong>all manifested outstation packages</strong> from your default warehouse at the chosen slot.
-                Shadowfax (intracity) needs no pickup request — a rider is dispatched to the store automatically once the order is confirmed.
+                Intracity needs no pickup request — Shiprocket dispatches a rider to the store automatically once the order is confirmed.
               </p>
               <div style={{ marginBottom: 14, background: 'var(--surface-sunken)', borderRadius: 10, padding: '10px 14px' }}>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: pending.length ? 6 : 0 }}>
@@ -586,32 +700,42 @@ export default function AdminDashboard() {
                 <button onClick={async () => {
                   setPurResult('Submitting…');
                   const r = await adminCreatePickupRequest(purDate, purTime, Number(purCount)).catch(e => ({ ok: false, reason: String(e.message || e), data: undefined }));
-                  setPurResult(r.ok ? `Pickup scheduled for ${purDate} at ${purTime} · ${purCount} package(s).` : `Error: ${(r as { ok: boolean; reason?: string }).reason}`);
+                  // The backend translates Delhivery's terse refusals — a wallet under the Rs.500
+                  // minimum, or a slot already open for this warehouse today — into a sentence worth
+                  // reading, so prefer it over the raw reason.
+                  setPurResult(r.ok
+                    ? `Pickup scheduled for ${purDate} at ${purTime} · ${purCount} package(s). Delhivery sometimes moves the date — check their panel to confirm the slot.`
+                    : `Error: ${(r as { ok: boolean; reason?: string }).reason}`);
                 }} disabled={!purDate || !purTime} style={{ ...addBtn, opacity: !purDate ? 0.5 : 1 }}>Request pickup</button>
               </div>
               {purResult && <div style={{ marginTop: 10, fontSize: 'var(--text-sm)', color: purResult.startsWith('Error') ? 'var(--status-error)' : 'var(--status-success)', fontWeight: 700 }}>{purResult}</div>}
 
-              {/* Delhivery's pickup API books an empty slot — it takes a date, time and a package
-                  COUNT, with no field for waybills. Attaching the actual parcels is a separate
-                  action that only exists in their panel, and a pickup with nothing attached is why
-                  a rider turns up and leaves empty-handed.
-                  Cancelling is the same story: Delhivery's public API (all on track.delhivery.com)
-                  has cancel-SHIPMENT but no cancel-PICKUP. one.delhivery.com/v2/pickup-requests/
-                  domestic is a browser page, not an endpoint — it serves text/html and ignores our
-                  API token entirely; its Cancel button is authenticated by a panel login session
-                  our server doesn't have. So both links below deep-link into the panel. */}
+              {/* Delhivery's rules, from their own Pickup Request Creation docs. An earlier version
+                  of this box claimed the waybills had to be attached by hand in their panel and that
+                  a pickup with none attached collects nothing. That was wrong: their documentation
+                  states the request is raised against the WAREHOUSE, not the waybill, and one
+                  request therefore covers every parcel ready at that location. */}
               <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--amber-50)', border: '1px solid var(--border-brand)' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
                   <AlertTriangle size={16} style={{ color: 'var(--brand-secondary)', flex: 'none', marginTop: 2 }} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: 4 }}>
-                      After scheduling, add the packages in the Delhivery app
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: 6 }}>
+                      How Delhivery pickups work
                     </div>
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: 1.6, margin: '0 0 8px' }}>
-                      This books the <strong>slot only</strong> — Delhivery&apos;s API has no field for waybills. Open the
-                      Delhivery One panel → <strong>Pickup Requests</strong> → open today&apos;s request → <strong>Add to Pickup</strong>,
-                      and add all {Math.max(1, pending.length)} waybill{pending.length !== 1 ? 's' : ''} listed above. A pickup with no
-                      packages attached means the rider collects nothing.
+                    <ul style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: 1.7, margin: '0 0 8px', paddingLeft: 18 }}>
+                      <li><strong>One request covers every parcel at this warehouse.</strong> It is raised against the pickup location, not against waybills — you do not need one request per shipment.</li>
+                      <li><strong>Only one open request per warehouse per day.</strong> A second can be raised only after the existing one is closed, so schedule once the day&apos;s parcels are ready rather than per order.</li>
+                      <li><strong>Raise it when the parcels are packed</strong> and ready to hand to the field executive — not at the moment the order is placed.</li>
+                      <li><strong>Count</strong> is how many packages the rider should collect. Use the button above to fill in the {Math.max(1, pending.length)} awaiting pickup.</li>
+                      <li>Each parcel needs its <strong>shipping label</strong> printed — recipient address and scannable tracking barcode. Download them from the shipments list.</li>
+                      <li>Parcels at a <strong>different location</strong> need their own request from that warehouse.</li>
+                      <li><strong>Your Delhivery wallet must hold at least ₹500</strong> or the request is rejected. This applies to Prepaid and COD alike — confirmed live. Shipment creation also debits the wallet at the time the parcel is created, not on delivery.</li>
+                      <li>Delhivery may <strong>move the date</strong> you ask for — a request for one day has come back scheduled for the next. Check the confirmation rather than assuming the slot you chose.</li>
+                    </ul>
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.6, margin: '0 0 8px' }}>
+                      This step is optional: your Delhivery account POC can enable <strong>auto-pickup</strong>, after which collections are
+                      scheduled for you and this panel is only needed for an ad-hoc slot. Delhivery has no cancel-pickup API, so cancelling
+                      is done in their panel.
                     </p>
                     <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                       <a href="https://one.delhivery.com/v2/pickup-requests/domestic" target="_blank" rel="noopener noreferrer"
@@ -640,7 +764,7 @@ export default function AdminDashboard() {
                   {(delivSub === 'delhivery' ? (orders || []).filter(o => o.carrier === 'DELHIVERY') : (orders || [])).map(o => {
                     const w = shipmentWeights[o.id] ?? '0.5';
                     const trackData = trackResult[o.id] as { status?: string; note?: string; scans?: { time: string; event: string }[] } | undefined;
-                    const service = o.carrier === 'SHADOWFAX' ? { kind: 'Intracity', name: 'Shadowfax' }
+                    const service = o.carrier === 'SHIPROCKET' ? { kind: 'Intracity', name: 'Shiprocket' }
                       : o.carrier === 'DELHIVERY' ? { kind: 'Intercity', name: 'Delhivery' } : null;
                     return (
                       <tr key={o.id}>
@@ -676,8 +800,8 @@ export default function AdminDashboard() {
                             /* Labelled pills rather than bare icons — four unlabelled glyphs in a row
                                gave no clue which one cancelled a shipment. */
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {o.carrier !== 'SHADOWFAX' && <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={actionBtn()} title="Download the shipping label PDF"><Download size={13} /> Label</button>}
-                              {o.carrier !== 'SHADOWFAX' && (
+                              {o.carrier === 'DELHIVERY' && <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={actionBtn()} title="Download the shipping label PDF"><Download size={13} /> Label</button>}
+                              {o.carrier === 'DELHIVERY' && (
                                 <button title="Proof of delivery / signature (available after delivery)" onClick={async () => {
                                   setErr('');
                                   for (const t of ['EPOD', 'SIGNATURE_URL'] as const) {
@@ -690,7 +814,7 @@ export default function AdminDashboard() {
                               <button title="Fetch the latest carrier status" onClick={async () => {
                                 const r = await adminTrackOrder(o.id).catch(() => null);
                                 if (!r?.ok) { if (r) setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${r.reason || 'unknown'}` } })); return; }
-                                if (r.carrier === 'SHADOWFAX') {
+                                if (r.carrier === 'SHIPROCKET') {
                                   setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', note: '', scans: r.scans || [] } }));
                                 } else {
                                   type ShipmentData = { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
@@ -701,11 +825,30 @@ export default function AdminDashboard() {
                               }} style={actionBtn()}><ExternalLink size={13} /> Status</button>
                               {o.shipmentStatus !== 'CANCELLED' && (
                                 <button disabled={shipmentBusy === o.id} onClick={async () => {
-                                  if (!confirm(`Cancel shipment ${o.delhiveryWaybill}?\n\nThis cancels the parcel with the carrier and refunds the shipping charge to your wallet. It does NOT refund the customer's payment.`)) return;
+                                  // For Shiprocket the AWB only exists once a real rider has been
+                                  // found — so its presence means someone is already on their way
+                                  // AND the delivery charge has been taken. That is a different
+                                  // decision from cancelling a booking still searching for a rider,
+                                  // and must not sit behind the same casual confirm.
+                                  const riderOut = o.carrier === 'SHIPROCKET' && !!o.delhiveryWaybill;
+                                  const q = riderOut
+                                    ? `A RIDER HAS ALREADY BEEN DISPATCHED for ${o.orderNumber}.\n\nThey may be at the store or on the way to the customer, and the delivery charge has already been taken. The carrier may refuse to call them off this late.\n\nStill try to cancel?`
+                                    : `Cancel shipment ${o.delhiveryWaybill}?\n\nThis cancels the parcel with the carrier. It does NOT refund the customer's payment.`;
+                                  if (!confirm(q)) return;
                                   setShipmentBusy(o.id); setErr('');
-                                  await adminCancelShipment(o.id).catch(e => { setErr(String(e.message || e)); });
-                                  setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
-                                  setShipmentBusy(null);
+                                  try {
+                                    const r = await adminCancelShipment(o.id);
+                                    // Only NOW is it actually cancelled. This used to mark the row
+                                    // CANCELLED even when the carrier refused, so a failed cancel
+                                    // looked identical to a successful one — while a rider was still
+                                    // on the way.
+                                    setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
+                                    // Prefer the backend's sentence: it knows whether a rider was
+                                    // out, and therefore whether anything was actually charged.
+                                    setCancelInfo({ orderNumber: o.orderNumber, ok: true, message: r?.message || `Booking ${o.delhiveryWaybill} cancelled with ${o.carrier || 'the carrier'}. The customer's payment is not refunded by this.` });
+                                  } catch (e: unknown) {
+                                    setCancelInfo({ orderNumber: o.orderNumber, ok: false, message: e instanceof Error ? e.message : 'The carrier refused to cancel this booking.' });
+                                  } finally { setShipmentBusy(null); }
                                 }} style={actionBtn(true)} title="Cancel this shipment with the carrier">
                                   {shipmentBusy === o.id ? '…' : <><X size={13} /> Cancel</>}
                                 </button>
@@ -738,19 +881,95 @@ export default function AdminDashboard() {
             </Panel>
             </>)}
 
-            {delivSub === 'shadowfax' && (
-              <Panel title="Shadowfax — intracity orders" loading={orders === null}
+            {delivSub === 'sameday' && (
+              <>
+              {/* Pickup readiness. What decides whether a store can take a same-day order is
+                  whether its Shiprocket pickup location is VERIFIED — an unverified one quotes a
+                  price and then refuses the booking, so it must never read as available. */}
+              <Panel title="Same-day stores — Shiprocket pickup readiness" loading={storeReadiness === null}
+                action={storeReadiness === null ? undefined : <button onClick={() => adminGetStoreReadiness().then(setStoreReadiness).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+                {storeReadiness && (
+                  <>
+                    {!storeReadiness.configured ? (
+                      <Empty text="Shiprocket is not configured on this environment, so no store can take a same-day order." />
+                    ) : (
+                      <>
+                        <div style={{ ...card, padding: '10px 14px', marginBottom: 12, borderColor: storeReadiness.verifiedCount === storeReadiness.stores.length ? 'var(--border-default)' : 'var(--status-error)' }}>
+                          <strong style={{ color: storeReadiness.verifiedCount === storeReadiness.stores.length ? 'var(--text-strong)' : 'var(--status-error)', fontSize: 'var(--text-sm)' }}>
+                            {storeReadiness.verifiedCount} of {storeReadiness.stores.length} stores can dispatch
+                          </strong>
+                          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '4px 0 0', lineHeight: 1.5 }}>
+                            A store can take same-day orders when its pickup nickname exists in Shiprocket — that is where the rider
+                            collects from. Shiprocket&apos;s own <em>status</em> is shown for reference only: it reads 2 on your primary
+                            location and 1 on the rest, while their panel marks all of them verified, and bookings from status-1
+                            locations are accepted. Read live from Shiprocket, not cached.
+                          </p>
+                        </div>
+                        <Table head={['Store', 'City', 'Pincode', 'Pickup name', 'Can dispatch?']}>
+                          {storeReadiness.stores.map((s) => (
+                            <tr key={s.pincode} style={{ opacity: s.verified ? 1 : 0.75 }}>
+                              <td style={td}><strong style={{ color: 'var(--text-strong)' }}>{s.name}</strong>{s.isPrimary && <span style={{ marginLeft: 6, fontSize: 'var(--text-2xs)', fontWeight: 800, color: 'var(--text-subtle)' }}>PRIMARY</span>}</td>
+                              <td style={td}>{s.city}, {s.state}</td>
+                              <td style={td}><span style={{ fontFamily: 'monospace' }}>{s.pincode}</span></td>
+                              <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{s.pickupName || '—'}</span>{s.pickupId ? <><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>id {s.pickupId}</span></> : null}</td>
+                              <td style={td}>
+                                {s.usable ? <Badge text="Yes" ok /> : <Badge text="No" />}
+                                {s.usable && !s.verified && <div style={{ marginTop: 3, fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>Shiprocket status 1 (normal for a non-primary location)</div>}
+                                {s.blockedReason && <div style={{ marginTop: 4, fontSize: 'var(--text-2xs)', color: 'var(--status-error)', maxWidth: 320, lineHeight: 1.45 }}>{s.blockedReason}</div>}
+                              </td>
+                            </tr>
+                          ))}
+                        </Table>
+                        {!!storeReadiness.unmappedPickups?.length && (
+                          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '10px 0 0' }}>
+                            Registered in Shiprocket but not mapped to any ADC store: {storeReadiness.unmappedPickups.map(p => p.nickname).join(', ')}.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </Panel>
+              <Panel title="Shiprocket — status reference (admin only)"
+                action={<button onClick={() => setSfxStatesOpen(v => !v)} style={{ ...iconBtn, width: 'auto', padding: '4px 10px', fontSize: 'var(--text-xs)', fontWeight: 700 }}>{sfxStatesOpen ? 'Hide' : 'Show'}</button>}>
+                {sfxStatesOpen ? (
+                  <>
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                      What each Shiprocket tracking status does to the order. Anything not listed leaves the order untouched rather than
+                      guessing. Note &quot;Rider assigned&quot; only means a rider was allocated — nothing has left the store yet, so it must
+                      not read as shipped to the customer.
+                    </p>
+                    <Table head={['Shiprocket status', 'Order becomes', 'What it means']}>
+                      {SR_ORDER_STATES.map((s) => (
+                        <tr key={s.id}>
+                          <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{s.id}</span></td>
+                          <td style={td}><strong>{s.status}</strong></td>
+                          <td style={{ ...td, color: 'var(--text-muted)' }}>{s.description}</td>
+                        </tr>
+                      ))}
+                    </Table>
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '10px 0 0', lineHeight: 1.5 }}>
+                      Observed on a real delivery (1 Aug 2026, Rapido rider, 10.61 km): Rider reached pickup 18:33:01 → Picked up 18:33:28
+                      → Rider reached drop 18:57:12 → Delivered 19:46:05. Every webhook arrived within seconds of the event.
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>{SR_ORDER_STATES.length} mapped statuses — click Show to view the full reference.</p>
+                )}
+              </Panel>
+              <Panel title="Same-day — intracity orders" loading={orders === null}
                 action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
                 {orders && (() => {
-                  const sfx = orders.filter(o => o.carrier === 'SHADOWFAX');
-                  if (!sfx.length) return <Empty text="No intracity (Shadowfax) orders yet." />;
+                  // Was filtered to the retired carrier, so every real intracity order since the
+                  // carrier changed was invisible on this screen.
+                  const sfx = orders.filter(o => o.carrier === 'SHIPROCKET');
+                  if (!sfx.length) return <Empty text="No intracity orders yet." />;
                   return (
                     <>
-                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>Same-city orders shipped by Shadowfax. There is no printable shipping label (the rider collects from the store) — the available documents are the live tracking link and the proof-of-delivery signature (after delivery).</p>
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>Same-city orders delivered by a rider from the nearest store, on Shiprocket Hyperlocal. There is no shipping label to print — the rider collects from the store — so tracking is the live status trail.</p>
                       <Table head={['Order', 'Customer', 'AWB', 'Status', 'Documents']}>
                         {sfx.map(o => {
                           const trackData = trackResult[o.id] as { status?: string; scans?: { time: string; event: string }[] } | undefined;
-                          const doc = sfxDoc[o.id];
                           return (
                             <tr key={o.id}>
                               <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{o.orderStatus}</span></td>
@@ -765,11 +984,11 @@ export default function AdminDashboard() {
                                       if (r?.ok) setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', scans: r.scans || [] } }));
                                       else setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${r?.reason || 'unknown'}` } }));
                                     }} style={iconBtn}><ExternalLink size={14} /></button>
-                                    <button title="Fetch documents (tracking link + POD)" onClick={async () => {
-                                      setErr('');
-                                      const r = await adminFetchShadowfaxDoc(o.id).catch(() => null);
-                                      setSfxDoc(p => ({ ...p, [o.id]: r || { error: 'Could not fetch documents' } }));
-                                    }} style={iconBtn}><FileText size={14} /></button>
+                                    {/* Hyperlocal has no printable document — the rider collects
+                                        from the store — so the public tracking page is the artefact. */}
+                                    {o.trackingUrl && (
+                                      <a href={o.trackingUrl} target="_blank" rel="noreferrer" title="Open Shiprocket tracking page" style={{ ...iconBtn, display: 'inline-grid' }}><FileText size={14} /></a>
+                                    )}
                                   </div>
                                 ) : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>No shipment</span>}
                                 {trackData && (
@@ -783,19 +1002,6 @@ export default function AdminDashboard() {
                                     ))}
                                   </div>
                                 )}
-                                {doc && (
-                                  <div style={{ marginTop: 6, fontSize: 'var(--text-2xs)', whiteSpace: 'normal', maxWidth: 340 }}>
-                                    {'error' in doc ? (
-                                      <span style={{ color: 'var(--status-error)', fontWeight: 700 }}>{doc.error}</span>
-                                    ) : (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                        {doc.trackUrl && <a href={doc.trackUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--text-link)', fontWeight: 700 }}>↗ Live tracking link</a>}
-                                        {doc.pod?.urls?.length ? doc.pod.urls.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ color: 'var(--text-link)', fontWeight: 700 }}>↗ Proof of delivery (PDF)</a>) : <span style={{ color: 'var(--text-muted)' }}>POD available after delivery.</span>}
-                                        {doc.pod?.recipient && <span style={{ color: 'var(--text-muted)' }}>Received by {doc.pod.recipient}</span>}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
                               </td>
                             </tr>
                           );
@@ -806,9 +1012,306 @@ export default function AdminDashboard() {
                 })()}
                 {orders === null && <button onClick={() => adminGetOrders().then(setOrders).catch(() => setOrders([]))} style={addBtn}>Load orders</button>}
               </Panel>
+              </>
             )}
           </div>
         )}
+
+        {/* ===== Stores (staff portal) ===== */}
+        {tab === 'stores' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <Panel title="How an order reaches each kitchen" >
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', margin: '0 0 10px', lineHeight: 1.6 }}>
+                Every paid order is assigned to the store that will make it — from the delivery address when it is
+                placed, then corrected to whichever store the carrier can actually collect from. Staff sign in at
+                their store&apos;s own page and work only their own orders: accept, bake, mark ready. They cannot
+                cancel anything or see another store&apos;s work.
+              </p>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', margin: 0, lineHeight: 1.6 }}>
+                <strong>Petpooja has one outlet configured for us — Begur.</strong> Begur&apos;s orders are pushed
+                there automatically. Every other store bills the order on its own Petpooja terminal and types the
+                bill number back into the portal; without that number nothing links the payment to their till, so
+                it is chased in <em>Needs attention</em>.
+              </p>
+            </Panel>
+
+            <Panel title="Stores" loading={storeReport === null}
+              action={<button onClick={() => adminGetStores().then(setStoreReport).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+              {storeReport && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {storeReport.stores.map(s => (
+                    <StoreCard key={s.code} store={s} busy={staffBusy}
+                      onChanged={() => { adminGetStores().then(setStoreReport).catch(() => {}); refreshAttention(); }}
+                      setBusy={setStaffBusy} setErr={setErr} setNotice={setNotice} />
+                  ))}
+                  {!!storeReport.orphanedStaff.length && (
+                    <div style={{ ...card, padding: 14, borderColor: 'var(--status-error)' }}>
+                      <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--status-error)' }}>
+                        {storeReport.orphanedStaff.length} login{storeReport.orphanedStaff.length !== 1 ? 's' : ''} for a store that no longer exists
+                      </strong>
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '6px 0 10px' }}>
+                        These cannot sign in. Delete them.
+                      </p>
+                      {storeReport.orphanedStaff.map(u => (
+                        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', fontSize: 'var(--text-sm)' }}>
+                          <span style={{ fontFamily: 'monospace' }}>{u.username}</span>
+                          <span style={{ color: 'var(--text-muted)', flex: 1 }}>→ {u.storeCode}</span>
+                          <button onClick={async () => { await adminDeleteStoreStaff(u.id); adminGetStores().then(setStoreReport).catch(() => {}); }}
+                            style={actionBtn(true)}><Trash2 size={13} /> Delete</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </Panel>
+          </div>
+        )}
+
+        {/* ===== Petpooja (POS) ===== */}
+        {tab === 'petpooja' && (() => {
+          const key = (i: { item_id: string; variation_id: string }) => `${i.item_id}|${i.variation_id}`;
+          const reload = () => { adminGetPetpoojaMapping().then(setPpMap).catch(() => {}); refreshAttention(); };
+          const linkByProduct = async (productId: number, composite: string) => {
+            setPpBusy('p' + productId); setErr('');
+            const [itemId, variationId] = composite ? composite.split('|') : [null, ''];
+            try { await adminLinkProductToPetpooja(productId, itemId, variationId || ''); reload(); }
+            catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Could not save the link'); }
+            finally { setPpBusy(null); }
+          };
+          const createAndLink = async (i: { item_id: string; variation_id: string; name: string }) => {
+            setPpBusy(key(i)); setErr(''); setNotice('');
+            try {
+              const r = await adminCreateProductFromPetpooja(i.item_id, i.variation_id);
+              setNotice(r.created ? `Created "${r.product.name}" and linked it.` : `Linked to the existing product "${r.product.name}".`);
+              reload(); adminGetProducts().then(setProducts).catch(() => {});
+            } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Could not create the product'); }
+            finally { setPpBusy(null); }
+          };
+          const q = ppSearch.trim().toLowerCase();
+          const rows = (ppMap?.items || []).filter(i => {
+            if (ppOnlyUnlinked && i.product_id) return false;
+            if (!q) return true;
+            return i.name.toLowerCase().includes(q) || (i.variation_name || '').toLowerCase().includes(q) || i.item_id.includes(q);
+          });
+          const linked = (ppMap?.items || []).filter(i => i.product_id).length;
+          const total = ppMap?.items.length || 0;
+          const lastPush = ppMap?.pushes?.[0];
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Menu status. Petpooja PUSHES the catalogue to us — menu fetch is deprecated on their
+                  side — so this panel is the only place the arrival of a menu is visible. */}
+              <Panel title="Menu from Petpooja" loading={ppMap === null}
+                action={<button onClick={reload} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+                {ppMap && (!ppMap.menuSynced ? (
+                  <Empty text="No menu received yet. Petpooja pushes the catalogue to us — ask them to trigger it, we cannot pull it." />
+                ) : (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 14 }}>
+                      <MiniStat label="Items in menu" value={String(total)} />
+                      <MiniStat label="Linked to products" value={`${linked} / ${total}`} bad={linked < total} />
+                      <MiniStat label="Restaurant code" value={ppMap.restId} />
+                      <MiniStat label="Last received" value={lastPush ? fmtDate(lastPush.received_at) : '—'} />
+                    </div>
+                    {linked < total && (
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, margin: '0 0 12px', lineHeight: 1.5 }}>
+                        {total - linked} item{total - linked !== 1 ? 's are' : ' is'} not linked to a product. An order reaches the kitchen only when
+                        every product it contains has a Petpooja item — one unlinked product fails the whole relay.
+                      </p>
+                    )}
+                    <details>
+                      <summary style={{ cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--text-muted)' }}>
+                        Push history ({ppMap.pushes.length}) and taxes ({ppMap.taxes.length})
+                      </summary>
+                      <div style={{ marginTop: 10 }}>
+                        <Table head={['Received', 'Restaurant', 'Source', 'Items']}>
+                          {ppMap.pushes.map(p => (
+                            <tr key={p.id}>
+                              <td style={td}>{fmtDate(p.received_at)}</td>
+                              <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{p.rest_id}</span></td>
+                              <td style={td}>{p.source}</td>
+                              <td style={td}>{p.item_count}</td>
+                            </tr>
+                          ))}
+                        </Table>
+                        <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', marginTop: 8 }}>
+                          Taxes: {ppMap.taxes.map(t => `${t.name} ${t.percentage}%`).join(' · ') || 'none'}
+                        </p>
+                      </div>
+                    </details>
+                  </>
+                ))}
+              </Panel>
+
+              {/* Petpooja owns the menu and there is no API to change it from here. Saying so in
+                  the product is better than leaving someone hunting for a button that cannot exist:
+                  their integration exposes save_order, update_order_status and rider_status_update
+                  outbound, and menu/stock/store-status inbound. Nothing creates or edits an item. */}
+              <Panel title="Changing the menu">
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.65, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <p style={{ margin: 0 }}>
+                    <strong>The menu is edited in Petpooja, never here.</strong> Their integration has no
+                    create-item or edit-item endpoint — we can only receive. So a price change, a new cookie or a
+                    withdrawn one is made on the Petpooja dashboard, and their system pushes the whole catalogue
+                    to us within moments. Nobody needs to tell us; the push above records every arrival.
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    We <strong>update in place and never delete</strong>. An item that changes keeps its link to
+                    your product, so prices and names can change freely without breaking anything. A brand-new
+                    item arrives unlinked and appears below as not linked to anything. An item they remove simply
+                    stops appearing in their pushes.
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    After any menu change, check the <em>done</em> count below. If it dropped, something new needs
+                    linking before an order containing it can reach the kitchen.
+                  </p>
+                  <p style={{ margin: 0, color: 'var(--text-muted)' }}>
+                    Marking an item out of stock is separate and instant — that arrives on its own feed the
+                    moment the kitchen toggles it, without a full menu push.
+                  </p>
+                  <p style={{ margin: 0, color: 'var(--text-muted)' }}>
+                    To change what the <em>website</em> sells or charges, use the Products tab. Our price is what
+                    the customer pays and what Razorpay settles; theirs only prints on the POS bill.
+                  </p>
+                </div>
+              </Panel>
+
+              {ppMap?.menuSynced && (() => {
+                /*
+                 * Rows are OUR products, not theirs. Our catalogue is the fixed set we sell; theirs
+                 * is larger and contains items we never list online. Product-first means every row
+                 * matters and "what is still unmapped" is visible without hunting.
+                 */
+                const itemFor = new Map<number, PetpoojaItem>();
+                for (const i of ppMap.items) if (i.product_id) itemFor.set(i.product_id, i);
+                const label = (i: PetpoojaItem) =>
+                  `${i.name}${i.variation_name ? ' — ' + i.variation_name : ''}${i.price != null ? `  (₹${i.price})` : ''}`;
+                const claimedBy = new Map<string, number>();
+                for (const i of ppMap.items) if (i.product_id) claimedBy.set(`${i.item_id}|${i.variation_id}`, i.product_id);
+
+                const pq = ppSearch.trim().toLowerCase();
+                const prodRows = (ppMap.products || []).filter(p => {
+                  if (ppOnlyUnlinked && itemFor.has(p.id)) return false;
+                  return !pq || p.name.toLowerCase().includes(pq);
+                });
+                const mapped = (ppMap.products || []).filter(p => itemFor.has(p.id)).length;
+                const spare = ppMap.items.filter(i => !i.product_id);
+
+                return (
+                  <Panel title={`Link your products to Petpooja items — ${mapped} of ${ppMap.products.length} done`}>
+                    <FilterBar search={ppSearch} onSearch={setPpSearch} placeholder="Search your products…"
+                      active={ppOnlyUnlinked} onClear={() => { setPpSearch(''); setPpOnlyUnlinked(false); }}>
+                      <Field label="Show">
+                        <select value={ppOnlyUnlinked ? 'unlinked' : 'all'} onChange={e => setPpOnlyUnlinked(e.target.value === 'unlinked')}
+                          style={{ ...inp, cursor: 'pointer' }}>
+                          <option value="all">All products</option>
+                          <option value="unlinked">Not linked only</option>
+                        </select>
+                      </Field>
+                    </FilterBar>
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                      Every product that can appear in a web order needs a Petpooja item, or that order will not reach the kitchen.
+                      Petpooja items you do not sell online (coffees, combo packs) can be left alone.
+                    </p>
+                    <Table head={['Your product', 'Your price', 'Petpooja item', 'Their price']}>
+                      {prodRows.map(p => {
+                        const cur = itemFor.get(p.id) || null;
+                        const busy = ppBusy === `p${p.id}`;
+                        return (
+                          <tr key={p.id} style={{ opacity: busy ? 0.5 : 1 }}>
+                            <td style={td}>
+                              <strong style={{ color: 'var(--text-strong)' }}>{p.name}</strong>
+                              {!cur && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>not linked</div>}
+                            </td>
+                            <td style={td}>{money(p.price)}</td>
+                            <td style={td}>
+                              <select value={cur ? `${cur.item_id}|${cur.variation_id}` : ''} disabled={busy}
+                                onChange={e => linkByProduct(p.id, e.target.value)}
+                                style={{ ...inp, cursor: 'pointer', minWidth: 260, padding: '7px 10px' }}>
+                                <option value="">— not linked —</option>
+                                {ppMap.items.map(i => {
+                                  const k = `${i.item_id}|${i.variation_id}`;
+                                  const owner = claimedBy.get(k);
+                                  const taken = owner != null && owner !== p.id;
+                                  return <option key={k} value={k} disabled={taken}>
+                                    {label(i)}{taken ? '  — already linked' : ''}
+                                  </option>;
+                                })}
+                              </select>
+                            </td>
+                            <td style={td}>
+                              {cur?.price != null ? (
+                                <>
+                                  {money(cur.price)}
+                                  {Number(cur.price) !== Number(p.price) && (
+                                    <div title="Their price differs from yours. The customer is charged YOUR price; theirs only appears on the POS bill."
+                                      style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', marginTop: 2 }}>differs from yours</div>
+                                  )}
+                                </>
+                              ) : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Table>
+                    {!prodRows.length && <Empty text="No products match." />}
+                    {spare.length > 0 && (
+                      <details style={{ marginTop: 14 }}>
+                        <summary style={{ cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--text-muted)' }}>
+                          {spare.length} Petpooja item{spare.length !== 1 ? 's' : ''} not linked to anything
+                        </summary>
+                        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '8px 0 10px', lineHeight: 1.5 }}>
+                          These exist on the POS but not on your site. That is fine for anything you do not sell online. If you do want to
+                          sell one, create it as a product and link it in one step.
+                        </p>
+                        <Table head={['Petpooja item', 'Their price', 'Stock', '']}>
+                          {spare.map(i => (
+                            <tr key={`${i.item_id}|${i.variation_id}`}>
+                              <td style={td}>
+                                {i.name}{i.variation_name && <span style={{ color: 'var(--text-muted)' }}> — {i.variation_name}</span>}
+                                <br /><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>{i.item_id}</span>
+                              </td>
+                              <td style={td}>{i.price != null ? money(i.price) : '—'}</td>
+                              <td style={td}>{i.in_stock ? <Badge text="In stock" ok /> : <Badge text="Out" />}</td>
+                              <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                                <button disabled={ppBusy === `${i.item_id}|${i.variation_id}`} onClick={() => createAndLink(i)} style={actionBtn()}
+                                  title="Create this as one of your products and link them">
+                                  <Plus size={13} /> Add as product
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </Table>
+                      </details>
+                    )}
+                  </Panel>
+                );
+              })()}
+
+              <Panel title="Orders sent to the POS" loading={ppRelays === null}
+                action={<button onClick={() => adminGetPetpoojaRelays().then(setPpRelays).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+                {ppRelays && (ppRelays.length ? (
+                  <Table head={['Order', 'Total', 'Reached kitchen?', 'Their order id', 'Attempts', 'When']}>
+                    {ppRelays.map(r => (
+                      <tr key={r.order_id}>
+                        <td style={td}><strong style={{ color: 'var(--text-link)' }}>{r.order_number}</strong></td>
+                        <td style={td}>{money(r.total_amount)}</td>
+                        <td style={td}>
+                          {r.relay_ok ? <Badge text="Yes" ok /> : <Badge text="Failed" />}
+                          {!r.relay_ok && r.last_error && <div style={{ marginTop: 3, fontSize: 'var(--text-2xs)', color: 'var(--status-error)', maxWidth: 300 }}>{r.last_error}</div>}
+                        </td>
+                        <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{r.petpooja_order_id || '—'}</span></td>
+                        <td style={td}>{r.attempts}</td>
+                        <td style={td}>{fmtDate(r.updated_at)}</td>
+                      </tr>
+                    ))}
+                  </Table>
+                ) : <Empty text="No orders have been sent to the POS yet." />)}
+              </Panel>
+            </div>
+          );
+        })()}
 
         {/* ===== Coupons ===== */}
         {tab === 'coupons' && (() => {
@@ -1117,6 +1620,23 @@ export default function AdminDashboard() {
       )}
 
       {/* Order detail popup */}
+      {cancelInfo && (
+        <div onClick={() => setCancelInfo(null)} style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'var(--surface-overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 'min(460px,96vw)', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: 24, borderTop: `4px solid ${cancelInfo.ok ? 'var(--status-success, #1a7f4b)' : 'var(--status-error)'}` }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+              {cancelInfo.ok ? <Check size={20} style={{ color: 'var(--status-success, #1a7f4b)', flex: 'none', marginTop: 2 }} /> : <AlertTriangle size={20} style={{ color: 'var(--status-error)', flex: 'none', marginTop: 2 }} />}
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: 'var(--text-h5, 1.05rem)', color: 'var(--text-strong)' }}>{cancelInfo.ok ? 'Cancelled' : 'Not cancelled'}</h3>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 2 }}>{cancelInfo.orderNumber}</div>
+              </div>
+              <button onClick={() => setCancelInfo(null)} style={iconBtn}><X size={18} /></button>
+            </div>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.6, whiteSpace: 'pre-line', margin: '0 0 16px' }}>{cancelInfo.message}</p>
+            <button onClick={() => setCancelInfo(null)} style={{ ...addBtn, width: '100%', justifyContent: 'center' }}>Got it</button>
+          </div>
+        </div>
+      )}
+
       {viewOrder && (() => {
         const o = viewOrder;
         const items = o.items || [];
@@ -1137,9 +1657,14 @@ export default function AdminDashboard() {
                 </div>
                 <button onClick={() => setViewOrder(null)} style={iconBtn}><X size={18} /></button>
               </div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                 <Badge text={o.orderStatus} />
                 <Badge text={o.paymentStatus} ok={o.paymentStatus === 'PAID'} />
+                {o.warningFlags?.includes('DUPLICATE_CHARGE') && (
+                  <span style={{ padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--status-danger-bg, #FCEBEA)', color: 'var(--status-danger, #C0392B)', fontSize: 'var(--text-xs)', fontWeight: 800 }}>
+                    ⚠ Possible duplicate charge — check Razorpay
+                  </span>
+                )}
               </div>
 
               <div style={{ ...card, padding: 14, marginBottom: 14, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -1181,7 +1706,7 @@ export default function AdminDashboard() {
               {/* Shipment — read-only summary; create/cancel/label live in the Delivery tab (no duplication) */}
               {(() => {
                 const modalTrack = trackResult[o.id] as { status?: string; note?: string; scans?: { time: string; event: string }[] } | undefined;
-                const service = o.carrier === 'SHADOWFAX' ? 'Intracity (Shadowfax)' : o.carrier === 'DELHIVERY' ? 'Intercity (Delhivery)' : null;
+                const service = o.carrier === 'SHIPROCKET' ? 'Intracity (Shiprocket)' : o.carrier === 'DELHIVERY' ? 'Intercity (Delhivery)' : null;
                 return (
                   <div style={{ ...card, padding: 14, marginBottom: 14 }}>
                     <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Shipment</div>
@@ -1195,7 +1720,9 @@ export default function AdminDashboard() {
                         <button onClick={async () => {
                           const r = await adminTrackOrder(o.id).catch(() => null);
                           if (!r?.ok) return;
-                          if (r.carrier === 'SHADOWFAX') {
+                          // Shiprocket is pre-normalised by the backend into { status, scans };
+                          // only Delhivery returns its own raw envelope.
+                          if (r.carrier === 'SHIPROCKET') {
                             setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', note: '', scans: r.scans || [] } }));
                           } else {
                             type ShipmentData = { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
@@ -1206,7 +1733,18 @@ export default function AdminDashboard() {
                         }} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', background: 'var(--surface-raised)', color: 'var(--text-strong)', border: '1.5px solid var(--border-default)' }}><ExternalLink size={14} /> Track</button>
                       </div>
                     ) : (
-                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '10px 0 0' }}>Not shipped yet — create, cancel or download the label from the <strong>Delivery</strong> tab.</p>
+                      <div style={{ marginTop: 10 }}>
+                        {o.shipmentError && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, margin: '0 0 8px' }}>Booking failed: {o.shipmentError}</p>}
+                        {!a ? (
+                          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>This order has no delivery address, so no courier can be booked for it.</p>
+                        ) : o.paymentStatus === 'PAID' && o.orderStatus !== 'CANCELLED' ? (
+                          <button disabled={fixing === o.id} onClick={() => rebookShipment(o.id)} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', opacity: fixing === o.id ? 0.5 : 1 }}>
+                            <Truck size={14} /> {fixing === o.id ? 'Booking…' : 'Book courier now'}
+                          </button>
+                        ) : (
+                          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>Not shipped — a courier is only booked once payment is confirmed.</p>
+                        )}
+                      </div>
                     )}
                     {modalTrack && (
                       <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 8, padding: 12 }}>
@@ -1226,6 +1764,29 @@ export default function AdminDashboard() {
                   </div>
                 );
               })()}
+
+              {/* Kitchen / POS — the leg that decides whether the bill and KOT actually print.
+                  Shown only for paid orders: an unpaid one is never relayed, by design. */}
+              {o.paymentStatus === 'PAID' && (
+                <div style={{ ...card, padding: 14, marginBottom: 14 }}>
+                  <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Kitchen (Petpooja POS)</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <Badge text={o.pos?.relayed ? 'Ticket printed' : o.pos ? 'Relay failed' : 'Not sent'} ok={!!o.pos?.relayed} />
+                    {o.pos?.petpoojaOrderId && <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.pos.petpoojaOrderId}</span>}
+                  </div>
+                  {!o.pos?.relayed && (
+                    <div style={{ marginTop: 10 }}>
+                      {o.pos?.lastError && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, margin: '0 0 8px' }}>{o.pos.lastError}{o.pos.attempts ? ` — ${o.pos.attempts} attempt${o.pos.attempts > 1 ? 's' : ''}` : ''}</p>}
+                      {o.orderStatus !== 'CANCELLED' && (
+                        <button disabled={fixing === o.id} onClick={() => retryPosRelay(o.id)} style={{ ...addBtn, padding: '8px 14px', fontSize: 'var(--text-sm)', opacity: fixing === o.id ? 0.5 : 1 }}>
+                          <RefreshCw size={14} /> {fixing === o.id ? 'Sending…' : 'Send to POS'}
+                        </button>
+                      )}
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '8px 0 0' }}>Invoices and KOTs live in the Petpooja dashboard — this only shows whether the ticket reached them.</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {row('Item total', money(o.subtotal ?? o.totalAmount))}
@@ -1250,6 +1811,234 @@ export default function AdminDashboard() {
   );
 }
 
+/*
+ * Orders that took the customer's money but did not finish downstream.
+ *
+ * Four separate lists rather than one, because each needs a different action:
+ *   • paid, no courier      → re-book (one click, re-runs the same routing payment would have)
+ *   • paid, no POS ticket   → usually an unmapped product; fix the mapping, then push again
+ *   • cancelled, leg stuck  → the POS or carrier refused; must be finished in THEIR dashboard
+ *   • money reversed        → a refund or chargeback landed on an order still being fulfilled
+ * The whole panel is hidden when every list is empty, so a clean day shows nothing at all.
+ */
+function AttentionPanel({ report, busy, onRebook, onRetryPos, onOpen, onRefresh }: {
+  report: AttentionReport; busy: number | null;
+  onRebook: (id: number) => void; onRetryPos: (id: number) => void;
+  onOpen: (id: number) => void; onRefresh: () => void;
+}) {
+  const head: React.CSSProperties = { fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', margin: '14px 0 6px' };
+  const line: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 0', borderTop: '1px solid var(--border-soft)', fontSize: 'var(--text-sm)' };
+  const num: React.CSSProperties = { fontWeight: 800, color: 'var(--text-link)', cursor: 'pointer' };
+  const why: React.CSSProperties = { color: 'var(--text-muted)', fontSize: 'var(--text-xs)', flex: 1, minWidth: 180 };
+
+  return (
+    <div style={{ ...card, padding: '14px 16px', marginBottom: 16, borderColor: 'var(--status-error)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <AlertTriangle size={18} style={{ color: 'var(--status-error)' }} />
+        <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>Needs attention ({report.total})</span>
+        <button onClick={onRefresh} style={{ ...iconBtn, marginLeft: 'auto' }} title="Refresh"><RefreshCw size={15} /></button>
+      </div>
+
+      {!!report.paidNoShipment.length && <>
+        <div style={head}>Paid, but no courier booked ({report.paidNoShipment.length})</div>
+        {report.paidNoShipment.map(o => (
+          <div key={o.id} style={line}>
+            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
+            <span>{money(o.total_amount)}</span>
+            {/* No address = nothing to ship to, and no retry can ever fix it. Say so instead of
+                offering a button that is guaranteed to fail. */}
+            <span style={why}>{o.has_address === false ? 'No delivery address on this order — it cannot be shipped.' : (o.shipment_error || 'No booking attempt recorded yet.')}</span>
+            {o.has_address === false ? (
+              <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>Not shippable</span>
+            ) : (
+              <button disabled={busy === o.id} onClick={() => onRebook(o.id)} style={{ ...actionBtn(), opacity: busy === o.id ? 0.5 : 1 }}>
+                <Truck size={13} /> {busy === o.id ? 'Booking…' : 'Book courier'}
+              </button>
+            )}
+          </div>
+        ))}
+      </>}
+
+      {!!report.paidNoPosTicket.length && <>
+        <div style={head}>Paid, but the kitchen never got the ticket ({report.paidNoPosTicket.length})</div>
+        {report.paidNoPosTicket.map(o => (
+          <div key={o.id} style={line}>
+            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
+            <span>{money(o.total_amount)}</span>
+            <span style={why}>{o.last_error || 'Never attempted.'}{o.attempts ? ` (${o.attempts} attempt${o.attempts > 1 ? 's' : ''})` : ''}</span>
+            <button disabled={busy === o.id} onClick={() => onRetryPos(o.id)} style={{ ...actionBtn(), opacity: busy === o.id ? 0.5 : 1 }}>
+              <RefreshCw size={13} /> {busy === o.id ? 'Sending…' : 'Send to POS'}
+            </button>
+          </div>
+        ))}
+      </>}
+
+      {!!report.cancelStuckDownstream.length && <>
+        <div style={head}>Cancelled here, but still live downstream ({report.cancelStuckDownstream.length})</div>
+        {report.cancelStuckDownstream.map((o, i) => (
+          <div key={`${o.id}-${i}`} style={line}>
+            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
+            <span style={why}>{o.remarks}</span>
+          </div>
+        ))}
+      </>}
+
+      {!!report.moneyReversed.length && <>
+        <div style={head}>Money refunded or contested ({report.moneyReversed.length})</div>
+        {report.moneyReversed.map((o, i) => (
+          <div key={`${o.id}-${i}`} style={line}>
+            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
+            <span style={why}>{o.remarks}</span>
+          </div>
+        ))}
+      </>}
+
+      {/* Only the stores that bill on their own Petpooja terminal can land here — Begur relays
+          automatically. There is no button: nobody at head office can type a bill number that only
+          exists on a shop's till. The fix is to ring the store. */}
+      {!!report.posManualUnbilled?.length && <>
+        <div style={head}>Made at a store, but no POS bill number recorded ({report.posManualUnbilled.length})</div>
+        {report.posManualUnbilled.map(o => (
+          <div key={o.id} style={line}>
+            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
+            <span>{money(o.total_amount)}</span>
+            <span style={why}>
+              {o.store_code} — {o.store_accepted_at ? 'accepted' : 'not even accepted yet'}
+              {o.store_ready_at ? ', packed' : ''}. Nothing links this payment to a bill on their till.
+            </span>
+          </div>
+        ))}
+      </>}
+    </div>
+  );
+}
+
+/*
+ * One store: where its staff sign in, who can, and what it is sitting on.
+ *
+ * The password handling here is the honest kind. Hashes cannot be read back, so there is no way to
+ * answer "what is their password" for an account in use — and pretending otherwise by storing a
+ * copy would be worse than useless. Instead: a brand-new account shows the starting password it was
+ * created with, and the moment it is used or changed that stops being shown and the only move left
+ * is to set a new one, which the admin then hands over in person.
+ */
+function StoreCard({ store, busy, setBusy, onChanged, setErr, setNotice }: {
+  store: AdminStore; busy: number | null;
+  setBusy: (n: number | null) => void; onChanged: () => void;
+  setErr: (s: string) => void; setNotice: (s: string) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [newUser, setNewUser] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [resetting, setResetting] = useState<number | null>(null);
+  const [resetPass, setResetPass] = useState('');
+
+  const portalUrl = typeof window !== 'undefined' ? `${window.location.origin}${store.portalPath}` : store.portalPath;
+
+  const guard = async (id: number, fn: () => Promise<unknown>, ok: string) => {
+    setBusy(id); setErr(''); setNotice('');
+    try { await fn(); setNotice(ok); onChanged(); }
+    catch (e: unknown) { setErr(e instanceof Error ? e.message : 'That did not work'); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <div style={{ ...card, padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+        <strong style={{ fontSize: 'var(--text-base)', color: 'var(--text-strong)' }}>{store.name}</strong>
+        <Badge text={store.posMode === 'AUTO' ? 'Petpooja: automatic' : 'Petpooja: billed at the store'} ok={store.posMode === 'AUTO'} />
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+          {store.city} · {store.pincode}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>Staff sign in at</span>
+        <code style={{ fontSize: 'var(--text-xs)', background: 'var(--surface-sunken)', padding: '4px 9px', borderRadius: 6 }}>{portalUrl}</code>
+        <button onClick={() => { navigator.clipboard?.writeText(portalUrl); setNotice('Link copied.'); }} style={actionBtn()}>Copy</button>
+        <a href={store.portalPath} target="_blank" rel="noreferrer" style={{ ...actionBtn(), textDecoration: 'none' }}><ExternalLink size={13} /> Open</a>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginBottom: 14 }}>
+        <MiniStat label="Paid, last 30 days" value={String(store.last30Days.paid)} />
+        <MiniStat label="Not yet accepted" value={String(store.last30Days.unaccepted)} bad={store.last30Days.unaccepted > 0} />
+        {store.posMode === 'MANUAL' && (
+          <MiniStat label="No POS bill number" value={String(store.last30Days.unbilled)} bad={store.last30Days.unbilled > 0} />
+        )}
+      </div>
+
+      <Table head={['Username', 'Last signed in', 'Status', '']}>
+        {store.staff.map(u => (
+          <tr key={u.id} style={{ opacity: busy === u.id ? 0.5 : 1 }}>
+            <td style={td}>
+              <strong style={{ fontFamily: 'monospace', color: 'var(--text-strong)' }}>{u.username}</strong>
+              {u.onStartingPassword && u.startingPassword && (
+                <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 3 }}>
+                  Starting password: <code>{u.startingPassword}</code> — never used yet
+                </div>
+              )}
+            </td>
+            <td style={td}>{u.lastLoginAt ? fmtDate(u.lastLoginAt) : <span style={{ color: 'var(--text-muted)' }}>never</span>}</td>
+            <td style={td}>{u.isActive ? <Badge text="Active" ok /> : <Badge text="Disabled" />}</td>
+            <td style={{ ...td, whiteSpace: 'nowrap' }}>
+              <button onClick={() => { setResetting(resetting === u.id ? null : u.id); setResetPass(''); }} style={actionBtn()}>
+                <KeyRound size={13} /> Set password
+              </button>
+              <button onClick={() => guard(u.id, () => adminToggleStoreStaff(u.id), u.isActive ? 'Account disabled.' : 'Account enabled.')} style={actionBtn()}>
+                {u.isActive ? <ToggleRight size={13} /> : <ToggleLeft size={13} />} {u.isActive ? 'Disable' : 'Enable'}
+              </button>
+              <button onClick={() => guard(u.id, () => adminDeleteStoreStaff(u.id), 'Account deleted.')} style={actionBtn(true)}>
+                <Trash2 size={13} />
+              </button>
+            </td>
+          </tr>
+        ))}
+        {resetting != null && (
+          <tr>
+            <td style={td} colSpan={4}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input type="text" value={resetPass} onChange={e => setResetPass(e.target.value)}
+                  placeholder="New password (8+ characters)" style={{ ...inp, width: 'auto', flex: '1 1 220px' }} />
+                <button disabled={resetPass.length < 8}
+                  onClick={() => guard(resetting, () => adminSetStoreStaffPassword(resetting, resetPass),
+                    `Password set. Give it to them: ${resetPass}`).then(() => { setResetting(null); setResetPass(''); })}
+                  style={{ ...addBtn, opacity: resetPass.length < 8 ? 0.5 : 1 }}>Save</button>
+                <button onClick={() => setResetting(null)} style={actionBtn()}>Cancel</button>
+              </div>
+              <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+                Shown once, here, after saving — write it down before you close this. It cannot be read back.
+              </p>
+            </td>
+          </tr>
+        )}
+      </Table>
+
+      {adding ? (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
+          <input value={newUser} onChange={e => setNewUser(e.target.value)} placeholder="username" style={{ ...inp, width: 'auto', flex: '1 1 160px' }} />
+          <input value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="password (8+)" style={{ ...inp, width: 'auto', flex: '1 1 160px' }} />
+          <button disabled={!newUser.trim() || newPass.length < 8}
+            onClick={() => guard(-1, () => adminCreateStoreStaff(store.code, newUser.trim(), newPass), `Created ${newUser.trim()}.`)
+              .then(() => { setAdding(false); setNewUser(''); setNewPass(''); })}
+            style={{ ...addBtn, opacity: !newUser.trim() || newPass.length < 8 ? 0.5 : 1 }}>Create</button>
+          <button onClick={() => setAdding(false)} style={actionBtn()}>Cancel</button>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} style={{ ...actionBtn(), marginTop: 12 }}><Plus size={13} /> Add another login</button>
+      )}
+    </div>
+  );
+}
+
+function MiniStat({ label, value, bad }: { label: string; value: string; bad?: boolean }) {
+  return (
+    <div style={{ ...card, padding: '10px 14px' }}>
+      <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
+      <div style={{ fontSize: 'var(--text-base)', fontWeight: 800, color: bad ? 'var(--status-error)' : 'var(--text-strong)', marginTop: 2 }}>{value}</div>
+    </div>
+  );
+}
+
 const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
 const addBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' };
 const iconBtn: React.CSSProperties = { width: 34, height: 34, borderRadius: 9, border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'inline-grid', placeItems: 'center', color: 'var(--text-body)', marginRight: 6 };
@@ -1266,7 +2055,7 @@ const actionBtn = (danger = false): React.CSSProperties => ({
  * Admin-facing shipment status. Delhivery's own wording is misleading at the start of the journey:
  * "CREATED"/"Manifested" only means a waybill exists, which happens automatically on payment while
  * the parcel is still on the counter. Spelling that out as "Awaiting pickup" is what tells the
- * operator there is still something to DO (attach it to a pickup request).
+ * operator there is still something to DO (schedule a pickup for the warehouse).
  */
 function shipStatusLabel(s?: string | null): string {
   const t = (s || '').trim();

@@ -6,10 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-// Shadowfax is RETIRED — it never assigned a rider in any live test and support was unreachable.
-// zoneStores/tracking helpers are still imported because historical SHADOWFAX orders must remain
-// viewable; createShadowfaxOrder is deliberately no longer used for new shipments.
-import { zoneStores, nearestStoreToCoords, orderStoresByProximity, trackShadowfax, sfxStatusLabel, sfxStatusRank, shadowfaxConfigured } from '../shadowfax.js';
+import { zoneStores, nearestStoreToCoords, orderStoresByProximity, storeForAddress } from '../stores.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -17,13 +14,10 @@ import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
 const router = Router();
 router.use(requireAuth);
 
-// SFX_STORES + nearestStore (intracity pickup routing) live in ../shadowfax.js — shared with the
+// The store list + nearestStore (intracity pickup routing) live in ../stores.js — shared with the
 // checkout /delivery/check so both use the same store-zone logic.
 
-// Mirrors delivery.js's SHADOWFAX_DISABLED — while true, intracity orders are self-pickup from
-// the nearest store (no shipment created at all) instead of being handed to Shadowfax.
-const SHADOWFAX_DISABLED = process.env.SHADOWFAX_DISABLED === 'true';
-// Same escape hatch for Shiprocket: flip this and intracity falls through to Delhivery.
+// Kill switch: flip this and intracity stops being offered (it is never sent to a slower courier).
 const SHIPROCKET_DISABLED = process.env.SHIPROCKET_DISABLED === 'true';
 
 // Auto-create a shipment once an order is PAID. Routes by DESTINATION PINCODE:
@@ -104,6 +98,12 @@ async function attemptShipment(orderId, addressArg) {
         return { ok: false, reason: `intracity_unserviceable: no verified store can reach ${destPin} on the same-day carrier. Verify a nearer pickup location in the Shiprocket panel, then re-book.` };
       } else {
       const pickup = chosen.store;
+      // The carrier picked this store, so it is the one actually baking the order — write it over
+      // whatever the address-only guess at order creation said. Done BEFORE the booking call: if
+      // that call fails, the right kitchen is still the one holding the order on its board.
+      if (pickup.code && pickup.code !== order.store_code) {
+        await query('UPDATE orders SET store_code = $1, updated_at = $2 WHERE id = $3', [pickup.code, nowIso(), orderId]).catch(() => {});
+      }
       console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | store=${pickup.name} | ₹${chosen.rate} | ${chosen.distance} km`);
       const created = await createHyperlocalOrder({
         order, items,
@@ -365,15 +365,21 @@ router.post('/', async (req, res) => {
   const ts = nowIso();
   const orderNumber = await genOrderNumber();
 
+  // Which kitchen this belongs to, from the address alone. Assigned now rather than at booking so
+  // the store owns the order from the moment it is paid for — a courier that cannot be booked must
+  // not also mean no kitchen ever sees it. attemptShipment corrects this if the carrier ends up
+  // serving the drop from a different store.
+  const fulfillingStore = storeForAddress(address);
+
   const orderId = await withTransaction(async (client) => {
     const { rows: [order] } = await client.query(
       `INSERT INTO orders
          (order_number, user_id, address_id, subtotal, discount_amount, delivery_fee, tax_amount,
           total_amount, coupon_code, payment_status, order_status, shipment_status, label_generated,
-          created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING','PLACED','NOT_CREATED',FALSE,$10,$11) RETURNING id`,
+          store_code, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING','PLACED','NOT_CREATED',FALSE,$10,$11,$12) RETURNING id`,
       [orderNumber, user.id, address.id, subtotal, discount, deliveryFee, 0, total,
-       couponCode ?? null, ts, ts]
+       couponCode ?? null, fulfillingStore?.code ?? null, ts, ts]
     );
     const oid = order.id;
     for (const li of lineItems) {
@@ -449,23 +455,6 @@ router.get('/:id/delhivery-track', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) throw new ApiError('Order not found');
   if (!order.delhivery_waybill) return res.json({ tracked: false, reason: 'no_waybill' });
-
-  // Intracity orders ship via Shadowfax — track them there, NOT Delhivery (the AWB lives in the
-  // delhivery_waybill column for both carriers, so branch on `carrier`).
-  if (order.carrier === 'SHADOWFAX') {
-    if (!shadowfaxConfigured()) return res.json({ tracked: false, reason: 'shadowfax_not_configured' });
-    const result = await trackShadowfax(order.delhivery_waybill);
-    if (!result.ok) return res.json({ tracked: false, reason: result.reason });
-    // Store the human label, and only when it ADVANCES the lifecycle — so a stale poll (e.g. staging
-    // returning `new`) can't overwrite a status the webhook already moved forward.
-    if (result.status && sfxStatusRank(result.status) > sfxStatusRank(order.shipment_status)) {
-      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [sfxStatusLabel(result.status), nowIso(), order.id]);
-    }
-    const scans = (result.data?.tracking_details || [])
-      .map(t => ({ time: t.created, event: sfxStatusLabel(t.status_id) || t.status || t.remarks }))
-      .reverse();
-    return res.json({ tracked: true, carrier: 'SHADOWFAX', waybill: order.delhivery_waybill, status: sfxStatusLabel(result.status) || result.status || null, trackUrl: result.trackUrl || null, scans });
-  }
 
   // Pan-India orders ship via Delhivery.
   const result = await trackShipment(order.delhivery_waybill);

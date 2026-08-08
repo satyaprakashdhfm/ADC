@@ -5,7 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 
-import { initSchema } from './db.js';
+import { initSchema, getOne } from './db.js';
 import { seedIfEmpty } from './seed.js';
 import { parseAuth } from './middleware.js';
 
@@ -18,9 +18,10 @@ import couponRoutes from './routes/coupons.js';
 import adminRoutes from './routes/admin.js';
 import contactRoutes from './routes/contact.js';
 import deliveryRoutes from './routes/delivery.js';
-import shadowfaxWebhookRoutes from './routes/shadowfax.js';
 import petpoojaRoutes from './routes/petpooja.js';
 import hyperlocalRoutes from './routes/hyperlocal.js';
+import storeRoutes from './routes/store.js';
+import { ensureStoreAccounts } from './storeAuth.js';
 import { paymentWebhook } from './routes/paymentsWebhook.js';
 import { paymentCallback } from './routes/orders.js';
 
@@ -99,8 +100,10 @@ app.use('/api/addresses', addressRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/delivery', deliveryRoutes);
-app.use('/api/shadowfax', shadowfaxWebhookRoutes);
 app.use('/api/petpooja', petpoojaRoutes);
+// Store staff portal. Its own auth scheme (see storeAuth.js), NOT a Supabase role — counter staff
+// must never hold a token that /api/admin or a customer's account would also accept.
+app.use('/api/store', storeRoutes);
 // Shiprocket Hyperlocal tracking. NOT /api/shiprocket — their panel rejects webhook URLs
 // containing shiprocket / kartrocket / sr / kr / localhost.
 app.use('/api/hyperlocal', hyperlocalRoutes);
@@ -137,6 +140,9 @@ if (!process.env.VERCEL) {
     } else {
       await seedIfEmpty();
     }
+    // Give any store that has no staff login one. Idempotent — an existing account is never
+    // touched, so a password someone changed cannot be reset by a redeploy.
+    await ensureStoreAccounts().catch((e) => console.error('[STORE] account seed failed:', e?.message || e));
     app.listen(PORT, () => {
       console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
       console.log(`[CONFIG] DB=${process.env.DATABASE_URL ? 'supabase-pooler' : 'local-pg'}`);
@@ -144,7 +150,9 @@ if (!process.env.VERCEL) {
       console.log(`[CONFIG] DELHIVERY_TOKEN=${process.env.DELIVERY_API_TOKEN || process.env.DELHIVERY_API_TOKEN ? 'set' : 'MISSING'}`);
       console.log(`[CONFIG] DELHIVERY_BASE_URL=${process.env.DELHIVERY_BASE_URL || '(default: track.delhivery.com)'}`);
       console.log(`[CONFIG] RESEND=${process.env.RESEND_API_KEY ? 'set' : 'MISSING'}`);
-      console.log(`[CONFIG] ADMIN_EMAILS=${process.env.ADMIN_EMAILS || 'MISSING'}`);
+      // Admin is granted on the users row, not by env var — see the note in middleware.js.
+      getOne("SELECT count(*)::int AS n FROM users WHERE role = 'ADMIN'")
+        .then((r) => console.log(`[CONFIG] ADMIN accounts in DB=${r?.n ?? '?'}`)).catch(() => {});
     });
   })().catch(err => { console.error('Startup failed:', err); process.exit(1); });
 }

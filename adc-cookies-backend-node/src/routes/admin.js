@@ -16,8 +16,9 @@ import {
   fetchDocument,
   DELHIVERY_DOC_TYPES,
 } from '../delhivery.js';
-import { shadowfaxConfigured, trackShadowfax, getShadowfaxPod, sfxStatusLabel, SFX_STORES, sfxServiceability } from '../shadowfax.js';
-import { cancelShiprocketOrder, trackShiprocket } from '../shiprocket.js';
+import { ADC_STORES } from '../stores.js';
+import { hashPassword, defaultPasswordFor } from '../storeAuth.js';
+import { cancelShiprocketOrder, trackShiprocket, listPickups, shiprocketConfigured } from '../shiprocket.js';
 import { cancelOrder as petpoojaCancelOrder, relayOrder, unmappedProducts } from '../petpooja.js';
 import { autoCreateShipment } from './orders.js';
 
@@ -218,13 +219,93 @@ router.patch('/orders/:id/status', async (req, res) => {
 // still unlinked. An order cannot relay until every product it contains has a Petpooja item id.
 router.get('/petpooja/mapping', async (_req, res) => {
   const restId = process.env.PETPOOJA_REST_ID || '';
-  const [items, products, unmapped] = await Promise.all([
-    getAll(`SELECT item_id, variation_id, name, variation_name, price, in_stock, product_id
+  const [items, products, unmapped, pushes, taxes] = await Promise.all([
+    getAll(`SELECT item_id, variation_id, name, variation_name, price, in_stock, product_id, category_id
               FROM petpooja_items WHERE rest_id = $1 ORDER BY name, variation_name`, [restId]),
     getAll('SELECT id, name, price, is_available FROM products ORDER BY id'),
     unmappedProducts(restId),
+    // Every menu Petpooja has ever pushed. Kept because a push that arrives malformed is otherwise
+    // invisible — their dashboard only ever says "Menu trigger failed" with no detail.
+    getAll(`SELECT id, rest_id, source, item_count, received_at FROM petpooja_menu_snapshots
+             ORDER BY id DESC LIMIT 10`),
+    getAll('SELECT tax_id, name, percentage FROM petpooja_taxes WHERE rest_id = $1 ORDER BY tax_id', [restId]),
   ]);
-  res.json({ restId, items, products, unmapped, menuSynced: items.length > 0 });
+  res.json({ restId, items, products, unmapped, taxes, pushes, menuSynced: items.length > 0 });
+});
+
+/*
+ * Link from OUR side: given one of our products, choose which Petpooja item it is.
+ *
+ * The item-first direction reads backwards in practice. Our catalogue is the fixed, known set —
+ * thirteen products we actually sell — while theirs is larger and includes things we never list
+ * online (coffees, combo packs). Working product-by-product means every row is one you care about,
+ * and "which of our products still has no POS item" is answerable at a glance.
+ *
+ * A product maps to exactly one item, so any previous link for that product is cleared first —
+ * otherwise re-pointing a product would silently leave two items claiming it, and relayOrder would
+ * pick whichever the query happened to return.
+ */
+router.post('/petpooja/mapping/by-product', async (req, res) => {
+  const restId = process.env.PETPOOJA_REST_ID || '';
+  const { productId, itemId, variationId = '' } = req.body || {};
+  if (!productId) throw new ApiError('productId is required');
+  const ts = nowIso();
+
+  await query('UPDATE petpooja_items SET product_id = NULL, updated_at = $1 WHERE rest_id = $2 AND product_id = $3',
+    [ts, restId, Number(productId)]);
+
+  if (itemId) {
+    const r = await query(
+      `UPDATE petpooja_items SET product_id = $1, updated_at = $2
+        WHERE rest_id = $3 AND item_id = $4 AND variation_id = $5`,
+      [Number(productId), ts, restId, String(itemId), String(variationId)]);
+    if (!r.rowCount) throw new ApiError('That Petpooja item is not in the synced menu', 404);
+  }
+  res.json({ ok: true });
+});
+
+/*
+ * Create one of OUR products straight from a Petpooja item, and link the two.
+ *
+ * Mapping assumes a matching product already exists on our side. For a catalogue that lives in the
+ * POS first — which is the normal direction here, since the kitchen owns the menu — it usually does
+ * not, and the alternative is retyping every name and price into the Products tab and coming back.
+ */
+router.post('/petpooja/mapping/create-product', async (req, res) => {
+  const restId = process.env.PETPOOJA_REST_ID || '';
+  const { itemId, variationId = '' } = req.body || {};
+  if (!itemId) throw new ApiError('itemId is required');
+
+  const item = await getOne(
+    `SELECT * FROM petpooja_items WHERE rest_id = $1 AND item_id = $2 AND variation_id = $3`,
+    [restId, String(itemId), String(variationId)]);
+  if (!item) throw new ApiError('That Petpooja item is not in the synced menu', 404);
+  if (item.product_id) throw new ApiError('This item is already linked to a product', 409);
+
+  // Their variation name belongs in the product name — "Choco Chip" and "Choco Chip (500g)" are
+  // different products to a customer, and identical ones would be impossible to tell apart.
+  const name = [item.name, item.variation_name].filter(Boolean).join(' — ');
+  const existing = await getOne('SELECT id FROM products WHERE lower(name) = lower($1)', [name]);
+  const ts = nowIso();
+  let productId;
+  if (existing) {
+    productId = existing.id;   // don't duplicate a product that is already there — just link it
+  } else {
+    const row = await getOne(
+      `INSERT INTO products (name, category, description, price, stock_quantity, images, options,
+                             is_available, menu_group, tag, featured, created_at, updated_at)
+       VALUES ($1,'COOKIES',$2,$3,0,NULL,NULL,$4,NULL,NULL,FALSE,$5,$5) RETURNING id`,
+      [name, `Imported from Petpooja (item ${item.item_id})`, Number(item.price) || 0, !!item.in_stock, ts]);
+    productId = row.id;
+  }
+
+  await query(
+    `UPDATE petpooja_items SET product_id = $1, updated_at = $2
+      WHERE rest_id = $3 AND item_id = $4 AND variation_id = $5`,
+    [productId, ts, restId, String(itemId), String(variationId)]);
+
+  const product = await getOne('SELECT * FROM products WHERE id = $1', [productId]);
+  res.json({ ok: true, created: !existing, product: serializeProduct(product) });
 });
 
 // Link or unlink one of their items to one of our products. product_id null clears the link.
@@ -265,7 +346,10 @@ router.post('/petpooja/orders/:id/retry', async (req, res) => {
  * kitchen and a courier.
  */
 router.get('/attention', async (_req, res) => {
-  const [noShipment, noRelay, cancelStuck, disputes] = await Promise.all([
+  // Stores whose orders WE relay to Petpooja. Everywhere else the staff bill on their own terminal,
+  // so "no POS ticket" is the normal state there and listing it would bury the real failures.
+  const autoPosStores = ADC_STORES.filter((s) => s.posMode === 'AUTO').map((s) => s.code);
+  const [noShipment, noRelay, cancelStuck, disputes, manualUnbilled] = await Promise.all([
     // Paid, not cancelled, and no courier booked. `has_address` matters: an order with no address
     // can NEVER be booked, so the UI must explain that rather than offer a retry that always fails.
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error, o.carrier,
@@ -274,13 +358,14 @@ router.get('/attention', async (_req, res) => {
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
                AND o.delhivery_waybill IS NULL
              ORDER BY o.created_at DESC LIMIT 100`),
-    // Paid, not cancelled, and the kitchen never got the ticket.
+    // Paid, not cancelled, relayed by us, and the kitchen never got the ticket.
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at,
                    p.last_error, COALESCE(p.attempts, 0) AS attempts
               FROM orders o LEFT JOIN petpooja_orders p ON p.order_id = o.id
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
                AND (p.relay_ok IS NULL OR p.relay_ok = FALSE)
-             ORDER BY o.created_at DESC LIMIT 100`),
+               AND o.store_code = ANY($1::text[])
+             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores]),
     // Cancelled on our side but a downstream leg refused — POS ticket or rider still live.
     getAll(`SELECT DISTINCT o.id, o.order_number, t.status, t.remarks, t.created_at
               FROM orders o JOIN order_tracking t ON t.order_id = o.id
@@ -291,14 +376,110 @@ router.get('/attention', async (_req, res) => {
               FROM orders o JOIN order_tracking t ON t.order_id = o.id
              WHERE t.status IN ('DISPUTE_OPENED','REFUNDED','REFUND_FAILED','FULFILLED_THEN_REFUNDED')
              ORDER BY t.created_at DESC LIMIT 100`),
+    // Billed by a store on its own terminal, but no bill number typed back. Money Razorpay settled
+    // with no POS bill to reconcile it against — the manual flow's one failure mode.
+    getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.store_code,
+                   o.store_accepted_at, o.store_ready_at
+              FROM orders o
+             WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
+               AND o.store_code IS NOT NULL AND NOT (o.store_code = ANY($1::text[]))
+               AND (o.store_pos_bill_no IS NULL OR o.store_pos_bill_no = '')
+             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores]),
   ]);
   res.json({
     paidNoShipment: noShipment,
     paidNoPosTicket: noRelay,
     cancelStuckDownstream: cancelStuck,
     moneyReversed: disputes,
-    total: noShipment.length + noRelay.length + cancelStuck.length + disputes.length,
+    posManualUnbilled: manualUnbilled,
+    total: noShipment.length + noRelay.length + cancelStuck.length + disputes.length + manualUnbilled.length,
   });
+});
+
+/* ---------- Stores (staff portal) ---------- */
+
+/*
+ * Every outlet, its staff logins and what it is currently holding.
+ *
+ * `onStartingPassword` is the closest thing to an honest answer to "what is their password". A hash
+ * cannot be read back, so instead we report whether the account has ever been used or had its
+ * password changed. If neither has happened, the starting password still works and the UI can print
+ * it; once either has, it cannot, and the UI says so rather than showing a stale one.
+ */
+router.get('/stores', async (_req, res) => {
+  const [staff, counts] = await Promise.all([
+    getAll('SELECT * FROM store_users ORDER BY store_code, username'),
+    getAll(`SELECT store_code,
+                   COUNT(*) FILTER (WHERE payment_status = 'PAID' AND order_status <> 'CANCELLED') AS paid,
+                   COUNT(*) FILTER (WHERE payment_status = 'PAID' AND order_status <> 'CANCELLED' AND store_accepted_at IS NULL) AS unaccepted,
+                   COUNT(*) FILTER (WHERE payment_status = 'PAID' AND order_status <> 'CANCELLED' AND (store_pos_bill_no IS NULL OR store_pos_bill_no = '')) AS unbilled
+              FROM orders WHERE created_at >= $1 GROUP BY store_code`,
+      [new Date(Date.now() - 30 * 864e5).toISOString()]),
+  ]);
+  const countBy = new Map(counts.map((c) => [c.store_code, c]));
+  res.json({
+    stores: ADC_STORES.map((s) => {
+      const c = countBy.get(s.code) || {};
+      return {
+        code: s.code, name: s.name, city: s.city, state: s.state, pincode: s.pincode,
+        address: s.address_line_1, phone: s.contact, posMode: s.posMode,
+        pickupName: s.pickupName,
+        portalPath: `/store/${s.code}`,
+        last30Days: { paid: Number(c.paid || 0), unaccepted: Number(c.unaccepted || 0), unbilled: Number(c.unbilled || 0) },
+        staff: staff.filter((u) => u.store_code === s.code).map((u) => ({
+          id: u.id, username: u.username, name: u.name, isActive: !!u.is_active,
+          lastLoginAt: u.last_login_at, passwordSetAt: u.password_set_at,
+          onStartingPassword: !u.last_login_at && !u.password_set_at,
+          startingPassword: (!u.last_login_at && !u.password_set_at) ? defaultPasswordFor(s.code) : null,
+        })),
+      };
+    }),
+    // Accounts pointing at a store code that no longer exists in stores.js. They cannot sign in
+    // (requireStoreUser refuses them), so surfacing them is the only way they get cleaned up.
+    orphanedStaff: staff.filter((u) => !ADC_STORES.some((s) => s.code === u.store_code))
+      .map((u) => ({ id: u.id, username: u.username, storeCode: u.store_code })),
+  });
+});
+
+router.post('/stores/:code/staff', async (req, res) => {
+  const store = ADC_STORES.find((s) => s.code === String(req.params.code).toLowerCase());
+  if (!store) throw new ApiError('No such store');
+  const username = String(req.body?.username || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  if (!/^[a-z0-9._-]{3,40}$/.test(username)) throw new ApiError('Username: 3–40 characters, letters/numbers/._- only');
+  if (password.length < 8) throw new ApiError('Choose a password of at least 8 characters');
+  const ts = nowIso();
+  const row = await getOne(
+    `INSERT INTO store_users (store_code, username, password_hash, name, password_set_at, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$5,$5) RETURNING id, username`,
+    [store.code, username, await hashPassword(password), String(req.body?.name || '').trim() || null, ts]
+  );
+  res.json({ ok: true, id: row.id, username: row.username });
+});
+
+// Set a staff password to something the admin types. There is no "email them a reset link" here —
+// these accounts have no mailbox; the admin hands the password over in person.
+router.post('/stores/staff/:id/password', async (req, res) => {
+  const password = String(req.body?.password || '');
+  if (password.length < 8) throw new ApiError('Choose a password of at least 8 characters');
+  const user = await getOne('SELECT id FROM store_users WHERE id = $1', [req.params.id]);
+  if (!user) throw new ApiError('No such staff account');
+  const ts = nowIso();
+  await query('UPDATE store_users SET password_hash = $1, password_set_at = $2, updated_at = $2 WHERE id = $3',
+    [await hashPassword(password), ts, user.id]);
+  res.json({ ok: true });
+});
+
+router.patch('/stores/staff/:id/toggle', async (req, res) => {
+  const row = await getOne('UPDATE store_users SET is_active = NOT is_active, updated_at = $1 WHERE id = $2 RETURNING id, is_active',
+    [nowIso(), req.params.id]);
+  if (!row) throw new ApiError('No such staff account');
+  res.json({ ok: true, isActive: !!row.is_active });
+});
+
+router.delete('/stores/staff/:id', async (req, res) => {
+  await query('DELETE FROM store_users WHERE id = $1', [req.params.id]);
+  res.json({ ok: true });
 });
 
 /* ---------- Coupons ---------- */
@@ -532,18 +713,51 @@ router.get('/analytics', async (req, res) => {
    Delivery — Warehouses
    ====================================================================== */
 
-// All Shadowfax pickup stores + whether each one's pincode is CURRENTLY serviceable on the
-// connected Shadowfax environment (staging today) — so admin can see at a glance which stores
-// actually work as an intracity pickup point right now vs which ones are only real-store
-// listings that the sandbox doesn't service yet. Live-checked on every call (cheap, no caching)
-// so this reflects reality immediately, not a stale snapshot.
-router.get('/delivery/shadowfax-stores', async (_req, res) => {
-  if (!shadowfaxConfigured()) return res.json(SFX_STORES.map((s) => ({ ...s, serviceable: null, services: [] })));
-  const results = await Promise.all(SFX_STORES.map(async (s) => {
-    const r = await sfxServiceability(s.pincode);
-    return { ...s, serviceable: r.ok ? r.serviceable : null, services: r.services || [] };
-  }));
-  res.json(results);
+/*
+ * GET /api/admin/delivery/stores — can each ADC store dispatch a same-day order?
+ *
+ * What matters is that the store's pickup nickname EXISTS in Shiprocket, because orders are
+ * collected from whatever that name resolves to on their side. A missing or misspelt nickname means
+ * we would quote a store we cannot collect from.
+ *
+ * Their `status` field is reported for reference only and is NOT used to gate anything: it reads 2
+ * on the primary location and 1 on every other, while their panel shows all of them VERIFIED, and
+ * bookings from status=1 locations were accepted in a live test on 2026-08-07.
+ */
+router.get('/delivery/stores', async (_req, res) => {
+  if (!shiprocketConfigured()) {
+    return res.json({ configured: false, stores: ADC_STORES.map((s) => ({ ...s, verified: null })), verifiedCount: 0 });
+  }
+  const { ok, reason, pickups } = await listPickups();
+  const byNick = new Map(pickups.map((p) => [p.nickname.toLowerCase(), p]));
+  const stores = ADC_STORES.map((s) => {
+    const nick = String(s.pickupName || '').trim().toLowerCase();
+    const p = nick ? byNick.get(nick) : null;
+    return {
+      name: s.name, city: s.city, state: s.state, pincode: s.pincode,
+      latitude: s.latitude, longitude: s.longitude,
+      pickupName: s.pickupName || null,
+      registered: !!p,
+      verified: p ? p.verified : false,   // their status===2 — informational only, gates nothing
+      isPrimary: p?.isPrimary ?? false,
+      phoneVerified: p?.phoneVerified ?? false,
+      pickupId: p?.id ?? null,
+      contact: p?.contact ?? null,
+      // Exactly why this store cannot take an order right now, in the operator's language.
+      // Only a genuinely unusable store gets a reason. A status of 1 is normal for every
+      // non-primary location and does not stop it being booked.
+      blockedReason: !nick ? 'No Shiprocket pickup nickname configured for this store — it cannot be used for same-day.'
+        : !p ? `No pickup location named "${s.pickupName}" exists in Shiprocket. Add it in their panel, or correct the nickname.`
+        : null,
+      usable: !!nick && !!p,
+    };
+  });
+  res.json({
+    configured: true, ok, reason: reason ?? null, stores,
+    verifiedCount: stores.filter((s) => s.usable).length,
+    // Orphans: registered with Shiprocket but not mapped to any store of ours.
+    unmappedPickups: pickups.filter((p) => !ADC_STORES.some((s) => String(s.pickupName || '').toLowerCase() === p.nickname.toLowerCase())),
+  });
 });
 
 router.get('/delivery/warehouses', async (_req, res) => {
@@ -713,11 +927,29 @@ router.post('/orders/:id/shipment', async (req, res) => {
 // DELETE /api/admin/orders/:id/shipment — cancel the shipment WITH WHOEVER BOOKED IT.
 // This used to always call Delhivery, so cancelling an intracity order sent a Shiprocket AWB to
 // Delhivery's edit endpoint, which rejected it while the rider was still on the way.
+/*
+ * Has a rider actually been allocated to this order?
+ *
+ * For Shiprocket the AWB is the tell, and it is a reliable one: assignment is asynchronous and the
+ * AWB only appears once a real rider has been found. Confirmed live on 2026-08-07 — a create +
+ * assign + cancel cycle that was cancelled during "Searching For Rider" never produced an AWB and
+ * never charged the wallet. So AWB present = rider allocated = money already spent = someone is on
+ * their way to the store, which is a materially different thing to cancel than a pending search.
+ *
+ * The status text is checked too, for orders whose AWB arrived by webhook before we stored it.
+ */
+function riderDispatched(order) {
+  if (order.carrier !== 'SHIPROCKET') return false;
+  if (order.delhivery_waybill) return true;
+  return /RIDER ASSIGNED|PICKED ?UP|IN TRANSIT|OUT FOR DELIVERY|REACHED/i.test(String(order.shipment_status || ''));
+}
+
 router.delete('/orders/:id/shipment', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
   if (!order) throw new ApiError('Order not found', 404);
   if (!order.delhivery_waybill && !order.carrier_order_id) throw new ApiError('No shipment exists for this order', 400);
 
+  const dispatched = riderDispatched(order);
   const ref = order.delhivery_waybill || order.carrier_order_id;
   console.log(`[ADMIN-SHIPMENT] cancel | order=${order.order_number} | carrier=${order.carrier || 'DELHIVERY'} | ref=${ref}`);
 
@@ -727,8 +959,6 @@ router.delete('/orders/:id/shipment', async (req, res) => {
       throw new ApiError('This Shiprocket booking predates us storing their order id — cancel it in the Shiprocket panel.', 409);
     }
     result = await cancelShiprocketOrder(order.carrier_order_id);
-  } else if (order.carrier === 'SHADOWFAX') {
-    throw new ApiError('Shadowfax is retired — cancel this one in their dashboard.', 409);
   } else {
     if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
     result = await cancelShipment(order.delhivery_waybill);
@@ -736,15 +966,32 @@ router.delete('/orders/:id/shipment', async (req, res) => {
 
   if (!result.ok) {
     console.log(`[ADMIN-SHIPMENT] cancel FAILED | ref=${ref} | reason=${JSON.stringify(result.reason)}`);
+    const carrier = order.carrier || 'DELHIVERY';
+    const raw = typeof result.reason === 'string' ? result.reason : JSON.stringify(result.reason ?? '');
     await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-      [order.id, 'SHIPMENT_CANCEL_FAILED', `⚠ ${order.carrier || 'DELHIVERY'} refused to cancel ${ref}: ${JSON.stringify(result.reason).slice(0, 300)}`, nowIso()]).catch(() => {});
-    return res.status(502).json({ error: result.reason, detail: result.detail });
+      [order.id, 'SHIPMENT_CANCEL_FAILED', `⚠ ${carrier} refused to cancel ${ref}: ${raw.slice(0, 300)}`, nowIso()]).catch(() => {});
+    // A human sentence, not a reason code — this is read by whoever now has to go and cancel it by
+    // hand, and "the rider is still coming" is the part that matters.
+    const panel = carrier === 'SHIPROCKET' ? 'Shiprocket' : 'Delhivery';
+    const message = dispatched
+      ? `A rider has already been dispatched for this order, and ${carrier} refused to call them off: ${raw.slice(0, 240)}. The rider is still on their way to the store. Phone the store and the rider to stop the handover, then cancel it in the ${panel} dashboard. The delivery charge has already been taken and will not come back on its own.`
+      : `${carrier} refused to cancel ${ref}: ${raw.slice(0, 300)}. The booking is still LIVE — a rider may still collect this order. Cancel it directly in the ${panel} dashboard.`;
+    return res.status(502).json({ ok: false, error: message, message, carrier, dispatched, reason: result.reason, detail: result.detail });
   }
 
   await query(`UPDATE orders SET shipment_status='CANCELLED', updated_at=$1 WHERE id=$2`, [nowIso(), order.id]);
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-    [order.id, 'SHIPMENT_CANCELLED', `${order.carrier || 'DELHIVERY'} booking ${ref} cancelled`, nowIso()]).catch(() => {});
-  res.json({ ok: true, waybill: order.delhivery_waybill, carrier: order.carrier || 'DELHIVERY' });
+    [order.id, 'SHIPMENT_CANCELLED', `${order.carrier || 'DELHIVERY'} booking ${ref} cancelled${dispatched ? ' (rider had already been dispatched)' : ''}`, nowIso()]).catch(() => {});
+  /*
+   * Shiprocket accepts the cancel but leaves `status` reading NEW — their own panel shows the same,
+   * and only the activity log records "Order Canceled" (verified live 2026-08-07). So a 200 is the
+   * best confirmation their API offers, and we do not try to re-read the status to "verify": doing
+   * so would report every successful cancellation as a failure.
+   */
+  const message = dispatched
+    ? `Booking ${ref} cancelled and the rider called off. Please confirm with the store that nobody collects it — the delivery charge was already taken, so check whether it is refunded to your wallet.`
+    : `Booking ${ref} cancelled with ${order.carrier || 'the carrier'}. No rider had been allocated yet, so nothing was charged. The customer's payment is NOT refunded by this.`;
+  res.json({ ok: true, waybill: order.delhivery_waybill, carrier: order.carrier || 'DELHIVERY', dispatched, message });
 });
 
 /*
@@ -809,23 +1056,6 @@ router.get('/orders/:id/track', async (req, res) => {
     return res.json({ ok: result.ok, carrier: 'SHIPROCKET', status: result.status || null, awb: result.awb || order.delhivery_waybill, scans });
   }
 
-  // Shadowfax (retired) — normalize into { ok, carrier, status, scans } for the admin UI.
-  if (order.carrier === 'SHADOWFAX') {
-    if (!shadowfaxConfigured()) throw new ApiError('Shadowfax not configured', 503);
-    const result = await trackShadowfax(order.delhivery_waybill);
-    if (result.ok && result.status) {
-      // Store the friendly label, not the raw status_id — the customer-facing track route
-      // (routes/orders.js) stores sfxStatusLabel(result.status) here too; storing the raw slug
-      // instead would leave shipment_status inconsistently formatted depending on which route
-      // last touched it.
-      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [sfxStatusLabel(result.status), nowIso(), order.id]);
-    }
-    const scans = (result.data?.tracking_details || [])
-      .map(t => ({ time: t.created, event: sfxStatusLabel(t.status_id) || t.status || t.remarks }))
-      .reverse();
-    return res.json({ ok: result.ok, carrier: 'SHADOWFAX', status: sfxStatusLabel(result.status) || result.status || null, scans });
-  }
-
   // Delhivery (outstation)
   if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
   const result = await trackShipment(order.delhivery_waybill);
@@ -851,26 +1081,6 @@ function firstUrl(v) {
   if (typeof v === 'object') { for (const x of Object.values(v)) { const u = firstUrl(x); if (u) return u; } return null; }
   return null;
 }
-
-// GET /api/admin/orders/:id/shadowfax-doc — Shadowfax documents for an intracity order:
-// proof-of-delivery signature (after delivery) + the shareable customer tracking link.
-router.get('/orders/:id/shadowfax-doc', async (req, res) => {
-  const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
-  if (!order) throw new ApiError('Order not found', 404);
-  if (order.carrier !== 'SHADOWFAX') return res.json({ ok: false, reason: 'not_shadowfax' });
-  if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
-  if (!shadowfaxConfigured()) throw new ApiError('Shadowfax not configured', 503);
-
-  const awb = order.delhivery_waybill;
-  const [pod, track] = await Promise.all([getShadowfaxPod(awb), trackShadowfax(awb)]);
-  res.json({
-    ok: true,
-    awb,
-    status: track.ok ? (track.status || null) : null,
-    trackUrl: track.ok ? (track.trackUrl || null) : null,
-    pod: pod.ok ? { recipient: pod.recipient, urls: pod.urls } : null,
-  });
-});
 
 // GET /api/admin/orders/:id/document?type=EPOD — fetch a B2C document (proof of delivery,
 // signature, return-QC image) for a Delhivery order. Only after the shipment exists.
@@ -943,7 +1153,25 @@ router.post('/delivery/pickup-request', async (req, res) => {
   const result = await createPickupRequest({
     pickupDate, pickupTime, pickupLocation: wh.pickup_location, packageCount: Number(packageCount || 1),
   });
-  res.json(result);
+
+  /*
+   * Delhivery's rejections are terse and name no cause, so translate the two that actually happen.
+   * A wallet under ₹500 is the common one — it applies to Prepaid and COD alike (confirmed live) —
+   * and the other is a slot already open for this warehouse today, since only one pickup request
+   * per location per day is allowed until the existing one is closed.
+   */
+  if (!result.ok) {
+    const raw = JSON.stringify(result.reason ?? result.detail ?? '').toLowerCase();
+    let hint = null;
+    if (/balance|wallet|insufficient|recharge|fund/.test(raw)) {
+      hint = 'Your Delhivery wallet is below the ₹500 minimum needed to book a pickup. Top it up in the Delhivery panel and try again. (Prepaid and COD both require this.)';
+    } else if (/already|exist|duplicate|open|pending/.test(raw)) {
+      hint = `A pickup request is already open for ${wh.pickup_location} today. Delhivery allows only one per warehouse per day — the existing one must be closed before another can be raised. Check it in their panel.`;
+    }
+    const message = hint || `Delhivery refused the pickup request: ${JSON.stringify(result.reason ?? '').slice(0, 300)}`;
+    return res.status(502).json({ ...result, error: message, message, warehouse: wh.pickup_location });
+  }
+  res.json({ ...result, warehouse: wh.pickup_location });
 });
 
 export default router;

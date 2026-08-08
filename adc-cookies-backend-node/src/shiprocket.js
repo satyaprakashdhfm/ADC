@@ -168,43 +168,73 @@ export async function checkServiceability({ pickupPin, deliveryPin, latFrom, lon
  * Returns { store, rate, distance } or null when no store covers the drop.
  */
 /*
- * The pickup nicknames Shiprocket will actually dispatch from — those with status 2 (VERIFIED).
+ * The pickup nicknames registered with Shiprocket.
  *
- * A location sitting at status 1 still quotes perfectly well, because serviceability is answered
- * from pincode and coordinates and never looks at the nickname. Dispatch does look, so an
- * unverified store produces a confident same-day quote and then refuses the booking. Quoting a
- * store we cannot collect from is how a customer ends up paying for a promise we cannot keep, so
- * the verified set is resolved up front and unverified stores are never offered at all.
+ * This deliberately does NOT filter on their `status` field. That was a wrong reading: `status` is
+ * 2 only on the PRIMARY location and 1 on every other, while their panel's own Verification Status
+ * column reads VERIFIED for all of them. Gating on status===2 therefore excluded four perfectly
+ * usable stores — it took Chennai offline entirely and forced every Bengaluru order through Begur
+ * at a longer distance and a higher fee.
  *
- * Cached for 30 minutes: verification changes at human speed, and this sits in the checkout path.
+ * Proven on 2026-08-07: bookings from `jayanagar` and `besant`, both status=1, were ACCEPTED.
+ *
+ * What is still worth checking is that the nickname EXISTS on their side. Orders are collected from
+ * whatever the nickname resolves to in their panel, so a store whose pickupName is missing or
+ * misspelt cannot be dispatched from, and quoting it would sell a delivery we cannot make.
+ *
+ * Cached for 30 minutes: this sits in the checkout path and the list changes at human speed.
  */
-let verifiedCache = null;
-let verifiedExpiry = 0;
-export async function verifiedPickups({ force = false } = {}) {
-  if (!force && verifiedCache && Date.now() < verifiedExpiry) return verifiedCache;
+let pickupCache = null;
+let pickupExpiry = 0;
+
+/**
+ * Every pickup location as Shiprocket reports it, verified or not — for the admin screen, which
+ * needs to show WHY a store cannot dispatch, not merely that it can't. Uncached: this is an
+ * operator pressing refresh, and a stale answer is exactly what makes this screen useless.
+ */
+export async function listPickups() {
+  const r = await srRequest('GET', '/settings/company/pickup');
+  if (!r.ok) return { ok: false, reason: r.reason, pickups: [] };
+  const list = r.data?.data?.shipping_address || r.data?.shipping_address || [];
+  return {
+    ok: true,
+    pickups: list.map((p) => ({
+      id: p.id,
+      nickname: String(p.pickup_location || '').trim(),
+      verified: Number(p.status) === 2,
+      status: Number(p.status),
+      isPrimary: !!Number(p.is_primary_location),
+      phoneVerified: !!Number(p.phone_verified),
+      city: p.city, pincode: p.pin_code, address: p.address,
+      contact: [p.name, p.phone].filter(Boolean).join(' / '),
+    })),
+  };
+}
+
+export async function registeredPickups({ force = false } = {}) {
+  if (!force && pickupCache && Date.now() < pickupExpiry) return pickupCache;
   const r = await srRequest('GET', '/settings/company/pickup');
   if (!r.ok) {
     // Do NOT treat an unreadable list as "nothing is verified" — that would take intracity offline
     // over a transient API blip. Keep the last known good set; only fail closed if we never had one.
     log('pickups', `✗ could not read pickup list (${JSON.stringify(r.reason).slice(0, 80)}) — keeping last known set`);
-    return verifiedCache || new Set();
+    return pickupCache || new Set();
   }
   const list = r.data?.data?.shipping_address || r.data?.shipping_address || [];
-  verifiedCache = new Set(list.filter((p) => Number(p.status) === 2).map((p) => String(p.pickup_location).trim().toLowerCase()));
-  verifiedExpiry = Date.now() + 30 * 60_000;
-  const pending = list.filter((p) => Number(p.status) !== 2).map((p) => p.pickup_location);
-  log('pickups', `${verifiedCache.size}/${list.length} verified${pending.length ? ` | NOT verified: ${pending.join(', ')}` : ''}`);
-  return verifiedCache;
+  pickupCache = new Set(list.map((p) => String(p.pickup_location).trim().toLowerCase()));
+  pickupExpiry = Date.now() + 30 * 60_000;
+  log('pickups', `${pickupCache.size} registered: ${[...pickupCache].join(', ')}`);
+  return pickupCache;
 }
 
 export async function pickServiceableStore(stores, { pin, lat, lng }) {
-  const verified = await verifiedPickups();
+  const registered = await registeredPickups();
   for (const s of stores) {
     if (s.latitude == null || s.longitude == null) continue;
-    // Skip stores Shiprocket will not collect from — see verifiedPickups above.
+    // Skip only a store whose pickup nickname does not exist on their side — see above.
     const nick = String(s.pickupName || '').trim().toLowerCase();
-    if (!nick || !verified.has(nick)) {
-      log('pick-store', `✗ ${s.name} skipped — pickup "${s.pickupName || 'none'}" is not verified with Shiprocket`);
+    if (!nick || !registered.has(nick)) {
+      log('pick-store', `✗ ${s.name} skipped — pickup "${s.pickupName || 'none'}" is not registered with Shiprocket`);
       continue;
     }
     const q = await checkServiceability({

@@ -130,6 +130,10 @@ export interface Address {
   addressLine1: string; addressLine2?: string;
   city: string; state: string; pincode: string; isDefault: boolean;
   label?: string; // Home / Office / Other
+  // Captured from the browser when the shopper uses "detect my location". REQUIRED for same-day
+  // intracity delivery — Shiprocket Hyperlocal returns no couriers for a pincode without
+  // coordinates, so an address lacking them silently falls back to multi-day courier.
+  latitude?: number | null; longitude?: number | null;
 }
 
 export async function getAddresses(): Promise<Address[]> { return request('/addresses'); }
@@ -248,10 +252,18 @@ export interface Order {
   subtotal?: number; discountAmount?: number; deliveryFee?: number; taxAmount?: number;
   couponCode?: string | null; shipmentStatus?: string; trackingUrl?: string | null;
   delhiveryWaybill?: string | null; delhiveryShipmentId?: string | null; labelGenerated?: boolean;
-  carrier?: string | null; // 'SHADOWFAX' (intracity) | 'DELHIVERY' (outstation)
-  estimatedDelivery?: string | null; // Shadowfax promised date from webhook (YYYY-MM-DD HH:MM:SS)
+  carrierOrderId?: string | null;   // the carrier's own order id — Shiprocket's cancel API keys off it
+  carrier?: string | null; // 'SHIPROCKET' (intracity, same-day) | 'DELHIVERY' (outstation)
+  shipmentError?: string | null;    // why the automatic courier booking failed, if it did
+  estimatedDelivery?: string | null; // carrier promised date from webhook (YYYY-MM-DD HH:MM:SS)
   payment?: OrderPayment | null;
+  /** Petpooja relay state (admin views only) — whether the kitchen actually received the ticket. */
+  pos?: { relayed: boolean; petpoojaOrderId: string | null; attempts: number; lastError: string | null } | null;
+  /** Which store is making it and how far they have got. `posBillNo` is the bill from that store's
+   *  own Petpooja terminal — the only link to the POS for every outlet except Begur. */
+  store?: { code: string; acceptedAt: string | null; readyAt: string | null; posBillNo: string | null } | null;
   address?: Address | null; items?: OrderItem[];
+  warningFlags?: string[]; // e.g. 'DUPLICATE_CHARGE' — admin-facing alerts, doesn't affect order status
 }
 
 export interface OrderItem {
@@ -285,7 +297,7 @@ export async function getOrder(id: number): Promise<Order> { return request(`/or
 
 export interface DelhiveryTrackResult {
   tracked: boolean; waybill?: string; reason?: string;
-  // Normalized fields returned for BOTH carriers (Delhivery + Shadowfax).
+  // Normalized fields returned for BOTH carriers (Delhivery + Shiprocket).
   carrier?: string; status?: string | null; trackUrl?: string | null;
   scans?: { time: string; event: string }[];
   data?: { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
@@ -303,19 +315,19 @@ export interface DeliveryCheck {
   pincode?: string;
   tat?: number | null;
   expectedDeliveryDate?: string | null;
-  intracity?: boolean;          // near one of our stores → ships same-day via Shadowfax
-  carrier?: string;             // 'SHADOWFAX' when intracity
+  intracity?: boolean;          // near one of our stores → same-day from that store
+  carrier?: string;             // 'SHIPROCKET' when intracity
   store?: string;               // nearest store name (intracity)
   city?: string;
   sameDay?: boolean;
-  maintenanceMessage?: string;  // shown when reason === 'shadowfax_paused' — Shadowfax is down, checkout blocked
+  maintenanceMessage?: string;  // shown when same-day is unavailable and checkout is blocked
 }
 
 /** Combined serviceability + TAT check — used at checkout when an address is selected. */
 export async function checkDeliveryPin(pincode: string): Promise<DeliveryCheck> {
   console.log(`[delivery] checking pincode ${pincode} …`);
   const r = await request<DeliveryCheck>(`/delivery/check?pincode=${encodeURIComponent(pincode)}`);
-  console.log(`[delivery] pincode ${pincode} →`, r.intracity ? `SHADOWFAX (intracity, ${r.store})` : r.serviceable ? 'DELHIVERY (pan-India)' : 'not serviceable', r);
+  console.log(`[delivery] pincode ${pincode} →`, r.intracity ? `SHIPROCKET (intracity, ${r.store})` : r.serviceable ? 'DELHIVERY (pan-India)' : 'not serviceable', r);
   return r;
 }
 
@@ -371,8 +383,134 @@ export async function adminAnalytics(from?: string, to?: string): Promise<AdminA
 }
 
 export async function adminGetOrders(): Promise<Order[]> { return request('/admin/orders'); }
-export async function adminUpdateOrderStatus(id: number, status: string, remarks?: string): Promise<Order> {
+
+/**
+ * Cancelling also cancels the POS ticket and the courier booking. `cancelWarnings` lists any leg
+ * that refused — those need doing by hand in the carrier's or Petpooja's own dashboard.
+ */
+export async function adminUpdateOrderStatus(id: number, status: string, remarks?: string): Promise<Order & { cancelWarnings?: string[] }> {
   return request(`/admin/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, remarks }) });
+}
+
+/** Everything that took money but did not complete downstream. Empty lists = nothing to chase. */
+export interface AttentionReport {
+  paidNoShipment: { id: number; order_number: string; total_amount: number; created_at: string; shipment_error: string | null; carrier: string | null; has_address: boolean }[];
+  paidNoPosTicket: { id: number; order_number: string; total_amount: number; created_at: string; last_error: string | null; attempts: number }[];
+  cancelStuckDownstream: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
+  moneyReversed: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
+  /** Paid, made at a store that bills on its OWN Petpooja terminal, and no bill number typed back —
+   *  so there is nothing to reconcile the Razorpay settlement against. */
+  posManualUnbilled: { id: number; order_number: string; total_amount: number; created_at: string; store_code: string; store_accepted_at: string | null; store_ready_at: string | null }[];
+  total: number;
+}
+export async function adminAttention(): Promise<AttentionReport> { return request('/admin/attention'); }
+
+/* ---- Admin: Stores (staff portal) ---- */
+
+export interface StoreStaff {
+  id: number; username: string; name: string | null; isActive: boolean;
+  lastLoginAt: string | null; passwordSetAt: string | null;
+  /** Never signed in and never had its password changed — so the starting password still works. */
+  onStartingPassword: boolean;
+  /** Only present while `onStartingPassword` holds; a hash cannot be read back once it doesn't. */
+  startingPassword: string | null;
+}
+export interface AdminStore {
+  code: string; name: string; city: string; state: string; pincode: number;
+  address: string; phone: string;
+  /** 'AUTO' — we relay to Petpooja. 'MANUAL' — this store bills on its own terminal. */
+  posMode: 'AUTO' | 'MANUAL';
+  pickupName: string | null;
+  portalPath: string;
+  last30Days: { paid: number; unaccepted: number; unbilled: number };
+  staff: StoreStaff[];
+}
+export interface AdminStoresReport {
+  stores: AdminStore[];
+  orphanedStaff: { id: number; username: string; storeCode: string }[];
+}
+export async function adminGetStores(): Promise<AdminStoresReport> { return request('/admin/stores'); }
+
+export async function adminCreateStoreStaff(code: string, username: string, password: string, name?: string): Promise<{ ok: boolean; id: number; username: string }> {
+  return request(`/admin/stores/${code}/staff`, { method: 'POST', body: JSON.stringify({ username, password, name }) });
+}
+export async function adminSetStoreStaffPassword(id: number, password: string): Promise<{ ok: boolean }> {
+  return request(`/admin/stores/staff/${id}/password`, { method: 'POST', body: JSON.stringify({ password }) });
+}
+export async function adminToggleStoreStaff(id: number): Promise<{ ok: boolean; isActive: boolean }> {
+  return request(`/admin/stores/staff/${id}/toggle`, { method: 'PATCH' });
+}
+export async function adminDeleteStoreStaff(id: number): Promise<{ ok: boolean }> {
+  return request(`/admin/stores/staff/${id}`, { method: 'DELETE' });
+}
+
+/**
+ * Can each store ACTUALLY dispatch a same-day order right now? `verified` is the only thing that
+ * matters — an unverified Shiprocket pickup quotes fine and then refuses the booking.
+ */
+export interface StoreReadiness {
+  name: string; city: string; state: string; pincode: number;
+  pickupName: string | null; registered: boolean; verified: boolean | null;
+  isPrimary: boolean; phoneVerified: boolean; pickupId: number | null; usable?: boolean;
+  contact: string | null; blockedReason: string | null;
+}
+export interface StoreReadinessReport {
+  configured: boolean; ok?: boolean; reason?: string | null;
+  stores: StoreReadiness[]; verifiedCount: number;
+  unmappedPickups?: { id: number; nickname: string; city: string; pincode: string; verified: boolean }[];
+}
+export async function adminGetStoreReadiness(): Promise<StoreReadinessReport> { return request('/admin/delivery/stores'); }
+
+/* ---- Admin: Petpooja (POS) ---- */
+
+/** One row of Petpooja's catalogue. `productId` null means it is not yet linked to a product. */
+export interface PetpoojaItem {
+  item_id: string; variation_id: string; name: string; variation_name: string | null;
+  price: number | null; in_stock: boolean; product_id: number | null; category_id: string | null;
+}
+export interface PetpoojaMapping {
+  restId: string;
+  items: PetpoojaItem[];
+  products: { id: number; name: string; price: number; is_available: boolean }[];
+  unmapped: { id: number; name: string }[];
+  taxes: { tax_id: string; name: string; percentage: number }[];
+  /** Every menu Petpooja has pushed us, newest first. */
+  pushes: { id: number; rest_id: string; source: string; item_count: number; received_at: string }[];
+  menuSynced: boolean;
+}
+export async function adminGetPetpoojaMapping(): Promise<PetpoojaMapping> { return request('/admin/petpooja/mapping'); }
+
+/** Link a Petpooja item to one of our products, or pass null to unlink. */
+export async function adminSetPetpoojaMapping(itemId: string, variationId: string, productId: number | null): Promise<{ ok: boolean }> {
+  return request('/admin/petpooja/mapping', { method: 'POST', body: JSON.stringify({ itemId, variationId, productId }) });
+}
+
+/** Link from OUR side: pick which Petpooja item a product is. Pass itemId null to unlink. */
+export async function adminLinkProductToPetpooja(productId: number, itemId: string | null, variationId = ''): Promise<{ ok: boolean }> {
+  return request('/admin/petpooja/mapping/by-product', { method: 'POST', body: JSON.stringify({ productId, itemId, variationId }) });
+}
+
+/** Create one of our products from a Petpooja item and link the two in one step. */
+export async function adminCreateProductFromPetpooja(itemId: string, variationId: string): Promise<{ ok: boolean; created: boolean; product: Product }> {
+  return request('/admin/petpooja/mapping/create-product', { method: 'POST', body: JSON.stringify({ itemId, variationId }) });
+}
+
+/** Which orders reached the POS, which failed, and why. */
+export interface PetpoojaRelay {
+  order_id: number; order_number: string; total_amount: number; relay_ok: boolean;
+  petpooja_order_id: string | null; petpooja_status: string | null; attempts: number;
+  last_error: string | null; updated_at: string;
+}
+export async function adminGetPetpoojaRelays(): Promise<PetpoojaRelay[]> { return request('/admin/petpooja/orders'); }
+
+/** Re-run the AUTOMATIC carrier routing (intracity → Shiprocket, else Delhivery) for a paid order. */
+export async function adminRebookShipment(orderId: number): Promise<{ ok: boolean; reason?: string; waybill?: string; carrier?: string }> {
+  return request(`/admin/orders/${orderId}/rebook`, { method: 'POST' });
+}
+
+/** Push a paid order to the Petpooja POS again after a failed relay (e.g. once mapping is fixed). */
+export async function adminRetryPosRelay(orderId: number): Promise<{ ok: boolean; reason?: string; skipped?: boolean }> {
+  return request(`/admin/petpooja/orders/${orderId}/retry`, { method: 'POST', body: JSON.stringify({}) });
 }
 
 export async function adminGetProducts(): Promise<Product[]> { return request('/admin/products'); }
@@ -434,6 +572,7 @@ export async function adminToggleWarehouse(id: number): Promise<Warehouse> {
   return request(`/admin/delivery/warehouses/${id}/toggle`, { method: 'PATCH' });
 }
 
+
 /* ---- Admin: Delivery — Shipping cost ---- */
 export interface ShippingCostResult { ok: boolean; data?: unknown; reason?: string; }
 export async function adminGetShippingCost(destPin: string, weight = 0.5): Promise<ShippingCostResult> {
@@ -444,7 +583,12 @@ export async function adminGetShippingCost(destPin: string, weight = 0.5): Promi
 export async function adminCreateShipment(orderId: number, weight = 0.5): Promise<Order> {
   return request(`/admin/orders/${orderId}/shipment`, { method: 'POST', body: JSON.stringify({ weight }) });
 }
-export async function adminCancelShipment(orderId: number): Promise<{ ok: boolean; waybill: string }> {
+/**
+ * Cancel with whichever carrier booked it. `dispatched` says whether a rider had already been
+ * allocated — for Shiprocket that is the AWB existing, which only happens once a real rider is
+ * found, so it also means the delivery charge has already been taken.
+ */
+export async function adminCancelShipment(orderId: number): Promise<{ ok: boolean; waybill: string; carrier?: string; dispatched?: boolean; message?: string }> {
   return request(`/admin/orders/${orderId}/shipment`, { method: 'DELETE' });
 }
 export async function adminTrackOrder(orderId: number): Promise<{ ok: boolean; data?: unknown; reason?: string; carrier?: string; status?: string | null; scans?: { time: string; event: string }[] }> {
@@ -462,11 +606,6 @@ export async function adminFetchOrderDocument(orderId: number, docType: Delhiver
   return request(`/admin/orders/${orderId}/document?type=${encodeURIComponent(docType)}`);
 }
 
-/** Shadowfax (intracity) documents: proof-of-delivery signature + shareable customer tracking link. */
-export interface ShadowfaxDocResult { ok: boolean; awb?: string; status?: string | null; trackUrl?: string | null; pod?: { recipient?: string | null; urls: string[] } | null; reason?: string; }
-export async function adminFetchShadowfaxDoc(orderId: number): Promise<ShadowfaxDocResult> {
-  return request(`/admin/orders/${orderId}/shadowfax-doc`);
-}
 
 /**
  * Open the shipping-label PDF in a new tab. The label route is admin-protected, so a plain
