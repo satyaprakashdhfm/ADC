@@ -251,6 +251,11 @@ export default function StorePortal({ code }: { code: string }) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [err, setErr] = useState('');
   const [alerting, setAlerting] = useState<StoreOrder[]>([]);
+  // After accepting from the alert, a manual-POS store still has to key the order into Petpooja and
+  // type the bill number back — these are the orders waiting for that number.
+  const [billFor, setBillFor] = useState<StoreOrder[]>([]);
+  const [billDrafts, setBillDrafts] = useState<Record<number, string>>({});
+  const [acceptBusy, setAcceptBusy] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
   // Ids we have already announced. A ref, not state: it must not trigger a re-render, and the
@@ -295,26 +300,67 @@ export default function StorePortal({ code }: { code: string }) {
     return () => { for (const ev of ['pointerdown', 'keydown', 'touchstart'] as const) window.removeEventListener(ev, unlock, opts); };
   }, [ensureAudio]);
 
-  const chime = useCallback(async () => {
+  /*
+   * The alarm RINGS UNTIL SOMEONE ACCEPTS. A single ~1s blip is missed in a kitchen with an oven
+   * running and a mixer going, so bursts repeat on an interval and only stop when staff actually
+   * accept the order in the alert (or the safety cap below trips, so a tablet nobody is standing
+   * at doesn't ring for the rest of the day).
+   */
+  const alarmTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const alarmCap = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alarmNodes = useRef<OscillatorNode[]>([]);
+  const ALARM_CAP_MS = 120_000;
+
+  const stopAlarm = useCallback(() => {
+    if (alarmTimer.current) { clearInterval(alarmTimer.current); alarmTimer.current = null; }
+    if (alarmCap.current) { clearTimeout(alarmCap.current); alarmCap.current = null; }
+    for (const osc of alarmNodes.current) { try { osc.stop(); } catch { /* already ended */ } }
+    alarmNodes.current = [];
+  }, []);
+
+  const startAlarm = useCallback(async () => {
     const ctx = await ensureAudio();
-    // No audio (blocked, or a browser without WebAudio) — buzz instead where that exists. A phone
-    // or tablet in an apron pocket is felt even when the room is loud.
-    if (!ctx) { try { navigator.vibrate?.([250, 120, 250]); } catch { /* not supported */ } return; }
-    // Three rising pairs rather than one, and loud: this has to carry across a kitchen with an oven
-    // running, and a single short blip is easy to miss entirely.
-    const start = ctx.currentTime + 0.05;
-    [880, 1175, 880, 1175, 880, 1175].forEach((freq, i) => {
-      const t0 = start + i * 0.22;
-      const osc = ctx.createOscillator(); const gain = ctx.createGain();
-      osc.type = 'sine'; osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, t0);
-      gain.gain.exponentialRampToValueAtTime(0.6, t0 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(t0); osc.stop(t0 + 0.22);
-    });
-    try { navigator.vibrate?.([120, 60, 120]); } catch { /* not supported */ }
-  }, [ensureAudio]);
+    stopAlarm();
+    // No audio (blocked, or a browser without WebAudio) — buzz on a loop instead where that exists.
+    // A phone or tablet in an apron pocket is felt even when the room is loud.
+    if (!ctx) {
+      const buzz = () => { try { navigator.vibrate?.([300, 150, 300]); } catch { /* not supported */ } };
+      buzz();
+      alarmTimer.current = setInterval(buzz, 1500);
+      alarmCap.current = setTimeout(stopAlarm, ALARM_CAP_MS);
+      return;
+    }
+    // Three rising pairs per burst (~1.3s), repeated every 1.5s for a continuous alarm.
+    const burst = () => {
+      const start = ctx.currentTime + 0.05;
+      [880, 1175, 880, 1175, 880, 1175].forEach((freq, i) => {
+        const t0 = start + i * 0.22;
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(0.6, t0 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(t0); osc.stop(t0 + 0.22);
+        alarmNodes.current.push(osc);
+        osc.onended = () => { alarmNodes.current = alarmNodes.current.filter(n => n !== osc); };
+      });
+      try { navigator.vibrate?.([120, 60, 120]); } catch { /* not supported */ }
+    };
+    burst();
+    alarmTimer.current = setInterval(burst, 1500);
+    alarmCap.current = setTimeout(stopAlarm, ALARM_CAP_MS);
+  }, [ensureAudio, stopAlarm]);
+
+  // Never leave an alarm ringing behind a closed/navigated-away board.
+  useEffect(() => stopAlarm, [stopAlarm]);
+
+  // One burst only — for the "test the sound" / "turn the sound on" buttons, which should confirm
+  // audio works without starting the full until-accepted alarm.
+  const chime = useCallback(async () => {
+    await startAlarm();
+    setTimeout(stopAlarm, 1500);
+  }, [startAlarm, stopAlarm]);
 
   const signOut = useCallback(() => { clearStoreToken(code); setSession(null); setOrders(null); }, [code]);
 
@@ -328,7 +374,7 @@ export default function StorePortal({ code }: { code: string }) {
       const ids = new Set(waiting.map(o => o.id));
       if (announce && announced.current) {
         const fresh = waiting.filter(o => !announced.current!.has(o.id));
-        if (fresh.length) { setAlerting(fresh); chime(); }
+        if (fresh.length) { setAlerting(fresh); void startAlarm(); }
       }
       announced.current = ids;
       setErr('');
@@ -336,7 +382,7 @@ export default function StorePortal({ code }: { code: string }) {
       if (e instanceof StoreAuthError) { signOut(); return; }
       setErr(e instanceof Error ? e.message : 'Could not load orders');
     }
-  }, [code, chime, signOut]);
+  }, [code, startAlarm, signOut]);
 
   // Restore an existing session on load — a tablet is signed in once and left that way.
   useEffect(() => {
@@ -388,6 +434,37 @@ export default function StorePortal({ code }: { code: string }) {
   if (!session) return <StoreSignIn code={code} onSignedIn={(s) => { setSession(s); chime(); }} />;
 
   const manual = !session.store.relaysToPos;
+
+  /* Accept straight from the alert — that IS the acknowledgement, so the alarm stops here rather
+     than on a separate "got it". A manual-POS store is then asked for the bill number, which is the
+     only link between the money Razorpay settled and the bill their kitchen printed. */
+  const acceptAlerted = async () => {
+    setAcceptBusy(true); setErr('');
+    const accepted = alerting;
+    try {
+      for (const o of accepted) await storeAcceptOrder(code, o.id);
+      stopAlarm();
+      setAlerting([]);
+      setBillFor(manual ? accepted : []);
+      await refresh(false);
+    } catch (e: unknown) {
+      if (e instanceof StoreAuthError) { signOut(); return; }
+      setErr(e instanceof Error ? e.message : 'Could not accept the order');
+    } finally { setAcceptBusy(false); }
+  };
+
+  const saveBill = async (orderId: number, no: string) => {
+    setAcceptBusy(true); setErr('');
+    try {
+      await storeSetPosBill(code, orderId, no);
+      setBillFor(prev => prev.filter(o => o.id !== orderId));
+      await refresh(false);
+    } catch (e: unknown) {
+      if (e instanceof StoreAuthError) { signOut(); return; }
+      setErr(e instanceof Error ? e.message : 'Could not save the bill number');
+    } finally { setAcceptBusy(false); }
+  };
+
   const list = orders || [];
   const waiting = list.filter(o => !o.workflow.acceptedAt && o.status !== 'CANCELLED');
   const working = list.filter(o => o.workflow.acceptedAt && !o.workflow.readyAt && o.status !== 'CANCELLED');
@@ -489,20 +566,70 @@ export default function StorePortal({ code }: { code: string }) {
           side of a kitchen, and dismissing it must be deliberate. */}
       {alerting.length > 0 && (
         <div role="alertdialog" aria-label="New order" style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,12,4,.6)', display: 'grid', placeItems: 'center', padding: 20 }}>
-          <div style={{ ...wrap, padding: 26, width: 'min(460px, 100%)', textAlign: 'center' }}>
-            <div style={{ fontSize: 42, marginBottom: 6 }}>🍪</div>
-            <h2 style={{ fontSize: 24, fontWeight: 900, margin: '0 0 6px' }}>
-              {alerting.length === 1 ? 'New order' : `${alerting.length} new orders`}
-            </h2>
-            <p style={{ fontSize: 15, color: 'var(--text-muted, #7b6a58)', margin: '0 0 18px' }}>
-              {alerting.map(o => o.orderNumber).join(', ')}
-            </p>
-            <div style={{ textAlign: 'left', marginBottom: 20 }}>
-              {alerting.flatMap(o => o.items).map((i, n) => (
-                <div key={n} style={{ fontSize: 16, padding: '5px 0' }}><strong>{i.quantity}×</strong> {i.name}</div>
-              ))}
+          <div className="hide-sb" style={{ ...wrap, padding: 24, width: 'min(560px, 100%)', maxHeight: '92vh', overflowY: 'auto' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 40, marginBottom: 4 }}>🍪</div>
+              <h2 style={{ fontSize: 23, fontWeight: 900, margin: '0 0 14px' }}>
+                {alerting.length === 1 ? 'New order' : `${alerting.length} new orders`}
+              </h2>
             </div>
-            <button onClick={() => setAlerting([])} style={{ ...btn('primary', true), width: '100%' }}>Got it</button>
+
+            {/* Everything the kitchen needs to key this in — items, notes, customer and address —
+                so nobody has to dismiss the alert and hunt for the order on the board. */}
+            {alerting.map(o => (
+              <div key={o.id} style={{ textAlign: 'left', border: '1px solid var(--border-default, #e7dccd)', borderRadius: 14, padding: 14, marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                  <strong style={{ fontSize: 16 }}>{o.orderNumber}</strong>
+                  <span style={{ fontSize: 16, fontWeight: 900 }}>{money(o.totalAmount)}</span>
+                </div>
+                {o.items.map((i, n) => (
+                  <div key={n} style={{ fontSize: 15, padding: '4px 0', display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                    <span><strong>{i.quantity}×</strong> {i.name}
+                      {i.specialNotes && <em style={{ display: 'block', fontSize: 12, color: 'var(--text-muted, #7b6a58)' }}>Note: {i.specialNotes}</em>}
+                    </span>
+                    <span style={{ flex: 'none' }}>{money(i.totalPrice)}</span>
+                  </div>
+                ))}
+                {o.customer && (
+                  <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted, #7b6a58)' }}>
+                    {o.customer.name}{o.customer.phone ? ` · ${o.customer.phone}` : ''}
+                  </div>
+                )}
+                {o.address && (
+                  <div style={{ fontSize: 13, color: 'var(--text-muted, #7b6a58)' }}>
+                    {[o.address.line1, o.address.line2, o.address.city, o.address.pincode].filter(Boolean).join(', ')}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <button disabled={acceptBusy} onClick={acceptAlerted} style={{ ...btn('primary', true), width: '100%', opacity: acceptBusy ? 0.6 : 1 }}>
+              <Check size={19} /> {acceptBusy ? 'Accepting…' : alerting.length === 1 ? 'Accept order' : `Accept ${alerting.length} orders`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Straight after accepting: the bill number from their own Petpooja terminal. */}
+      {billFor.length > 0 && (
+        <div role="dialog" aria-label="Bill number" style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,12,4,.6)', display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div className="hide-sb" style={{ ...wrap, padding: 24, width: 'min(460px, 100%)', maxHeight: '92vh', overflowY: 'auto' }}>
+            <h2 style={{ fontSize: 21, fontWeight: 900, margin: '0 0 6px' }}>Accepted — now bill it</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-muted, #7b6a58)', margin: '0 0 16px' }}>
+              Key the order into your Petpooja terminal, then type the bill number here.
+            </p>
+            {billFor.map(o => (
+              <div key={o.id} style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>{o.orderNumber} · {money(o.totalAmount)}</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={billDrafts[o.id] || ''} onChange={e => setBillDrafts(d => ({ ...d, [o.id]: e.target.value }))} placeholder="Bill number"
+                    style={{ flex: 1, minWidth: 0, padding: '11px 13px', borderRadius: 12, border: '1.5px solid var(--border-default, #e7dccd)', fontSize: 15 }} />
+                  <button disabled={!(billDrafts[o.id] || '').trim() || acceptBusy} onClick={() => saveBill(o.id, (billDrafts[o.id] || '').trim())}
+                    style={{ ...btn('primary'), opacity: !(billDrafts[o.id] || '').trim() || acceptBusy ? 0.6 : 1 }}>Save</button>
+                </div>
+              </div>
+            ))}
+            <button onClick={() => setBillFor([])} style={{ ...btn(), width: '100%', marginTop: 4 }}>I&apos;ll do it later</button>
           </div>
         </div>
       )}
