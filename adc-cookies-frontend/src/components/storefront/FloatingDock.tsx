@@ -42,25 +42,25 @@ export default function FloatingDock() {
   // itself even after the wheel modal is closed — not just while it's open.
   const { activeReward, setActiveReward, checking: checkingReward, now, refresh } = useActiveSpinReward();
 
-  // The wheel auto-opens on the FIRST visit to the site (once ever, tracked in localStorage) —
-  // only on the homepage, so it never ambushes anyone mid-checkout or on a contact form.
+  /* The wheel auto-opens on the FIRST visit (once ever, tracked in localStorage), homepage only so
+     it never ambushes anyone mid-checkout. It waits behind the "where are we delivering?" prompt:
+     a returning visitor who already has a location gets the wheel almost immediately, while a
+     brand-new one answers the location question first and sees the wheel ~10s in. */
   useEffect(() => {
     if (typeof window === 'undefined' || spinDone.current || pathname !== '/') return;
     let seen = false;
-    let locationAsked = false;
+    let locationKnown = false;
     try {
       seen = !!localStorage.getItem('adc_spin_first_seen');
-      locationAsked = !!localStorage.getItem('adc_location_asked');
+      // Either they've already picked/detected a location, or we've asked before and they declined.
+      locationKnown = !!localStorage.getItem('adc_location_pincode') || !!localStorage.getItem('adc_location_asked');
     } catch { /* ignore */ }
     if (seen) { spinDone.current = true; return; }
-    // On a very first landing the "where are we delivering?" prompt takes precedence — stacking a
-    // prize wheel on top of it is how you get both dismissed. The wheel gets the next visit.
-    if (!locationAsked) return;
     spinDone.current = true;
     const t = setTimeout(() => {
       setSpin(true);
       try { localStorage.setItem('adc_spin_first_seen', '1'); } catch { /* ignore */ }
-    }, 2800);
+    }, locationKnown ? 2800 : 10_000);
     return () => clearTimeout(t);
   }, [pathname]);
 

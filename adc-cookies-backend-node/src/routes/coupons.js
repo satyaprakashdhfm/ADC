@@ -266,12 +266,11 @@ function buildTickets(coupons) {
 router.get('/spin-cooldown', couponLimiter, async (req, res) => {
   const deviceId = String(req.query.deviceId || '').trim();
   const userId = req.user?.id ?? null;
-  const ip = req.ip || null;
   if (!deviceId && !userId) return res.json({ completed: false });
   const nowIsoStr = nowIso();
   const existing = await getOne(
-    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2 OR (ip IS NOT NULL AND ip = $3)) ORDER BY id DESC LIMIT 1`,
-    [deviceId, userId, ip]
+    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2) ORDER BY id DESC LIMIT 1`,
+    [deviceId, userId]
   );
   if (!existing || existing.expires_at > nowIsoStr) return res.json({ completed: false });
   const nextSpinAtMs = new Date(existing.drawn_at).getTime() + SPIN_COOLDOWN_HOURS * 3600_000;
@@ -288,12 +287,12 @@ router.post('/spin', couponLimiter, async (req, res) => {
   const ip = req.ip || null;
   const nowIsoStr = nowIso();
 
-  // Latest draw for this device, account OR origin IP, regardless of whether its own window has
-  // expired — needed to enforce the cooldown below, not just the in-progress replay. The IP arm is
-  // what stops "clear site data / open incognito and spin again until I like the prize".
+  // Latest draw for this device or account, regardless of whether its own window has expired —
+  // needed to enforce the cooldown below, not just the in-progress replay. Deliberately NOT keyed
+  // on IP: everyone behind one café/office/CGNAT address would share a single cooldown.
   const existing = await getOne(
-    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2 OR (ip IS NOT NULL AND ip = $3)) ORDER BY id DESC LIMIT 1`,
-    [deviceId, userId, ip]
+    `SELECT * FROM spin_draws WHERE (device_id = $1 OR user_id = $2) ORDER BY id DESC LIMIT 1`,
+    [deviceId, userId]
   );
   if (existing) {
     // Still within its own 12h window (win or miss) — replay it instead of drawing again. This is

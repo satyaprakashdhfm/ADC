@@ -36,6 +36,11 @@ export function nearestStore(lat: number, lng: number): Store {
 interface LocationValue {
   store: Store | null;
   label: string;
+  /* Where the CUSTOMER is ("Lakdikapul, Hyderabad") — which is what "Deliver to" should say. The
+     store is our own dispatch detail: an address in Hyderabad shouldn't read "Electronic City"
+     just because that's the nearest branch we could match. */
+  area: string;
+  setArea: (a: string) => void;
   detecting: boolean;
   error: string;
   ready: boolean;               // hydrated from localStorage (avoids SSR/first-paint flash)
@@ -46,8 +51,11 @@ interface LocationValue {
 
 const Ctx = createContext<LocationValue | null>(null);
 
+const AREA_KEY = 'adc_location_area';
+
 export function LocationProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<Store | null>(null);
+  const [area, setAreaState] = useState('');
   const [detecting, setDetecting] = useState(false);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
@@ -59,6 +67,8 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         const s = STORES.find(x => x.pincode === pin);
         if (s) setStore(s);
       }
+      const savedArea = localStorage.getItem(AREA_KEY);
+      if (savedArea) setAreaState(savedArea);
     } catch { /* ignore */ }
     setReady(true);
   }, []);
@@ -70,8 +80,16 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore */ }
   };
 
+  const setArea = useCallback((a: string) => {
+    setAreaState(a);
+    try { if (a) localStorage.setItem(AREA_KEY, a); else localStorage.removeItem(AREA_KEY); } catch { /* ignore */ }
+  }, []);
+
   const chooseStore = useCallback((s: Store) => { setStore(s); setError(''); persist(s); }, []);
-  const clear = useCallback(() => { setStore(null); persist(null); }, []);
+  const clear = useCallback(() => {
+    setStore(null); persist(null); setAreaState('');
+    try { localStorage.removeItem(AREA_KEY); } catch { /* ignore */ }
+  }, []);
 
   const detect = useCallback(() => new Promise<Store | null>((resolve) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -98,7 +116,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   }), []);
 
   return (
-    <Ctx.Provider value={{ store, label: store ? storeLabel(store) : '', detecting, error, ready, detect, chooseStore, clear }}>
+    <Ctx.Provider value={{ store, label: store ? storeLabel(store) : '', area, setArea, detecting, error, ready, detect, chooseStore, clear }}>
       {children}
     </Ctx.Provider>
   );

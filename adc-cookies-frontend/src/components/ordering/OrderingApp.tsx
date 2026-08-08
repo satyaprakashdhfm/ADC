@@ -848,10 +848,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       {head(<ShoppingBag size={18} color="var(--brand-secondary)" />, 'Order summary')}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {lines.map((l, i) => (
-          <div key={l.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 0', borderBottom: i < lines.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
+          <div key={l.id} className="co-line" style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 0', borderBottom: i < lines.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
             {l.img
-              ? <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} title={`View ${l.name}`} style={{ width: 92, height: 92, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none', cursor: 'pointer' }}><Image src={l.img} alt={l.name} width={92} height={92} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
-              : <Thumb size={92} seed={i} />}
+              ? <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} title={`View ${l.name}`} className="co-line__img" style={{ width: 112, height: 112, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none', cursor: 'pointer' }}><Image src={l.img} alt={l.name} width={112} height={112} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+              : <Thumb size={112} seed={i} />}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} role="link" tabIndex={0} title={`View ${l.name}`} style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)', lineHeight: 1.25, cursor: 'pointer' }}>{l.name}</div>
               {/* The catalog blurb, so the summary reads like the product card rather than a bare
@@ -954,7 +954,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     {head(<Cookie size={18} color="var(--brand-secondary)" />, 'Goes great with')}
                     <div className="hide-sb" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
                       {suggestions.map(p => (
-                        <div key={p.id} style={{ flex: 'none', width: 132, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div key={p.id} className="co-upsell-tile" style={{ flex: 'none', width: 132, display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'var(--surface-sunken)' }}>
                             <Image src={firstImage(p.images)} alt={p.name} fill sizes="132px" style={{ objectFit: 'cover' }} />
                           </div>
