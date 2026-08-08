@@ -77,11 +77,14 @@ export interface Product {
   description: string; price: number; stockQuantity: number;
   images: string; options: string; isAvailable: boolean;
   menuGroup: string; tag: string; featured: boolean;
-  /** Perishable-item delivery rule (e.g. Red Velvet: 24h shelf life) — same-day intracity only,
-   *  never a multi-day Delhivery parcel. restrictCities narrows WHICH intracity cities count
-   *  ('Bengaluru') since a store's same-day reach isn't the same as "this item is made there";
-   *  null/empty means any intracity city is fine, just never outstation. */
-  sameDayOnly: boolean; restrictCities: string | null;
+  /** Per-delivery-mode availability, each with the reason to show the customer when off (e.g. Red
+   *  Velvet: intercityAvailable=false, "must be enjoyed within 24 hours"). restrictCities narrows
+   *  WHICH intracity cities count when intracity IS available ('Bengaluru') since a store's
+   *  same-day reach isn't the same as "this item is made there"; null/empty means any intracity
+   *  city is fine. */
+  intracityAvailable: boolean; intracityUnavailableReason: string | null;
+  intercityAvailable: boolean; intercityUnavailableReason: string | null;
+  restrictCities: string | null;
 }
 
 /** Parse the JSON `images` column and return the first url, or a fallback. */
@@ -341,6 +344,11 @@ export interface DeliveryCheck {
   etaHours?: number;            // intracity only — real ETA from the carrier quote
   etaLabel?: string;            // e.g. "within ~1 hour" — same-day intracity promise
   maintenanceMessage?: string;  // shown when same-day is unavailable and checkout is blocked
+  /** Per-product delivery eligibility for THIS pincode — independent of `serviceable`, which is
+   *  about the destination in general. Cross-reference against cart contents to flag a restricted
+   *  line item with its admin-written reason ("must be enjoyed within 24 hours…") right where the
+   *  customer can see it, instead of only finding out when the order is refused at checkout. */
+  sameDayRestrictions?: { productId: number; name: string; eligible: boolean; reason: string | null }[];
 }
 
 /** Combined serviceability + TAT check — used at checkout when an address is selected. */
@@ -367,7 +375,9 @@ export interface ProductInput {
   name: string; category: 'COOKIES' | 'TINS'; description?: string; price: number;
   stockQuantity?: number; images?: string; options?: string; isAvailable?: boolean;
   menuGroup?: string; tag?: string; featured?: boolean;
-  sameDayOnly?: boolean; restrictCities?: string;
+  intracityAvailable?: boolean; intracityUnavailableReason?: string;
+  intercityAvailable?: boolean; intercityUnavailableReason?: string;
+  restrictCities?: string;
 }
 
 export interface AdminAnalytics {

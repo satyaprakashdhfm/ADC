@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, ChevronDown, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, PackageCheck } from 'lucide-react';
+import { ChevronLeft, User, BookOpen, X, Search, ShoppingBag, ChevronRight, ChevronDown, Sparkles, Check, ArrowRight, Gift, MapPin, CreditCard, Bike, Home, Briefcase, Lock, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, PackageCheck, AlertTriangle } from 'lucide-react';
 import { STORES, productAvailableFor } from '@/lib/stores';
 import { useLocation } from '@/context/LocationContext';
 import { LocationPill, LocationBanner } from '@/components/storefront/LocationPicker';
@@ -568,7 +568,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   // number (older saved addresses may predate that requirement — block those too, not just new ones).
   const chosenPinOk = PIN_RE.test((chosen?.pincode || '').trim());
   const chosenPhoneOk = PHONE_RE.test((chosen?.phone || '').replace(/\D/g, ''));
-  const canProceed = hydrated && lines.length > 0 && !!chosen && chosenPinOk && chosenPhoneOk && (delivCheck ? delivCheck.serviceable : true);
+  // Tier 2 — precise, address-based: once checkDeliveryPin has actually run for the chosen address,
+  // this is the real pincode-zone match (see sameDayRestrictions on DeliveryCheck), not the coarse
+  // "nearest store" hint the catalog page used before checkout existed. A cart item this address
+  // cannot receive blocks proceeding to payment — same guarantee the backend re-checks at order
+  // creation, just surfaced here before the customer wastes a trip through Razorpay.
+  const restrictionFor = (lineId: string) =>
+    delivCheck?.sameDayRestrictions?.find(r => String(r.productId) === String(lineId) && !r.eligible) || null;
+  const hasBlockingRestriction = lines.some(l => !!restrictionFor(l.id));
+  const canProceed = hydrated && lines.length > 0 && !!chosen && chosenPinOk && chosenPhoneOk
+    && (delivCheck ? delivCheck.serviceable : true) && !hasBlockingRestriction;
   const fieldStyle: React.CSSProperties = { flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
   const hintStyle: React.CSSProperties = { fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 600 };
   const EMPTY_AFORM = { fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home', latitude: null, longitude: null };
@@ -847,7 +856,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     <div style={card$}>
       {head(<ShoppingBag size={18} color="var(--brand-secondary)" />, 'Order summary')}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {lines.map((l, i) => (
+        {lines.map((l, i) => {
+          const restriction = restrictionFor(l.id);
+          return (
           <div key={l.id} className="co-line" style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 0', borderBottom: i < lines.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
             {l.img
               ? <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} title={`View ${l.name}`} className="co-line__img" style={{ width: 112, height: 112, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none', cursor: 'pointer' }}><Image src={l.img} alt={l.name} width={112} height={112} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
@@ -867,9 +878,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 <QStepper value={l.qty} onChange={n => setQty(l.id, n, l.name, l.price, l.img)} size="sm" />
               </div>
               {applied && l.id === giftLineId && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--green-success)', fontWeight: 800, marginTop: 4 }}>🎁 Free — your spin reward</div>}
+              {restriction && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fdecec', color: '#a4231d', fontSize: 'var(--text-xs)', fontWeight: 700, lineHeight: 1.4 }}>
+                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span>Not deliverable to this address — {restriction.reason} Remove it to continue, or choose a different address.</span>
+                </div>
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
         {lines.length === 0 && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', padding: '8px 0' }}>Your cart is empty.</div>}
       </div>
       {/* Delivery promise — EXPRESS badge + a real date, like the big marketplaces */}
@@ -1506,7 +1524,7 @@ export default function OrderingApp() {
     getProducts().then(products => {
       if (!products?.length) { setMenu(FALLBACK_MENU); setTins(FALLBACK_TINS); return; }
       const cookies = products.filter(p => p.category === 'COOKIES' && productAvailableFor(deliveryStore, p));
-      const tinProds = products.filter(p => p.category === 'TINS');
+      const tinProds = products.filter(p => p.category === 'TINS' && productAvailableFor(deliveryStore, p));
 
       // Deterministic decorative rating/review-count from the product id (stable across renders).
       const ratingOf = (p: Product) => Math.round((4.4 + ((p.id * 7) % 6) / 10) * 10) / 10;

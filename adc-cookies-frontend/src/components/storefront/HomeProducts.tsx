@@ -118,7 +118,7 @@ export default function HomeProducts() {
   const cookies = products
     .filter(p => p.category === 'COOKIES' && p.isAvailable && !/sundae/i.test(p.name) && productAvailableFor(store, p))
     .sort((a, b) => (ql ? (a.name.toLowerCase().includes(ql) ? 0 : 1) - (b.name.toLowerCase().includes(ql) ? 0 : 1) : 0));
-  const tins = products.filter(p => p.category === 'TINS' && p.isAvailable);
+  const tins = products.filter(p => p.category === 'TINS' && p.isAvailable && productAvailableFor(store, p));
 
   return (
     <section id="products" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>

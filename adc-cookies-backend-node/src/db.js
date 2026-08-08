@@ -84,21 +84,46 @@ export async function initSchema() {
     ALTER TABLE products ADD COLUMN IF NOT EXISTS menu_group TEXT;
     ALTER TABLE products ADD COLUMN IF NOT EXISTS tag TEXT;
     ALTER TABLE products ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT FALSE;
-    -- A perishable item (Red Velvet: 24-hour shelf life) cannot survive a multi-day Delhivery
-    -- parcel, so it must never be sold on an order that could route that way. same_day_only forces
-    -- the order-creation guard to require a genuinely same-day-capable destination; restrict_cities
-    -- (comma-separated, e.g. 'Bengaluru') narrows WHICH intracity cities count, since a store's own
-    -- same-day network is not necessarily where a given item is even made — Besant Nagar (Chennai)
-    -- is intracity-capable in general but does not carry Red Velvet. NULL/empty restrict_cities with
-    -- same_day_only=true means "any intracity city is fine, just never outstation".
-    ALTER TABLE products ADD COLUMN IF NOT EXISTS same_day_only BOOLEAN NOT NULL DEFAULT FALSE;
+    -- Per-product, per-delivery-mode availability, each with an admin-supplied reason shown to the
+    -- customer when off. Two independent switches, not one:
+    --   intracity_available  — can this be sold on a same-day, store-fulfilled order at all right now?
+    --   intercity_available  — can this be sold on a multi-day Delhivery parcel at all right now?
+    -- Both default TRUE (ordinary products, unrestricted). Turning either off is a normal OPERATIONAL
+    -- lever (out of stock today, kitchen issue, temporary pause) — nothing structural required.
+    --
+    -- restrict_cities (comma-separated, e.g. 'Bengaluru') narrows WHICH intracity cities count when
+    -- intracity_available is true, since a store's own same-day network is not necessarily where a
+    -- given item is even made — Besant Nagar (Chennai) is intracity-capable in general but does not
+    -- carry Red Velvet. NULL/empty means any intracity city is fine.
+    --
+    -- A STRUCTURAL rule (Red Velvet: 24-hour shelf life, can never survive a multi-day parcel) is
+    -- just intercity_available=FALSE with a permanent reason — the same mechanism as a temporary
+    -- operational pause, not a separate concept.
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS intracity_available BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS intracity_unavailable_reason TEXT;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS intercity_available BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS intercity_unavailable_reason TEXT;
     ALTER TABLE products ADD COLUMN IF NOT EXISTS restrict_cities TEXT;
 
+    -- One-time: migrate the old same_day_only flag into the new shape, then drop it — superseded,
+    -- not parallel. Guarded by the column's existence so this runs exactly once, ever.
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'same_day_only') THEN
+        UPDATE products SET intercity_available = FALSE,
+          intercity_unavailable_reason = COALESCE(intercity_unavailable_reason,
+            'This item must be enjoyed within 24 hours of baking, so we only deliver it same-day within our intracity area.')
+          WHERE same_day_only = TRUE;
+        ALTER TABLE products DROP COLUMN same_day_only;
+      END IF;
+    END $$;
+
     -- One-time: Red Velvet's 24-hour shelf life means it can never go by Delhivery. Guarded by
-    -- "same_day_only = FALSE" so this sets the rule once and never fights an admin who edits it
-    -- afterward via the Products tab — a later boot sees same_day_only already TRUE and skips it.
-    UPDATE products SET same_day_only = TRUE, restrict_cities = 'Bengaluru'
-      WHERE name IN ('Red Velvet Filled Cookie', 'Red Velvet Cookie Tin') AND same_day_only = FALSE;
+    -- "intercity_available = TRUE" so this sets the rule once and never fights an admin who edits it
+    -- afterward via the Products tab.
+    UPDATE products SET intercity_available = FALSE, restrict_cities = COALESCE(restrict_cities, 'Bengaluru'),
+        intercity_unavailable_reason = COALESCE(intercity_unavailable_reason,
+          'This item must be enjoyed within 24 hours of baking, so we only deliver it same-day within our intracity area.')
+      WHERE name IN ('Red Velvet Filled Cookie', 'Red Velvet Cookie Tin') AND intercity_available = TRUE;
 
     -- A store not currently taking orders (closed for the day, out of stock entirely, whatever the
     -- reason) — distinct from posMode/staff login state, which is about HOW it fulfils, not WHETHER
@@ -111,11 +136,11 @@ export async function initSchema() {
       updated_at TEXT NOT NULL
     );
 
-    -- Manual per-store product availability — generalizes same_day_only/restrict_cities (which only
+    -- Manual per-store product availability — generalizes intracity_available/restrict_cities (which only
     -- ever understands "restricted to city X") to any product/store combination an admin wants to
     -- flip directly, no code change needed: "Jayanagar is out of Red Velvet today", or the reverse,
     -- turning something ordinarily city-restricted back on for one specific store. No row for a
-    -- store/product pair means "no override" — the automatic same_day_only/restrict_cities rule (or
+    -- store/product pair means "no override" — the automatic intracity_available/restrict_cities rule (or
     -- plain storewide availability) still decides it.
     CREATE TABLE IF NOT EXISTS store_product_overrides (
       store_code TEXT NOT NULL,

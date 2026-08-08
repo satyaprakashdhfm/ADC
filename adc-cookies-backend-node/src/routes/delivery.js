@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getOne } from '../db.js';
+import { getOne, getAll } from '../db.js';
 import { ApiError } from '../middleware.js';
 import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhivery.js';
 // Aliased: delhivery.js already exports a checkServiceability with a different signature.
@@ -7,7 +7,7 @@ import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhiv
 // shopper is shown are the ones the order will actually be dispatched from. Quoting against a single
 // fixed origin is what let checkout advertise a store we then could not collect from.
 import { pickServiceableStore, shiprocketConfigured } from '../shiprocket.js';
-import { nearestStore, zoneStores, orderStoresByProximity, isStoreActive } from '../stores.js';
+import { nearestStore, zoneStores, orderStoresByProximity, isStoreActive, deliveryEligible } from '../stores.js';
 
 const router = Router();
 
@@ -51,6 +51,33 @@ router.get('/check', async (req, res) => {
   const lng = req.query.lng ?? req.query.long ? Number(req.query.lng ?? req.query.long) : null;
   console.log(`[DELIVERY] HIT /api/delivery/check | pincode=${pin || req.query.pincode || 'MISSING'}${lat && lng ? ` | coords=${lat},${lng}` : ''}`);
   if (!/^\d{6}$/.test(pin)) return res.json({ serviceable: false, reason: 'invalid_pincode' });
+
+  /*
+   * Per-product delivery-mode eligibility for THIS pincode — independent of whether the
+   * destination itself is serviceable at all (a Bengaluru pincode is serviceable in general even
+   * though Red Velvet is fine there and a Chennai one is not). Computed once and merged into
+   * whichever branch below actually responds, via the res.json wrap just below, so checkout can
+   * cross-reference cart contents against `sameDayRestrictions` and show the admin-written reason
+   * on the exact line item — this is the "second round" check, precise (real pincode-zone match),
+   * distinct from the coarse nearest-store hint the catalog page uses before an address exists.
+   * Same rule as order-creation (deliveryEligible), so the two can never disagree.
+   */
+  const restrictedProducts = await getAll(
+    `SELECT id, name, intracity_available, intracity_unavailable_reason, intercity_available, intercity_unavailable_reason, restrict_cities
+       FROM products
+      WHERE is_available = TRUE AND (intracity_available = FALSE OR intercity_available = FALSE OR restrict_cities IS NOT NULL)`
+  ).catch(() => []);
+  const isIntracityPin = zoneStores(pin).length > 0;
+  const sameDayRestrictions = restrictedProducts.map((p) => {
+    const eligible = deliveryEligible(pin, p);
+    return {
+      productId: p.id, name: p.name, eligible,
+      reason: eligible ? null : ((isIntracityPin ? p.intracity_unavailable_reason : p.intercity_unavailable_reason)
+        || 'Not available for delivery to this address.'),
+    };
+  });
+  const _json = res.json.bind(res);
+  res.json = (body) => _json({ ...body, sameDayRestrictions });
 
   // Delhivery pan-India quote — used both for out-of-town pincodes and as the fallback for an
   // intracity zone whenever same-day can't be quoted, so a store-city pincode is never hard-blocked.

@@ -36,10 +36,12 @@ export function serializeProduct(p) {
     id: p.id, name: p.name, category: p.category, description: p.description,
     price: p.price, stockQuantity: p.stock_quantity, images: p.images, options: p.options,
     isAvailable: !!p.is_available, menuGroup: p.menu_group, tag: p.tag, featured: !!p.featured,
-    // Perishable-item delivery rule: same-day intracity only, optionally narrowed to specific
-    // cities (e.g. Red Velvet -> Bengaluru only) because a store's same-day reach isn't the same
-    // as "this item is even made there". See sameDayEligible() in stores.js for the enforcement.
-    sameDayOnly: !!p.same_day_only, restrictCities: p.restrict_cities || null,
+    // Per-delivery-mode availability, each with the reason to show the customer when off. See
+    // deliveryEligible() / intracityEligible() / intercityEligible() in stores.js for enforcement —
+    // this is data only, never re-derive the rule here.
+    intracityAvailable: !!p.intracity_available, intracityUnavailableReason: p.intracity_unavailable_reason || null,
+    intercityAvailable: !!p.intercity_available, intercityUnavailableReason: p.intercity_unavailable_reason || null,
+    restrictCities: p.restrict_cities || null,
     createdAt: p.created_at, updatedAt: p.updated_at,
   };
 }

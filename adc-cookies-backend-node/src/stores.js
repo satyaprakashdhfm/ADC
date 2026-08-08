@@ -66,42 +66,63 @@ export async function isStoreActive(code) {
   return row ? !!row.is_active : true;
 }
 
+const parseCities = (raw) => String(raw || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+
 /**
- * Can a same-day-only product actually reach this pincode?
+ * Can this product go on a same-day, store-fulfilled order to this pincode?
  *
- * A perishable item can never travel by Delhivery — no destination pincode makes that safe — so the
- * check is really "is there an intracity store here at all, and if the product also names specific
- * cities, is one of THOSE the one serving it". zoneStores already answers "which stores could serve
- * this pincode" for the ordinary courier-routing decision; this reuses it rather than re-deriving
- * city eligibility a second way that could drift from what booking actually does.
- *
- * `restrictCities` is comma-separated (e.g. 'Bengaluru') or null/empty for "any intracity city".
+ * zoneStores already answers "which stores could serve this pincode" for the ordinary
+ * courier-routing decision; this reuses it rather than re-deriving city eligibility a second way
+ * that could drift from what booking actually does. `restrict_cities` narrows WHICH intracity
+ * cities count (e.g. Red Velvet: Bengaluru, not Chennai) — empty means any intracity city is fine.
  */
-export function sameDayEligible(destPincode, restrictCities) {
+export function intracityEligible(destPincode, product) {
+  if (!product.intracity_available) return false;
   const stores = zoneStores(destPincode);
-  if (!stores.length) return false;               // no intracity store in range at all -> Delhivery-only
-  const allowed = String(restrictCities || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
-  if (!allowed.length) return true;                // no city restriction beyond "must be intracity"
+  if (!stores.length) return false;                // not an intracity pincode at all
+  const allowed = parseCities(product.restrict_cities);
+  if (!allowed.length) return true;
   return stores.some((s) => allowed.includes(s.city.toLowerCase()));
 }
 
+/** Can this product go on a multi-day Delhivery parcel at all, anywhere? No city concept — Delhivery
+ *  is national, so this is a flat on/off (Red Velvet: permanently off, 24h shelf life). */
+export function intercityEligible(product) {
+  return !!product.intercity_available;
+}
+
 /**
- * The same rule, asked from the OTHER direction: not "can this pincode be reached", but "can THIS
- * store sell it at all". Used by the store portal's own menu view — a same-day-only, city-restricted
- * product is not something Besant Nagar carries, whatever a customer's address happens to be.
+ * Can this product reach this destination AT ALL, by whichever carrier actually applies there?
+ *
+ * NOT "intracity OR intercity" independently — an intracity-zone pincode never falls back to
+ * Delhivery for a same-day product (the standing rule: a same-day promise is never silently
+ * downgraded to multi-day), so a pincode inside a store zone is judged ONLY on intracity
+ * eligibility. Everywhere else, only intercity applies. This is the one function order-creation,
+ * the storefront catalog, and checkout should all call — never re-derive this a second way.
+ */
+export function deliveryEligible(destPincode, product) {
+  return zoneStores(destPincode).length
+    ? intracityEligible(destPincode, product)
+    : intercityEligible(product);
+}
+
+/**
+ * The intracity rule, asked from the OTHER direction: not "can this pincode be reached", but "can
+ * THIS store sell it at all". Used by the store portal's own menu view — a city-restricted product
+ * is not something Besant Nagar carries, whatever a customer's address happens to be.
  */
 export function storeProductAvailable(storeCode, product) {
-  if (!product.same_day_only) return true;
+  if (!product.intracity_available) return false;
   const store = storeByCode(storeCode);
   if (!store) return false;
-  const allowed = String(product.restrict_cities || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+  const allowed = parseCities(product.restrict_cities);
   return !allowed.length || allowed.includes(store.city.toLowerCase());
 }
 
 /**
  * The same question, but honouring a manual admin override first (see store_product_overrides in
  * db.js) — an explicit "on" or "off" for this exact store/product always wins over the automatic
- * same_day_only/restrict_cities rule, since it's what lets an admin handle a one-off case (a
+ * intracity_available/restrict_cities rule, since it's what lets an admin handle a one-off case (a
  * specific store out of an ingredient today) that a city-name rule can't express. `override` is
  * `true`/`false` when a row exists for this store+product, or `null`/`undefined` when it doesn't —
  * callers fetch that themselves (stores.js stays DB-free) and pass it straight through.

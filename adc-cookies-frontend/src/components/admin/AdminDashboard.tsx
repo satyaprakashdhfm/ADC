@@ -68,7 +68,7 @@ const fmtDate = (s: string) => { const d = new Date(s); return isNaN(d.getTime()
 const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text-muted)', fontWeight: 800, borderBottom: '1px solid var(--border-default)' };
 const td: React.CSSProperties = { padding: '12px', fontSize: 'var(--text-sm)', color: 'var(--text-body)', borderBottom: '1px solid var(--border-soft)', verticalAlign: 'middle' };
 
-const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, stockQuantity: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, images: '', sameDayOnly: false, restrictCities: '' };
+const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, stockQuantity: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, images: '', intracityAvailable: true, intracityUnavailableReason: '', intercityAvailable: true, intercityUnavailableReason: '', restrictCities: '' };
 
 // Coupon create/edit form uses string fields (easy inputs); converted to CouponInput on save.
 // `editId` is set when editing an existing coupon (PUT) instead of creating a new one (POST).
@@ -651,9 +651,19 @@ export default function AdminDashboard() {
                 <tr key={p.id}>
                   <td style={td}>
                     <strong>{p.name}</strong>
-                    {p.sameDayOnly && (
+                    {!p.intracityAvailable && (
                       <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>
-                        Same-day only{p.restrictCities ? ` — ${p.restrictCities}` : ''}
+                        Intracity off{p.intracityUnavailableReason ? ` — ${p.intracityUnavailableReason}` : ''}
+                      </div>
+                    )}
+                    {!p.intercityAvailable && (
+                      <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>
+                        Intercity off{p.intercityUnavailableReason ? ` — ${p.intercityUnavailableReason}` : ''}
+                      </div>
+                    )}
+                    {p.intracityAvailable && p.restrictCities && (
+                      <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700, marginTop: 2 }}>
+                        Intracity restricted to {p.restrictCities}
                       </div>
                     )}
                   </td>
@@ -662,7 +672,7 @@ export default function AdminDashboard() {
                   <td style={td}><span style={{ color: p.stockQuantity <= 10 ? 'var(--status-error)' : 'var(--text-body)', fontWeight: p.stockQuantity <= 10 ? 800 : 400 }}>{p.stockQuantity}</span></td>
                   <td style={td}>{p.tag || '—'}</td>
                   <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                    <button onClick={() => setEditing({ id: p.id, data: { name: p.name, category: p.category, description: p.description, price: p.price, stockQuantity: p.stockQuantity, images: p.images, options: p.options, isAvailable: p.isAvailable, menuGroup: p.menuGroup, tag: p.tag, featured: p.featured, sameDayOnly: p.sameDayOnly, restrictCities: p.restrictCities || '' } })} aria-label="Edit" style={iconBtn}><Pencil size={15} /></button>
+                    <button onClick={() => setEditing({ id: p.id, data: { name: p.name, category: p.category, description: p.description, price: p.price, stockQuantity: p.stockQuantity, images: p.images, options: p.options, isAvailable: p.isAvailable, menuGroup: p.menuGroup, tag: p.tag, featured: p.featured, intracityAvailable: p.intracityAvailable, intracityUnavailableReason: p.intracityUnavailableReason || '', intercityAvailable: p.intercityAvailable, intercityUnavailableReason: p.intercityUnavailableReason || '', restrictCities: p.restrictCities || '' } })} aria-label="Edit" style={iconBtn}><Pencil size={15} /></button>
                     <button onClick={() => removeProduct(p.id)} aria-label="Delete" style={{ ...iconBtn, color: 'var(--status-error)' }}><Trash2 size={15} /></button>
                   </td>
                 </tr>
@@ -1666,27 +1676,40 @@ export default function AdminDashboard() {
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={!!editing.data.featured} onChange={e => setEditing({ ...editing, data: { ...editing.data, featured: e.target.checked } })} /> Featured
               </label>
-              <div style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-input)', padding: 12 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer', marginBottom: editing.data.sameDayOnly ? 10 : 0 }}>
-                  <input type="checkbox" checked={!!editing.data.sameDayOnly}
-                    onChange={e => setEditing({ ...editing, data: { ...editing.data, sameDayOnly: e.target.checked } })} />
-                  Perishable — same-day delivery only
-                </label>
-                {editing.data.sameDayOnly && (
-                  <>
-                    <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: '0 0 8px', lineHeight: 1.5 }}>
-                      Blocks this product from any order that could ship by multi-day courier — checked at checkout,
-                      not just labelled. Leave the city blank to allow it same-day from any of our stores.
-                    </p>
+              <div style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-input)', padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                  Which delivery methods this product can go on, right now. Checked at checkout AND at order
+                  creation — turning either off is enforced, not just labelled.
+                </p>
+                <DeliveryModeToggle
+                  label="Intracity — same-day, from one of our stores"
+                  available={editing.data.intracityAvailable !== false}
+                  reason={editing.data.intracityUnavailableReason || ''}
+                  onToggle={v => setEditing({ ...editing, data: { ...editing.data, intracityAvailable: v } })}
+                  onReason={r => setEditing({ ...editing, data: { ...editing.data, intracityUnavailableReason: r } })}
+                >
+                  {editing.data.intracityAvailable !== false && (
                     <Field label="Only deliver same-day within (city, optional)">
                       <input style={inp} placeholder="e.g. Bengaluru" value={editing.data.restrictCities || ''}
                         onChange={e => setEditing({ ...editing, data: { ...editing.data, restrictCities: e.target.value } })} />
                     </Field>
-                  </>
-                )}
+                  )}
+                </DeliveryModeToggle>
+                <DeliveryModeToggle
+                  label="Intercity — multi-day courier, anywhere else"
+                  available={editing.data.intercityAvailable !== false}
+                  reason={editing.data.intercityUnavailableReason || ''}
+                  onToggle={v => setEditing({ ...editing, data: { ...editing.data, intercityAvailable: v } })}
+                  onReason={r => setEditing({ ...editing, data: { ...editing.data, intercityUnavailableReason: r } })}
+                />
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                <button onClick={saveProduct} disabled={!editing.data.name || !editing.data.price} style={{ ...addBtn, flex: 1, justifyContent: 'center', opacity: (!editing.data.name || !editing.data.price) ? 0.5 : 1 }}><Check size={16} /> Save</button>
+                {(() => {
+                  const missingReason = (editing.data.intracityAvailable === false && !(editing.data.intracityUnavailableReason || '').trim())
+                    || (editing.data.intercityAvailable === false && !(editing.data.intercityUnavailableReason || '').trim());
+                  const disabled = !editing.data.name || !editing.data.price || missingReason;
+                  return <button onClick={saveProduct} disabled={disabled} style={{ ...addBtn, flex: 1, justifyContent: 'center', opacity: disabled ? 0.5 : 1 }}><Check size={16} /> Save</button>;
+                })()}
                 <button onClick={() => setEditing(null)} style={{ padding: '12px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
               </div>
             </div>
@@ -1990,10 +2013,10 @@ function AttentionPanel({ report, busy, onRebook, onRetryPos, onOpen, onRefresh 
 
 /*
  * Every store, online or off (including Begur, which has no staff portal so it never appears in the
- * "Stores" panel below) — and, per store, a flat on/off for each product. This generalizes
- * same_day_only/restrict_cities (which only ever understands "restricted to city X") to any one-off
- * case an admin wants to flip directly, no code change: a store fully out of an ingredient today, or
- * the reverse. An explicit override here always wins over the automatic rule.
+ * "Stores" panel below) — and, per store, a flat on/off for each product. This generalizes the
+ * product-level intracity/intercity toggle (which only ever understands "restricted to city X") to
+ * any one-off case an admin wants to flip directly, no code change: a store fully out of an
+ * ingredient today, or the reverse. An explicit override here always wins over the automatic rule.
  */
 function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: (s: string) => void; setNotice: (s: string) => void }) {
   const [stores, setStores] = useState<AdminStoreStatus[] | null>(null);
@@ -2399,6 +2422,47 @@ function Empty({ text }: { text: string }) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label style={{ display: 'block' }}><span style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 5 }}>{label}</span>{children}</label>;
+}
+
+/**
+ * One delivery-mode on/off switch on the product form. Turning it OFF requires a reason before it
+ * can be saved with that value — an off switch with no explanation is useless to whoever reads it
+ * later (the customer sees this text when the product is disabled for them; another admin sees it
+ * when wondering why a product they didn't touch is suddenly unavailable). `children` renders
+ * extra fields only relevant while this mode is ON (e.g. the city restriction, for intracity).
+ */
+function DeliveryModeToggle({ label, available, reason, onToggle, onReason, children }: {
+  label: string; available: boolean; reason: string;
+  onToggle: (v: boolean) => void; onReason: (r: string) => void; children?: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', flex: 1 }}>{label}</span>
+        <button type="button" onClick={() => onToggle(!available)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 'var(--radius-pill)',
+            border: `1.5px solid ${available ? 'var(--border-default)' : 'var(--status-error)'}`,
+            background: available ? 'var(--surface-card)' : 'var(--status-error-bg, #fdecec)',
+            color: available ? 'var(--text-body)' : 'var(--status-error)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
+          {available ? <ToggleRight size={15} color="var(--brand-secondary)" /> : <ToggleLeft size={15} />}
+          {available ? 'On' : 'Off'}
+        </button>
+      </div>
+      {!available && (
+        <div style={{ marginTop: 8 }}>
+          <input style={{ ...inp, borderColor: !reason.trim() ? 'var(--status-error)' : undefined }}
+            placeholder={'Reason shown to the customer (required) — e.g. "Out of same-day stock today"'}
+            value={reason} onChange={e => onReason(e.target.value)} />
+          {!reason.trim() && (
+            <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', margin: '4px 0 0' }}>
+              A reason is required while this is off.
+            </p>
+          )}
+        </div>
+      )}
+      {available && children && <div style={{ marginTop: 10 }}>{children}</div>}
+    </div>
+  );
 }
 
 // Search box + a compact "Filters" popover (the filter symbol reveals the extra filters inside).
