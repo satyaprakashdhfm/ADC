@@ -77,6 +77,11 @@ export interface Product {
   description: string; price: number; stockQuantity: number;
   images: string; options: string; isAvailable: boolean;
   menuGroup: string; tag: string; featured: boolean;
+  /** Perishable-item delivery rule (e.g. Red Velvet: 24h shelf life) — same-day intracity only,
+   *  never a multi-day Delhivery parcel. restrictCities narrows WHICH intracity cities count
+   *  ('Bengaluru') since a store's same-day reach isn't the same as "this item is made there";
+   *  null/empty means any intracity city is fine, just never outstation. */
+  sameDayOnly: boolean; restrictCities: string | null;
 }
 
 /** Parse the JSON `images` column and return the first url, or a fallback. */
@@ -358,6 +363,7 @@ export interface ProductInput {
   name: string; category: 'COOKIES' | 'TINS'; description?: string; price: number;
   stockQuantity?: number; images?: string; options?: string; isAvailable?: boolean;
   menuGroup?: string; tag?: string; featured?: boolean;
+  sameDayOnly?: boolean; restrictCities?: string;
 }
 
 export interface AdminAnalytics {
@@ -434,6 +440,10 @@ export interface AdminStore {
   pickupName: string | null;
   portalPath: string;
   last30Days: { paid: number; unaccepted: number; unbilled: number };
+  /** Storewide-available, same-day-only products this store cannot sell (city rule excludes it) —
+   *  e.g. Besant Nagar (Chennai) never carries a Bengaluru-only item. Computed with the exact same
+   *  rule the store's own menu view and the checkout guard use, so this can never drift from reality. */
+  doesNotCarry: string[];
   staff: StoreStaff[];
 }
 export interface AdminStoresReport {

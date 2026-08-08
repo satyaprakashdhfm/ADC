@@ -108,6 +108,9 @@ export interface StoreTrack {
 export interface StoreMenuItem {
   id: number; name: string; category: string; menuGroup: string | null;
   price: number; available: boolean;
+  /** Whether THIS store carries it — separate from `available`, which is storewide. A same-day-only,
+   *  city-restricted item (Red Velvet: Bengaluru only) is a flat no at Besant Nagar regardless. */
+  availableHere: boolean;
   posItemId: string | null; posVariation: string | null;
   posPrice: number | null; posInStock: boolean | null;
 }
