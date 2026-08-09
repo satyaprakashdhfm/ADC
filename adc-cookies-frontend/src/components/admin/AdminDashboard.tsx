@@ -1,23 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import {
-  adminGetOrders,
-  adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
-  adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
-  adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
-  adminGetStoreReadiness,
-  adminGetPetpoojaMapping, adminCreateProductFromPetpooja, adminGetPetpoojaRelays, adminLinkProductToPetpooja,
-  type Warehouse, type WarehouseInput,
-  type StoreReadinessReport, type PetpoojaMapping, type PetpoojaRelay, type PetpoojaItem,
-} from '@/lib/api';
-import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
-  Plus, Pencil, Check, X, LogOut,
-  Truck, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download,
-  FileText, AlertTriangle, Store as StoreIcon,
+  LogOut, Truck, FileText, Store as StoreIcon,
 } from 'lucide-react';
 import { usePagination } from '@/hooks/admin/usePagination';
 import { useAdminUsers } from '@/hooks/admin/useAdminUsers';
@@ -30,6 +18,8 @@ import { useAdminProducts } from '@/hooks/admin/useAdminProducts';
 import { useSiteSettings } from '@/hooks/admin/useSiteSettings';
 import { useAdminAttention } from '@/hooks/admin/useAdminAttention';
 import { useAdminOrders } from '@/hooks/admin/useAdminOrders';
+import { useAdminDelivery } from '@/hooks/admin/useAdminDelivery';
+import { useAdminPetpooja } from '@/hooks/admin/useAdminPetpooja';
 import UsersTab from './users/UsersTab';
 import OverviewTab from './overview/OverviewTab';
 import MessagesTab from './messages/MessagesTab';
@@ -42,28 +32,10 @@ import OrdersTab from './orders/OrdersTab';
 import OrderDetailModal from './orders/OrderDetailModal';
 import CancelResultModal from './orders/CancelResultModal';
 import AttentionPanel from './attention/AttentionPanel';
-import { money, todayStr, fmtDate } from './shared/format';
-import {
-  card, td, inp, addBtn, iconBtn, actionBtn,
-  MiniStat, Panel, Table, Badge, Empty, Field, FilterBar,
-} from './shared/ui';
-
-/*
- * Shiprocket Hyperlocal tracking statuses and what each one does to the order. Mirrors
- * shiprocketStatusToOrderStatus() in adc-cookies-backend-node/src/shiprocket.js — if that mapping
- * changes, change this too, since this table is what an operator trusts when reading a status.
- */
-const SR_ORDER_STATES = [
-  { id: 'RIDER ASSIGNED', status: 'PACKED', description: 'A rider has been allocated. Nothing has left the store yet.' },
-  { id: 'PICKUP SCHEDULED', status: 'PACKED', description: 'Collection is booked; the rider is on the way to the store.' },
-  { id: 'AWB ASSIGNED', status: 'PACKED', description: 'The tracking number exists. Assignment is asynchronous, so this can lag the order by a minute or two.' },
-  { id: 'PICKED UP', status: 'OUT_FOR_DELIVERY', description: 'The rider has collected the order from the store.' },
-  { id: 'IN TRANSIT', status: 'OUT_FOR_DELIVERY', description: 'On the way to the customer.' },
-  { id: 'OUT FOR DELIVERY', status: 'OUT_FOR_DELIVERY', description: 'On the final leg to the drop address.' },
-  { id: 'RIDER REACHED DROP', status: '(no change)', description: 'The rider is at the door. Deliberately not marked delivered — at the door is not delivered.' },
-  { id: 'DELIVERED', status: 'DELIVERED', description: 'Handed to the customer. Terminal state.' },
-  { id: 'CANCELLED / RTO', status: 'CANCELLED', description: 'Cancelled, or returned to origin.' },
-];
+import DeliveryTab from './delivery/DeliveryTab';
+import WarehouseEditorModal from './delivery/WarehouseEditorModal';
+import PetpoojaTab from './petpooja/PetpoojaTab';
+import { card, addBtn } from './shared/ui';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -87,29 +59,8 @@ export default function AdminDashboard() {
   const [notice, setNotice] = useState('');
   const [loginOpen, setLoginOpen] = useState(false);
 
-  // Per-tab search/filter state for the other lists
-
+  // Page numbers stay here, not in each tab, so a page survives switching tabs and back.
   const { pageOf, setPageOf } = usePagination();
-
-  // Delivery tab state
-  const [warehouses, setWarehouses] = useState<Warehouse[] | null>(null);
-  const [whForm, setWhForm] = useState<{ id?: number; data: WarehouseInput } | null>(null);
-  const [purDate, setPurDate] = useState('');
-  const [purTime, setPurTime] = useState('10:00');
-  const [purCount, setPurCount] = useState('1');
-  const [purResult, setPurResult] = useState<string>('');
-  const [shipmentBusy, setShipmentBusy] = useState<number | null>(null);
-  const [shipmentWeights, setShipmentWeights] = useState<Record<number, string>>({});
-  const [delivSub, setDelivSub] = useState<'main' | 'sameday' | 'delhivery'>('main');
-  const [storeReadiness, setStoreReadiness] = useState<StoreReadinessReport | null>(null);
-  const [ppMap, setPpMap] = useState<PetpoojaMapping | null>(null);
-  const [ppRelays, setPpRelays] = useState<PetpoojaRelay[] | null>(null);
-  const [ppBusy, setPpBusy] = useState<string | null>(null);   // "itemId|variationId" being saved
-  const [ppSearch, setPpSearch] = useState('');
-  const [ppOnlyUnlinked, setPpOnlyUnlinked] = useState(false);
-  const [sfxStatesOpen, setSfxStatesOpen] = useState(false);
-
-  const EMPTY_WH: WarehouseInput = { name: '', registeredName: '', pickupLocation: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', returnPincode: '', phone: '', email: '', isDefault: false, skipDelhivery: false };
 
   const isAdmin = !!user && user.role === 'ADMIN';
 
@@ -128,20 +79,13 @@ export default function AdminDashboard() {
     changeOrderStatus, rebookShipment, retryPosRelay,
   } = useAdminOrders(isAdmin && (tab === 'orders' || tab === 'delivery'), { onError: setErr, onNotice: setNotice, refreshStats, refreshAttention });
   const { messages, search: messageSearch, setSearch: setMessageSearch, handledFilter: messageHandled, setHandledFilter: setMessageHandled, markHandled } = useAdminMessages(isAdmin && tab === 'messages', refreshStats);
-
-  // Lazy-load each tab's data the first time it's opened.
-  useEffect(() => {
-    if (!isAdmin) return;
-    if (tab === 'petpooja') {
-      if (ppMap === null) adminGetPetpoojaMapping().then(setPpMap).catch(() => setPpMap(null));
-      if (ppRelays === null) adminGetPetpoojaRelays().then(setPpRelays).catch(() => setPpRelays([]));
-    }
-    if (tab === 'delivery') {
-      if (warehouses === null) adminGetWarehouses().then(setWarehouses).catch(() => setWarehouses([]));
-      if (orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
-      if (storeReadiness === null) adminGetStoreReadiness().then(setStoreReadiness).catch(() => setStoreReadiness(null));
-    }
-  }, [tab, isAdmin, orders, storeReadiness, ppMap, ppRelays]);
+  const {
+    warehouses, setWarehouses, whForm, setWhForm,
+    purDate, setPurDate, purTime, setPurTime, purCount, setPurCount, purResult, setPurResult,
+    shipmentBusy, setShipmentBusy, shipmentWeights, setShipmentWeights,
+    delivSub, setDelivSub, storeReadiness, setStoreReadiness, sfxStatesOpen, setSfxStatesOpen,
+  } = useAdminDelivery(isAdmin && tab === 'delivery');
+  const { ppMap, setPpMap, ppRelays, setPpRelays, ppBusy, setPpBusy, ppSearch, setPpSearch, ppOnlyUnlinked, setPpOnlyUnlinked } = useAdminPetpooja(isAdmin && tab === 'petpooja');
 
   const { storeReport, staffBusy, setStaffBusy, refreshStores, storeChanged, deleteOrphanedStaff } = useAdminStores(isAdmin && tab === 'stores', refreshAttention);
   const { coupons, search: couponSearch, setSearch: setCouponSearch, statusFilter: couponStatusFilter, setStatusFilter: setCouponStatusFilter, couponForm, setCouponForm, toggleCoupon, editCoupon, saveCoupon, removeCoupon } = useAdminCoupons(isAdmin && tab === 'coupons', setErr);
@@ -256,390 +200,21 @@ export default function AdminDashboard() {
 
         {/* ===== Delivery ===== */}
         {tab === 'delivery' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-            {/* Sub-nav: all shipments · same-day intracity · Delhivery outstation */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {([['main', 'All shipments'], ['sameday', 'Same-day · Intracity'], ['delhivery', 'Delhivery · Outstation']] as const).map(([id, label]) => {
-                const on = delivSub === id;
-                return <button key={id} onClick={() => setDelivSub(id)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: on ? 'none' : '1.5px solid var(--border-default)', background: on ? 'var(--gradient-warm)' : 'var(--surface-card)', color: on ? 'var(--white)' : 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{label}</button>;
-              })}
-            </div>
-
-            {(delivSub === 'main' || delivSub === 'delhivery') && (<>
-            {delivSub === 'main' && (<>
-            {/* Warehouses */}
-            <Panel title="Warehouses" loading={warehouses === null}
-              action={<button onClick={() => setWhForm({ data: { ...EMPTY_WH } })} style={addBtn}><Plus size={16} /> Add warehouse</button>}>
-              {warehouses && warehouses.length > 0 ? (
-                <Table head={['Name', 'Location', 'Pincode', 'Status', 'Default', '']}>
-                  {warehouses.map(w => (
-                    <tr key={w.id}>
-                      <td style={td}><strong>{w.name}</strong><br /><span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{w.pickupLocation}</span></td>
-                      <td style={td}>{[w.city, w.state].filter(Boolean).join(', ') || '—'}</td>
-                      <td style={td}>{w.pincode}</td>
-                      <td style={td}><Badge text={w.isActive ? 'Active' : 'Inactive'} ok={w.isActive} /></td>
-                      <td style={td}>
-                        {w.isDefault
-                          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--brand-secondary)', fontWeight: 700, fontSize: 'var(--text-xs)' }}><Star size={13} fill="currentColor" /> Default</span>
-                          : <button onClick={async () => { await adminSetDefaultWarehouse(w.id); adminGetWarehouses().then(setWarehouses).catch(() => {}); }} style={{ ...iconBtn, width: 'auto', padding: '4px 10px', fontSize: 'var(--text-xs)', fontWeight: 700 }}>Set default</button>}
-                      </td>
-                      <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                        <button onClick={() => setWhForm({ id: w.id, data: { name: w.name, registeredName: w.registeredName || '', pickupLocation: w.pickupLocation, addressLine1: w.addressLine1 || '', addressLine2: w.addressLine2 || '', city: w.city || '', state: w.state || '', pincode: w.pincode, returnPincode: w.returnPincode || '', phone: w.phone || '', email: w.email || '' } })} style={iconBtn} aria-label="Edit"><Pencil size={15} /></button>
-                        <button onClick={async () => { const u = await adminToggleWarehouse(w.id).catch(() => null); if (u) setWarehouses(p => (p || []).map(x => x.id === w.id ? u : x)); }} style={iconBtn} aria-label="Toggle active">
-                          {w.isActive ? <ToggleRight size={15} color="var(--brand-secondary)" /> : <ToggleLeft size={15} />}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </Table>
-              ) : warehouses !== null && <Empty text="No warehouses yet — add one to create shipments." />}
-            </Panel>
-
-            {/* Pickup request (Delhivery only) */}
-            {(() => {
-              const pending = (orders || []).filter(o => o.carrier === 'DELHIVERY' && o.delhiveryWaybill && !['DELIVERED', 'CANCELLED'].includes(o.shipmentStatus || ''));
-              return (
-            <Panel title="Schedule a Delhivery pickup">
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                Delhivery collects <strong>all manifested outstation packages</strong> from your default warehouse at the chosen slot.
-                Intracity needs no pickup request — Shiprocket dispatches a rider to the store automatically once the order is confirmed.
-              </p>
-              <div style={{ marginBottom: 14, background: 'var(--surface-sunken)', borderRadius: 10, padding: '10px 14px' }}>
-                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: pending.length ? 6 : 0 }}>
-                  {pending.length} Delhivery package{pending.length !== 1 ? 's' : ''} awaiting pickup
-                </div>
-                {pending.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {pending.map(o => (
-                      <span key={o.id} style={{ fontSize: 'var(--text-2xs)', fontFamily: 'monospace', background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '2px 7px', color: 'var(--text-body)' }} title={`${o.address?.fullName || ''} · ${o.delhiveryWaybill}`}>{o.orderNumber}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <Field label="Pickup date"><input type="date" style={{ ...inp, width: 160 }} value={purDate} min={todayStr()} onChange={e => setPurDate(e.target.value)} /></Field>
-                <Field label="Pickup time"><input type="time" style={{ ...inp, width: 120 }} value={purTime} onChange={e => setPurTime(e.target.value)} /></Field>
-                <Field label="Package count"><input type="number" style={{ ...inp, width: 90 }} value={purCount} onChange={e => setPurCount(e.target.value)} min="1" /></Field>
-                <button onClick={() => setPurCount(String(Math.max(1, pending.length)))} style={{ ...iconBtn, width: 'auto', padding: '0 12px', height: 40, marginRight: 0, fontSize: 'var(--text-xs)', fontWeight: 700 }} title="Use the awaiting-pickup count">Use {Math.max(1, pending.length)}</button>
-                <button onClick={async () => {
-                  setPurResult('Submitting…');
-                  const r = await adminCreatePickupRequest(purDate, purTime, Number(purCount)).catch(e => ({ ok: false, reason: String(e.message || e), data: undefined }));
-                  // The backend translates Delhivery's terse refusals — a wallet under the Rs.500
-                  // minimum, or a slot already open for this warehouse today — into a sentence worth
-                  // reading, so prefer it over the raw reason.
-                  setPurResult(r.ok
-                    ? `Pickup scheduled for ${purDate} at ${purTime} · ${purCount} package(s). Delhivery sometimes moves the date — check their panel to confirm the slot.`
-                    : `Error: ${(r as { ok: boolean; reason?: string }).reason}`);
-                }} disabled={!purDate || !purTime} style={{ ...addBtn, opacity: !purDate ? 0.5 : 1 }}>Request pickup</button>
-              </div>
-              {purResult && <div style={{ marginTop: 10, fontSize: 'var(--text-sm)', color: purResult.startsWith('Error') ? 'var(--status-error)' : 'var(--status-success)', fontWeight: 700 }}>{purResult}</div>}
-
-              {/* Delhivery's rules, from their own Pickup Request Creation docs. An earlier version
-                  of this box claimed the waybills had to be attached by hand in their panel and that
-                  a pickup with none attached collects nothing. That was wrong: their documentation
-                  states the request is raised against the WAREHOUSE, not the waybill, and one
-                  request therefore covers every parcel ready at that location. */}
-              <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--amber-50)', border: '1px solid var(--border-brand)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-                  <AlertTriangle size={16} style={{ color: 'var(--brand-secondary)', flex: 'none', marginTop: 2 }} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: 6 }}>
-                      How Delhivery pickups work
-                    </div>
-                    <ul style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: 1.7, margin: '0 0 8px', paddingLeft: 18 }}>
-                      <li><strong>One request covers every parcel at this warehouse.</strong> It is raised against the pickup location, not against waybills — you do not need one request per shipment.</li>
-                      <li><strong>Only one open request per warehouse per day.</strong> A second can be raised only after the existing one is closed, so schedule once the day&apos;s parcels are ready rather than per order.</li>
-                      <li><strong>Raise it when the parcels are packed</strong> and ready to hand to the field executive — not at the moment the order is placed.</li>
-                      <li><strong>Count</strong> is how many packages the rider should collect. Use the button above to fill in the {Math.max(1, pending.length)} awaiting pickup.</li>
-                      <li>Each parcel needs its <strong>shipping label</strong> printed — recipient address and scannable tracking barcode. Download them from the shipments list.</li>
-                      <li>Parcels at a <strong>different location</strong> need their own request from that warehouse.</li>
-                      <li><strong>Your Delhivery wallet must hold at least ₹500</strong> or the request is rejected. This applies to Prepaid and COD alike — confirmed live. Shipment creation also debits the wallet at the time the parcel is created, not on delivery.</li>
-                      <li>Delhivery may <strong>move the date</strong> you ask for — a request for one day has come back scheduled for the next. Check the confirmation rather than assuming the slot you chose.</li>
-                    </ul>
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.6, margin: '0 0 8px' }}>
-                      This step is optional: your Delhivery account POC can enable <strong>auto-pickup</strong>, after which collections are
-                      scheduled for you and this panel is only needed for an ad-hoc slot. Delhivery has no cancel-pickup API, so cancelling
-                      is done in their panel.
-                    </p>
-                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                      <a href="https://one.delhivery.com/v2/pickup-requests/domestic" target="_blank" rel="noopener noreferrer"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--brand-secondary)' }}>
-                        <ExternalLink size={13} /> Open pickup requests
-                      </a>
-                      <a href="https://one.delhivery.com/v2/pickup-requests/domestic" target="_blank" rel="noopener noreferrer"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--status-error)' }}
-                        title="Delhivery provides no cancel-pickup API — cancel it from their panel">
-                        <X size={13} /> Cancel a pickup request
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Panel>
-              );
-            })()}
-            </>)}
-
-            {/* Orders with shipment actions — all carriers under "All", or Delhivery-only under its tab */}
-            <Panel title={delivSub === 'delhivery' ? 'Delhivery — outstation shipments' : 'Order shipments'} loading={orders === null}
-              action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-              {orders && (
-                <Table head={['Order', 'Customer', 'Service', 'Waybill', 'Status', 'Actions']}>
-                  {(delivSub === 'delhivery' ? (orders || []).filter(o => o.carrier === 'DELHIVERY') : (orders || [])).map(o => {
-                    const w = shipmentWeights[o.id] ?? '0.5';
-                    const trackData = trackResult[o.id] as { status?: string; note?: string; scans?: { time: string; event: string }[] } | undefined;
-                    const service = o.carrier === 'SHIPROCKET' ? { kind: 'Intracity', name: 'Shiprocket' }
-                      : o.carrier === 'DELHIVERY' ? { kind: 'Intercity', name: 'Delhivery' } : null;
-                    return (
-                      <tr key={o.id}>
-                        <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{o.orderStatus}</span></td>
-                        <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.pincode || ''}</span></td>
-                        <td style={td}>
-                          {service
-                            ? <><span style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-xs)' }}>{service.kind}</span><br /><span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-2xs)' }}>({service.name})</span></>
-                            : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>—</span>}
-                        </td>
-                        <td style={td}>
-                          {o.delhiveryWaybill
-                            ? <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill}</span>
-                            : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>—</span>}
-                        </td>
-                        <td style={td}><Badge text={shipStatusLabel(o.shipmentStatus)} ok={o.shipmentStatus === 'DELIVERED'} /></td>
-                        <td style={{ ...td, whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
-                          {!o.delhiveryWaybill ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <input type="number" value={w} min="0.1" step="0.1" title="Weight (kg)"
-                                onChange={e => setShipmentWeights(p => ({ ...p, [o.id]: e.target.value }))}
-                                style={{ ...inp, width: 62, padding: '6px 8px' }} />
-                              <button disabled={shipmentBusy === o.id} onClick={async () => {
-                                setShipmentBusy(o.id); setErr('');
-                                const r = await adminCreateShipment(o.id, Number(w) || 0.5).catch(e => { setErr(String(e.message || e)); return null; });
-                                if (r) setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, delhiveryWaybill: r.delhiveryWaybill, shipmentStatus: r.shipmentStatus, carrier: 'DELHIVERY' } : x));
-                                setShipmentBusy(null);
-                              }} style={{ ...addBtn, padding: '7px 12px', fontSize: 'var(--text-xs)' }}>
-                                {shipmentBusy === o.id ? '…' : <><Truck size={13} /> Create</>}
-                              </button>
-                            </div>
-                          ) : (
-                            /* Labelled pills rather than bare icons — four unlabelled glyphs in a row
-                               gave no clue which one cancelled a shipment. */
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {o.carrier === 'DELHIVERY' && <button onClick={() => openLabel(o.delhiveryWaybill!).catch(e => setErr(String(e.message || e)))} style={actionBtn()} title="Download the shipping label PDF"><Download size={13} /> Label</button>}
-                              {o.carrier === 'DELHIVERY' && (
-                                <button title="Proof of delivery / signature (available after delivery)" onClick={async () => {
-                                  setErr('');
-                                  for (const t of ['EPOD', 'SIGNATURE_URL'] as const) {
-                                    const r = await adminFetchOrderDocument(o.id, t).catch(() => null);
-                                    if (r?.ok && r.url) { window.open(r.url, '_blank', 'noopener'); return; }
-                                  }
-                                  setErr('No proof-of-delivery document available yet — Delhivery provides it after delivery.');
-                                }} style={actionBtn()}><FileText size={13} /> POD</button>
-                              )}
-                              <button title="Fetch the latest carrier status" onClick={async () => {
-                                const r = await adminTrackOrder(o.id).catch(() => null);
-                                if (!r?.ok) { if (r) setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${r.reason || 'unknown'}` } })); return; }
-                                if (r.carrier === 'SHIPROCKET') {
-                                  setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', note: '', scans: r.scans || [] } }));
-                                } else {
-                                  type ShipmentData = { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
-                                  const shipment = (r.data as ShipmentData)?.ShipmentData?.[0]?.Shipment;
-                                  const scans = (shipment?.Scans || []).map(s => ({ time: s.ScanDetail?.ScanDateTime || '', event: [s.ScanDetail?.Scan, s.ScanDetail?.Instructions].filter(Boolean).join(' — ') })).reverse();
-                                  setTrackResult(p => ({ ...p, [o.id]: { status: shipment?.Status?.Status || 'No status', note: shipment?.Status?.Instructions || '', scans } }));
-                                }
-                              }} style={actionBtn()}><ExternalLink size={13} /> Status</button>
-                              {o.shipmentStatus !== 'CANCELLED' && (
-                                <button disabled={shipmentBusy === o.id} onClick={async () => {
-                                  // For Shiprocket the AWB only exists once a real rider has been
-                                  // found — so its presence means someone is already on their way
-                                  // AND the delivery charge has been taken. That is a different
-                                  // decision from cancelling a booking still searching for a rider,
-                                  // and must not sit behind the same casual confirm.
-                                  const riderOut = o.carrier === 'SHIPROCKET' && !!o.delhiveryWaybill;
-                                  const q = riderOut
-                                    ? `A RIDER HAS ALREADY BEEN DISPATCHED for ${o.orderNumber}.\n\nThey may be at the store or on the way to the customer, and the delivery charge has already been taken. The carrier may refuse to call them off this late.\n\nStill try to cancel?`
-                                    : `Cancel shipment ${o.delhiveryWaybill}?\n\nThis cancels the parcel with the carrier. It does NOT refund the customer's payment.`;
-                                  if (!confirm(q)) return;
-                                  setShipmentBusy(o.id); setErr('');
-                                  try {
-                                    const r = await adminCancelShipment(o.id);
-                                    // Only NOW is it actually cancelled. This used to mark the row
-                                    // CANCELLED even when the carrier refused, so a failed cancel
-                                    // looked identical to a successful one — while a rider was still
-                                    // on the way.
-                                    setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
-                                    // Prefer the backend's sentence: it knows whether a rider was
-                                    // out, and therefore whether anything was actually charged.
-                                    setCancelInfo({ orderNumber: o.orderNumber, ok: true, message: r?.message || `Booking ${o.delhiveryWaybill} cancelled with ${o.carrier || 'the carrier'}. The customer's payment is not refunded by this.` });
-                                  } catch (e: unknown) {
-                                    setCancelInfo({ orderNumber: o.orderNumber, ok: false, message: e instanceof Error ? e.message : 'The carrier refused to cancel this booking.' });
-                                  } finally { setShipmentBusy(null); }
-                                }} style={actionBtn(true)} title="Cancel this shipment with the carrier">
-                                  {shipmentBusy === o.id ? '…' : <><X size={13} /> Cancel</>}
-                                </button>
-                              )}
-                            </div>
-                          )}
-                          {trackData && (
-                            <div style={{ marginTop: 6, background: 'var(--surface-sunken)', borderRadius: 8, padding: '8px 12px', maxWidth: 340, whiteSpace: 'normal' }}>
-                              <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-xs)', marginBottom: 6 }}>{trackData.status}{trackData.note ? ` — ${trackData.note}` : ''}</div>
-                              {trackData.scans && trackData.scans.length > 0 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                  {trackData.scans.slice(0, 5).map((s, i) => (
-                                    <div key={i} style={{ display: 'flex', gap: 8, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)' }}>
-                                      <span style={{ flex: 'none', color: 'var(--text-subtle)', minWidth: 110 }}>{s.time ? new Date(s.time).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</span>
-                                      <span>{s.event}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </Table>
-              )}
-              {orders !== null && !(delivSub === 'delhivery' ? orders.filter(o => o.carrier === 'DELHIVERY') : orders).length && <Empty text={delivSub === 'delhivery' ? 'No Delhivery (outstation) shipments yet.' : 'No orders yet.'} />}
-              {orders === null && <button onClick={() => adminGetOrders().then(setOrders).catch(() => setOrders([]))} style={addBtn}>Load orders</button>}
-            </Panel>
-            </>)}
-
-            {delivSub === 'sameday' && (
-              <>
-              {/* Pickup readiness. What decides whether a store can take a same-day order is
-                  whether its Shiprocket pickup location is VERIFIED — an unverified one quotes a
-                  price and then refuses the booking, so it must never read as available. */}
-              <Panel title="Same-day stores — Shiprocket pickup readiness" loading={storeReadiness === null}
-                action={storeReadiness === null ? undefined : <button onClick={() => adminGetStoreReadiness().then(setStoreReadiness).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-                {storeReadiness && (
-                  <>
-                    {!storeReadiness.configured ? (
-                      <Empty text="Shiprocket is not configured on this environment, so no store can take a same-day order." />
-                    ) : (
-                      <>
-                        <div style={{ ...card, padding: '10px 14px', marginBottom: 12, borderColor: storeReadiness.verifiedCount === storeReadiness.stores.length ? 'var(--border-default)' : 'var(--status-error)' }}>
-                          <strong style={{ color: storeReadiness.verifiedCount === storeReadiness.stores.length ? 'var(--text-strong)' : 'var(--status-error)', fontSize: 'var(--text-sm)' }}>
-                            {storeReadiness.verifiedCount} of {storeReadiness.stores.length} stores can dispatch
-                          </strong>
-                          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '4px 0 0', lineHeight: 1.5 }}>
-                            A store can take same-day orders when its pickup nickname exists in Shiprocket — that is where the rider
-                            collects from. Shiprocket&apos;s own <em>status</em> is shown for reference only: it reads 2 on your primary
-                            location and 1 on the rest, while their panel marks all of them verified, and bookings from status-1
-                            locations are accepted. Read live from Shiprocket, not cached.
-                          </p>
-                        </div>
-                        <Table head={['Store', 'City', 'Pincode', 'Pickup name', 'Can dispatch?']}>
-                          {storeReadiness.stores.map((s) => (
-                            <tr key={s.pincode} style={{ opacity: s.verified ? 1 : 0.75 }}>
-                              <td style={td}><strong style={{ color: 'var(--text-strong)' }}>{s.name}</strong>{s.isPrimary && <span style={{ marginLeft: 6, fontSize: 'var(--text-2xs)', fontWeight: 800, color: 'var(--text-subtle)' }}>PRIMARY</span>}</td>
-                              <td style={td}>{s.city}, {s.state}</td>
-                              <td style={td}><span style={{ fontFamily: 'monospace' }}>{s.pincode}</span></td>
-                              <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{s.pickupName || '—'}</span>{s.pickupId ? <><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>id {s.pickupId}</span></> : null}</td>
-                              <td style={td}>
-                                {s.usable ? <Badge text="Yes" ok /> : <Badge text="No" />}
-                                {s.usable && !s.verified && <div style={{ marginTop: 3, fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>Shiprocket status 1 (normal for a non-primary location)</div>}
-                                {s.blockedReason && <div style={{ marginTop: 4, fontSize: 'var(--text-2xs)', color: 'var(--status-error)', maxWidth: 320, lineHeight: 1.45 }}>{s.blockedReason}</div>}
-                              </td>
-                            </tr>
-                          ))}
-                        </Table>
-                        {!!storeReadiness.unmappedPickups?.length && (
-                          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '10px 0 0' }}>
-                            Registered in Shiprocket but not mapped to any ADC store: {storeReadiness.unmappedPickups.map(p => p.nickname).join(', ')}.
-                          </p>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-              </Panel>
-              <Panel title="Shiprocket — status reference (admin only)"
-                action={<button onClick={() => setSfxStatesOpen(v => !v)} style={{ ...iconBtn, width: 'auto', padding: '4px 10px', fontSize: 'var(--text-xs)', fontWeight: 700 }}>{sfxStatesOpen ? 'Hide' : 'Show'}</button>}>
-                {sfxStatesOpen ? (
-                  <>
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      What each Shiprocket tracking status does to the order. Anything not listed leaves the order untouched rather than
-                      guessing. Note &quot;Rider assigned&quot; only means a rider was allocated — nothing has left the store yet, so it must
-                      not read as shipped to the customer.
-                    </p>
-                    <Table head={['Shiprocket status', 'Order becomes', 'What it means']}>
-                      {SR_ORDER_STATES.map((s) => (
-                        <tr key={s.id}>
-                          <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{s.id}</span></td>
-                          <td style={td}><strong>{s.status}</strong></td>
-                          <td style={{ ...td, color: 'var(--text-muted)' }}>{s.description}</td>
-                        </tr>
-                      ))}
-                    </Table>
-                    <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '10px 0 0', lineHeight: 1.5 }}>
-                      Observed on a real delivery (1 Aug 2026, Rapido rider, 10.61 km): Rider reached pickup 18:33:01 → Picked up 18:33:28
-                      → Rider reached drop 18:57:12 → Delivered 19:46:05. Every webhook arrived within seconds of the event.
-                    </p>
-                  </>
-                ) : (
-                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>{SR_ORDER_STATES.length} mapped statuses — click Show to view the full reference.</p>
-                )}
-              </Panel>
-              <Panel title="Same-day — intracity orders" loading={orders === null}
-                action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-                {orders && (() => {
-                  // Was filtered to the retired carrier, so every real intracity order since the
-                  // carrier changed was invisible on this screen.
-                  const sfx = orders.filter(o => o.carrier === 'SHIPROCKET');
-                  if (!sfx.length) return <Empty text="No intracity orders yet." />;
-                  return (
-                    <>
-                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>Same-city orders delivered by a rider from the nearest store, on Shiprocket Hyperlocal. There is no shipping label to print — the rider collects from the store — so tracking is the live status trail.</p>
-                      <Table head={['Order', 'Customer', 'AWB', 'Status', 'Documents']}>
-                        {sfx.map(o => {
-                          const trackData = trackResult[o.id] as { status?: string; scans?: { time: string; event: string }[] } | undefined;
-                          return (
-                            <tr key={o.id}>
-                              <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{o.orderStatus}</span></td>
-                              <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city} · {o.address?.pincode}</span></td>
-                              <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill || '—'}</span></td>
-                              <td style={td}><Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'DELIVERED'} /></td>
-                              <td style={{ ...td, whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
-                                {o.delhiveryWaybill ? (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <button title="Track" onClick={async () => {
-                                      const r = await adminTrackOrder(o.id).catch(() => null);
-                                      if (r?.ok) setTrackResult(p => ({ ...p, [o.id]: { status: r.status || 'No status', scans: r.scans || [] } }));
-                                      else setTrackResult(p => ({ ...p, [o.id]: { status: `Error: ${r?.reason || 'unknown'}` } }));
-                                    }} style={iconBtn}><ExternalLink size={14} /></button>
-                                    {/* Hyperlocal has no printable document — the rider collects
-                                        from the store — so the public tracking page is the artefact. */}
-                                    {o.trackingUrl && (
-                                      <a href={o.trackingUrl} target="_blank" rel="noreferrer" title="Open Shiprocket tracking page" style={{ ...iconBtn, display: 'inline-grid' }}><FileText size={14} /></a>
-                                    )}
-                                  </div>
-                                ) : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>No shipment</span>}
-                                {trackData && (
-                                  <div style={{ marginTop: 6, background: 'var(--surface-sunken)', borderRadius: 8, padding: '8px 12px', maxWidth: 340, whiteSpace: 'normal' }}>
-                                    <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-xs)', marginBottom: trackData.scans?.length ? 6 : 0 }}>{trackData.status}</div>
-                                    {(trackData.scans || []).slice(0, 5).map((s, i) => (
-                                      <div key={i} style={{ display: 'flex', gap: 8, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)' }}>
-                                        <span style={{ flex: 'none', color: 'var(--text-subtle)', minWidth: 110 }}>{s.time ? new Date(s.time).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</span>
-                                        <span>{s.event}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </Table>
-                    </>
-                  );
-                })()}
-                {orders === null && <button onClick={() => adminGetOrders().then(setOrders).catch(() => setOrders([]))} style={addBtn}>Load orders</button>}
-              </Panel>
-              </>
-            )}
-          </div>
+          <DeliveryTab
+            delivSub={delivSub} setDelivSub={setDelivSub}
+            warehouses={warehouses} setWarehouses={setWarehouses} setWhForm={setWhForm}
+            orders={orders} setOrders={setOrders}
+            purDate={purDate} setPurDate={setPurDate}
+            purTime={purTime} setPurTime={setPurTime}
+            purCount={purCount} setPurCount={setPurCount}
+            purResult={purResult} setPurResult={setPurResult}
+            shipmentBusy={shipmentBusy} setShipmentBusy={setShipmentBusy}
+            shipmentWeights={shipmentWeights} setShipmentWeights={setShipmentWeights}
+            trackResult={trackResult} setTrackResult={setTrackResult}
+            storeReadiness={storeReadiness} setStoreReadiness={setStoreReadiness}
+            sfxStatesOpen={sfxStatesOpen} setSfxStatesOpen={setSfxStatesOpen}
+            setErr={setErr} setCancelInfo={setCancelInfo}
+          />
         )}
 
         {/* ===== Stores (staff portal) ===== */}
@@ -657,249 +232,17 @@ export default function AdminDashboard() {
         )}
 
         {/* ===== Petpooja (POS) ===== */}
-        {tab === 'petpooja' && (() => {
-          const key = (i: { item_id: string; variation_id: string }) => `${i.item_id}|${i.variation_id}`;
-          const reload = () => { adminGetPetpoojaMapping().then(setPpMap).catch(() => {}); refreshAttention(); };
-          const linkByProduct = async (productId: number, composite: string) => {
-            setPpBusy('p' + productId); setErr('');
-            const [itemId, variationId] = composite ? composite.split('|') : [null, ''];
-            try { await adminLinkProductToPetpooja(productId, itemId, variationId || ''); reload(); }
-            catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Could not save the link'); }
-            finally { setPpBusy(null); }
-          };
-          const createAndLink = async (i: { item_id: string; variation_id: string; name: string }) => {
-            setPpBusy(key(i)); setErr(''); setNotice('');
-            try {
-              const r = await adminCreateProductFromPetpooja(i.item_id, i.variation_id);
-              setNotice(r.created ? `Created "${r.product.name}" and linked it.` : `Linked to the existing product "${r.product.name}".`);
-              reload(); refreshProducts();
-            } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Could not create the product'); }
-            finally { setPpBusy(null); }
-          };
-          const q = ppSearch.trim().toLowerCase();
-          const rows = (ppMap?.items || []).filter(i => {
-            if (ppOnlyUnlinked && i.product_id) return false;
-            if (!q) return true;
-            return i.name.toLowerCase().includes(q) || (i.variation_name || '').toLowerCase().includes(q) || i.item_id.includes(q);
-          });
-          const linked = (ppMap?.items || []).filter(i => i.product_id).length;
-          const total = ppMap?.items.length || 0;
-          const lastPush = ppMap?.pushes?.[0];
-
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {/* Menu status. Petpooja PUSHES the catalogue to us — menu fetch is deprecated on their
-                  side — so this panel is the only place the arrival of a menu is visible. */}
-              <Panel title="Menu from Petpooja" loading={ppMap === null}
-                action={<button onClick={reload} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-                {ppMap && (!ppMap.menuSynced ? (
-                  <Empty text="No menu received yet. Petpooja pushes the catalogue to us — ask them to trigger it, we cannot pull it." />
-                ) : (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 14 }}>
-                      <MiniStat label="Items in menu" value={String(total)} />
-                      <MiniStat label="Linked to products" value={`${linked} / ${total}`} bad={linked < total} />
-                      <MiniStat label="Restaurant code" value={ppMap.restId} />
-                      <MiniStat label="Last received" value={lastPush ? fmtDate(lastPush.received_at) : '—'} />
-                    </div>
-                    {linked < total && (
-                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, margin: '0 0 12px', lineHeight: 1.5 }}>
-                        {total - linked} item{total - linked !== 1 ? 's are' : ' is'} not linked to a product. An order reaches the kitchen only when
-                        every product it contains has a Petpooja item — one unlinked product fails the whole relay.
-                      </p>
-                    )}
-                    <details>
-                      <summary style={{ cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--text-muted)' }}>
-                        Push history ({ppMap.pushes.length}) and taxes ({ppMap.taxes.length})
-                      </summary>
-                      <div style={{ marginTop: 10 }}>
-                        <Table head={['Received', 'Restaurant', 'Source', 'Items']}>
-                          {ppMap.pushes.map(p => (
-                            <tr key={p.id}>
-                              <td style={td}>{fmtDate(p.received_at)}</td>
-                              <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{p.rest_id}</span></td>
-                              <td style={td}>{p.source}</td>
-                              <td style={td}>{p.item_count}</td>
-                            </tr>
-                          ))}
-                        </Table>
-                        <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', marginTop: 8 }}>
-                          Taxes: {ppMap.taxes.map(t => `${t.name} ${t.percentage}%`).join(' · ') || 'none'}
-                        </p>
-                      </div>
-                    </details>
-                  </>
-                ))}
-              </Panel>
-
-              {/* Petpooja owns the menu and there is no API to change it from here. Saying so in
-                  the product is better than leaving someone hunting for a button that cannot exist:
-                  their integration exposes save_order, update_order_status and rider_status_update
-                  outbound, and menu/stock/store-status inbound. Nothing creates or edits an item. */}
-              <Panel title="Changing the menu">
-                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.65, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <p style={{ margin: 0 }}>
-                    <strong>The menu is edited in Petpooja, never here.</strong> Their integration has no
-                    create-item or edit-item endpoint — we can only receive. So a price change, a new cookie or a
-                    withdrawn one is made on the Petpooja dashboard, and their system pushes the whole catalogue
-                    to us within moments. Nobody needs to tell us; the push above records every arrival.
-                  </p>
-                  <p style={{ margin: 0 }}>
-                    We <strong>update in place and never delete</strong>. An item that changes keeps its link to
-                    your product, so prices and names can change freely without breaking anything. A brand-new
-                    item arrives unlinked and appears below as not linked to anything. An item they remove simply
-                    stops appearing in their pushes.
-                  </p>
-                  <p style={{ margin: 0 }}>
-                    After any menu change, check the <em>done</em> count below. If it dropped, something new needs
-                    linking before an order containing it can reach the kitchen.
-                  </p>
-                  <p style={{ margin: 0, color: 'var(--text-muted)' }}>
-                    Marking an item out of stock is separate and instant — that arrives on its own feed the
-                    moment the kitchen toggles it, without a full menu push.
-                  </p>
-                  <p style={{ margin: 0, color: 'var(--text-muted)' }}>
-                    To change what the <em>website</em> sells or charges, use the Products tab. Our price is what
-                    the customer pays and what Razorpay settles; theirs only prints on the POS bill.
-                  </p>
-                </div>
-              </Panel>
-
-              {ppMap?.menuSynced && (() => {
-                /*
-                 * Rows are OUR products, not theirs. Our catalogue is the fixed set we sell; theirs
-                 * is larger and contains items we never list online. Product-first means every row
-                 * matters and "what is still unmapped" is visible without hunting.
-                 */
-                const itemFor = new Map<number, PetpoojaItem>();
-                for (const i of ppMap.items) if (i.product_id) itemFor.set(i.product_id, i);
-                const label = (i: PetpoojaItem) =>
-                  `${i.name}${i.variation_name ? ' — ' + i.variation_name : ''}${i.price != null ? `  (₹${i.price})` : ''}`;
-                const claimedBy = new Map<string, number>();
-                for (const i of ppMap.items) if (i.product_id) claimedBy.set(`${i.item_id}|${i.variation_id}`, i.product_id);
-
-                const pq = ppSearch.trim().toLowerCase();
-                const prodRows = (ppMap.products || []).filter(p => {
-                  if (ppOnlyUnlinked && itemFor.has(p.id)) return false;
-                  return !pq || p.name.toLowerCase().includes(pq);
-                });
-                const mapped = (ppMap.products || []).filter(p => itemFor.has(p.id)).length;
-                const spare = ppMap.items.filter(i => !i.product_id);
-
-                return (
-                  <Panel title={`Link your products to Petpooja items — ${mapped} of ${ppMap.products.length} done`}>
-                    <FilterBar search={ppSearch} onSearch={setPpSearch} placeholder="Search your products…"
-                      active={ppOnlyUnlinked} onClear={() => { setPpSearch(''); setPpOnlyUnlinked(false); }}>
-                      <Field label="Show">
-                        <select value={ppOnlyUnlinked ? 'unlinked' : 'all'} onChange={e => setPpOnlyUnlinked(e.target.value === 'unlinked')}
-                          style={{ ...inp, cursor: 'pointer' }}>
-                          <option value="all">All products</option>
-                          <option value="unlinked">Not linked only</option>
-                        </select>
-                      </Field>
-                    </FilterBar>
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                      Every product that can appear in a web order needs a Petpooja item, or that order will not reach the kitchen.
-                      Petpooja items you do not sell online (coffees, combo packs) can be left alone.
-                    </p>
-                    <Table head={['Your product', 'Your price', 'Petpooja item', 'Their price']}>
-                      {prodRows.map(p => {
-                        const cur = itemFor.get(p.id) || null;
-                        const busy = ppBusy === `p${p.id}`;
-                        return (
-                          <tr key={p.id} style={{ opacity: busy ? 0.5 : 1 }}>
-                            <td style={td}>
-                              <strong style={{ color: 'var(--text-strong)' }}>{p.name}</strong>
-                              {!cur && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>not linked</div>}
-                            </td>
-                            <td style={td}>{money(p.price)}</td>
-                            <td style={td}>
-                              <select value={cur ? `${cur.item_id}|${cur.variation_id}` : ''} disabled={busy}
-                                onChange={e => linkByProduct(p.id, e.target.value)}
-                                style={{ ...inp, cursor: 'pointer', minWidth: 260, padding: '7px 10px' }}>
-                                <option value="">— not linked —</option>
-                                {ppMap.items.map(i => {
-                                  const k = `${i.item_id}|${i.variation_id}`;
-                                  const owner = claimedBy.get(k);
-                                  const taken = owner != null && owner !== p.id;
-                                  return <option key={k} value={k} disabled={taken}>
-                                    {label(i)}{taken ? '  — already linked' : ''}
-                                  </option>;
-                                })}
-                              </select>
-                            </td>
-                            <td style={td}>
-                              {cur?.price != null ? (
-                                <>
-                                  {money(cur.price)}
-                                  {Number(cur.price) !== Number(p.price) && (
-                                    <div title="Their price differs from yours. The customer is charged YOUR price; theirs only appears on the POS bill."
-                                      style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', marginTop: 2 }}>differs from yours</div>
-                                  )}
-                                </>
-                              ) : '—'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </Table>
-                    {!prodRows.length && <Empty text="No products match." />}
-                    {spare.length > 0 && (
-                      <details style={{ marginTop: 14 }}>
-                        <summary style={{ cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--text-muted)' }}>
-                          {spare.length} Petpooja item{spare.length !== 1 ? 's' : ''} not linked to anything
-                        </summary>
-                        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '8px 0 10px', lineHeight: 1.5 }}>
-                          These exist on the POS but not on your site. That is fine for anything you do not sell online. If you do want to
-                          sell one, create it as a product and link it in one step.
-                        </p>
-                        <Table head={['Petpooja item', 'Their price', 'Stock', '']}>
-                          {spare.map(i => (
-                            <tr key={`${i.item_id}|${i.variation_id}`}>
-                              <td style={td}>
-                                {i.name}{i.variation_name && <span style={{ color: 'var(--text-muted)' }}> — {i.variation_name}</span>}
-                                <br /><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>{i.item_id}</span>
-                              </td>
-                              <td style={td}>{i.price != null ? money(i.price) : '—'}</td>
-                              <td style={td}>{i.in_stock ? <Badge text="In stock" ok /> : <Badge text="Out" />}</td>
-                              <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                                <button disabled={ppBusy === `${i.item_id}|${i.variation_id}`} onClick={() => createAndLink(i)} style={actionBtn()}
-                                  title="Create this as one of your products and link them">
-                                  <Plus size={13} /> Add as product
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </Table>
-                      </details>
-                    )}
-                  </Panel>
-                );
-              })()}
-
-              <Panel title="Orders sent to the POS" loading={ppRelays === null}
-                action={<button onClick={() => adminGetPetpoojaRelays().then(setPpRelays).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-                {ppRelays && (ppRelays.length ? (
-                  <Table head={['Order', 'Total', 'Reached kitchen?', 'Their order id', 'Attempts', 'When']}>
-                    {ppRelays.map(r => (
-                      <tr key={r.order_id}>
-                        <td style={td}><strong style={{ color: 'var(--text-link)' }}>{r.order_number}</strong></td>
-                        <td style={td}>{money(r.total_amount)}</td>
-                        <td style={td}>
-                          {r.relay_ok ? <Badge text="Yes" ok /> : <Badge text="Failed" />}
-                          {!r.relay_ok && r.last_error && <div style={{ marginTop: 3, fontSize: 'var(--text-2xs)', color: 'var(--status-error)', maxWidth: 300 }}>{r.last_error}</div>}
-                        </td>
-                        <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{r.petpooja_order_id || '—'}</span></td>
-                        <td style={td}>{r.attempts}</td>
-                        <td style={td}>{fmtDate(r.updated_at)}</td>
-                      </tr>
-                    ))}
-                  </Table>
-                ) : <Empty text="No orders have been sent to the POS yet." />)}
-              </Panel>
-            </div>
-          );
-        })()}
+        {tab === 'petpooja' && (
+          <PetpoojaTab
+            ppMap={ppMap} setPpMap={setPpMap}
+            ppRelays={ppRelays} setPpRelays={setPpRelays}
+            ppBusy={ppBusy} setPpBusy={setPpBusy}
+            ppSearch={ppSearch} setPpSearch={setPpSearch}
+            ppOnlyUnlinked={ppOnlyUnlinked} setPpOnlyUnlinked={setPpOnlyUnlinked}
+            refreshProducts={refreshProducts} refreshAttention={refreshAttention}
+            setErr={setErr} setNotice={setNotice}
+          />
+        )}
 
         {/* ===== Coupons ===== */}
         {tab === 'coupons' && (
@@ -948,64 +291,7 @@ export default function AdminDashboard() {
       {couponForm && <CouponEditorModal couponForm={couponForm} setCouponForm={setCouponForm} onSave={saveCoupon} />}
 
       {/* Warehouse editor modal */}
-      {whForm && (
-        <div onClick={() => setWhForm(null)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'var(--surface-overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: 'min(560px,96vw)', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: 24 }} className="hide-sb">
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ flex: 1, fontSize: 'var(--text-h3)' }}>{whForm.id ? 'Edit warehouse' : 'Add warehouse'}</h3>
-              <button onClick={() => setWhForm(null)} style={iconBtn}><X size={18} /></button>
-            </div>
-            <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Warehouse name *"><input style={inp} value={whForm.data.name} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, name: e.target.value } })} /></Field>
-                <Field label="Registered name"><input style={inp} value={whForm.data.registeredName || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, registeredName: e.target.value } })} /></Field>
-              </div>
-              <Field label="Pickup location * (must EXACTLY match the pickup name in your Delhivery panel)">
-                <input style={inp} value={whForm.data.pickupLocation} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, pickupLocation: e.target.value } })} placeholder="e.g. A Dough Cookie" />
-              </Field>
-              <Field label="Address line 1"><input style={inp} value={whForm.data.addressLine1 || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, addressLine1: e.target.value } })} /></Field>
-              <Field label="Address line 2 / Area"><input style={inp} value={whForm.data.addressLine2 || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, addressLine2: e.target.value } })} /></Field>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                <Field label="City"><input style={inp} value={whForm.data.city || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, city: e.target.value } })} /></Field>
-                <Field label="State"><input style={inp} value={whForm.data.state || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, state: e.target.value } })} /></Field>
-                <Field label="Pincode *"><input style={inp} value={whForm.data.pincode} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, pincode: e.target.value } })} placeholder="500034" maxLength={6} /></Field>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Phone"><input style={inp} value={whForm.data.phone || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, phone: e.target.value } })} /></Field>
-                <Field label="Email"><input style={inp} value={whForm.data.email || ''} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, email: e.target.value } })} /></Field>
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
-                <input type="checkbox" checked={!!whForm.data.isDefault} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, isDefault: e.target.checked } })} /> Set as default warehouse
-              </label>
-              {!whForm.id && (
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={!!whForm.data.skipDelhivery} onChange={e => setWhForm({ ...whForm, data: { ...whForm.data, skipDelhivery: e.target.checked } })} style={{ marginTop: 2 }} />
-                  <span>Already registered on Delhivery One Panel<br /><span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Skip re-registering — the pickup location key above must match exactly what&apos;s in Delhivery.</span></span>
-                </label>
-              )}
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                <button
-                  disabled={!whForm.data.name || !whForm.data.pickupLocation || !whForm.data.pincode}
-                  onClick={async () => {
-                    try {
-                      if (whForm.id) {
-                        await adminUpdateWarehouse(whForm.id, whForm.data);
-                      } else {
-                        await adminCreateWarehouse(whForm.data);
-                      }
-                      setWhForm(null);
-                      adminGetWarehouses().then(setWarehouses).catch(() => {});
-                    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Save failed'); }
-                  }}
-                  style={{ ...addBtn, flex: 1, justifyContent: 'center', opacity: (!whForm.data.name || !whForm.data.pickupLocation || !whForm.data.pincode) ? 0.5 : 1 }}>
-                  <Check size={16} /> Save warehouse
-                </button>
-                <button onClick={() => setWhForm(null)} style={{ padding: '12px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {whForm && <WarehouseEditorModal whForm={whForm} setWhForm={setWhForm} setWarehouses={setWarehouses} setErr={setErr} />}
 
       {/* Product editor modal */}
       {editing && <ProductEditorModal editing={editing} setEditing={setEditing} onSave={saveProduct} />}
@@ -1028,20 +314,4 @@ export default function AdminDashboard() {
 
     </main>
   );
-}
-
-/*
- * Admin-facing shipment status. Delhivery's own wording is misleading at the start of the journey:
- * "CREATED"/"Manifested" only means a waybill exists, which happens automatically on payment while
- * the parcel is still on the counter. Spelling that out as "Awaiting pickup" is what tells the
- * operator there is still something to DO (schedule a pickup for the warehouse).
- */
-function shipStatusLabel(s?: string | null): string {
-  const t = (s || '').trim();
-  if (!t) return 'Not created';
-  const u = t.toUpperCase();
-  if (u === 'CREATED' || u === 'MANIFESTED') return 'Awaiting pickup';
-  if (u === 'AWAITING_PICKUP') return 'Awaiting pickup';
-  if (u === 'NOT_CREATED') return 'Not created';
-  return t;
 }
