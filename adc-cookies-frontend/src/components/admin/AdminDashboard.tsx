@@ -25,6 +25,7 @@ import {
   Truck, Warehouse as WarehouseIcon, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download, CalendarRange,
   FileText, AlertTriangle, Store as StoreIcon, KeyRound,
 } from 'lucide-react';
+import { usePagination, PAGE_SIZE } from '@/hooks/admin/usePagination';
 import { money, todayStr, daysAgoStr, fmtDate } from './shared/format';
 import {
   card, td, inp, addBtn, iconBtn, actionBtn,
@@ -50,7 +51,6 @@ const SR_ORDER_STATES = [
 
 const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 
-const PAGE_SIZE = 12; // rows per page in admin list tables
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
@@ -142,14 +142,7 @@ export default function AdminDashboard() {
   const [messageSearch, setMessageSearch] = useState('');
   const [messageHandled, setMessageHandled] = useState('');
 
-  // Pagination: one page number per list key.
-  const [pages, setPages] = useState<Record<string, number>>({});
-  const pageOf = (k: string) => pages[k] || 1;
-  const setPageOf = (k: string, n: number) => setPages(p => ({ ...p, [k]: n }));
-  function paginate<T>(arr: T[], key: string): T[] {
-    const page = pageOf(key);
-    return arr.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  }
+  const { pageOf, setPageOf, paginate } = usePagination();
 
   // Delivery tab state
   const [warehouses, setWarehouses] = useState<Warehouse[] | null>(null);
