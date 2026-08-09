@@ -7,14 +7,14 @@ import {
   adminDashboard, adminAnalytics, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
   adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
-  adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetUsers, adminGetMessages, adminMarkMessageHandled,
+  adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetMessages, adminMarkMessageHandled,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
   adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
   adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
   adminGetPetpoojaMapping, adminCreateProductFromPetpooja, adminGetPetpoojaRelays, adminLinkProductToPetpooja,
   adminGetStores, adminCreateStoreStaff, adminSetStoreStaffPassword, adminToggleStoreStaff, adminDeleteStoreStaff,
-  type AdminStats, type AdminAnalytics, type AdminUser, type AdminCoupon, type CouponInput, type AdminMessage,
+  type AdminStats, type AdminAnalytics, type AdminCoupon, type CouponInput, type AdminMessage,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
   type AttentionReport, type StoreReadinessReport, type PetpoojaMapping, type PetpoojaRelay, type PetpoojaItem,
   type AdminStoresReport, type AdminStore,
@@ -26,6 +26,8 @@ import {
   FileText, AlertTriangle, Store as StoreIcon, KeyRound,
 } from 'lucide-react';
 import { usePagination, PAGE_SIZE } from '@/hooks/admin/usePagination';
+import { useAdminUsers } from '@/hooks/admin/useAdminUsers';
+import UsersTab from './users/UsersTab';
 import { money, todayStr, daysAgoStr, fmtDate } from './shared/format';
 import {
   card, td, inp, addBtn, iconBtn, actionBtn,
@@ -112,7 +114,6 @@ export default function AdminDashboard() {
   const [stallInfo, setStallInfo] = useState('');
   const [stallInfoSaved, setStallInfoSaved] = useState(false);
   const [coupons, setCoupons] = useState<AdminCoupon[] | null>(null);
-  const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [messages, setMessages] = useState<AdminMessage[] | null>(null);
   const [editing, setEditing] = useState<{ id?: number; data: ProductInput } | null>(null);
   const [couponForm, setCouponForm] = useState<CouponDraft | null>(null);
@@ -138,7 +139,6 @@ export default function AdminDashboard() {
   const [productAvail, setProductAvail] = useState('');
   const [couponSearch, setCouponSearch] = useState('');
   const [couponStatusFilter, setCouponStatusFilter] = useState('');
-  const [userSearch, setUserSearch] = useState('');
   const [messageSearch, setMessageSearch] = useState('');
   const [messageHandled, setMessageHandled] = useState('');
 
@@ -171,6 +171,8 @@ export default function AdminDashboard() {
 
   const isAdmin = !!user && user.role === 'ADMIN';
 
+  const { users, search: userSearch, setSearch: setUserSearch } = useAdminUsers(isAdmin && tab === 'users');
+
   useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); setStallInfo(s.stallInfo || ''); }).catch(() => {}); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminAnalytics(range.from, range.to).then(setAnalytics).catch(() => {}); }, [isAdmin, range.from, range.to]);
@@ -184,7 +186,6 @@ export default function AdminDashboard() {
     if (tab === 'orders' && orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
     if (tab === 'products' && products === null) adminGetProducts().then(setProducts).catch(() => setProducts([]));
     if (tab === 'coupons' && coupons === null) adminGetCoupons().then(setCoupons).catch(() => setCoupons([]));
-    if (tab === 'users' && users === null) adminGetUsers().then(setUsers).catch(() => setUsers([]));
     if (tab === 'messages' && messages === null) adminGetMessages().then(setMessages).catch(() => setMessages([]));
     if (tab === 'petpooja') {
       if (ppMap === null) adminGetPetpoojaMapping().then(setPpMap).catch(() => setPpMap(null));
@@ -196,7 +197,7 @@ export default function AdminDashboard() {
       if (storeReadiness === null) adminGetStoreReadiness().then(setStoreReadiness).catch(() => setStoreReadiness(null));
     }
     if (tab === 'stores' && storeReport === null) adminGetStores().then(setStoreReport).catch(() => setStoreReport(null));
-  }, [tab, isAdmin, orders, products, coupons, users, messages, storeReadiness, ppMap, ppRelays, storeReport]);
+  }, [tab, isAdmin, orders, products, coupons, messages, storeReadiness, ppMap, ppRelays, storeReport]);
 
   const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); adminDashboard().then(setStats).catch(() => {}); }, []);
 
@@ -1395,41 +1396,15 @@ export default function AdminDashboard() {
         })()}
 
         {/* ===== Users ===== */}
-        {tab === 'users' && (() => {
-          const uq = userSearch.trim().toLowerCase();
-          const list = (users || []).filter(u => !uq || u.name.toLowerCase().includes(uq) || (u.email || '').toLowerCase().includes(uq) || (u.phone || '').includes(uq));
-          return (
-          <Panel title={`Customers${users ? ` (${list.length})` : ''}`} loading={users === null}>
-            <FilterBar search={userSearch} onSearch={v => { setUserSearch(v); setPageOf('users', 1); }} placeholder="Search name, email, phone…" active={false} onClear={() => { setUserSearch(''); setPageOf('users', 1); }} />
-            <Table head={['Name', 'Email', 'Phone', 'Address', 'Last login from', 'Orders', 'Joined']}>
-              {paginate(list, 'users').map(u => {
-                const addr = u.addresses?.find(a => a.isDefault) || u.addresses?.[0];
-                const addrText = addr ? [addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ') : '';
-                return (
-                <tr key={u.id}>
-                  <td style={td}><strong>{u.name}</strong></td>
-                  <td style={td}>{u.email || '—'}</td>
-                  <td style={td}>{u.phone || '—'}</td>
-                  <td style={{ ...td, maxWidth: 280, whiteSpace: 'normal', lineHeight: 1.4 }}>
-                    {addr ? (
-                      <span title={addrText}>
-                        {addrText}
-                        {(u.addresses?.length || 0) > 1 && <span style={{ color: 'var(--text-subtle)', fontWeight: 700 }}> · +{(u.addresses!.length - 1)} more</span>}
-                      </span>
-                    ) : '—'}
-                  </td>
-                  <td style={td}>{u.lastLoginLocation || '—'}</td>
-                  <td style={td}>{u.orderCount}</td>
-                  <td style={td}>{fmtDate(u.createdAt)}</td>
-                </tr>
-                );
-              })}
-            </Table>
-            {users && !list.length && <Empty text={users.length ? 'No customers match the search.' : 'No customers yet.'} />}
-            <Pager page={pageOf('users')} total={list.length} pageSize={PAGE_SIZE} onPage={n => setPageOf('users', n)} />
-          </Panel>
-          );
-        })()}
+        {tab === 'users' && (
+          <UsersTab
+            users={users}
+            search={userSearch}
+            onSearch={setUserSearch}
+            page={pageOf('users')}
+            onPage={n => setPageOf('users', n)}
+          />
+        )}
 
         {/* ===== Messages ===== */}
         {tab === 'messages' && (() => {
