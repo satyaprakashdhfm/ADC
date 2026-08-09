@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import {
-  adminDashboard, adminAnalytics, adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
+  adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
   adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
   adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetMessages, adminMarkMessageHandled,
@@ -14,24 +14,27 @@ import {
   adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
   adminGetPetpoojaMapping, adminCreateProductFromPetpooja, adminGetPetpoojaRelays, adminLinkProductToPetpooja,
   adminGetStores, adminCreateStoreStaff, adminSetStoreStaffPassword, adminToggleStoreStaff, adminDeleteStoreStaff,
-  type AdminStats, type AdminAnalytics, type AdminCoupon, type CouponInput, type AdminMessage,
+  type AdminCoupon, type CouponInput, type AdminMessage,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
   type AttentionReport, type StoreReadinessReport, type PetpoojaMapping, type PetpoojaRelay, type PetpoojaItem,
   type AdminStoresReport, type AdminStore,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
-  IndianRupee, Plus, Pencil, Trash2, Check, X, LogOut, Gift,
-  Truck, Warehouse as WarehouseIcon, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download, CalendarRange,
+  Plus, Pencil, Trash2, Check, X, LogOut, Gift,
+  Truck, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download,
   FileText, AlertTriangle, Store as StoreIcon, KeyRound,
 } from 'lucide-react';
 import { usePagination, PAGE_SIZE } from '@/hooks/admin/usePagination';
 import { useAdminUsers } from '@/hooks/admin/useAdminUsers';
+import { useAdminStats } from '@/hooks/admin/useAdminStats';
+import { useAdminAnalytics } from '@/hooks/admin/useAdminAnalytics';
 import UsersTab from './users/UsersTab';
-import { money, todayStr, daysAgoStr, fmtDate } from './shared/format';
+import OverviewTab from './overview/OverviewTab';
+import { money, todayStr, fmtDate } from './shared/format';
 import {
   card, td, inp, addBtn, iconBtn, actionBtn,
-  MiniStat, StatCard, Panel, Table, Badge, Empty, Field, FilterBar, Pager,
+  MiniStat, Panel, Table, Badge, Empty, Field, FilterBar, Pager,
 } from './shared/ui';
 
 /*
@@ -103,9 +106,6 @@ export default function AdminDashboard() {
   const { user, loading, logout } = useAuth();
   const [tab, setTab] = useState<TabId>('overview');
 
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
-  const [range, setRange] = useState(() => ({ from: daysAgoStr(29), to: todayStr() }));
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
   const [promoProductId, setPromoProductId] = useState<number | null>(null);
@@ -172,10 +172,10 @@ export default function AdminDashboard() {
   const isAdmin = !!user && user.role === 'ADMIN';
 
   const { users, search: userSearch, setSearch: setUserSearch } = useAdminUsers(isAdmin && tab === 'users');
+  const { stats, refreshStats } = useAdminStats(isAdmin, setErr);
+  const { analytics, range, setRange } = useAdminAnalytics(isAdmin);
 
-  useEffect(() => { if (isAdmin) adminDashboard().then(setStats).catch(e => setErr(String(e.message || e))); }, [isAdmin]);
   useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); setStallInfo(s.stallInfo || ''); }).catch(() => {}); }, [isAdmin]);
-  useEffect(() => { if (isAdmin) adminAnalytics(range.from, range.to).then(setAnalytics).catch(() => {}); }, [isAdmin, range.from, range.to]);
   // Loaded on every admin visit, not lazily per tab: an order that took money but never reached the
   // kitchen or a courier is the one thing that must not wait for someone to click the right tab.
   useEffect(() => { if (isAdmin) adminAttention().then(setAttention).catch(() => {}); }, [isAdmin]);
@@ -199,7 +199,7 @@ export default function AdminDashboard() {
     if (tab === 'stores' && storeReport === null) adminGetStores().then(setStoreReport).catch(() => setStoreReport(null));
   }, [tab, isAdmin, orders, products, coupons, messages, storeReadiness, ppMap, ppRelays, storeReport]);
 
-  const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); adminDashboard().then(setStats).catch(() => {}); }, []);
+  const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); refreshStats(); }, [refreshStats]);
 
   const refreshAttention = useCallback(() => { adminAttention().then(setAttention).catch(() => {}); }, []);
 
@@ -207,7 +207,7 @@ export default function AdminDashboard() {
     const updated = await adminUpdateOrderStatus(id, status).catch(() => null);
     if (!updated) return;
     setOrders(o => (o || []).map(x => x.id === id ? updated : x));
-    adminDashboard().then(setStats).catch(() => {});
+    refreshStats();
     refreshAttention();
     // Cancelling also cancels the POS ticket and the courier booking. If either refused, say so
     // loudly — otherwise the operator assumes the rider was called off when they were not.
@@ -301,7 +301,7 @@ export default function AdminDashboard() {
   const markHandled = async (id: number) => {
     await adminMarkMessageHandled(id).catch(() => {});
     setMessages(m => (m || []).map(x => x.id === id ? { ...x, handled: true } : x));
-    adminDashboard().then(setStats).catch(() => {});
+    refreshStats();
   };
 
   if (loading) return null;
@@ -365,95 +365,13 @@ export default function AdminDashboard() {
 
         {/* ===== Overview ===== */}
         {tab === 'overview' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Date-range filter — scopes the analytics charts below */}
-            <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}><CalendarRange size={16} /> Period</span>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {([['7 days', 7], ['30 days', 30], ['90 days', 90], ['1 year', 365]] as const).map(([lbl, d]) => {
-                  const active = range.from === daysAgoStr(d - 1) && range.to === todayStr();
-                  return (
-                    <button key={lbl} onClick={() => setRange({ from: daysAgoStr(d - 1), to: todayStr() })}
-                      style={{ padding: '6px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-xs)', border: active ? 'none' : '1.5px solid var(--border-default)', background: active ? 'var(--gradient-warm)' : 'var(--surface-card)', color: active ? 'var(--white)' : 'var(--text-body)' }}>{lbl}</button>
-                  );
-                })}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
-                <input type="date" value={range.from} max={range.to} onChange={e => e.target.value && setRange(r => ({ ...r, from: e.target.value }))} style={{ ...inp, width: 'auto', padding: '7px 10px', cursor: 'pointer' }} />
-                <span style={{ color: 'var(--text-muted)' }}>→</span>
-                <input type="date" value={range.to} min={range.from} max={todayStr()} onChange={e => e.target.value && setRange(r => ({ ...r, to: e.target.value }))} style={{ ...inp, width: 'auto', padding: '7px 10px', cursor: 'pointer' }} />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
-              <StatCard icon={<Users size={20} />} label="Customers" value={stats ? String(stats.totalUsers) : '—'} onClick={() => setTab('users')} />
-              <StatCard icon={<ShoppingBag size={20} />} label="Total orders" value={stats ? String(stats.totalOrders) : '—'} />
-              <StatCard icon={<IndianRupee size={20} />} label="Revenue" value={stats ? money(stats.totalRevenue) : '—'} sub={stats ? `${money(stats.paidRevenue)} paid` : ''} />
-              <StatCard icon={<Package size={20} />} label="Products" value={stats ? String(stats.totalProducts) : '—'} />
-              <StatCard icon={<MessageSquare size={20} />} label="New messages" value={stats ? String(stats.newMessages) : '—'} accent={!!stats?.newMessages} />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
-              <div style={{ ...card, padding: 20 }}>
-                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Orders by status</h3>
-                {stats && Object.keys(stats.ordersByStatus || {}).length ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {Object.entries(stats.ordersByStatus || {}).map(([s, n]) => {
-                      const pct = stats.totalOrders ? Math.round((n / stats.totalOrders) * 100) : 0;
-                      return (
-                        <div key={s}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', marginBottom: 4 }}><span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{s}</span><span style={{ color: 'var(--text-muted)' }}>{n}</span></div>
-                          <div style={{ height: 8, borderRadius: 99, background: 'var(--surface-sunken)', overflow: 'hidden' }}><div style={{ width: `${pct}%`, height: '100%', background: 'var(--gradient-warm)' }} /></div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>No orders yet.</p>}
-              </div>
-
-              <div style={{ ...card, padding: 20 }}>
-                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Top products</h3>
-                {stats && (stats.topProducts || []).length ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {(stats.topProducts || []).map((p, i) => (
-                      <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ width: 22, height: 22, borderRadius: 7, background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 12, fontWeight: 900, display: 'grid', placeItems: 'center', flex: 'none' }}>{i + 1}</span>
-                        <span style={{ flex: 1, fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{p.name}</span>
-                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{p.qty} sold · {money(p.revenue)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>No sales yet.</p>}
-              </div>
-            </div>
-
-            {/* Sales — last 30 days */}
-            <div style={{ ...card, padding: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, gap: 12, flexWrap: 'wrap' }}>
-                <h3 style={{ fontSize: 'var(--text-h4)' }}>Sales over time</h3>
-                {analytics && <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', fontWeight: 700 }}>{money(analytics.salesByDay.reduce((s, d) => s + d.revenue, 0))} · {analytics.salesByDay.reduce((s, d) => s + d.orders, 0)} orders</span>}
-              </div>
-              {analytics ? <SalesChart data={fillDays(analytics.salesByDay, analytics.from || range.from, analytics.to || range.to)} /> : <div style={{ height: 200, display: 'grid', placeItems: 'center', color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>Loading…</div>}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
-              <div style={{ ...card, padding: 20 }}>
-                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Orders by city</h3>
-                {analytics?.ordersByArea.length ? <BarRows items={analytics.ordersByArea.map(a => ({ label: a.city, value: a.orders, sub: `${a.orders} order${a.orders === 1 ? '' : 's'} · ${money(a.revenue)}` }))} /> : <Empty text="No orders yet." />}
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
-              <div style={{ ...card, padding: 20 }}>
-                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Payments</h3>
-                {analytics?.paymentBreakdown.length ? <Donut segments={analytics.paymentBreakdown.map((p, i) => ({ label: p.status, value: p.count, color: PIE[i % PIE.length] }))} center={`${analytics.paymentBreakdown.reduce((s, p) => s + p.count, 0)}`} centerSub="orders" /> : <Empty text="No payments yet." />}
-              </div>
-              <div style={{ ...card, padding: 20 }}>
-                <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Shipments</h3>
-                {analytics?.shipmentByStatus.length ? <Donut segments={analytics.shipmentByStatus.map((s, i) => ({ label: s.status, value: s.count, color: PIE[i % PIE.length] }))} center={`${analytics.shipmentByStatus.reduce((s, x) => s + x.count, 0)}`} centerSub="shipments" /> : <Empty text="No shipments yet." />}
-              </div>
-            </div>
-          </div>
+          <OverviewTab
+            stats={stats}
+            analytics={analytics}
+            range={range}
+            setRange={setRange}
+            onOpenUsers={() => setTab('users')}
+          />
         )}
 
         {/* ===== Orders ===== */}
@@ -2044,109 +1962,3 @@ function shipStatusLabel(s?: string | null): string {
   if (u === 'NOT_CREATED') return 'Not created';
   return t;
 }
-
-/* ---------- Charts (lightweight inline SVG/CSS — no external deps) ---------- */
-const PIE = ['var(--orange-cta)', 'var(--green-success)', 'var(--google-blue)', 'var(--purple)', 'var(--orange-dark)', 'var(--gray)'];
-
-// Fill every calendar day in [from, to] so the line chart has no gaps. Capped at 370 points
-// (for very long ranges the start is clamped) to keep the SVG light.
-function fillDays(rows: { day: string; revenue: number; orders: number; paid: number }[], from: string, to: string) {
-  const byDay = new Map(rows.map(r => [r.day, r]));
-  const out: { day: string; revenue: number; orders: number; paid: number }[] = [];
-  const end = new Date(`${to}T00:00:00Z`);
-  let start = new Date(`${from}T00:00:00Z`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return rows;
-  const maxStart = new Date(end); maxStart.setUTCDate(end.getUTCDate() - 369);
-  if (start < maxStart) start = maxStart;
-  for (const d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-    const key = d.toISOString().slice(0, 10);
-    const r = byDay.get(key);
-    out.push({ day: key, revenue: r?.revenue ?? 0, orders: r?.orders ?? 0, paid: r?.paid ?? 0 });
-  }
-  return out;
-}
-
-function SalesChart({ data }: { data: { day: string; revenue: number; paid: number }[] }) {
-  const W = 760, H = 200, pl = 6, pr = 6, pt = 14, pb = 22;
-  const n = data.length;
-  const max = Math.max(1, ...data.map(d => d.revenue));
-  const x = (i: number) => pl + (n <= 1 ? (W - pl - pr) / 2 : (i * (W - pl - pr)) / (n - 1));
-  const y = (v: number) => pt + (1 - v / max) * (H - pt - pb);
-  const line = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(d.revenue).toFixed(1)}`).join(' ');
-  const area = `${line} L ${x(n - 1).toFixed(1)} ${(H - pb).toFixed(1)} L ${x(0).toFixed(1)} ${(H - pb).toFixed(1)} Z`;
-  const peakI = data.reduce((bi, d, i) => (d.revenue > data[bi].revenue ? i : bi), 0);
-  const fmtDay = (s: string) => new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-  return (
-    <div style={{ width: '100%', overflow: 'hidden' }}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" style={{ display: 'block', height: 200 }}>
-        <defs>
-          <linearGradient id="salesfill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" style={{ stopColor: 'var(--orange-cta)' }} stopOpacity="0.35" />
-            <stop offset="100%" style={{ stopColor: 'var(--orange-cta)' }} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {[0.25, 0.5, 0.75].map(g => <line key={g} x1={pl} x2={W - pr} y1={pt + g * (H - pt - pb)} y2={pt + g * (H - pt - pb)} stroke="var(--border-soft)" strokeWidth="1" />)}
-        <path d={area} fill="url(#salesfill)" />
-        <path d={line} fill="none" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" style={{ stroke: 'var(--orange-cta)' }} />
-        {max > 1 && <circle cx={x(peakI)} cy={y(data[peakI].revenue)} r="4" strokeWidth="2" style={{ fill: 'var(--orange-cta)', stroke: 'var(--white)' }} />}
-      </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 2 }}>
-        <span>{fmtDay(data[0].day)}</span>
-        <span>Peak {money(data[peakI].revenue)} · {fmtDay(data[peakI].day)}</span>
-        <span>{fmtDay(data[n - 1].day)}</span>
-      </div>
-    </div>
-  );
-}
-
-function BarRows({ items, color = 'var(--orange-cta)' }: { items: { label: string; value: number; sub?: string }[]; color?: string }) {
-  const max = Math.max(1, ...items.map(i => i.value));
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-      {items.map(it => (
-        <div key={it.label}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', marginBottom: 4, gap: 8 }}>
-            <span style={{ fontWeight: 700, color: 'var(--text-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.label}</span>
-            <span style={{ color: 'var(--text-muted)', flex: 'none' }}>{it.sub ?? it.value}</span>
-          </div>
-          <div style={{ height: 8, borderRadius: 99, background: 'var(--surface-sunken)', overflow: 'hidden' }}>
-            <div style={{ width: `${Math.max(3, (it.value / max) * 100)}%`, height: '100%', background: color, borderRadius: 99 }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Donut({ segments, center, centerSub }: { segments: { label: string; value: number; color: string }[]; center?: string; centerSub?: string }) {
-  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
-  const r = 52, sw = 18, c = 2 * Math.PI * r;
-  let offset = 0;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-      <div style={{ position: 'relative', width: 130, height: 130, flex: 'none' }}>
-        <svg viewBox="0 0 130 130" width="130" height="130" style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx="65" cy="65" r={r} fill="none" stroke="var(--surface-sunken)" strokeWidth={sw} />
-          {segments.map(s => {
-            const frac = s.value / total;
-            const dash = frac * c;
-            const el = <circle key={s.label} cx="65" cy="65" r={r} fill="none" strokeWidth={sw} strokeDasharray={`${dash} ${c - dash}`} strokeDashoffset={-offset} style={{ stroke: s.color }} />;
-            offset += dash;
-            return el;
-          })}
-        </svg>
-        {center && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center' }}><div><div style={{ fontWeight: 900, fontSize: 'var(--text-h4)', color: 'var(--text-strong)' }}>{center}</div>{centerSub && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)' }}>{centerSub}</div>}</div></div>}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7, flex: 1, minWidth: 120 }}>
-        {segments.map(s => (
-          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)' }}>
-            <span style={{ width: 11, height: 11, borderRadius: 3, background: s.color, flex: 'none' }} />
-            <span style={{ flex: 1, color: 'var(--text-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
-            <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>{s.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
