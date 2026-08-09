@@ -4,20 +4,18 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import {
-  adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
-  adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo,
-  adminCreateProduct, adminUpdateProduct, adminDeleteProduct,
+  adminGetOrders, adminUpdateOrderStatus,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
   adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
   adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
   adminGetPetpoojaMapping, adminCreateProductFromPetpooja, adminGetPetpoojaRelays, adminLinkProductToPetpooja,
-  type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
+  type Order, type Warehouse, type WarehouseInput,
   type AttentionReport, type StoreReadinessReport, type PetpoojaMapping, type PetpoojaRelay, type PetpoojaItem,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
-  Plus, Pencil, Trash2, Check, X, LogOut, Gift,
+  Plus, Pencil, Check, X, LogOut, Gift,
   Truck, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download,
   FileText, AlertTriangle, Store as StoreIcon,
 } from 'lucide-react';
@@ -28,12 +26,16 @@ import { useAdminAnalytics } from '@/hooks/admin/useAdminAnalytics';
 import { useAdminMessages } from '@/hooks/admin/useAdminMessages';
 import { useAdminStores } from '@/hooks/admin/useAdminStores';
 import { useAdminCoupons } from '@/hooks/admin/useAdminCoupons';
+import { useAdminProducts } from '@/hooks/admin/useAdminProducts';
+import { useSiteSettings } from '@/hooks/admin/useSiteSettings';
 import UsersTab from './users/UsersTab';
 import OverviewTab from './overview/OverviewTab';
 import MessagesTab from './messages/MessagesTab';
 import StoresTab from './stores/StoresTab';
 import CouponsTab from './coupons/CouponsTab';
 import CouponEditorModal from './coupons/CouponEditorModal';
+import ProductsTab from './products/ProductsTab';
+import ProductEditorModal from './products/ProductEditorModal';
 import { money, todayStr, fmtDate } from './shared/format';
 import {
   card, td, inp, addBtn, iconBtn, actionBtn,
@@ -72,21 +74,12 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]['id'];
 
-const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, stockQuantity: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, images: '', sameDayOnly: false, restrictCities: '' };
-
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
   const [tab, setTab] = useState<TabId>('overview');
 
   const [orders, setOrders] = useState<Order[] | null>(null);
-  const [products, setProducts] = useState<Product[] | null>(null);
-  const [promoProductId, setPromoProductId] = useState<number | null>(null);
-  const [headerOffer, setHeaderOffer] = useState('');
-  const [headerOfferSaved, setHeaderOfferSaved] = useState(false);
-  const [stallInfo, setStallInfo] = useState('');
-  const [stallInfoSaved, setStallInfoSaved] = useState(false);
-  const [editing, setEditing] = useState<{ id?: number; data: ProductInput } | null>(null);
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [attention, setAttention] = useState<AttentionReport | null>(null);
   // Outcome of a cancel — shown as a modal rather than a banner, because a REFUSED cancel means a
@@ -104,9 +97,6 @@ export default function AdminDashboard() {
   const [orderPayment, setOrderPayment] = useState('');
 
   // Per-tab search/filter state for the other lists
-  const [productSearch, setProductSearch] = useState('');
-  const [productCat, setProductCat] = useState('');
-  const [productAvail, setProductAvail] = useState('');
 
   const { pageOf, setPageOf, paginate } = usePagination();
 
@@ -136,9 +126,10 @@ export default function AdminDashboard() {
   const { users, search: userSearch, setSearch: setUserSearch } = useAdminUsers(isAdmin && tab === 'users');
   const { stats, refreshStats } = useAdminStats(isAdmin, setErr);
   const { analytics, range, setRange } = useAdminAnalytics(isAdmin);
+  const { products, search: productSearch, setSearch: setProductSearch, category: productCat, setCategory: setProductCat, availability: productAvail, setAvailability: setProductAvail, editing, setEditing, saveProduct, removeProduct, refreshProducts } = useAdminProducts(isAdmin && tab === 'products', setErr, refreshStats);
+  const siteSettings = useSiteSettings(isAdmin, setErr);
   const { messages, search: messageSearch, setSearch: setMessageSearch, handledFilter: messageHandled, setHandledFilter: setMessageHandled, markHandled } = useAdminMessages(isAdmin && tab === 'messages', refreshStats);
 
-  useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); setStallInfo(s.stallInfo || ''); }).catch(() => {}); }, [isAdmin]);
   // Loaded on every admin visit, not lazily per tab: an order that took money but never reached the
   // kitchen or a courier is the one thing that must not wait for someone to click the right tab.
   useEffect(() => { if (isAdmin) adminAttention().then(setAttention).catch(() => {}); }, [isAdmin]);
@@ -147,7 +138,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!isAdmin) return;
     if (tab === 'orders' && orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
-    if (tab === 'products' && products === null) adminGetProducts().then(setProducts).catch(() => setProducts([]));
     if (tab === 'petpooja') {
       if (ppMap === null) adminGetPetpoojaMapping().then(setPpMap).catch(() => setPpMap(null));
       if (ppRelays === null) adminGetPetpoojaRelays().then(setPpRelays).catch(() => setPpRelays([]));
@@ -157,9 +147,7 @@ export default function AdminDashboard() {
       if (orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
       if (storeReadiness === null) adminGetStoreReadiness().then(setStoreReadiness).catch(() => setStoreReadiness(null));
     }
-  }, [tab, isAdmin, orders, products, storeReadiness, ppMap, ppRelays]);
-
-  const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); refreshStats(); }, [refreshStats]);
+  }, [tab, isAdmin, orders, storeReadiness, ppMap, ppRelays]);
 
   const refreshAttention = useCallback(() => { adminAttention().then(setAttention).catch(() => {}); }, []);
 
@@ -206,19 +194,6 @@ export default function AdminDashboard() {
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Could not reach the POS');
     } finally { setFixing(null); }
-  };
-  const saveProduct = async () => {
-    if (!editing) return;
-    try {
-      if (editing.id) await adminUpdateProduct(editing.id, editing.data);
-      else await adminCreateProduct(editing.data);
-      setEditing(null); refreshProducts();
-    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Save failed'); }
-  };
-  const removeProduct = async (id: number) => {
-    if (!confirm('Delete this product? This cannot be undone.')) return;
-    await adminDeleteProduct(id).catch(() => {});
-    refreshProducts();
   };
   if (loading) return null;
 
@@ -360,105 +335,20 @@ export default function AdminDashboard() {
 
         {/* ===== Products ===== */}
         {tab === 'products' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <Panel title="Homepage promo popup">
-            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>Pick the product featured in the popup shown to new visitors — its photo, name and description are used, and the button opens that product. Leave as Default for the generic offer.</p>
-            <select
-              value={promoProductId ?? ''}
-              onChange={async e => {
-                const val = e.target.value ? Number(e.target.value) : null;
-                setPromoProductId(val);
-                await adminSetPromoProduct(val).catch(err => setErr(String(err.message || err)));
-              }}
-              style={{ ...inp, width: 'auto', minWidth: 260, cursor: 'pointer' }}
-            >
-              <option value="">Default (no specific product)</option>
-              {(products || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </Panel>
-          <Panel title="Header banner offer">
-            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>Free text shown in the rotating banner at the very top of every page. Only put a real, currently-active coupon code here — leave blank to hide this line entirely (the veg/login lines keep rotating either way).</p>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <input
-                value={headerOffer}
-                onChange={e => { setHeaderOffer(e.target.value); setHeaderOfferSaved(false); }}
-                placeholder="e.g. Get 5% off with code SAVE5"
-                style={{ ...inp, flex: '1 1 320px' }}
-              />
-              <button
-                onClick={async () => {
-                  await adminSetHeaderOffer(headerOffer.trim() || null).catch(err => setErr(String(err.message || err)));
-                  setHeaderOfferSaved(true);
-                }}
-                style={addBtn}
-              >{headerOfferSaved ? 'Saved ✓' : 'Save'}</button>
-            </div>
-          </Panel>
-          <Panel title="Today's stall — visit us">
-            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>Shown as a card on the homepage (right under the hero). Use it for a pop-up stall's location and timing — leave blank to hide the card entirely.</p>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <input
-                value={stallInfo}
-                onChange={e => { setStallInfo(e.target.value); setStallInfoSaved(false); }}
-                placeholder="e.g. Phoenix Mall, Whitefield — 11am to 8pm today"
-                style={{ ...inp, flex: '1 1 320px' }}
-              />
-              <button
-                onClick={async () => {
-                  await adminSetStallInfo(stallInfo.trim() || null).catch(err => setErr(String(err.message || err)));
-                  setStallInfoSaved(true);
-                }}
-                style={addBtn}
-              >{stallInfoSaved ? 'Saved ✓' : 'Save'}</button>
-            </div>
-          </Panel>
-          {(() => {
-            const cats = Array.from(new Set((products || []).map(p => p.category))).sort();
-            const pq = productSearch.trim().toLowerCase();
-            const list = (products || []).filter(p => {
-              if (productCat && p.category !== productCat) return false;
-              if (productAvail === 'in' && !p.isAvailable) return false;
-              if (productAvail === 'out' && p.isAvailable) return false;
-              if (!pq) return true;
-              return p.name.toLowerCase().includes(pq) || (p.tag || '').toLowerCase().includes(pq);
-            });
-            const active = !!(productCat || productAvail);
-            const clear = () => { setProductCat(''); setProductAvail(''); setProductSearch(''); setPageOf('products', 1); };
-            const selStyle = { ...inp, cursor: 'pointer' } as React.CSSProperties;
-            return (
-          <Panel title={`Products${products ? ` (${list.length})` : ''}`} loading={products === null} action={<button onClick={() => setEditing({ data: { ...EMPTY_PRODUCT } })} style={addBtn}><Plus size={16} /> Add product</button>}>
-            <FilterBar search={productSearch} onSearch={v => { setProductSearch(v); setPageOf('products', 1); }} placeholder="Search product or tag…" active={active} onClear={clear}>
-              <Field label="Category"><select value={productCat} onChange={e => { setProductCat(e.target.value); setPageOf('products', 1); }} style={selStyle}><option value="">All categories</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
-              <Field label="Availability"><select value={productAvail} onChange={e => { setProductAvail(e.target.value); setPageOf('products', 1); }} style={selStyle}><option value="">Any</option><option value="in">In stock / available</option><option value="out">Unavailable</option></select></Field>
-            </FilterBar>
-            <Table head={['Name', 'Category', 'Price', 'Stock', 'Tag', '']}>
-              {paginate(list, 'products').map(p => (
-                <tr key={p.id}>
-                  <td style={td}>
-                    <strong>{p.name}</strong>
-                    {p.sameDayOnly && (
-                      <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>
-                        Same-day only{p.restrictCities ? ` — ${p.restrictCities}` : ''}
-                      </div>
-                    )}
-                  </td>
-                  <td style={td}>{p.category}</td>
-                  <td style={td}>{money(p.price)}</td>
-                  <td style={td}><span style={{ color: p.stockQuantity <= 10 ? 'var(--status-error)' : 'var(--text-body)', fontWeight: p.stockQuantity <= 10 ? 800 : 400 }}>{p.stockQuantity}</span></td>
-                  <td style={td}>{p.tag || '—'}</td>
-                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                    <button onClick={() => setEditing({ id: p.id, data: { name: p.name, category: p.category, description: p.description, price: p.price, stockQuantity: p.stockQuantity, images: p.images, options: p.options, isAvailable: p.isAvailable, menuGroup: p.menuGroup, tag: p.tag, featured: p.featured, sameDayOnly: p.sameDayOnly, restrictCities: p.restrictCities || '' } })} aria-label="Edit" style={iconBtn}><Pencil size={15} /></button>
-                    <button onClick={() => removeProduct(p.id)} aria-label="Delete" style={{ ...iconBtn, color: 'var(--status-error)' }}><Trash2 size={15} /></button>
-                  </td>
-                </tr>
-              ))}
-            </Table>
-            {products && !list.length && <Empty text={products.length ? 'No products match the filter.' : 'No products.'} />}
-            <Pager page={pageOf('products')} total={list.length} pageSize={PAGE_SIZE} onPage={n => setPageOf('products', n)} />
-          </Panel>
-            );
-          })()}
-          </div>
+          <ProductsTab
+            products={products}
+            search={productSearch}
+            onSearch={setProductSearch}
+            category={productCat}
+            onCategory={setProductCat}
+            availability={productAvail}
+            onAvailability={setProductAvail}
+            setEditing={setEditing}
+            onRemove={removeProduct}
+            page={pageOf('products')}
+            onPage={n => setPageOf('products', n)}
+            settings={{ products, ...siteSettings }}
+          />
         )}
 
         {/* ===== Delivery ===== */}
@@ -879,7 +769,7 @@ export default function AdminDashboard() {
             try {
               const r = await adminCreateProductFromPetpooja(i.item_id, i.variation_id);
               setNotice(r.created ? `Created "${r.product.name}" and linked it.` : `Linked to the existing product "${r.product.name}".`);
-              reload(); adminGetProducts().then(setProducts).catch(() => {});
+              reload(); refreshProducts();
             } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Could not create the product'); }
             finally { setPpBusy(null); }
           };
@@ -1215,60 +1105,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Product editor modal */}
-      {editing && (
-        <div onClick={() => setEditing(null)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'var(--surface-overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: 'min(520px,96vw)', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: 24 }} className="hide-sb">
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ flex: 1, fontSize: 'var(--text-h3)' }}>{editing.id ? 'Edit product' : 'New product'}</h3>
-              <button onClick={() => setEditing(null)} style={iconBtn}><X size={18} /></button>
-            </div>
-            <div style={{ display: 'grid', gap: 12 }}>
-              <Field label="Name"><input style={inp} value={editing.data.name} onChange={e => setEditing({ ...editing, data: { ...editing.data, name: e.target.value } })} /></Field>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Category">
-                  <select style={inp} value={editing.data.category} onChange={e => setEditing({ ...editing, data: { ...editing.data, category: e.target.value as 'COOKIES' | 'TINS' } })}>
-                    <option value="COOKIES">COOKIES</option><option value="TINS">TINS</option>
-                  </select>
-                </Field>
-                <Field label="Menu group"><input style={inp} value={editing.data.menuGroup || ''} onChange={e => setEditing({ ...editing, data: { ...editing.data, menuGroup: e.target.value } })} /></Field>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                <Field label="Price ₹"><input type="number" style={inp} value={editing.data.price} onChange={e => setEditing({ ...editing, data: { ...editing.data, price: Number(e.target.value) } })} /></Field>
-                <Field label="Stock"><input type="number" style={inp} value={editing.data.stockQuantity} onChange={e => setEditing({ ...editing, data: { ...editing.data, stockQuantity: Number(e.target.value) } })} /></Field>
-                <Field label="Tag"><input style={inp} value={editing.data.tag || ''} onChange={e => setEditing({ ...editing, data: { ...editing.data, tag: e.target.value } })} /></Field>
-              </div>
-              <Field label="Description"><textarea rows={3} style={{ ...inp, resize: 'vertical' }} value={editing.data.description || ''} onChange={e => setEditing({ ...editing, data: { ...editing.data, description: e.target.value } })} /></Field>
-              <Field label="Image path (e.g. /assets/products/adc-special.jpg or JSON array)"><input style={inp} value={editing.data.images || ''} onChange={e => setEditing({ ...editing, data: { ...editing.data, images: e.target.value } })} /></Field>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer' }}>
-                <input type="checkbox" checked={!!editing.data.featured} onChange={e => setEditing({ ...editing, data: { ...editing.data, featured: e.target.checked } })} /> Featured
-              </label>
-              <div style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-input)', padding: 12 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer', marginBottom: editing.data.sameDayOnly ? 10 : 0 }}>
-                  <input type="checkbox" checked={!!editing.data.sameDayOnly}
-                    onChange={e => setEditing({ ...editing, data: { ...editing.data, sameDayOnly: e.target.checked } })} />
-                  Perishable — same-day delivery only
-                </label>
-                {editing.data.sameDayOnly && (
-                  <>
-                    <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: '0 0 8px', lineHeight: 1.5 }}>
-                      Blocks this product from any order that could ship by multi-day courier — checked at checkout,
-                      not just labelled. Leave the city blank to allow it same-day from any of our stores.
-                    </p>
-                    <Field label="Only deliver same-day within (city, optional)">
-                      <input style={inp} placeholder="e.g. Bengaluru" value={editing.data.restrictCities || ''}
-                        onChange={e => setEditing({ ...editing, data: { ...editing.data, restrictCities: e.target.value } })} />
-                    </Field>
-                  </>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                <button onClick={saveProduct} disabled={!editing.data.name || !editing.data.price} style={{ ...addBtn, flex: 1, justifyContent: 'center', opacity: (!editing.data.name || !editing.data.price) ? 0.5 : 1 }}><Check size={16} /> Save</button>
-                <button onClick={() => setEditing(null)} style={{ padding: '12px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {editing && <ProductEditorModal editing={editing} setEditing={setEditing} onSave={saveProduct} />}
 
       {/* Order detail popup */}
       {cancelInfo && (
