@@ -7,14 +7,14 @@ import {
   adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
   adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo,
   adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
-  adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminGetMessages, adminMarkMessageHandled,
+  adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
   adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
   adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
   adminGetPetpoojaMapping, adminCreateProductFromPetpooja, adminGetPetpoojaRelays, adminLinkProductToPetpooja,
   adminGetStores, adminCreateStoreStaff, adminSetStoreStaffPassword, adminToggleStoreStaff, adminDeleteStoreStaff,
-  type AdminCoupon, type CouponInput, type AdminMessage,
+  type AdminCoupon, type CouponInput,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
   type AttentionReport, type StoreReadinessReport, type PetpoojaMapping, type PetpoojaRelay, type PetpoojaItem,
   type AdminStoresReport, type AdminStore,
@@ -29,8 +29,10 @@ import { usePagination, PAGE_SIZE } from '@/hooks/admin/usePagination';
 import { useAdminUsers } from '@/hooks/admin/useAdminUsers';
 import { useAdminStats } from '@/hooks/admin/useAdminStats';
 import { useAdminAnalytics } from '@/hooks/admin/useAdminAnalytics';
+import { useAdminMessages } from '@/hooks/admin/useAdminMessages';
 import UsersTab from './users/UsersTab';
 import OverviewTab from './overview/OverviewTab';
+import MessagesTab from './messages/MessagesTab';
 import { money, todayStr, fmtDate } from './shared/format';
 import {
   card, td, inp, addBtn, iconBtn, actionBtn,
@@ -114,7 +116,6 @@ export default function AdminDashboard() {
   const [stallInfo, setStallInfo] = useState('');
   const [stallInfoSaved, setStallInfoSaved] = useState(false);
   const [coupons, setCoupons] = useState<AdminCoupon[] | null>(null);
-  const [messages, setMessages] = useState<AdminMessage[] | null>(null);
   const [editing, setEditing] = useState<{ id?: number; data: ProductInput } | null>(null);
   const [couponForm, setCouponForm] = useState<CouponDraft | null>(null);
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
@@ -139,8 +140,6 @@ export default function AdminDashboard() {
   const [productAvail, setProductAvail] = useState('');
   const [couponSearch, setCouponSearch] = useState('');
   const [couponStatusFilter, setCouponStatusFilter] = useState('');
-  const [messageSearch, setMessageSearch] = useState('');
-  const [messageHandled, setMessageHandled] = useState('');
 
   const { pageOf, setPageOf, paginate } = usePagination();
 
@@ -174,6 +173,7 @@ export default function AdminDashboard() {
   const { users, search: userSearch, setSearch: setUserSearch } = useAdminUsers(isAdmin && tab === 'users');
   const { stats, refreshStats } = useAdminStats(isAdmin, setErr);
   const { analytics, range, setRange } = useAdminAnalytics(isAdmin);
+  const { messages, search: messageSearch, setSearch: setMessageSearch, handledFilter: messageHandled, setHandledFilter: setMessageHandled, markHandled } = useAdminMessages(isAdmin && tab === 'messages', refreshStats);
 
   useEffect(() => { if (isAdmin) adminGetSettings().then(s => { setPromoProductId(s.promoProductId); setHeaderOffer(s.headerOffer || ''); setStallInfo(s.stallInfo || ''); }).catch(() => {}); }, [isAdmin]);
   // Loaded on every admin visit, not lazily per tab: an order that took money but never reached the
@@ -186,7 +186,6 @@ export default function AdminDashboard() {
     if (tab === 'orders' && orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
     if (tab === 'products' && products === null) adminGetProducts().then(setProducts).catch(() => setProducts([]));
     if (tab === 'coupons' && coupons === null) adminGetCoupons().then(setCoupons).catch(() => setCoupons([]));
-    if (tab === 'messages' && messages === null) adminGetMessages().then(setMessages).catch(() => setMessages([]));
     if (tab === 'petpooja') {
       if (ppMap === null) adminGetPetpoojaMapping().then(setPpMap).catch(() => setPpMap(null));
       if (ppRelays === null) adminGetPetpoojaRelays().then(setPpRelays).catch(() => setPpRelays([]));
@@ -197,7 +196,7 @@ export default function AdminDashboard() {
       if (storeReadiness === null) adminGetStoreReadiness().then(setStoreReadiness).catch(() => setStoreReadiness(null));
     }
     if (tab === 'stores' && storeReport === null) adminGetStores().then(setStoreReport).catch(() => setStoreReport(null));
-  }, [tab, isAdmin, orders, products, coupons, messages, storeReadiness, ppMap, ppRelays, storeReport]);
+  }, [tab, isAdmin, orders, products, coupons, storeReadiness, ppMap, ppRelays, storeReport]);
 
   const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); refreshStats(); }, [refreshStats]);
 
@@ -297,11 +296,6 @@ export default function AdminDashboard() {
     if (!confirm('Delete this coupon? This cannot be undone.')) return;
     await adminDeleteCoupon(id).catch(() => {});
     setCoupons(c => (c || []).filter(x => x.id !== id));
-  };
-  const markHandled = async (id: number) => {
-    await adminMarkMessageHandled(id).catch(() => {});
-    setMessages(m => (m || []).map(x => x.id === id ? { ...x, handled: true } : x));
-    refreshStats();
   };
 
   if (loading) return null;
@@ -1325,41 +1319,18 @@ export default function AdminDashboard() {
         )}
 
         {/* ===== Messages ===== */}
-        {tab === 'messages' && (() => {
-          const mq = messageSearch.trim().toLowerCase();
-          const list = (messages || []).filter(m => {
-            if (messageHandled === 'open' && m.handled) return false;
-            if (messageHandled === 'done' && !m.handled) return false;
-            if (!mq) return true;
-            return m.name.toLowerCase().includes(mq) || (m.email || '').toLowerCase().includes(mq) || m.message.toLowerCase().includes(mq);
-          });
-          const clear = () => { setMessageHandled(''); setMessageSearch(''); setPageOf('messages', 1); };
-          const selStyle = { ...inp, cursor: 'pointer' } as React.CSSProperties;
-          return (
-          <Panel title={`Contact messages${messages ? ` (${list.length})` : ''}`} loading={messages === null}>
-            <FilterBar search={messageSearch} onSearch={v => { setMessageSearch(v); setPageOf('messages', 1); }} placeholder="Search sender or message…" active={!!messageHandled} onClear={clear}>
-              <Field label="Status"><select value={messageHandled} onChange={e => { setMessageHandled(e.target.value); setPageOf('messages', 1); }} style={selStyle}><option value="">All messages</option><option value="open">Unhandled only</option><option value="done">Handled only</option></select></Field>
-            </FilterBar>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {paginate(list, 'messages').map(m => (
-                <div key={m.id} style={{ ...card, padding: 16, opacity: m.handled ? 0.6 : 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-                    <strong style={{ color: 'var(--text-strong)' }}>{m.name}</strong>
-                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{m.email}{m.phone ? ` · ${m.phone}` : ''}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{fmtDate(m.createdAt)}</span>
-                  </div>
-                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.6, marginBottom: 10 }}>{m.message}</p>
-                  {!m.handled
-                    ? <button onClick={() => markHandled(m.id)} style={{ ...iconBtn, width: 'auto', padding: '7px 14px', fontWeight: 700, fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={15} /> Mark handled</button>
-                    : <span style={{ fontSize: 'var(--text-sm)', color: 'var(--status-success)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={15} /> Handled</span>}
-                </div>
-              ))}
-            </div>
-            {messages && !list.length && <Empty text={messages.length ? 'No messages match the filter.' : 'No messages yet.'} />}
-            <Pager page={pageOf('messages')} total={list.length} pageSize={PAGE_SIZE} onPage={n => setPageOf('messages', n)} />
-          </Panel>
-          );
-        })()}
+        {tab === 'messages' && (
+          <MessagesTab
+            messages={messages}
+            search={messageSearch}
+            onSearch={setMessageSearch}
+            handledFilter={messageHandled}
+            onHandledFilter={setMessageHandled}
+            onMarkHandled={markHandled}
+            page={pageOf('messages')}
+            onPage={n => setPageOf('messages', n)}
+          />
+        )}
       </div>
 
       {/* Create-coupon modal */}
