@@ -13,26 +13,26 @@ import {
   adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
   adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
   adminGetPetpoojaMapping, adminCreateProductFromPetpooja, adminGetPetpoojaRelays, adminLinkProductToPetpooja,
-  adminGetStores, adminCreateStoreStaff, adminSetStoreStaffPassword, adminToggleStoreStaff, adminDeleteStoreStaff,
   type AdminCoupon, type CouponInput,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
   type AttentionReport, type StoreReadinessReport, type PetpoojaMapping, type PetpoojaRelay, type PetpoojaItem,
-  type AdminStoresReport, type AdminStore,
 } from '@/lib/api';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
   Plus, Pencil, Trash2, Check, X, LogOut, Gift,
   Truck, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download,
-  FileText, AlertTriangle, Store as StoreIcon, KeyRound,
+  FileText, AlertTriangle, Store as StoreIcon,
 } from 'lucide-react';
 import { usePagination, PAGE_SIZE } from '@/hooks/admin/usePagination';
 import { useAdminUsers } from '@/hooks/admin/useAdminUsers';
 import { useAdminStats } from '@/hooks/admin/useAdminStats';
 import { useAdminAnalytics } from '@/hooks/admin/useAdminAnalytics';
 import { useAdminMessages } from '@/hooks/admin/useAdminMessages';
+import { useAdminStores } from '@/hooks/admin/useAdminStores';
 import UsersTab from './users/UsersTab';
 import OverviewTab from './overview/OverviewTab';
 import MessagesTab from './messages/MessagesTab';
+import StoresTab from './stores/StoresTab';
 import { money, todayStr, fmtDate } from './shared/format';
 import {
   card, td, inp, addBtn, iconBtn, actionBtn,
@@ -162,10 +162,6 @@ export default function AdminDashboard() {
   const [ppOnlyUnlinked, setPpOnlyUnlinked] = useState(false);
   const [sfxStatesOpen, setSfxStatesOpen] = useState(false);
 
-  // Stores tab
-  const [storeReport, setStoreReport] = useState<AdminStoresReport | null>(null);
-  const [staffBusy, setStaffBusy] = useState<number | null>(null);
-
   const EMPTY_WH: WarehouseInput = { name: '', registeredName: '', pickupLocation: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', returnPincode: '', phone: '', email: '', isDefault: false, skipDelhivery: false };
 
   const isAdmin = !!user && user.role === 'ADMIN';
@@ -195,12 +191,13 @@ export default function AdminDashboard() {
       if (orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
       if (storeReadiness === null) adminGetStoreReadiness().then(setStoreReadiness).catch(() => setStoreReadiness(null));
     }
-    if (tab === 'stores' && storeReport === null) adminGetStores().then(setStoreReport).catch(() => setStoreReport(null));
-  }, [tab, isAdmin, orders, products, coupons, storeReadiness, ppMap, ppRelays, storeReport]);
+  }, [tab, isAdmin, orders, products, coupons, storeReadiness, ppMap, ppRelays]);
 
   const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); refreshStats(); }, [refreshStats]);
 
   const refreshAttention = useCallback(() => { adminAttention().then(setAttention).catch(() => {}); }, []);
+
+  const { storeReport, staffBusy, setStaffBusy, refreshStores, storeChanged, deleteOrphanedStaff } = useAdminStores(isAdmin && tab === 'stores', refreshAttention);
 
   const changeOrderStatus = async (id: number, status: string) => {
     const updated = await adminUpdateOrderStatus(id, status).catch(() => null);
@@ -929,53 +926,16 @@ export default function AdminDashboard() {
 
         {/* ===== Stores (staff portal) ===== */}
         {tab === 'stores' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <Panel title="How an order reaches each kitchen" >
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', margin: '0 0 10px', lineHeight: 1.6 }}>
-                Every paid order is assigned to the store that will make it — from the delivery address when it is
-                placed, then corrected to whichever store the carrier can actually collect from. Staff sign in at
-                their store&apos;s own page and work only their own orders: accept, bake, mark ready. They cannot
-                cancel anything or see another store&apos;s work.
-              </p>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', margin: 0, lineHeight: 1.6 }}>
-                <strong>Petpooja has one outlet configured for us — Begur.</strong> Begur&apos;s orders are pushed
-                there automatically. Every other store bills the order on its own Petpooja terminal and types the
-                bill number back into the portal; without that number nothing links the payment to their till, so
-                it is chased in <em>Needs attention</em>.
-              </p>
-            </Panel>
-
-            <Panel title="Stores" loading={storeReport === null}
-              action={<button onClick={() => adminGetStores().then(setStoreReport).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-              {storeReport && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {storeReport.stores.map(s => (
-                    <StoreCard key={s.code} store={s} busy={staffBusy}
-                      onChanged={() => { adminGetStores().then(setStoreReport).catch(() => {}); refreshAttention(); }}
-                      setBusy={setStaffBusy} setErr={setErr} setNotice={setNotice} />
-                  ))}
-                  {!!storeReport.orphanedStaff.length && (
-                    <div style={{ ...card, padding: 14, borderColor: 'var(--status-error)' }}>
-                      <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--status-error)' }}>
-                        {storeReport.orphanedStaff.length} login{storeReport.orphanedStaff.length !== 1 ? 's' : ''} for a store that no longer exists
-                      </strong>
-                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '6px 0 10px' }}>
-                        These cannot sign in. Delete them.
-                      </p>
-                      {storeReport.orphanedStaff.map(u => (
-                        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', fontSize: 'var(--text-sm)' }}>
-                          <span style={{ fontFamily: 'monospace' }}>{u.username}</span>
-                          <span style={{ color: 'var(--text-muted)', flex: 1 }}>→ {u.storeCode}</span>
-                          <button onClick={async () => { await adminDeleteStoreStaff(u.id); adminGetStores().then(setStoreReport).catch(() => {}); }}
-                            style={actionBtn(true)}><Trash2 size={13} /> Delete</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </Panel>
-          </div>
+          <StoresTab
+            storeReport={storeReport}
+            staffBusy={staffBusy}
+            setStaffBusy={setStaffBusy}
+            onRefresh={refreshStores}
+            onStoreChanged={storeChanged}
+            onDeleteOrphanedStaff={deleteOrphanedStaff}
+            setErr={setErr}
+            setNotice={setNotice}
+          />
         )}
 
         {/* ===== Petpooja (POS) ===== */}
@@ -1802,122 +1762,6 @@ function AttentionPanel({ report, busy, onRebook, onRetryPos, onOpen, onRefresh 
  * created with, and the moment it is used or changed that stops being shown and the only move left
  * is to set a new one, which the admin then hands over in person.
  */
-function StoreCard({ store, busy, setBusy, onChanged, setErr, setNotice }: {
-  store: AdminStore; busy: number | null;
-  setBusy: (n: number | null) => void; onChanged: () => void;
-  setErr: (s: string) => void; setNotice: (s: string) => void;
-}) {
-  const [adding, setAdding] = useState(false);
-  const [newUser, setNewUser] = useState('');
-  const [newPass, setNewPass] = useState('');
-  const [resetting, setResetting] = useState<number | null>(null);
-  const [resetPass, setResetPass] = useState('');
-
-  const portalUrl = typeof window !== 'undefined' ? `${window.location.origin}${store.portalPath}` : store.portalPath;
-
-  const guard = async (id: number, fn: () => Promise<unknown>, ok: string) => {
-    setBusy(id); setErr(''); setNotice('');
-    try { await fn(); setNotice(ok); onChanged(); }
-    catch (e: unknown) { setErr(e instanceof Error ? e.message : 'That did not work'); }
-    finally { setBusy(null); }
-  };
-
-  return (
-    <div style={{ ...card, padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-        <strong style={{ fontSize: 'var(--text-base)', color: 'var(--text-strong)' }}>{store.name}</strong>
-        <Badge text={store.posMode === 'AUTO' ? 'Petpooja: automatic' : 'Petpooja: billed at the store'} ok={store.posMode === 'AUTO'} />
-        <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-          {store.city} · {store.pincode}
-        </span>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>Staff sign in at</span>
-        <code style={{ fontSize: 'var(--text-xs)', background: 'var(--surface-sunken)', padding: '4px 9px', borderRadius: 6 }}>{portalUrl}</code>
-        <button onClick={() => { navigator.clipboard?.writeText(portalUrl); setNotice('Link copied.'); }} style={actionBtn()}>Copy</button>
-        <a href={store.portalPath} target="_blank" rel="noreferrer" style={{ ...actionBtn(), textDecoration: 'none' }}><ExternalLink size={13} /> Open</a>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginBottom: 14 }}>
-        <MiniStat label="Paid, last 30 days" value={String(store.last30Days.paid)} />
-        <MiniStat label="Not yet accepted" value={String(store.last30Days.unaccepted)} bad={store.last30Days.unaccepted > 0} />
-        {store.posMode === 'MANUAL' && (
-          <MiniStat label="No POS bill number" value={String(store.last30Days.unbilled)} bad={store.last30Days.unbilled > 0} />
-        )}
-      </div>
-
-      {/* Same rule the store's own /menu view and the checkout guard enforce — shown here so admin
-          sees, without opening the store portal, exactly what each shop cannot sell. */}
-      {store.doesNotCarry.length > 0 && (
-        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 14px', padding: '8px 12px', background: 'var(--surface-sunken)', borderRadius: 8 }}>
-          Does not carry (same-day delivery restricted elsewhere): <strong style={{ color: 'var(--text-body)' }}>{store.doesNotCarry.join(', ')}</strong>
-        </p>
-      )}
-
-      <Table head={['Username', 'Last signed in', 'Status', '']}>
-        {store.staff.map(u => (
-          <tr key={u.id} style={{ opacity: busy === u.id ? 0.5 : 1 }}>
-            <td style={td}>
-              <strong style={{ fontFamily: 'monospace', color: 'var(--text-strong)' }}>{u.username}</strong>
-              {u.onStartingPassword && u.startingPassword && (
-                <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 3 }}>
-                  Starting password: <code>{u.startingPassword}</code> — never used yet
-                </div>
-              )}
-            </td>
-            <td style={td}>{u.lastLoginAt ? fmtDate(u.lastLoginAt) : <span style={{ color: 'var(--text-muted)' }}>never</span>}</td>
-            <td style={td}>{u.isActive ? <Badge text="Active" ok /> : <Badge text="Disabled" />}</td>
-            <td style={{ ...td, whiteSpace: 'nowrap' }}>
-              <button onClick={() => { setResetting(resetting === u.id ? null : u.id); setResetPass(''); }} style={actionBtn()}>
-                <KeyRound size={13} /> Set password
-              </button>
-              <button onClick={() => guard(u.id, () => adminToggleStoreStaff(u.id), u.isActive ? 'Account disabled.' : 'Account enabled.')} style={actionBtn()}>
-                {u.isActive ? <ToggleRight size={13} /> : <ToggleLeft size={13} />} {u.isActive ? 'Disable' : 'Enable'}
-              </button>
-              <button onClick={() => guard(u.id, () => adminDeleteStoreStaff(u.id), 'Account deleted.')} style={actionBtn(true)}>
-                <Trash2 size={13} />
-              </button>
-            </td>
-          </tr>
-        ))}
-        {resetting != null && (
-          <tr>
-            <td style={td} colSpan={4}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <input type="text" value={resetPass} onChange={e => setResetPass(e.target.value)}
-                  placeholder="New password (8+ characters)" style={{ ...inp, width: 'auto', flex: '1 1 220px' }} />
-                <button disabled={resetPass.length < 8}
-                  onClick={() => guard(resetting, () => adminSetStoreStaffPassword(resetting, resetPass),
-                    `Password set. Give it to them: ${resetPass}`).then(() => { setResetting(null); setResetPass(''); })}
-                  style={{ ...addBtn, opacity: resetPass.length < 8 ? 0.5 : 1 }}>Save</button>
-                <button onClick={() => setResetting(null)} style={actionBtn()}>Cancel</button>
-              </div>
-              <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
-                Shown once, here, after saving — write it down before you close this. It cannot be read back.
-              </p>
-            </td>
-          </tr>
-        )}
-      </Table>
-
-      {adding ? (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
-          <input value={newUser} onChange={e => setNewUser(e.target.value)} placeholder="username" style={{ ...inp, width: 'auto', flex: '1 1 160px' }} />
-          <input value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="password (8+)" style={{ ...inp, width: 'auto', flex: '1 1 160px' }} />
-          <button disabled={!newUser.trim() || newPass.length < 8}
-            onClick={() => guard(-1, () => adminCreateStoreStaff(store.code, newUser.trim(), newPass), `Created ${newUser.trim()}.`)
-              .then(() => { setAdding(false); setNewUser(''); setNewPass(''); })}
-            style={{ ...addBtn, opacity: !newUser.trim() || newPass.length < 8 ? 0.5 : 1 }}>Create</button>
-          <button onClick={() => setAdding(false)} style={actionBtn()}>Cancel</button>
-        </div>
-      ) : (
-        <button onClick={() => setAdding(true)} style={{ ...actionBtn(), marginTop: 12 }}><Plus size={13} /> Add another login</button>
-      )}
-    </div>
-  );
-}
-
 /*
  * Admin-facing shipment status. Delhivery's own wording is misleading at the start of the journey:
  * "CREATED"/"Manifested" only means a waybill exists, which happens automatically on payment while
