@@ -6,14 +6,12 @@ import LoginModal from '@/components/ordering/LoginModal';
 import {
   adminGetOrders, adminUpdateOrderStatus, adminGetProducts,
   adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo,
-  adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminGetCoupons,
-  adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon,
+  adminCreateProduct, adminUpdateProduct, adminDeleteProduct,
   adminGetWarehouses, adminCreateWarehouse, adminUpdateWarehouse, adminSetDefaultWarehouse,
   adminToggleWarehouse, adminCreateShipment, adminCancelShipment,
   adminTrackOrder, openLabel, adminCreatePickupRequest, adminFetchOrderDocument,
   adminAttention, adminRebookShipment, adminRetryPosRelay, adminGetStoreReadiness,
   adminGetPetpoojaMapping, adminCreateProductFromPetpooja, adminGetPetpoojaRelays, adminLinkProductToPetpooja,
-  type AdminCoupon, type CouponInput,
   type Product, type Order, type ProductInput, type Warehouse, type WarehouseInput,
   type AttentionReport, type StoreReadinessReport, type PetpoojaMapping, type PetpoojaRelay, type PetpoojaItem,
 } from '@/lib/api';
@@ -29,10 +27,13 @@ import { useAdminStats } from '@/hooks/admin/useAdminStats';
 import { useAdminAnalytics } from '@/hooks/admin/useAdminAnalytics';
 import { useAdminMessages } from '@/hooks/admin/useAdminMessages';
 import { useAdminStores } from '@/hooks/admin/useAdminStores';
+import { useAdminCoupons } from '@/hooks/admin/useAdminCoupons';
 import UsersTab from './users/UsersTab';
 import OverviewTab from './overview/OverviewTab';
 import MessagesTab from './messages/MessagesTab';
 import StoresTab from './stores/StoresTab';
+import CouponsTab from './coupons/CouponsTab';
+import CouponEditorModal from './coupons/CouponEditorModal';
 import { money, todayStr, fmtDate } from './shared/format';
 import {
   card, td, inp, addBtn, iconBtn, actionBtn,
@@ -73,36 +74,6 @@ type TabId = typeof TABS[number]['id'];
 
 const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, stockQuantity: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, images: '', sameDayOnly: false, restrictCities: '' };
 
-// Coupon create/edit form uses string fields (easy inputs); converted to CouponInput on save.
-// `editId` is set when editing an existing coupon (PUT) instead of creating a new one (POST).
-type CouponDraft = {
-  editId?: number; code: string; discountType: 'PERCENTAGE' | 'FIXED'; discountValue: string;
-  minimumOrderAmount: string; maximumDiscount: string; validDays: string; usageLimit: string;
-  isSpin: boolean; spinWeight: string; spinLabel: string; terms: string;
-};
-const EMPTY_COUPON: CouponDraft = { code: '', discountType: 'PERCENTAGE', discountValue: '', minimumOrderAmount: '', maximumDiscount: '', validDays: '', usageLimit: '', isSpin: false, spinWeight: '', spinLabel: '', terms: '' };
-const EMPTY_SPIN_COUPON: CouponDraft = { ...EMPTY_COUPON, discountType: 'FIXED', isSpin: true };
-// Prefill the form from an existing coupon, for editing.
-function couponToDraft(c: AdminCoupon): CouponDraft {
-  const days = c.expiryDate ? Math.max(1, Math.ceil((new Date(c.expiryDate).getTime() - Date.now()) / 864e5)) : null;
-  return {
-    editId: c.id, code: c.code, discountType: c.discountType as 'PERCENTAGE' | 'FIXED',
-    discountValue: String(c.discountValue), minimumOrderAmount: c.minimumOrderAmount != null ? String(c.minimumOrderAmount) : '',
-    maximumDiscount: c.maximumDiscount != null ? String(c.maximumDiscount) : '', validDays: days != null ? String(days) : '',
-    usageLimit: c.usageLimit != null ? String(c.usageLimit) : '',
-    isSpin: c.spinWeight != null, spinWeight: c.spinWeight != null ? String(c.spinWeight) : '',
-    spinLabel: c.spinLabel || '', terms: c.terms || '',
-  };
-}
-
-// Live coupon status derived at read-time — no cron needed to "deactivate" a coupon.
-function couponStatus(c: AdminCoupon): { text: string; ok: boolean } {
-  if (!c.isActive) return { text: 'Disabled', ok: false };
-  if (c.expiryDate && c.expiryDate < new Date().toISOString().slice(0, 10)) return { text: 'Expired', ok: false };
-  if (c.usageLimit != null && (c.timesUsed ?? 0) >= c.usageLimit) return { text: 'Limit reached', ok: false };
-  return { text: 'Active', ok: true };
-}
-
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
@@ -115,9 +86,7 @@ export default function AdminDashboard() {
   const [headerOfferSaved, setHeaderOfferSaved] = useState(false);
   const [stallInfo, setStallInfo] = useState('');
   const [stallInfoSaved, setStallInfoSaved] = useState(false);
-  const [coupons, setCoupons] = useState<AdminCoupon[] | null>(null);
   const [editing, setEditing] = useState<{ id?: number; data: ProductInput } | null>(null);
-  const [couponForm, setCouponForm] = useState<CouponDraft | null>(null);
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [attention, setAttention] = useState<AttentionReport | null>(null);
   // Outcome of a cancel — shown as a modal rather than a banner, because a REFUSED cancel means a
@@ -138,8 +107,6 @@ export default function AdminDashboard() {
   const [productSearch, setProductSearch] = useState('');
   const [productCat, setProductCat] = useState('');
   const [productAvail, setProductAvail] = useState('');
-  const [couponSearch, setCouponSearch] = useState('');
-  const [couponStatusFilter, setCouponStatusFilter] = useState('');
 
   const { pageOf, setPageOf, paginate } = usePagination();
 
@@ -181,7 +148,6 @@ export default function AdminDashboard() {
     if (!isAdmin) return;
     if (tab === 'orders' && orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
     if (tab === 'products' && products === null) adminGetProducts().then(setProducts).catch(() => setProducts([]));
-    if (tab === 'coupons' && coupons === null) adminGetCoupons().then(setCoupons).catch(() => setCoupons([]));
     if (tab === 'petpooja') {
       if (ppMap === null) adminGetPetpoojaMapping().then(setPpMap).catch(() => setPpMap(null));
       if (ppRelays === null) adminGetPetpoojaRelays().then(setPpRelays).catch(() => setPpRelays([]));
@@ -191,13 +157,14 @@ export default function AdminDashboard() {
       if (orders === null) adminGetOrders().then(setOrders).catch(() => setOrders([]));
       if (storeReadiness === null) adminGetStoreReadiness().then(setStoreReadiness).catch(() => setStoreReadiness(null));
     }
-  }, [tab, isAdmin, orders, products, coupons, storeReadiness, ppMap, ppRelays]);
+  }, [tab, isAdmin, orders, products, storeReadiness, ppMap, ppRelays]);
 
   const refreshProducts = useCallback(() => { adminGetProducts().then(setProducts).catch(() => {}); refreshStats(); }, [refreshStats]);
 
   const refreshAttention = useCallback(() => { adminAttention().then(setAttention).catch(() => {}); }, []);
 
   const { storeReport, staffBusy, setStaffBusy, refreshStores, storeChanged, deleteOrphanedStaff } = useAdminStores(isAdmin && tab === 'stores', refreshAttention);
+  const { coupons, search: couponSearch, setSearch: setCouponSearch, statusFilter: couponStatusFilter, setStatusFilter: setCouponStatusFilter, couponForm, setCouponForm, toggleCoupon, editCoupon, saveCoupon, removeCoupon } = useAdminCoupons(isAdmin && tab === 'coupons', setErr);
 
   const changeOrderStatus = async (id: number, status: string) => {
     const updated = await adminUpdateOrderStatus(id, status).catch(() => null);
@@ -253,48 +220,6 @@ export default function AdminDashboard() {
     await adminDeleteProduct(id).catch(() => {});
     refreshProducts();
   };
-  const toggleCoupon = async (id: number) => {
-    const updated = await adminToggleCoupon(id).catch(() => null);
-    if (updated) setCoupons(c => (c || []).map(x => x.id === id ? { ...updated, timesUsed: x.timesUsed } : x));
-  };
-  const editCoupon = (c: AdminCoupon) => setCouponForm(couponToDraft(c));
-  const saveCoupon = async () => {
-    if (!couponForm) return;
-    const f = couponForm;
-    if (!f.code.trim() || !f.discountValue) { setErr('A coupon needs a code and a discount value.'); return; }
-    if (f.isSpin && !f.spinWeight) { setErr('A Spin Wheel offer needs an odds weight (%).'); return; }
-    const days = Number(f.validDays);
-    const payload: CouponInput = {
-      code: f.code.trim().toUpperCase(),
-      discountType: f.discountType,
-      discountValue: Number(f.discountValue),
-      minimumOrderAmount: f.minimumOrderAmount ? Number(f.minimumOrderAmount) : null,
-      maximumDiscount: f.maximumDiscount ? Number(f.maximumDiscount) : null,
-      // "Valid for N days" → concrete expiry date; blank = never expires.
-      expiryDate: days > 0 ? new Date(Date.now() + days * 864e5).toISOString().slice(0, 10) : null,
-      usageLimit: f.usageLimit ? Number(f.usageLimit) : null,
-      isActive: true,
-      spinWeight: f.isSpin ? Number(f.spinWeight) : null,
-      spinLabel: f.isSpin ? (f.spinLabel.trim() || null) : null,
-      terms: f.isSpin ? (f.terms.trim() || null) : null,
-    };
-    try {
-      if (f.editId != null) {
-        const updated = await adminUpdateCoupon(f.editId, payload);
-        setCoupons(c => (c || []).map(x => x.id === f.editId ? { ...updated, timesUsed: x.timesUsed } : x));
-      } else {
-        const created = await adminCreateCoupon(payload);
-        setCoupons(c => [...(c || []), { ...created, timesUsed: 0 }]);
-      }
-      setCouponForm(null); setErr('');
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not save coupon'); }
-  };
-  const removeCoupon = async (id: number) => {
-    if (!confirm('Delete this coupon? This cannot be undone.')) return;
-    await adminDeleteCoupon(id).catch(() => {});
-    setCoupons(c => (c || []).filter(x => x.id !== id));
-  };
-
   if (loading) return null;
 
   // Not an admin (or signed out) → show a clear sign-in gate instead of silently bouncing home.
@@ -1184,88 +1109,21 @@ export default function AdminDashboard() {
         })()}
 
         {/* ===== Coupons ===== */}
-        {tab === 'coupons' && (() => {
-          const cq = couponSearch.trim().toLowerCase();
-          const regular = (coupons || []).filter(c => c.spinWeight == null);
-          const spinCoupons = (coupons || []).filter(c => c.spinWeight != null).sort((a, b) => (b.spinWeight ?? 0) - (a.spinWeight ?? 0));
-          const list = regular.filter(c => {
-            if (couponStatusFilter && couponStatus(c).text !== couponStatusFilter) return false;
-            return !cq || c.code.toLowerCase().includes(cq);
-          });
-          const selStyle = { ...inp, cursor: 'pointer' } as React.CSSProperties;
-          const totalSpinWeight = spinCoupons.filter(c => couponStatus(c).ok).reduce((s, c) => s + (c.spinWeight ?? 0), 0);
-          const noRewardChance = Math.max(0, 100 - totalSpinWeight);
-          return (
-          <>
-          <Panel title={`Coupons${coupons ? ` (${list.length})` : ''}`} loading={coupons === null}
-            action={<button onClick={() => setCouponForm({ ...EMPTY_COUPON })} style={addBtn}><Plus size={16} /> New coupon</button>}>
-            <FilterBar search={couponSearch} onSearch={v => { setCouponSearch(v); setPageOf('coupons', 1); }} placeholder="Search code…" active={!!couponStatusFilter} onClear={() => { setCouponStatusFilter(''); setCouponSearch(''); setPageOf('coupons', 1); }}>
-              <Field label="Status"><select value={couponStatusFilter} onChange={e => { setCouponStatusFilter(e.target.value); setPageOf('coupons', 1); }} style={selStyle}><option value="">All</option><option value="Active">Active</option><option value="Expired">Expired</option><option value="Limit reached">Limit reached</option><option value="Disabled">Disabled</option></select></Field>
-            </FilterBar>
-            <Table head={['Code', 'Discount', 'Min order', 'Valid till', 'Uses', 'Status', '']}>
-              {paginate(list, 'coupons').map(c => {
-                const st = couponStatus(c);
-                return (
-                <tr key={c.id}>
-                  <td style={td}><strong>{c.code}</strong></td>
-                  <td style={td}>{c.discountType === 'PERCENTAGE' ? `${c.discountValue}%${c.maximumDiscount ? ` (max ${money(c.maximumDiscount)})` : ''}` : money(c.discountValue)}</td>
-                  <td style={td}>{c.minimumOrderAmount ? money(c.minimumOrderAmount) : '—'}</td>
-                  <td style={td}>{c.expiryDate ? fmtDate(c.expiryDate) : 'No expiry'}</td>
-                  <td style={td}>{c.timesUsed ?? 0}{c.usageLimit != null ? ` / ${c.usageLimit}` : ''}</td>
-                  <td style={td}><Badge text={st.text} ok={st.ok} /></td>
-                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                    <button onClick={() => editCoupon(c)} aria-label="Edit" style={{ ...iconBtn, marginRight: 6 }}><Pencil size={15} /></button>
-                    <button onClick={() => toggleCoupon(c.id)} style={{ ...iconBtn, width: 'auto', padding: '6px 10px', marginRight: 6, fontWeight: 700, fontSize: 'var(--text-xs)' }}>{c.isActive ? 'Disable' : 'Enable'}</button>
-                    <button onClick={() => removeCoupon(c.id)} aria-label="Delete" style={{ ...iconBtn, color: 'var(--status-error)' }}><Trash2 size={15} /></button>
-                  </td>
-                </tr>
-                );
-              })}
-            </Table>
-            {coupons && !list.length && <Empty text={coupons.length ? 'No coupons match the filter.' : 'No coupons yet — create one above.'} />}
-            <Pager page={pageOf('coupons')} total={list.length} pageSize={PAGE_SIZE} onPage={n => setPageOf('coupons', n)} />
-          </Panel>
-
-          {/* ===== Spin Wheel Offers — a separate section: the rewards the Spin & Win wheel can
-              award, each with its own odds (weight %), usage limit, active window, and terms. ===== */}
-          <div style={{ marginTop: 24 }}>
-            <Panel title={`Spin Wheel Offers${coupons ? ` (${spinCoupons.length})` : ''}`} loading={coupons === null}
-              action={<button onClick={() => setCouponForm({ ...EMPTY_SPIN_COUPON })} style={addBtn}><Plus size={16} /> New offer</button>}>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 6px', lineHeight: 1.5 }}>
-                Each offer's <strong>Weight</strong> is its % chance of landing when someone spins. Weights across active offers currently sum to <strong>{totalSpinWeight.toFixed(1)}%</strong> — the remaining <strong>{noRewardChance.toFixed(1)}%</strong> is &quot;Better luck next time&quot;.
-              </p>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '0 0 6px', lineHeight: 1.5 }}>
-                <strong>How odds are guaranteed:</strong> every 1,000 spins draw from one shuffled batch pre-built to these exact weights (e.g. 5% weight = exactly 50 of the 1,000) — a real ratio per batch, not just an average over time. The batch auto-rebuilds the moment you change a weight here, and again once it runs out.
-              </p>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '0 0 14px', lineHeight: 1.5 }}>
-                <strong>Anti-abuse:</strong> re-spinning (reload, reopen) doesn't draw again — each device/account gets one locked-in result (win or miss) per 12h window, replayed if they retry, so no one can re-roll for a better prize or burn through other customers' tickets.
-              </p>
-              <Table head={['Wheel label', 'Code', 'Discount', 'Weight', 'Uses', 'Status', '']}>
-                {spinCoupons.map(c => {
-                  const st = couponStatus(c);
-                  return (
-                    <tr key={c.id}>
-                      <td style={td}><strong>{c.spinLabel || c.code}</strong></td>
-                      <td style={td}>{c.code}</td>
-                      <td style={td}>{c.discountType === 'PERCENTAGE' ? `${c.discountValue}%${c.maximumDiscount ? ` (max ${money(c.maximumDiscount)})` : ''}` : money(c.discountValue)}</td>
-                      <td style={td}>{(c.spinWeight ?? 0).toFixed(1)}%</td>
-                      <td style={td}>{c.timesUsed ?? 0}{c.usageLimit != null ? ` / ${c.usageLimit}` : ''}</td>
-                      <td style={td}><Badge text={st.text} ok={st.ok} /></td>
-                      <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                        <button onClick={() => editCoupon(c)} aria-label="Edit" style={{ ...iconBtn, marginRight: 6 }}><Pencil size={15} /></button>
-                        <button onClick={() => toggleCoupon(c.id)} style={{ ...iconBtn, width: 'auto', padding: '6px 10px', marginRight: 6, fontWeight: 700, fontSize: 'var(--text-xs)' }}>{c.isActive ? 'Disable' : 'Enable'}</button>
-                        <button onClick={() => removeCoupon(c.id)} aria-label="Delete" style={{ ...iconBtn, color: 'var(--status-error)' }}><Trash2 size={15} /></button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </Table>
-              {coupons && !spinCoupons.length && <Empty text="No Spin Wheel offers yet — create one above." />}
-            </Panel>
-          </div>
-          </>
-          );
-        })()}
+        {tab === 'coupons' && (
+          <CouponsTab
+            coupons={coupons}
+            search={couponSearch}
+            onSearch={setCouponSearch}
+            statusFilter={couponStatusFilter}
+            onStatusFilter={setCouponStatusFilter}
+            onNewCoupon={setCouponForm}
+            onEdit={editCoupon}
+            onToggle={toggleCoupon}
+            onRemove={removeCoupon}
+            page={pageOf('coupons')}
+            onPage={n => setPageOf('coupons', n)}
+          />
+        )}
 
         {/* ===== Users ===== */}
         {tab === 'users' && (
@@ -1294,54 +1152,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Create-coupon modal */}
-      {couponForm && (
-        <div onClick={() => setCouponForm(null)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'var(--surface-overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: 'min(480px,96vw)', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: 24 }} className="hide-sb">
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ flex: 1, fontSize: 'var(--text-h3)' }}>{couponForm.editId != null ? 'Edit' : 'New'} {couponForm.isSpin ? 'Spin Wheel offer' : 'coupon'}</h3>
-              <button onClick={() => setCouponForm(null)} style={iconBtn}><X size={18} /></button>
-            </div>
-            <div style={{ display: 'grid', gap: 12 }}>
-              <Field label="Code"><input style={inp} value={couponForm.code} onChange={e => setCouponForm(f => f && ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="WELCOME10" /></Field>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Discount type"><select style={{ ...inp, cursor: 'pointer' }} value={couponForm.discountType} onChange={e => setCouponForm(f => f && ({ ...f, discountType: e.target.value as 'PERCENTAGE' | 'FIXED' }))}><option value="PERCENTAGE">Percentage (%)</option><option value="FIXED">Fixed (₹)</option></select></Field>
-                <Field label={couponForm.discountType === 'PERCENTAGE' ? 'Percent off' : 'Amount off (₹)'}><input style={inp} type="number" min="0" value={couponForm.discountValue} onChange={e => setCouponForm(f => f && ({ ...f, discountValue: e.target.value }))} /></Field>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Min order (₹)"><input style={inp} type="number" min="0" value={couponForm.minimumOrderAmount} onChange={e => setCouponForm(f => f && ({ ...f, minimumOrderAmount: e.target.value }))} placeholder="Optional" /></Field>
-                <Field label="Max discount (₹)"><input style={inp} type="number" min="0" value={couponForm.maximumDiscount} onChange={e => setCouponForm(f => f && ({ ...f, maximumDiscount: e.target.value }))} placeholder="Optional cap" /></Field>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Valid for (days)"><input style={inp} type="number" min="1" value={couponForm.validDays} onChange={e => setCouponForm(f => f && ({ ...f, validDays: e.target.value }))} placeholder="Blank = no expiry" /></Field>
-                <Field label="Total uses limit"><input style={inp} type="number" min="1" value={couponForm.usageLimit} onChange={e => setCouponForm(f => f && ({ ...f, usageLimit: e.target.value }))} placeholder="Blank = unlimited" /></Field>
-              </div>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>The coupon auto-stops when it expires or hits its use limit — no need to disable it manually.</p>
-
-              <button type="button" onClick={() => setCouponForm(f => f && ({ ...f, isSpin: !f.isSpin }))} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 2px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
-                <span style={{ width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center', border: couponForm.isSpin ? 'none' : '2px solid var(--border-strong)', background: couponForm.isSpin ? 'var(--gradient-warm)' : 'transparent', color: 'var(--white)', flex: 'none' }}>{couponForm.isSpin && <Check size={13} strokeWidth={3} />}</span>
-                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>Show on the Spin &amp; Win wheel</span>
-              </button>
-
-              {couponForm.isSpin && (
-                <div style={{ display: 'grid', gap: 12, padding: 14, borderRadius: 'var(--radius-card)', background: 'var(--surface-raised)', border: '1px solid var(--border-soft)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <Field label="Wheel label"><input style={inp} value={couponForm.spinLabel} onChange={e => setCouponForm(f => f && ({ ...f, spinLabel: e.target.value }))} placeholder="e.g. Free Cookie Tin" /></Field>
-                    <Field label="Weight — odds (%)"><input style={inp} type="number" min="0" max="100" step="0.01" value={couponForm.spinWeight} onChange={e => setCouponForm(f => f && ({ ...f, spinWeight: e.target.value }))} placeholder="e.g. 5" /></Field>
-                  </div>
-                  <Field label="Terms & conditions (shown to shoppers)">
-                    <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={couponForm.terms} onChange={e => setCouponForm(f => f && ({ ...f, terms: e.target.value }))} placeholder="e.g. Valid on orders of ₹200 or more. One reward per account. Cannot be combined with other offers." />
-                  </Field>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                <button onClick={saveCoupon} style={{ ...addBtn, flex: 1, justifyContent: 'center' }}>{couponForm.editId != null ? 'Save changes' : couponForm.isSpin ? 'Create offer' : 'Create coupon'}</button>
-                <button onClick={() => setCouponForm(null)} style={{ ...iconBtn, width: 'auto', padding: '0 16px', fontWeight: 700 }}>Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {couponForm && <CouponEditorModal couponForm={couponForm} setCouponForm={setCouponForm} onSave={saveCoupon} />}
 
       {/* Warehouse editor modal */}
       {whForm && (
