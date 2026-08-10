@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { STORES } from '@/lib/stores';
+import { navLinksFor, type NavLinkDef, type NavKey } from '@/lib/navLinks';
 import MenuDrawer from './MenuDrawer';
 import LoginModal from '@/components/ordering/LoginModal';
 import { LocationPill } from './LocationPicker';
@@ -20,20 +21,10 @@ import { LocationPill } from './LocationPicker';
  * in <SiteNav /> with no wiring.
  */
 
-interface NavLink { label: string; href: string; menuKey?: 'cookies' | 'tins' | 'locations' }
-// Corporate and Partner-with-us are now their own top-level links (each its own page), not a
-// combined "Partner with us" dropdown — the client wants both visible directly in the navbar.
-export const NAV_DESKTOP: NavLink[] = [
-  { label: 'Home', href: '/' },
-  { label: 'Buy Cookies', href: '/order?cat=cookies', menuKey: 'cookies' },
-  { label: 'Cookie Tins', href: '/order?cat=tins', menuKey: 'tins' },
-  { label: 'Locations', href: '/locations', menuKey: 'locations' },
-  { label: 'Corporate', href: '/corporate' },
-  { label: 'Partner with us', href: '/franchise' },
-  { label: 'About Us', href: '/about' },
-  { label: 'Contact', href: '/contact' },
-  { label: 'Orders', href: '/account#orders' },
-];
+// Desktop navbar shows every link. Labels/hrefs come from lib/navLinks so a rename lands here, in
+// the mobile drawer and on the order page at once; the dropdown CONTENTS below stay local because
+// each surface fills them from different data.
+const DESKTOP_KEYS = ['home', 'cookies', 'tins', 'locations', 'corporate', 'franchise', 'about', 'contact', 'orders'] as const;
 
 const ctaBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 18px', border: 'none', cursor: 'pointer',
@@ -43,7 +34,7 @@ const ctaBtn: React.CSSProperties = {
 };
 
 // A desktop nav link that reveals a dropdown on hover when it has menu items.
-function NavItem({ item, menu }: { item: NavLink; menu?: { label: string; href: string }[] }) {
+function NavItem({ item, menu }: { item: NavLinkDef; menu?: { label: string; href: string }[] }) {
   const [open, setOpen] = useState(false);
   const hasMenu = !!menu && menu.length > 0;
   return (
@@ -192,7 +183,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
   }, []);
   // Cookies deep-link to that cookie (floats it to the top); tins all jump to the Cookie Tins section.
   const toMenu = (cat: 'COOKIES' | 'TINS') => products.filter(p => p.category === cat && p.isAvailable).map(p => ({ label: p.name, href: cat === 'TINS' ? '/order?cat=tins' : `/order?q=${encodeURIComponent(p.name)}` }));
-  const menuFor = (key?: NavLink['menuKey']) =>
+  const menuFor = (key: NavKey) =>
     key === 'cookies' ? toMenu('COOKIES')
       : key === 'tins' ? toMenu('TINS')
         : key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))
@@ -242,8 +233,8 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
           </div>
           <div>
             <div style={{ maxWidth: 1680, margin: '0 auto', padding: '2px var(--gutter) 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(16px,2.4vw,40px)', flexWrap: 'wrap' }}>
-              {NAV_DESKTOP.map(n => (
-                <NavItem key={n.label} item={n} menu={menuFor(n.menuKey)} />
+              {navLinksFor(DESKTOP_KEYS).map(n => (
+                <NavItem key={n.key} item={n} menu={menuFor(n.key)} />
               ))}
             </div>
           </div>
