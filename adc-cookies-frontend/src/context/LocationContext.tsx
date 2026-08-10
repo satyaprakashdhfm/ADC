@@ -99,10 +99,15 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     setDetecting(true); setError('');
     navigator.geolocation.getCurrentPosition(
       pos => {
-        const s = nearestStore(pos.coords.latitude, pos.coords.longitude);
+        const { latitude, longitude, accuracy } = pos.coords;
+        const s = nearestStore(latitude, longitude);
+        // Logged because a missing/!wrong coordinate is the difference between same-day showing up
+        // and the address reading "not serviceable" — worth being able to see what we got.
+        console.log(`[location] granted | lat=${latitude} lng=${longitude} (±${Math.round(accuracy)}m) | nearest store: ${s.name}`);
         setStore(s); persist(s); setDetecting(false); resolve(s);
       },
       err => {
+        console.warn(`[location] denied/failed | code=${err.code} ${err.message}`);
         setDetecting(false);
         setError(err.code === 1
           ? 'Location permission denied — pick a store below.'

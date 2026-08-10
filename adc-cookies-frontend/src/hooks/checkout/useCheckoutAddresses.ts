@@ -93,6 +93,11 @@ export function useCheckoutAddresses() {
     let longitude = aform.longitude;
     const geo = await geocodeAddress(aform);
     if (geo) { latitude = geo.latitude; longitude = geo.longitude; }
+    // Without coordinates the delivery check cannot quote intracity and the address will read
+    // "not serviceable", so make it visible when a save ends up with none.
+    console.log(latitude != null && longitude != null
+      ? `[address] saving with coordinates lat=${latitude} lng=${longitude}${geo ? ' (geocoded)' : ' (from GPS)'}`
+      : '[address] saving WITHOUT coordinates — same-day/intracity cannot be quoted for it');
     const data: Omit<Address, 'id'> = { ...aform, latitude, longitude, isDefault: makeDefault };
     if (editId != null) {
       // Editing an existing address.
