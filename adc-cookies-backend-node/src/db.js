@@ -2,6 +2,27 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
+/*
+ * How Postgres types come back into JavaScript.
+ *
+ * These MUST stay in step with the 0002/0003 migrations, and must be registered before any query
+ * runs. node-postgres' defaults would otherwise change the shape of values the routes already
+ * depend on, silently:
+ *
+ *   NUMERIC (1700)     default is a STRING, to avoid losing precision on huge values. Our amounts
+ *                      are rupees, so a JS number is exact and safe — and leaving it a string would
+ *                      turn `subtotal + deliveryFee` into "500" + "40" = "50040". Parsed to number.
+ *   TIMESTAMPTZ (1184) default is a JS Date. The API has always emitted strings here, so we keep
+ *                      strings — normalised to ISO, which is what most rows already held.
+ *   DATE (1082)        default is a JS Date. coupons.js compares expiry_date directly against a
+ *                      'YYYY-MM-DD' string in three places; a Date would stringify as
+ *                      "Mon Aug 11 2026 ..." and expire coupons a day early. Kept as the raw
+ *                      'YYYY-MM-DD' string it has always been.
+ */
+pg.types.setTypeParser(1700, (v) => (v === null ? null : Number.parseFloat(v)));
+pg.types.setTypeParser(1184, (v) => (v === null ? null : new Date(v).toISOString()));
+pg.types.setTypeParser(1082, (v) => v);
+
 // If DATABASE_URL is set (and non-empty) it wins; otherwise node-postgres reads
 // PGHOST / PGDATABASE / PGUSER / PGPASSWORD / PGPORT from the environment (.env).
 // Remote hosts (e.g. Supabase) require SSL; local Unix-socket auth does not.
@@ -44,8 +65,8 @@ export async function initSchema() {
       phone TEXT UNIQUE,
       password TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'CUSTOMER',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS addresses (
@@ -68,7 +89,7 @@ export async function initSchema() {
       name TEXT NOT NULL,
       category TEXT NOT NULL,
       description TEXT,
-      price FLOAT8 NOT NULL,
+      price NUMERIC(12,2) NOT NULL,
       stock_quantity INTEGER NOT NULL,
       images TEXT,
       options TEXT,
@@ -76,8 +97,8 @@ export async function initSchema() {
       menu_group TEXT,
       tag TEXT,
       featured BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     -- Idempotent migrations for pre-existing products tables
@@ -133,7 +154,7 @@ export async function initSchema() {
     CREATE TABLE IF NOT EXISTS store_status (
       store_code TEXT PRIMARY KEY,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
-      updated_at TEXT NOT NULL
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     -- Manual per-store product availability — generalizes intracity_available/restrict_cities (which only
@@ -146,7 +167,7 @@ export async function initSchema() {
       store_code TEXT NOT NULL,
       product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
       is_available BOOLEAN NOT NULL,
-      updated_at TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       PRIMARY KEY (store_code, product_id)
     );
 
@@ -154,10 +175,10 @@ export async function initSchema() {
       id SERIAL PRIMARY KEY,
       code TEXT NOT NULL UNIQUE,
       discount_type TEXT NOT NULL,
-      discount_value FLOAT8 NOT NULL,
-      minimum_order_amount FLOAT8,
-      maximum_discount FLOAT8,
-      expiry_date TEXT,
+      discount_value NUMERIC(12,2) NOT NULL,
+      minimum_order_amount NUMERIC(12,2),
+      maximum_discount NUMERIC(12,2),
+      expiry_date DATE,
       usage_limit INTEGER,
       is_active BOOLEAN NOT NULL DEFAULT TRUE
     );
@@ -165,8 +186,8 @@ export async function initSchema() {
     CREATE TABLE IF NOT EXISTS cart (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS cart_items (
@@ -175,7 +196,7 @@ export async function initSchema() {
       product_id INTEGER NOT NULL REFERENCES products(id),
       quantity INTEGER NOT NULL,
       selected_options TEXT,
-      unit_price FLOAT8 NOT NULL
+      unit_price NUMERIC(12,2) NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS orders (
@@ -183,11 +204,11 @@ export async function initSchema() {
       order_number TEXT NOT NULL UNIQUE,
       user_id INTEGER NOT NULL REFERENCES users(id),
       address_id INTEGER REFERENCES addresses(id),
-      subtotal FLOAT8 NOT NULL,
-      discount_amount FLOAT8 NOT NULL DEFAULT 0,
-      delivery_fee FLOAT8 NOT NULL DEFAULT 0,
-      tax_amount FLOAT8 NOT NULL DEFAULT 0,
-      total_amount FLOAT8 NOT NULL,
+      subtotal NUMERIC(12,2) NOT NULL,
+      discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      delivery_fee NUMERIC(12,2) NOT NULL DEFAULT 0,
+      tax_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      total_amount NUMERIC(12,2) NOT NULL,
       coupon_code TEXT,
       payment_status TEXT NOT NULL DEFAULT 'PENDING',
       order_status TEXT NOT NULL DEFAULT 'PLACED',
@@ -196,8 +217,8 @@ export async function initSchema() {
       tracking_url TEXT,
       shipment_status TEXT NOT NULL DEFAULT 'NOT_CREATED',
       label_generated BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS order_items (
@@ -206,8 +227,8 @@ export async function initSchema() {
       product_id INTEGER REFERENCES products(id),
       product_name TEXT NOT NULL,
       quantity INTEGER NOT NULL,
-      unit_price FLOAT8 NOT NULL,
-      total_price FLOAT8 NOT NULL,
+      unit_price NUMERIC(12,2) NOT NULL,
+      total_price NUMERIC(12,2) NOT NULL,
       selected_options TEXT,
       special_notes TEXT
     );
@@ -217,7 +238,7 @@ export async function initSchema() {
       order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
       status TEXT NOT NULL,
       remarks TEXT,
-      created_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS payments (
@@ -225,10 +246,10 @@ export async function initSchema() {
       order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
       provider TEXT NOT NULL,
       transaction_id TEXT,
-      amount FLOAT8 NOT NULL,
+      amount NUMERIC(12,2) NOT NULL,
       status TEXT NOT NULL,
-      paid_at TEXT,
-      created_at TEXT NOT NULL
+      paid_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS coupon_usage (
@@ -236,7 +257,7 @@ export async function initSchema() {
       coupon_id INTEGER NOT NULL REFERENCES coupons(id),
       user_id INTEGER NOT NULL REFERENCES users(id),
       order_id INTEGER NOT NULL REFERENCES orders(id),
-      used_at TEXT NOT NULL
+      used_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS contact_messages (
@@ -246,7 +267,7 @@ export async function initSchema() {
       phone TEXT,
       message TEXT NOT NULL,
       handled BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS warehouses (
@@ -264,7 +285,7 @@ export async function initSchema() {
       return_pincode VARCHAR(10),
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       is_default BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL
     );
 
     -- Simple key/value store for site-wide settings (e.g. which product the homepage promo shows)
@@ -283,8 +304,8 @@ export async function initSchema() {
       coupon_id INTEGER NOT NULL REFERENCES coupons(id),
       code TEXT NOT NULL,
       label TEXT NOT NULL,
-      claimed_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
+      claimed_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
       gift_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL
     );
 
@@ -299,7 +320,7 @@ export async function initSchema() {
       signature TEXT NOT NULL,
       tickets TEXT NOT NULL,
       position INTEGER NOT NULL DEFAULT 0,
-      updated_at TEXT NOT NULL
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     -- Anti-abuse: without this, someone could just keep re-spinning (reload the page, reopen the
@@ -313,8 +334,8 @@ export async function initSchema() {
       device_id TEXT NOT NULL,
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       code TEXT,
-      drawn_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL
+      drawn_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_spin_draws_device_id ON spin_draws(device_id);
     CREATE INDEX IF NOT EXISTS idx_spin_draws_user_id ON spin_draws(user_id);
@@ -335,8 +356,8 @@ export async function initSchema() {
       coupon_id INTEGER NOT NULL REFERENCES coupons(id),
       code TEXT NOT NULL,
       label TEXT NOT NULL,
-      claimed_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
+      claimed_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
       linked_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       gift_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL
     );
@@ -346,7 +367,7 @@ export async function initSchema() {
     ALTER TABLE addresses ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT 'Home';
     -- Spin & Win: which active coupons the wheel can award, their odds, and their terms.
     -- spin_weight is a 0-100 probability share; NULL = a normal (non-wheel) coupon.
-    ALTER TABLE coupons ADD COLUMN IF NOT EXISTS spin_weight FLOAT8;
+    ALTER TABLE coupons ADD COLUMN IF NOT EXISTS spin_weight NUMERIC(6,3);
     ALTER TABLE coupons ADD COLUMN IF NOT EXISTS spin_label TEXT;
     ALTER TABLE coupons ADD COLUMN IF NOT EXISTS terms TEXT;
     -- "Free item" rewards (a tin / a cookie) don't just knock money off — they hand over a real
@@ -440,7 +461,7 @@ export async function initSchema() {
       source TEXT NOT NULL,                       -- 'push' (they call us) | 'fetch' (we pull)
       payload JSONB NOT NULL,
       item_count INTEGER NOT NULL DEFAULT 0,
-      received_at TEXT NOT NULL
+      received_at TIMESTAMPTZ NOT NULL
     );
 
     -- Flattened item catalogue and, critically, product_id: the link from their menu to ours.
@@ -453,14 +474,14 @@ export async function initSchema() {
       variation_id TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL,
       variation_name TEXT,
-      price FLOAT8,
+      price NUMERIC(12,2),
       category_id TEXT,
       tax_ids TEXT,                               -- their comma-separated item_tax ids
       in_stock BOOLEAN NOT NULL DEFAULT TRUE,
       product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
       raw JSONB,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       UNIQUE (rest_id, item_id, variation_id)
     );
 
@@ -470,10 +491,10 @@ export async function initSchema() {
       rest_id TEXT NOT NULL,
       tax_id TEXT NOT NULL,
       name TEXT NOT NULL,
-      percentage FLOAT8 NOT NULL DEFAULT 0,
+      percentage NUMERIC(6,3) NOT NULL DEFAULT 0,
       tax_type TEXT,
       raw JSONB,
-      updated_at TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       UNIQUE (rest_id, tax_id)
     );
 
@@ -485,10 +506,10 @@ export async function initSchema() {
       group_id TEXT,
       group_name TEXT,
       name TEXT NOT NULL,
-      price FLOAT8 NOT NULL DEFAULT 0,
+      price NUMERIC(12,2) NOT NULL DEFAULT 0,
       in_stock BOOLEAN NOT NULL DEFAULT TRUE,
       raw JSONB,
-      updated_at TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       UNIQUE (rest_id, addon_id)
     );
 
@@ -498,7 +519,7 @@ export async function initSchema() {
       store_status BOOLEAN NOT NULL DEFAULT TRUE, -- true = open
       turn_on_time TEXT,
       reason TEXT,
-      updated_at TEXT NOT NULL
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     -- Relay audit: one row per order we push, so a failed relay is visible and replayable rather
@@ -514,8 +535,8 @@ export async function initSchema() {
       request JSONB,
       response JSONB,
       last_error TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       UNIQUE (order_id)
     );
 
@@ -537,10 +558,10 @@ export async function initSchema() {
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       -- NULL until the first successful login. The admin screen reads it as "this account is still
       -- on its handed-out password", which is the only safe way to show that without storing one.
-      last_login_at TEXT,
-      password_set_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      last_login_at TIMESTAMPTZ,
+      password_set_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_store_users_store_code ON store_users(store_code);
 
@@ -550,9 +571,9 @@ export async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_code TEXT;
     -- Set when the store accepts the order. Until then nobody has confirmed they are baking it,
     -- which is exactly what the portal's unaccepted list is for.
-    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_accepted_at TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_accepted_at TIMESTAMPTZ;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_accepted_by INTEGER REFERENCES store_users(id) ON DELETE SET NULL;
-    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_ready_at TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_ready_at TIMESTAMPTZ;
     -- The bill number from the store's own Petpooja terminal, typed in by staff. For every outlet
     -- except Begur this is the ONLY link between a web order and its POS bill — without it the
     -- day's takings cannot be reconciled against what Razorpay settled.

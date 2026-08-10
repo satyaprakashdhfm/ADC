@@ -32,6 +32,18 @@ a numbered file that can be reviewed, ordered and rolled back.
 |---|---|---|
 | `0000_baseline` | reflects reality (introspected from here) | reflects reality |
 | `0001_fk_indexes` | **applied, all four valid** | **applied, all four valid** |
+| `0002_money_numeric` | **NOT applied** | **applied + verified** |
+| `0003_timestamptz` | **NOT applied** | **applied + verified** |
+
+0002/0003 must be applied together with the type parsers in `db.js` — the parsers are already in the
+code, so a database still on FLOAT8/TEXT is the *safe* side of the mismatch (parsers only fire for
+NUMERIC/TIMESTAMPTZ/DATE OIDs, which such a database never returns). Apply with:
+
+```bash
+railway run --service adc-backend node scripts/db-migrate.mjs drizzle/0002_money_numeric.sql
+railway run --service adc-backend node scripts/db-migrate.mjs drizzle/0003_timestamptz.sql
+railway run --service adc-backend node scripts/db-verify-types.mjs
+```
 
 Note on which database is which — this is easy to get wrong and I did:
 the repo's local `.env` `DATABASE_URL` points at **production**, not staging. Production currently
