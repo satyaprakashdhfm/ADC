@@ -2,6 +2,27 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
+/*
+ * How Postgres types come back into JavaScript.
+ *
+ * These must be registered before any query runs, and must stay in step with the schema. They are
+ * a no-op against a database whose money is still FLOAT8 and whose timestamps are still TEXT —
+ * those never return these type OIDs — so this is safe to ship ahead of the migration, and
+ * required before it:
+ *
+ *   NUMERIC (1700)     default is a STRING, to avoid losing precision on huge values. Our amounts
+ *                      are rupees, so a JS number is exact — and leaving it a string would turn
+ *                      `subtotal + deliveryFee` into "500" + "40" = "50040". Parsed to number.
+ *   TIMESTAMPTZ (1184) default is a JS Date. The API has always emitted strings here, so we keep
+ *                      strings, normalised to ISO.
+ *   DATE (1082)        default is a JS Date. coupons.js compares expiry_date directly against a
+ *                      'YYYY-MM-DD' string; a Date would stringify as "Mon Aug 11 2026 ..." and
+ *                      expire coupons a day early. Kept as the raw 'YYYY-MM-DD' string.
+ */
+pg.types.setTypeParser(1700, (v) => (v === null ? null : Number.parseFloat(v)));
+pg.types.setTypeParser(1184, (v) => (v === null ? null : new Date(v).toISOString()));
+pg.types.setTypeParser(1082, (v) => v);
+
 // If DATABASE_URL is set (and non-empty) it wins; otherwise node-postgres reads
 // PGHOST / PGDATABASE / PGUSER / PGPASSWORD / PGPORT from the environment (.env).
 // Remote hosts (e.g. Supabase) require SSL; local Unix-socket auth does not.
