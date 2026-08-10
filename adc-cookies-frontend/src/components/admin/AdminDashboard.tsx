@@ -88,7 +88,7 @@ export default function AdminDashboard() {
   const { ppMap, setPpMap, ppRelays, setPpRelays, ppBusy, setPpBusy, ppSearch, setPpSearch, ppOnlyUnlinked, setPpOnlyUnlinked } = useAdminPetpooja(isAdmin && tab === 'petpooja');
 
   const { storeReport, staffBusy, setStaffBusy, refreshStores, storeChanged, deleteOrphanedStaff } = useAdminStores(isAdmin && tab === 'stores', refreshAttention);
-  const { coupons, search: couponSearch, setSearch: setCouponSearch, statusFilter: couponStatusFilter, setStatusFilter: setCouponStatusFilter, couponForm, setCouponForm, toggleCoupon, editCoupon, saveCoupon, removeCoupon } = useAdminCoupons(isAdmin && tab === 'coupons', setErr);
+  const { coupons, search: couponSearch, setSearch: setCouponSearch, statusFilter: couponStatusFilter, setStatusFilter: setCouponStatusFilter, couponForm, setCouponForm, toggleCoupon, editCoupon, saveCoupon, removeCoupon, resettingSpins, resetAllSpins } = useAdminCoupons(isAdmin && tab === 'coupons', setErr);
 
   if (loading) return null;
 
@@ -256,6 +256,8 @@ export default function AdminDashboard() {
             onEdit={editCoupon}
             onToggle={toggleCoupon}
             onRemove={removeCoupon}
+            resettingSpins={resettingSpins}
+            onResetAllSpins={resetAllSpins}
             page={pageOf('coupons')}
             onPage={n => setPageOf('coupons', n)}
           />

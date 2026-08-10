@@ -5,19 +5,19 @@ const { Pool } = pg;
 /*
  * How Postgres types come back into JavaScript.
  *
- * These must be registered before any query runs, and must stay in step with the schema. They are
- * a no-op against a database whose money is still FLOAT8 and whose timestamps are still TEXT —
- * those never return these type OIDs — so this is safe to ship ahead of the migration, and
- * required before it:
+ * These MUST stay in step with the 0002/0003 migrations, and must be registered before any query
+ * runs. node-postgres' defaults would otherwise change the shape of values the routes already
+ * depend on, silently:
  *
  *   NUMERIC (1700)     default is a STRING, to avoid losing precision on huge values. Our amounts
- *                      are rupees, so a JS number is exact — and leaving it a string would turn
- *                      `subtotal + deliveryFee` into "500" + "40" = "50040". Parsed to number.
+ *                      are rupees, so a JS number is exact and safe — and leaving it a string would
+ *                      turn `subtotal + deliveryFee` into "500" + "40" = "50040". Parsed to number.
  *   TIMESTAMPTZ (1184) default is a JS Date. The API has always emitted strings here, so we keep
- *                      strings, normalised to ISO.
+ *                      strings — normalised to ISO, which is what most rows already held.
  *   DATE (1082)        default is a JS Date. coupons.js compares expiry_date directly against a
- *                      'YYYY-MM-DD' string; a Date would stringify as "Mon Aug 11 2026 ..." and
- *                      expire coupons a day early. Kept as the raw 'YYYY-MM-DD' string.
+ *                      'YYYY-MM-DD' string in three places; a Date would stringify as
+ *                      "Mon Aug 11 2026 ..." and expire coupons a day early. Kept as the raw
+ *                      'YYYY-MM-DD' string it has always been.
  */
 pg.types.setTypeParser(1700, (v) => (v === null ? null : Number.parseFloat(v)));
 pg.types.setTypeParser(1184, (v) => (v === null ? null : new Date(v).toISOString()));
@@ -65,8 +65,8 @@ export async function initSchema() {
       phone TEXT UNIQUE,
       password TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'CUSTOMER',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS addresses (
@@ -89,7 +89,7 @@ export async function initSchema() {
       name TEXT NOT NULL,
       category TEXT NOT NULL,
       description TEXT,
-      price FLOAT8 NOT NULL,
+      price NUMERIC(12,2) NOT NULL,
       stock_quantity INTEGER NOT NULL,
       images TEXT,
       options TEXT,
@@ -97,38 +97,88 @@ export async function initSchema() {
       menu_group TEXT,
       tag TEXT,
       featured BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     -- Idempotent migrations for pre-existing products tables
     ALTER TABLE products ADD COLUMN IF NOT EXISTS menu_group TEXT;
     ALTER TABLE products ADD COLUMN IF NOT EXISTS tag TEXT;
     ALTER TABLE products ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT FALSE;
-    -- A perishable item (Red Velvet: 24-hour shelf life) cannot survive a multi-day Delhivery
-    -- parcel, so it must never be sold on an order that could route that way. same_day_only forces
-    -- the order-creation guard to require a genuinely same-day-capable destination; restrict_cities
-    -- (comma-separated, e.g. 'Bengaluru') narrows WHICH intracity cities count, since a store's own
-    -- same-day network is not necessarily where a given item is even made — Besant Nagar (Chennai)
-    -- is intracity-capable in general but does not carry Red Velvet. NULL/empty restrict_cities with
-    -- same_day_only=true means "any intracity city is fine, just never outstation".
-    ALTER TABLE products ADD COLUMN IF NOT EXISTS same_day_only BOOLEAN NOT NULL DEFAULT FALSE;
+    -- Per-product, per-delivery-mode availability, each with an admin-supplied reason shown to the
+    -- customer when off. Two independent switches, not one:
+    --   intracity_available  — can this be sold on a same-day, store-fulfilled order at all right now?
+    --   intercity_available  — can this be sold on a multi-day Delhivery parcel at all right now?
+    -- Both default TRUE (ordinary products, unrestricted). Turning either off is a normal OPERATIONAL
+    -- lever (out of stock today, kitchen issue, temporary pause) — nothing structural required.
+    --
+    -- restrict_cities (comma-separated, e.g. 'Bengaluru') narrows WHICH intracity cities count when
+    -- intracity_available is true, since a store's own same-day network is not necessarily where a
+    -- given item is even made — Besant Nagar (Chennai) is intracity-capable in general but does not
+    -- carry Red Velvet. NULL/empty means any intracity city is fine.
+    --
+    -- A STRUCTURAL rule (Red Velvet: 24-hour shelf life, can never survive a multi-day parcel) is
+    -- just intercity_available=FALSE with a permanent reason — the same mechanism as a temporary
+    -- operational pause, not a separate concept.
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS intracity_available BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS intracity_unavailable_reason TEXT;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS intercity_available BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS intercity_unavailable_reason TEXT;
     ALTER TABLE products ADD COLUMN IF NOT EXISTS restrict_cities TEXT;
 
+    -- One-time: migrate the old same_day_only flag into the new shape, then drop it — superseded,
+    -- not parallel. Guarded by the column's existence so this runs exactly once, ever.
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'same_day_only') THEN
+        UPDATE products SET intercity_available = FALSE,
+          intercity_unavailable_reason = COALESCE(intercity_unavailable_reason,
+            'This item must be enjoyed within 24 hours of baking, so we only deliver it same-day within our intracity area.')
+          WHERE same_day_only = TRUE;
+        ALTER TABLE products DROP COLUMN same_day_only;
+      END IF;
+    END $$;
+
     -- One-time: Red Velvet's 24-hour shelf life means it can never go by Delhivery. Guarded by
-    -- "same_day_only = FALSE" so this sets the rule once and never fights an admin who edits it
-    -- afterward via the Products tab — a later boot sees same_day_only already TRUE and skips it.
-    UPDATE products SET same_day_only = TRUE, restrict_cities = 'Bengaluru'
-      WHERE name IN ('Red Velvet Filled Cookie', 'Red Velvet Cookie Tin') AND same_day_only = FALSE;
+    -- "intercity_available = TRUE" so this sets the rule once and never fights an admin who edits it
+    -- afterward via the Products tab.
+    UPDATE products SET intercity_available = FALSE, restrict_cities = COALESCE(restrict_cities, 'Bengaluru'),
+        intercity_unavailable_reason = COALESCE(intercity_unavailable_reason,
+          'This item must be enjoyed within 24 hours of baking, so we only deliver it same-day within our intracity area.')
+      WHERE name IN ('Red Velvet Filled Cookie', 'Red Velvet Cookie Tin') AND intercity_available = TRUE;
+
+    -- A store not currently taking orders (closed for the day, out of stock entirely, whatever the
+    -- reason) — distinct from posMode/staff login state, which is about HOW it fulfils, not WHETHER
+    -- it currently can. Checked at order-creation and by the delivery quote, same idea as
+    -- SHIPROCKET_DISABLED but scoped to one store instead of the whole carrier. No row = active
+    -- (every ADC_STORES entry starts on; this only ever records an explicit admin flip).
+    CREATE TABLE IF NOT EXISTS store_status (
+      store_code TEXT PRIMARY KEY,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    -- Manual per-store product availability — generalizes intracity_available/restrict_cities (which only
+    -- ever understands "restricted to city X") to any product/store combination an admin wants to
+    -- flip directly, no code change needed: "Jayanagar is out of Red Velvet today", or the reverse,
+    -- turning something ordinarily city-restricted back on for one specific store. No row for a
+    -- store/product pair means "no override" — the automatic intracity_available/restrict_cities rule (or
+    -- plain storewide availability) still decides it.
+    CREATE TABLE IF NOT EXISTS store_product_overrides (
+      store_code TEXT NOT NULL,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      is_available BOOLEAN NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
+      PRIMARY KEY (store_code, product_id)
+    );
 
     CREATE TABLE IF NOT EXISTS coupons (
       id SERIAL PRIMARY KEY,
       code TEXT NOT NULL UNIQUE,
       discount_type TEXT NOT NULL,
-      discount_value FLOAT8 NOT NULL,
-      minimum_order_amount FLOAT8,
-      maximum_discount FLOAT8,
-      expiry_date TEXT,
+      discount_value NUMERIC(12,2) NOT NULL,
+      minimum_order_amount NUMERIC(12,2),
+      maximum_discount NUMERIC(12,2),
+      expiry_date DATE,
       usage_limit INTEGER,
       is_active BOOLEAN NOT NULL DEFAULT TRUE
     );
@@ -136,8 +186,8 @@ export async function initSchema() {
     CREATE TABLE IF NOT EXISTS cart (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS cart_items (
@@ -146,7 +196,7 @@ export async function initSchema() {
       product_id INTEGER NOT NULL REFERENCES products(id),
       quantity INTEGER NOT NULL,
       selected_options TEXT,
-      unit_price FLOAT8 NOT NULL
+      unit_price NUMERIC(12,2) NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS orders (
@@ -154,11 +204,11 @@ export async function initSchema() {
       order_number TEXT NOT NULL UNIQUE,
       user_id INTEGER NOT NULL REFERENCES users(id),
       address_id INTEGER REFERENCES addresses(id),
-      subtotal FLOAT8 NOT NULL,
-      discount_amount FLOAT8 NOT NULL DEFAULT 0,
-      delivery_fee FLOAT8 NOT NULL DEFAULT 0,
-      tax_amount FLOAT8 NOT NULL DEFAULT 0,
-      total_amount FLOAT8 NOT NULL,
+      subtotal NUMERIC(12,2) NOT NULL,
+      discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      delivery_fee NUMERIC(12,2) NOT NULL DEFAULT 0,
+      tax_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      total_amount NUMERIC(12,2) NOT NULL,
       coupon_code TEXT,
       payment_status TEXT NOT NULL DEFAULT 'PENDING',
       order_status TEXT NOT NULL DEFAULT 'PLACED',
@@ -167,8 +217,8 @@ export async function initSchema() {
       tracking_url TEXT,
       shipment_status TEXT NOT NULL DEFAULT 'NOT_CREATED',
       label_generated BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS order_items (
@@ -177,8 +227,8 @@ export async function initSchema() {
       product_id INTEGER REFERENCES products(id),
       product_name TEXT NOT NULL,
       quantity INTEGER NOT NULL,
-      unit_price FLOAT8 NOT NULL,
-      total_price FLOAT8 NOT NULL,
+      unit_price NUMERIC(12,2) NOT NULL,
+      total_price NUMERIC(12,2) NOT NULL,
       selected_options TEXT,
       special_notes TEXT
     );
@@ -188,7 +238,7 @@ export async function initSchema() {
       order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
       status TEXT NOT NULL,
       remarks TEXT,
-      created_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS payments (
@@ -196,10 +246,10 @@ export async function initSchema() {
       order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
       provider TEXT NOT NULL,
       transaction_id TEXT,
-      amount FLOAT8 NOT NULL,
+      amount NUMERIC(12,2) NOT NULL,
       status TEXT NOT NULL,
-      paid_at TEXT,
-      created_at TEXT NOT NULL
+      paid_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS coupon_usage (
@@ -207,7 +257,7 @@ export async function initSchema() {
       coupon_id INTEGER NOT NULL REFERENCES coupons(id),
       user_id INTEGER NOT NULL REFERENCES users(id),
       order_id INTEGER NOT NULL REFERENCES orders(id),
-      used_at TEXT NOT NULL
+      used_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS contact_messages (
@@ -217,7 +267,7 @@ export async function initSchema() {
       phone TEXT,
       message TEXT NOT NULL,
       handled BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS warehouses (
@@ -235,7 +285,7 @@ export async function initSchema() {
       return_pincode VARCHAR(10),
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       is_default BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TEXT NOT NULL
+      created_at TIMESTAMPTZ NOT NULL
     );
 
     -- Simple key/value store for site-wide settings (e.g. which product the homepage promo shows)
@@ -254,8 +304,8 @@ export async function initSchema() {
       coupon_id INTEGER NOT NULL REFERENCES coupons(id),
       code TEXT NOT NULL,
       label TEXT NOT NULL,
-      claimed_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
+      claimed_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
       gift_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL
     );
 
@@ -270,7 +320,7 @@ export async function initSchema() {
       signature TEXT NOT NULL,
       tickets TEXT NOT NULL,
       position INTEGER NOT NULL DEFAULT 0,
-      updated_at TEXT NOT NULL
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     -- Anti-abuse: without this, someone could just keep re-spinning (reload the page, reopen the
@@ -284,8 +334,8 @@ export async function initSchema() {
       device_id TEXT NOT NULL,
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       code TEXT,
-      drawn_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL
+      drawn_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_spin_draws_device_id ON spin_draws(device_id);
     CREATE INDEX IF NOT EXISTS idx_spin_draws_user_id ON spin_draws(user_id);
@@ -306,8 +356,8 @@ export async function initSchema() {
       coupon_id INTEGER NOT NULL REFERENCES coupons(id),
       code TEXT NOT NULL,
       label TEXT NOT NULL,
-      claimed_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
+      claimed_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
       linked_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       gift_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL
     );
@@ -317,7 +367,7 @@ export async function initSchema() {
     ALTER TABLE addresses ADD COLUMN IF NOT EXISTS label TEXT NOT NULL DEFAULT 'Home';
     -- Spin & Win: which active coupons the wheel can award, their odds, and their terms.
     -- spin_weight is a 0-100 probability share; NULL = a normal (non-wheel) coupon.
-    ALTER TABLE coupons ADD COLUMN IF NOT EXISTS spin_weight FLOAT8;
+    ALTER TABLE coupons ADD COLUMN IF NOT EXISTS spin_weight NUMERIC(6,3);
     ALTER TABLE coupons ADD COLUMN IF NOT EXISTS spin_label TEXT;
     ALTER TABLE coupons ADD COLUMN IF NOT EXISTS terms TEXT;
     -- "Free item" rewards (a tin / a cookie) don't just knock money off — they hand over a real
@@ -411,7 +461,7 @@ export async function initSchema() {
       source TEXT NOT NULL,                       -- 'push' (they call us) | 'fetch' (we pull)
       payload JSONB NOT NULL,
       item_count INTEGER NOT NULL DEFAULT 0,
-      received_at TEXT NOT NULL
+      received_at TIMESTAMPTZ NOT NULL
     );
 
     -- Flattened item catalogue and, critically, product_id: the link from their menu to ours.
@@ -424,14 +474,14 @@ export async function initSchema() {
       variation_id TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL,
       variation_name TEXT,
-      price FLOAT8,
+      price NUMERIC(12,2),
       category_id TEXT,
       tax_ids TEXT,                               -- their comma-separated item_tax ids
       in_stock BOOLEAN NOT NULL DEFAULT TRUE,
       product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
       raw JSONB,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       UNIQUE (rest_id, item_id, variation_id)
     );
 
@@ -441,10 +491,10 @@ export async function initSchema() {
       rest_id TEXT NOT NULL,
       tax_id TEXT NOT NULL,
       name TEXT NOT NULL,
-      percentage FLOAT8 NOT NULL DEFAULT 0,
+      percentage NUMERIC(6,3) NOT NULL DEFAULT 0,
       tax_type TEXT,
       raw JSONB,
-      updated_at TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       UNIQUE (rest_id, tax_id)
     );
 
@@ -456,10 +506,10 @@ export async function initSchema() {
       group_id TEXT,
       group_name TEXT,
       name TEXT NOT NULL,
-      price FLOAT8 NOT NULL DEFAULT 0,
+      price NUMERIC(12,2) NOT NULL DEFAULT 0,
       in_stock BOOLEAN NOT NULL DEFAULT TRUE,
       raw JSONB,
-      updated_at TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       UNIQUE (rest_id, addon_id)
     );
 
@@ -469,7 +519,7 @@ export async function initSchema() {
       store_status BOOLEAN NOT NULL DEFAULT TRUE, -- true = open
       turn_on_time TEXT,
       reason TEXT,
-      updated_at TEXT NOT NULL
+      updated_at TIMESTAMPTZ NOT NULL
     );
 
     -- Relay audit: one row per order we push, so a failed relay is visible and replayable rather
@@ -485,8 +535,8 @@ export async function initSchema() {
       request JSONB,
       response JSONB,
       last_error TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       UNIQUE (order_id)
     );
 
@@ -508,10 +558,10 @@ export async function initSchema() {
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       -- NULL until the first successful login. The admin screen reads it as "this account is still
       -- on its handed-out password", which is the only safe way to show that without storing one.
-      last_login_at TEXT,
-      password_set_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      last_login_at TIMESTAMPTZ,
+      password_set_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_store_users_store_code ON store_users(store_code);
 
@@ -521,9 +571,9 @@ export async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_code TEXT;
     -- Set when the store accepts the order. Until then nobody has confirmed they are baking it,
     -- which is exactly what the portal's unaccepted list is for.
-    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_accepted_at TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_accepted_at TIMESTAMPTZ;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_accepted_by INTEGER REFERENCES store_users(id) ON DELETE SET NULL;
-    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_ready_at TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_ready_at TIMESTAMPTZ;
     -- The bill number from the store's own Petpooja terminal, typed in by staff. For every outlet
     -- except Begur this is the ONLY link between a web order and its POS bill — without it the
     -- day's takings cannot be reconciled against what Razorpay settled.

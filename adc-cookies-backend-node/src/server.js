@@ -15,7 +15,7 @@ import cartRoutes from './routes/cart.js';
 import orderRoutes from './routes/orders.js';
 import addressRoutes from './routes/addresses.js';
 import couponRoutes from './routes/coupons.js';
-import adminRoutes from './routes/admin.js';
+import adminRoutes from './routes/admin/index.js';
 import contactRoutes from './routes/contact.js';
 import deliveryRoutes from './routes/delivery.js';
 import petpoojaRoutes from './routes/petpooja.js';

@@ -14,12 +14,17 @@ interface Props {
   stallInfoSaved: boolean;
   changeStallInfo: (v: string) => void;
   saveStallInfo: () => void;
+  deliveryFeeOutstation: string;
+  deliveryFeeSaved: boolean;
+  changeDeliveryFeeOutstation: (v: string) => void;
+  saveDeliveryFeeOutstation: () => void;
 }
 
 export default function SiteSettingsPanels({
   products, promoProductId, savePromoProduct,
   headerOffer, headerOfferSaved, changeHeaderOffer, saveHeaderOffer,
   stallInfo, stallInfoSaved, changeStallInfo, saveStallInfo,
+  deliveryFeeOutstation, deliveryFeeSaved, changeDeliveryFeeOutstation, saveDeliveryFeeOutstation,
 }: Props) {
   return (
     <>
@@ -58,6 +63,22 @@ export default function SiteSettingsPanels({
             style={{ ...inp, flex: '1 1 320px' }}
           />
           <button onClick={saveStallInfo} style={addBtn}>{stallInfoSaved ? 'Saved ✓' : 'Save'}</button>
+        </div>
+      </Panel>
+      <Panel title="Delivery fee — outstation">
+        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>
+          What a customer pays for outstation (Delhivery) delivery. Same-day intracity is never set here —
+          that&apos;s charged exactly what Shiprocket quotes for each address, live at checkout.
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>₹</span>
+          <input
+            type="number" min="0" step="1"
+            value={deliveryFeeOutstation}
+            onChange={e => changeDeliveryFeeOutstation(e.target.value)}
+            style={{ ...inp, width: 120 }}
+          />
+          <button onClick={saveDeliveryFeeOutstation} style={addBtn}>{deliveryFeeSaved ? 'Saved ✓' : 'Save'}</button>
         </div>
       </Panel>
     </>

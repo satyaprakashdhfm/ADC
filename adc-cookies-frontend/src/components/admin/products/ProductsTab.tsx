@@ -52,18 +52,28 @@ export default function ProductsTab({ products, search, onSearch, category, onCa
             <tr key={p.id}>
               <td style={td}>
                 <strong>{p.name}</strong>
-                {p.sameDayOnly && (
-                  <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>
-                    Same-day only{p.restrictCities ? ` — ${p.restrictCities}` : ''}
-                  </div>
-                )}
+                  {!p.intracityAvailable && (
+                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>
+                      Intracity off{p.intracityUnavailableReason ? ` — ${p.intracityUnavailableReason}` : ''}
+                    </div>
+                  )}
+                  {!p.intercityAvailable && (
+                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>
+                      Intercity off{p.intercityUnavailableReason ? ` — ${p.intercityUnavailableReason}` : ''}
+                    </div>
+                  )}
+                  {p.intracityAvailable && p.restrictCities && (
+                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700, marginTop: 2 }}>
+                      Intracity restricted to {p.restrictCities}
+                    </div>
+                  )}
               </td>
               <td style={td}>{p.category}</td>
               <td style={td}>{money(p.price)}</td>
               <td style={td}><span style={{ color: p.stockQuantity <= 10 ? 'var(--status-error)' : 'var(--text-body)', fontWeight: p.stockQuantity <= 10 ? 800 : 400 }}>{p.stockQuantity}</span></td>
               <td style={td}>{p.tag || '—'}</td>
               <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                <button onClick={() => setEditing({ id: p.id, data: { name: p.name, category: p.category, description: p.description, price: p.price, stockQuantity: p.stockQuantity, images: p.images, options: p.options, isAvailable: p.isAvailable, menuGroup: p.menuGroup, tag: p.tag, featured: p.featured, sameDayOnly: p.sameDayOnly, restrictCities: p.restrictCities || '' } })} aria-label="Edit" style={iconBtn}><Pencil size={15} /></button>
+                    <button onClick={() => setEditing({ id: p.id, data: { name: p.name, category: p.category, description: p.description, price: p.price, stockQuantity: p.stockQuantity, images: p.images, options: p.options, isAvailable: p.isAvailable, menuGroup: p.menuGroup, tag: p.tag, featured: p.featured, intracityAvailable: p.intracityAvailable, intracityUnavailableReason: p.intracityUnavailableReason || '', intercityAvailable: p.intercityAvailable, intercityUnavailableReason: p.intercityUnavailableReason || '', restrictCities: p.restrictCities || '' } })} aria-label="Edit" style={iconBtn}><Pencil size={15} /></button>
                 <button onClick={() => onRemove(p.id)} aria-label="Delete" style={{ ...iconBtn, color: 'var(--status-error)' }}><Trash2 size={15} /></button>
               </td>
             </tr>

@@ -2,10 +2,10 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { X, Gift, MessageCircle, Copy, Check, LogIn, ArrowRight, Clock, Lock } from 'lucide-react';
+import { X, Gift, MessageCircle, Copy, Check, Mail, ArrowRight, Clock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
-import { getActiveCoupons, claimSpin, spinDraw, getSpinCooldown, type ActiveCoupon } from '@/lib/api';
+import { getActiveCoupons, claimSpin, claimEmailSpin, spinDraw, getSpinCooldown, type ActiveCoupon, type EmailSpinClaim } from '@/lib/api';
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, whatsappLink } from '@/lib/site';
 import { type ActiveReward, CLAIM_WINDOW_HOURS, savePending, formatRemaining } from '@/lib/spinReward';
 import { useIsDesktop } from '@/lib/useIsDesktop';
@@ -96,9 +96,16 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const [spinError, setSpinError] = useState('');
   const [drawExpiresAtMs, setDrawExpiresAtMs] = useState<number | null>(null); // when a MISS result stops being "locked in" (wins are governed by activeReward instead)
   const [showTerms, setShowTerms] = useState(false);
+  // Subscribe-to-claim (email instead of login): capture name + email, email the coupon, and it
+  // attaches to their account the moment they sign in with that same email.
+  const [subName, setSubName] = useState('');
+  const [subEmail, setSubEmail] = useState('');
+  const [subBusy, setSubBusy] = useState(false);
+  const [subErr, setSubErr] = useState('');
+  const [emailClaimed, setEmailClaimed] = useState<EmailSpinClaim | null>(null);
   // One spin per device/account per day: once null (no active reward/result), check whether
   // they're still waiting out yesterday's cooldown before letting the idle spin button show.
-  const [cooldown, setCooldown] = useState<{ completed: boolean; nextSpinAt?: string } | null>(null);
+  const [cooldown, setCooldown] = useState<{ completed: boolean } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRewardRef = useRef<ActiveReward | null>(null);
   // A local per-second tick while the modal is open, so every countdown in it (win reward AND a
@@ -142,13 +149,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     return () => { cancelled = true; };
   }, [open, activeReward, result]);
 
-  // Once the wait is actually over, drop back to the idle spin button on its own rather than
-  // leaving "Next spin in 0s" stuck on screen.
-  useEffect(() => {
-    if (!cooldown?.completed || !cooldown.nextSpinAt) return;
-    const t = setTimeout(() => setCooldown(null), Math.max(0, new Date(cooldown.nextSpinAt).getTime() - Date.now()));
-    return () => clearTimeout(t);
-  }, [cooldown]);
+
 
   // Load the wheel's real offers as soon as this component exists (FloatingDock mounts it on
   // every page, well before anyone opens the modal) — not gated on `open`. Waiting for `open`
@@ -190,7 +191,6 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
       }
     : result?.win ? result : null;
   const guestWinNeedsLogin = !!result?.win && !user;
-  const guestMissNeedsLogin = !!result && !result.win && !user;
 
   const spin = async () => {
     if (spinning || result || activeReward || cooldown?.completed || !prizes) return;
@@ -208,7 +208,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
       // animating a spin that never actually happened.
       if (drawn.completed) {
         setSpinning(false);
-        setCooldown({ completed: true, nextSpinAt: drawn.nextSpinAt });
+        setCooldown({ completed: true });
         return;
       }
       code = drawn.code;
@@ -248,6 +248,21 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* ignore */ }
   };
 
+  const submitEmailClaim = async (code: string) => {
+    if (subBusy) return;
+    const em = subEmail.trim();
+    const nm = subName.trim();
+    if (nm.length < 2) { setSubErr('Please enter your name.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { setSubErr('Please enter a valid email.'); return; }
+    setSubBusy(true); setSubErr('');
+    try {
+      const claimed = await claimEmailSpin(code, em, nm);
+      setEmailClaimed(claimed);
+    } catch (e) {
+      setSubErr(e instanceof Error ? e.message : 'Could not claim right now — please try again.');
+    } finally { setSubBusy(false); }
+  };
+
   // A MISS used to reset here so reopening let them spin again — now both outcomes are locked
   // in server-side for the same window (see spin_draws), so closing just closes.
   const handleClose = () => close();
@@ -277,18 +292,20 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             <Gift size={desktop ? 14 : 13} /> Spin &amp; win
           </div>
           <h2 style={{ font: `900 var(${desktop ? '--text-h3' : '--text-h4'})/1.05 var(--font-display)`, color: 'var(--text-strong)', margin: '0 0 5px', letterSpacing: '-.02em' }}>
-            {activeReward ? (activeReward.claimed ? 'You won! 🎉' : 'You won! Sign in to claim 🎉') : result ? (result.win ? 'You won! 🎉' : (guestMissNeedsLogin ? 'Sorry! 😔' : 'So close!')) : cooldown?.completed ? 'Spin completed ✅' : 'Spin & win a treat!'}
+            {emailClaimed ? 'Coupon sent! 📧' : (activeReward || result?.win) ? 'You won! 🎉' : result ? 'So close!' : cooldown?.completed ? 'Already spun' : 'Spin & win a treat!'}
           </h2>
           <p style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-muted)', margin: `0 auto ${desktop ? 18 : 10}px`, maxWidth: desktop ? 320 : 290, lineHeight: 1.45 }}>
-            {activeReward
-              ? (activeReward.claimed ? 'Here’s your exclusive discount — use it at checkout.' : `Log in within ${formatRemaining(activeReward.expiresAtMs - nowMs)} to claim this reward before it expires.`)
-              : result
-                ? (result.win
-                  ? (guestWinNeedsLogin ? 'Log in to claim this reward before it expires.' : 'Here’s your exclusive discount — use it at checkout.')
-                  : `No prize this time — treats are always fresh though! Try the wheel again in ${formatRemaining((drawExpiresAtMs ?? 0) - nowMs)}.`)
-                : cooldown?.completed
-                  ? `You've already used today's spin. Please wait until your next spin in ${formatRemaining(new Date(cooldown.nextSpinAt ?? 0).getTime() - nowMs)}.`
-                  : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
+            {emailClaimed
+              ? `We’ve emailed your coupon to ${subEmail.trim()}. Sign in with that email to use it at checkout.`
+              : activeReward
+                ? (activeReward.claimed ? `Here’s your exclusive discount — use it before it expires in ${formatRemaining(activeReward.expiresAtMs - nowMs)}.` : 'Enter your email to claim it — we’ll send the coupon over and save it to your account.')
+                : result
+                  ? (result.win
+                    ? (guestWinNeedsLogin ? 'Enter your email to claim it — we’ll send the coupon straight to your inbox.' : 'Here’s your exclusive discount — use it at checkout.')
+                    : 'No prize this time — thanks for playing! It’s one spin per customer, so this wheel is done for now.')
+                  : cooldown?.completed
+                    ? "It's one spin per customer — you've already had yours. Keep an eye out for our next round!"
+                    : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
           </p>
 
           {/* Wheel */}
@@ -314,57 +331,61 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           </div>
 
           {/* Action area */}
-          {activeReward ? (
+          {emailClaimed ? (
             <div>
-              {activeReward.claimed ? (
-                <button onClick={() => copyCode(activeReward.code)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 6px', padding: '9px 16px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{activeReward.code}</span>
-                  {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
-                </button>
-              ) : (
-                // The code itself stays hidden until they actually log in and claim it — showing
-                // it early would defeat the point of gating the reward behind a real login.
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 6px', padding: '9px 16px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--border-strong)', background: 'var(--surface-raised)' }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--text-subtle)' }}>••••••</span>
-                  <Lock size={16} color="var(--text-subtle)" />
-                </div>
-              )}
+              <button onClick={() => copyCode(emailClaimed.code)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 8px', padding: '9px 16px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{emailClaimed.code}</span>
+                {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
+              </button>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 8 }}>
-                <Clock size={13} /> {activeReward.claimed ? `Valid for ${formatRemaining(activeReward.expiresAtMs - nowMs)}` : `Expires in ${formatRemaining(activeReward.expiresAtMs - nowMs)}`}
+                <Mail size={13} /> Also emailed to you
               </div>
-              {activeReward.claimed ? (
-                <button onClick={() => { close(); router.push('/'); }}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
-                  Order now <ArrowRight size={18} />
-                </button>
-              ) : (
-                <button onClick={() => { setShowTerms(false); setLoginOpen(true); }}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
-                  <LogIn size={18} /> Log in to claim
-                </button>
-              )}
-            </div>
-          ) : result ? (
-            guestWinNeedsLogin ? (
-              <button onClick={() => { setShowTerms(false); setLoginOpen(true); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
-                <LogIn size={18} /> Log in to claim
-              </button>
-            ) : guestMissNeedsLogin ? (
-              <button onClick={() => { setShowTerms(false); setLoginOpen(true); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
-                <LogIn size={18} /> Login to check more
-              </button>
-            ) : (
               <button onClick={() => { close(); router.push('/'); }}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
                 Order now <ArrowRight size={18} />
               </button>
-            )
+            </div>
+          ) : activeReward?.claimed ? (
+            <div>
+              <button onClick={() => copyCode(activeReward.code)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 6px', padding: '9px 16px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{activeReward.code}</span>
+                {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 8 }}>
+                <Clock size={13} /> Expires in {formatRemaining(activeReward.expiresAtMs - nowMs)}
+              </div>
+              <button onClick={() => { close(); router.push('/'); }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+                Order now <ArrowRight size={18} />
+              </button>
+            </div>
+          ) : ((activeReward && !activeReward.claimed) || guestWinNeedsLogin) ? (
+            // Subscribe-to-claim: no login needed — capture email + name, we email the coupon and
+            // attach it to their account the moment they sign in with that same email.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input value={subName} onChange={e => setSubName(e.target.value)} placeholder="Your name" aria-label="Your name"
+                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
+              <input value={subEmail} onChange={e => setSubEmail(e.target.value)} type="email" inputMode="email" placeholder="Your email" aria-label="Your email"
+                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
+              {subErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, textAlign: 'left' }}>{subErr}</div>}
+              <button onClick={() => submitEmailClaim(activeReward?.code || (result?.win ? result.code : '') || '')} disabled={subBusy}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: subBusy ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: subBusy ? 'wait' : 'pointer', boxShadow: subBusy ? 'none' : 'var(--shadow-brand)' }}>
+                <Mail size={18} /> {subBusy ? 'Sending…' : 'Subscribe & claim'}
+              </button>
+              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', textAlign: 'center', lineHeight: 1.4 }}>
+                We’ll email your coupon and save it to your account when you sign in with this email.
+              </div>
+            </div>
+          ) : result ? (
+            <button onClick={() => { close(); router.push('/'); }}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
+              Order now <ArrowRight size={18} />
+            </button>
           ) : cooldown?.completed ? (
             <div style={{ width: '100%', boxSizing: 'border-box', padding: desktop ? '16px' : '13px', borderRadius: 'var(--radius-button)', background: 'var(--surface-raised)', border: '1.5px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--text-subtle)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)' }}>
-              <Clock size={18} /> Next spin in {formatRemaining(new Date(cooldown.nextSpinAt ?? 0).getTime() - nowMs)}
+              <Clock size={18} /> One spin per customer
             </div>
           ) : (
             <button onClick={spin} disabled={spinning || !offersLoaded || checkingReward}
@@ -379,15 +400,12 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             No thanks, maybe later
           </button>
 
-          {/* Terms for only the reward this shopper got. */}
+          {/* Just a link — the full terms are a wall of text in a modal that's already busy, so
+              they open on demand as a plain list instead of being dumped inline. */}
           {wonPrize && (
-            <div style={{ margin: `${desktop ? 12 : 8}px 0 0`, padding: desktop ? '12px 14px' : '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-raised)', border: '1px solid var(--border-default)', textAlign: 'left' }}>
-              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 3 }}>Terms</div>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.4, margin: 0 }}>{wonPrize.terms || valueSummary(wonPrize)}</p>
-              <button onClick={() => setShowTerms(true)} style={{ marginTop: 4, background: 'none', border: 'none', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-2xs)', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>
-                View coupon details
-              </button>
-            </div>
+            <button onClick={() => setShowTerms(true)} style={{ margin: `${desktop ? 10 : 6}px auto 0`, display: 'block', background: 'none', border: 'none', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', textDecoration: 'underline', cursor: 'pointer', padding: 4 }}>
+              Terms &amp; conditions
+            </button>
           )}
 
           {/* Social links */}
@@ -411,10 +429,27 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
               <h3 style={{ flex: 1, fontSize: 'var(--text-base)', fontWeight: 800, color: 'var(--text-strong)', textAlign: 'left' }}>Coupon Terms</h3>
               <button onClick={() => setShowTerms(false)} aria-label="Close" style={{ width: 30, height: 30, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><X size={15} /></button>
             </div>
-            <div style={{ minHeight: 112, textAlign: 'left' }}>
-              <h4 style={{ font: '900 var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 6px' }}>{wonPrize.label}</h4>
-              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--brand-secondary)', margin: '0 0 10px' }}>{valueSummary(wonPrize)}</p>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55, margin: 0 }}>{wonPrize.terms || 'No additional terms.'}</p>
+            {/* One rule per row rather than a paragraph — the admin writes terms as a single
+                sentence-run, which nobody reads. Split on sentence/bullet breaks and list them. */}
+            <div style={{ textAlign: 'left' }}>
+              <h4 style={{ font: '900 var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>{wonPrize.label}</h4>
+              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--brand-secondary)', margin: '0 0 12px' }}>{valueSummary(wonPrize)}</p>
+              <div style={{ borderTop: '1px solid var(--border-default)' }}>
+                {(() => {
+                  const rules = [
+                    wonPrize.minimumOrderAmount ? `Minimum order ₹${wonPrize.minimumOrderAmount}` : null,
+                    wonPrize.discountType === 'PERCENTAGE' && wonPrize.maximumDiscount ? `Maximum discount ₹${wonPrize.maximumDiscount}` : null,
+                    ...String(wonPrize.terms || '').split(/[.;•\n]+/).map(s => s.trim()).filter(Boolean),
+                  ].filter(Boolean) as string[];
+                  if (!rules.length) return <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', padding: '10px 0', margin: 0 }}>No additional terms.</p>;
+                  return rules.map((r, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '9px 0', borderBottom: '1px solid var(--border-soft)' }}>
+                      <span aria-hidden style={{ flex: 'none', width: 5, height: 5, borderRadius: '50%', background: 'var(--brand-secondary)', marginTop: 7 }} />
+                      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.45 }}>{r}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
             </div>
           </div>
         </div>

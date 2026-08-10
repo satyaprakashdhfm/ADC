@@ -77,11 +77,14 @@ export interface Product {
   description: string; price: number; stockQuantity: number;
   images: string; options: string; isAvailable: boolean;
   menuGroup: string; tag: string; featured: boolean;
-  /** Perishable-item delivery rule (e.g. Red Velvet: 24h shelf life) — same-day intracity only,
-   *  never a multi-day Delhivery parcel. restrictCities narrows WHICH intracity cities count
-   *  ('Bengaluru') since a store's same-day reach isn't the same as "this item is made there";
-   *  null/empty means any intracity city is fine, just never outstation. */
-  sameDayOnly: boolean; restrictCities: string | null;
+  /** Per-delivery-mode availability, each with the reason to show the customer when off (e.g. Red
+   *  Velvet: intercityAvailable=false, "must be enjoyed within 24 hours"). restrictCities narrows
+   *  WHICH intracity cities count when intracity IS available ('Bengaluru') since a store's
+   *  same-day reach isn't the same as "this item is made there"; null/empty means any intracity
+   *  city is fine. */
+  intracityAvailable: boolean; intracityUnavailableReason: string | null;
+  intercityAvailable: boolean; intercityUnavailableReason: string | null;
+  restrictCities: string | null;
 }
 
 /** Parse the JSON `images` column and return the first url, or a fallback. */
@@ -214,19 +217,20 @@ function getDeviceId(): string {
 // Server-authoritative draw from the shuffled ticket pool — guarantees exact odds across every
 // batch of spins. Returns the winning coupon code (or null for "no reward"), and when this draw
 // expires — a repeat call before then just replays the SAME result, it doesn't draw again.
-// One spin per device/account per day: once that draw's own window has passed too, `completed`
-// comes back true with `nextSpinAt` — the next spin isn't drawn until then, even on a fresh call.
+// One spin per device/account, period: once that draw's own window has passed too, `completed`
+// comes back true for good — there is no `nextSpinAt` to wait out. The only reset is an admin
+// wiping every spin at once (see adminResetAllSpins).
 export interface SpinDrawResult {
-  code: string | null; expiresAt?: string; completed?: boolean; nextSpinAt?: string;
+  code: string | null; expiresAt?: string; completed?: boolean;
 }
 export async function spinDraw(): Promise<SpinDrawResult> {
   return request('/coupons/spin', { method: 'POST', body: JSON.stringify({ deviceId: getDeviceId() }) });
 }
 
-// Read-only check for the same daily cooldown — lets the wheel show "come back at X" the moment
-// it opens, without the side effect of actually drawing (see the backend route for why POST
-// /spin alone can't safely double as this check).
-export async function getSpinCooldown(): Promise<{ completed: boolean; nextSpinAt?: string }> {
+// Read-only check for the same one-spin lock — lets the wheel show "already spun" the moment it
+// opens, without the side effect of actually drawing (see the backend route for why POST /spin
+// alone can't safely double as this check).
+export async function getSpinCooldown(): Promise<{ completed: boolean }> {
   return request(`/coupons/spin-cooldown?deviceId=${encodeURIComponent(getDeviceId())}`);
 }
 
@@ -246,6 +250,17 @@ export async function getSpinStatus(): Promise<{ active: SpinClaim | null }> {
 // Record a spin win against the signed-in shopper's account (idempotent — see backend).
 export async function claimSpin(code: string): Promise<SpinClaim> {
   return request('/coupons/claim-spin', { method: 'POST', body: JSON.stringify({ code }) });
+}
+
+// Claim a spin win by EMAIL (subscribe-to-claim) — no login needed. The backend emails the coupon
+// and, once they sign in with this same email, attaches it to their account for checkout.
+export interface EmailSpinClaim {
+  code: string; label: string; discountType?: string; discountValue?: number;
+  minimumOrderAmount?: number | null; maximumDiscount?: number | null; terms?: string;
+  isGift?: boolean; expiresAt: string; alreadyClaimed?: boolean;
+}
+export async function claimEmailSpin(code: string, email: string, name: string): Promise<EmailSpinClaim> {
+  return request('/coupons/claim-email', { method: 'POST', body: JSON.stringify({ code, email, name }) });
 }
 
 /* ---- Orders ---- */
@@ -325,7 +340,15 @@ export interface DeliveryCheck {
   store?: string;               // nearest store name (intracity)
   city?: string;
   sameDay?: boolean;
+  deliveryFee?: number;         // the REAL charge: Shiprocket's live quote (intracity) or the admin-set flat outstation fee
+  etaHours?: number;            // intracity only — real ETA from the carrier quote
+  etaLabel?: string;            // e.g. "within ~1 hour" — same-day intracity promise
   maintenanceMessage?: string;  // shown when same-day is unavailable and checkout is blocked
+  /** Per-product delivery eligibility for THIS pincode — independent of `serviceable`, which is
+   *  about the destination in general. Cross-reference against cart contents to flag a restricted
+   *  line item with its admin-written reason ("must be enjoyed within 24 hours…") right where the
+   *  customer can see it, instead of only finding out when the order is refused at checkout. */
+  sameDayRestrictions?: { productId: number; name: string; eligible: boolean; reason: string | null }[];
 }
 
 /** Combined serviceability + TAT check — used at checkout when an address is selected. */
@@ -352,7 +375,9 @@ export interface ProductInput {
   name: string; category: 'COOKIES' | 'TINS'; description?: string; price: number;
   stockQuantity?: number; images?: string; options?: string; isAvailable?: boolean;
   menuGroup?: string; tag?: string; featured?: boolean;
-  sameDayOnly?: boolean; restrictCities?: string;
+  intracityAvailable?: boolean; intracityUnavailableReason?: string;
+  intercityAvailable?: boolean; intercityUnavailableReason?: string;
+  restrictCities?: string;
 }
 
 export interface AdminAnalytics {
@@ -365,7 +390,7 @@ export interface AdminAnalytics {
   topProducts: { name: string; qty: number; revenue: number }[];
 }
 
-interface SiteSettings { promoProductId: number | null; headerOffer: string | null; stallInfo: string | null; }
+interface SiteSettings { promoProductId: number | null; headerOffer: string | null; stallInfo: string | null; deliveryFeeOutstation: number; }
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
 export async function adminGetSettings(): Promise<SiteSettings> { return request('/admin/settings'); }
 export async function adminSetPromoProduct(promoProductId: number | null): Promise<SiteSettings> {
@@ -378,6 +403,26 @@ export async function adminSetHeaderOffer(headerOffer: string | null): Promise<S
 // Free-text "today's stall / visit us" note shown as a homepage card. null/empty hides the card.
 export async function adminSetStallInfo(stallInfo: string | null): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ stallInfo }) });
+}
+// Flat fee customers pay for outstation (Delhivery) delivery. Intracity is never set here — it's
+// Shiprocket's own live per-order quote, charged exactly as quoted (see orders.js).
+export async function adminSetDeliveryFeeOutstation(deliveryFeeOutstation: number): Promise<SiteSettings> {
+  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ deliveryFeeOutstation }) });
+}
+
+/* ---- Store online/offline, and per-store product availability ---- */
+export interface AdminStoreStatus { code: string; name: string; city: string; posMode: 'AUTO' | 'MANUAL'; isActive: boolean; }
+export async function adminGetStoreStatus(): Promise<{ stores: AdminStoreStatus[] }> { return request('/admin/store-status'); }
+export async function adminToggleStoreStatus(code: string): Promise<{ ok: boolean; code: string; isActive: boolean }> {
+  return request(`/admin/store-status/${code}/toggle`, { method: 'PATCH' });
+}
+export interface AdminStoreProduct { id: number; name: string; available: boolean; isOverride: boolean; automaticallyAvailable: boolean; }
+export async function adminGetStoreProducts(code: string): Promise<{ products: AdminStoreProduct[] }> {
+  return request(`/admin/store-products/${code}`);
+}
+// available: true/false sets an explicit override; null clears it, reverting to the automatic rule.
+export async function adminSetStoreProductOverride(code: string, productId: number, available: boolean | null): Promise<{ ok: boolean }> {
+  return request(`/admin/store-products/${code}/${productId}`, { method: 'PUT', body: JSON.stringify({ available }) });
 }
 // Public: the current header-banner offer text (or null if the admin hasn't set one).
 export async function getAnnouncement(): Promise<{ text: string | null }> { return request('/products/announcement'); }
@@ -546,6 +591,11 @@ export async function adminToggleCoupon(id: number): Promise<AdminCoupon> {
 }
 export async function adminDeleteCoupon(id: number): Promise<{ ok: boolean }> {
   return request(`/admin/coupons/${id}`, { method: 'DELETE' });
+}
+// Wheel is one spin per device/account for good — this is the only way to open a fresh round for
+// everyone at once. Leaves already-issued coupons (spin_claims/spin_email_claims) untouched.
+export async function adminResetAllSpins(): Promise<{ ok: boolean; cleared: number }> {
+  return request('/admin/coupons/reset-spins', { method: 'POST' });
 }
 
 export async function adminGetUsers(): Promise<AdminUser[]> { return request('/admin/users'); }

@@ -2,6 +2,7 @@
 import { X, Check } from 'lucide-react';
 import { type ProductInput } from '@/lib/api';
 import { inp, addBtn, iconBtn, Field } from '../shared/ui';
+import DeliveryModeToggle from './DeliveryModeToggle';
 
 type Editing = { id?: number; data: ProductInput };
 
@@ -40,27 +41,40 @@ export default function ProductEditorModal({ editing, setEditing, onSave }: Prop
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer' }}>
             <input type="checkbox" checked={!!editing.data.featured} onChange={e => set({ featured: e.target.checked })} /> Featured
           </label>
-          <div style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-input)', padding: 12 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer', marginBottom: editing.data.sameDayOnly ? 10 : 0 }}>
-              <input type="checkbox" checked={!!editing.data.sameDayOnly}
-                onChange={e => set({ sameDayOnly: e.target.checked })} />
-              Perishable — same-day delivery only
-            </label>
-            {editing.data.sameDayOnly && (
-              <>
-                <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: '0 0 8px', lineHeight: 1.5 }}>
-                  Blocks this product from any order that could ship by multi-day courier — checked at checkout,
-                  not just labelled. Leave the city blank to allow it same-day from any of our stores.
-                </p>
+          <div style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-input)', padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+              Which delivery methods this product can go on, right now. Checked at checkout AND at order
+              creation — turning either off is enforced, not just labelled.
+            </p>
+            <DeliveryModeToggle
+              label="Intracity — same-day, from one of our stores"
+              available={editing.data.intracityAvailable !== false}
+              reason={editing.data.intracityUnavailableReason || ''}
+              onToggle={v => set({ intracityAvailable: v })}
+              onReason={r => set({ intracityUnavailableReason: r })}
+            >
+              {editing.data.intracityAvailable !== false && (
                 <Field label="Only deliver same-day within (city, optional)">
                   <input style={inp} placeholder="e.g. Bengaluru" value={editing.data.restrictCities || ''}
                     onChange={e => set({ restrictCities: e.target.value })} />
                 </Field>
-              </>
-            )}
+              )}
+            </DeliveryModeToggle>
+            <DeliveryModeToggle
+              label="Intercity — multi-day courier, anywhere else"
+              available={editing.data.intercityAvailable !== false}
+              reason={editing.data.intercityUnavailableReason || ''}
+              onToggle={v => set({ intercityAvailable: v })}
+              onReason={r => set({ intercityUnavailableReason: r })}
+            />
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <button onClick={onSave} disabled={!editing.data.name || !editing.data.price} style={{ ...addBtn, flex: 1, justifyContent: 'center', opacity: (!editing.data.name || !editing.data.price) ? 0.5 : 1 }}><Check size={16} /> Save</button>
+            {(() => {
+              const missingReason = (editing.data.intracityAvailable === false && !(editing.data.intracityUnavailableReason || '').trim())
+                || (editing.data.intercityAvailable === false && !(editing.data.intercityUnavailableReason || '').trim());
+              const disabled = !editing.data.name || !editing.data.price || missingReason;
+              return <button onClick={onSave} disabled={disabled} style={{ ...addBtn, flex: 1, justifyContent: 'center', opacity: disabled ? 0.5 : 1 }}><Check size={16} /> Save</button>;
+            })()}
             <button onClick={() => setEditing(null)} style={{ padding: '12px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
           </div>
         </div>
