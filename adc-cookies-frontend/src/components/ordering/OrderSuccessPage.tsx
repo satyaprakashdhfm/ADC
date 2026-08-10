@@ -1,5 +1,7 @@
 'use client';
 import { PackageCheck, Check, Bike, Home, Tag } from 'lucide-react';
+import SiteHeader from '@/components/storefront/SiteHeader';
+import Footer from '@/components/storefront/Footer';
 
 export default function OrderSuccessPage({ show, total, orderId, eta, summary, pendingPayment, onBackToMenu, onViewOrder }: {
   show: boolean; total: number; orderId: string; eta: string;
@@ -14,8 +16,11 @@ export default function OrderSuccessPage({ show, total, orderId, eta, summary, p
     { icon: <Home size={18} />, label: 'Delivered', done: false },
   ];
   return (
-    <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, transform: show ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .38s cubic-bezier(.4,0,.2,1)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', textAlign: 'center', overflowY: 'auto' }}>
+    <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, transform: show ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .38s cubic-bezier(.4,0,.2,1)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+      {/* Same header and footer as every other page — a customer who has just paid should still
+          have the nav. This screen is a fixed overlay, so the chrome lives inside it. */}
+      <SiteHeader />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', textAlign: 'center' }}>
         <div style={{ width: 120, height: 120, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', boxShadow: '0 20px 60px var(--amber-500-38)', animation: 'riseIn .5s var(--ease-spring) both', marginBottom: 28 }}>
           <Check size={62} strokeWidth={3} style={{ color: 'var(--white)' }} />
         </div>
@@ -62,6 +67,7 @@ export default function OrderSuccessPage({ show, total, orderId, eta, summary, p
         <button onClick={onViewOrder} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><PackageCheck size={18} /> See your order &amp; status</button>
         <button onClick={onBackToMenu} style={{ width: '100%', padding: '16px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer' }}>Order more cookies</button>
       </div>
+      <Footer />
     </div>
   );
 }
