@@ -2,18 +2,16 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { ChevronLeft, User, BookOpen, X, ShoppingBag, ChevronRight, Check, ArrowRight, Gift, MapPin, CreditCard, Home, Briefcase, Lock, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, AlertTriangle } from 'lucide-react';
-import { STORES, productAvailableFor } from '@/lib/stores';
-import { navLinksFor } from '@/lib/navLinks';
+import { ChevronLeft, X, ShoppingBag, Check, ArrowRight, Gift, MapPin, CreditCard, Home, Briefcase, Lock, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, AlertTriangle } from 'lucide-react';
+import { productAvailableFor } from '@/lib/stores';
 import { useLocation } from '@/context/LocationContext';
-import { LocationPill, LocationBanner } from '@/components/storefront/LocationPicker';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import Footer from '@/components/storefront/Footer';
 import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { getProducts, firstImage, type Product } from '@/lib/api';
+import { firstImage } from '@/lib/api';
 import { formatRemaining } from '@/lib/spinReward';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { INDIAN_STATES, PIN_RE, PHONE_RE } from '@/lib/indiaAddress';
@@ -23,14 +21,8 @@ import { useCheckoutCoupons } from '@/hooks/checkout/useCheckoutCoupons';
 import { useCheckoutAddresses } from '@/hooks/checkout/useCheckoutAddresses';
 import { useCheckoutPayment } from '@/hooks/checkout/useCheckoutPayment';
 import { WEEKDAYS as _WD, MONTHS as _MO } from '@/lib/orderFormat';
-import { CATEGORIES, FALLBACK_MENU, FALLBACK_TINS } from './menuData';
-import { CategoryTab } from './ui/CategoryTab';
-import { SearchSuggest } from './ui/SearchSuggest';
 import { CheckoutStepper, Dot, Dash } from './ui/CheckoutStepper';
-import { Thumb, QStepper, MobileProductCard, DeskProductCard, SkeletonCard } from './ui/ProductCards';
-import { OrderNavItem } from './ui/OrderNavItem';
-import TinModal from './TinModal';
-import CorporatePanel from './CorporatePanel';
+import { Thumb, QStepper } from './ui/ProductCards';
 import OrderSuccessPage from './OrderSuccessPage';
 
 const fmtDay = (d: Date) => `${_WD[d.getDay()]}, ${d.getDate()} ${_MO[d.getMonth()]}`;
@@ -42,8 +34,6 @@ import { whatsappLink, SITE_PHONE } from '@/lib/site';
 // this is true. Flip back to false (and it all comes straight back) once online payment resumes.
 const STALL_MODE = false;
 
-// The order page's own header row — every nav link except Orders, which is the account page.
-const ORDER_NAV_KEYS = ['home', 'cookies', 'tins', 'locations', 'corporate', 'franchise', 'about', 'contact'] as const;
 
 /* ---- Data ---- */
 function parseServerDate(s?: string | null): Date | null {
@@ -662,339 +652,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
 /* ---- Order Success Page ---- */
 export default function OrderingApp() {
-  const router = useRouter();
   const pathname = usePathname();
-  const desktop = useIsDesktop(920);
-  const { cart, count, total, setQty } = useCart();
-  const { user } = useAuth();
-  const { store: deliveryStore } = useLocation();
 
-  const [menu, setMenu] = useState<typeof FALLBACK_MENU>([]);
-  const [tins, setTins] = useState<typeof FALLBACK_TINS>([]);
-  const [loading, setLoading] = useState(true);
-  const [active, setActive] = useState('Cookies');
-  const [drawer, setDrawer] = useState(false);
-  const [search, setSearch] = useState('');
-  const [tin, setTin] = useState<typeof FALLBACK_TINS[0] | null>(null);
-  const [loginOpen, setLoginOpen] = useState(false);
-
-  // Load products from backend — faithful mapping (real images, groups, tags, stable ratings).
-  // Re-runs when the delivery location changes so a same-day-only product (e.g. Red Velvet,
-  // Bengaluru-only) drops off the menu the moment someone's outside its allowed cities.
-  useEffect(() => {
-    getProducts().then(products => {
-      if (!products?.length) { setMenu(FALLBACK_MENU); setTins(FALLBACK_TINS); return; }
-      const cookies = products.filter(p => p.category === 'COOKIES' && productAvailableFor(deliveryStore, p));
-      const tinProds = products.filter(p => p.category === 'TINS' && productAvailableFor(deliveryStore, p));
-
-      // Deterministic decorative rating/review-count from the product id (stable across renders).
-      const ratingOf = (p: Product) => Math.round((4.4 + ((p.id * 7) % 6) / 10) * 10) / 10;
-      const rcOf = (p: Product) => {
-        const n = (p.id * 137) % 4200 + 480;
-        return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
-      };
-
-      if (cookies.length > 0) {
-        setMenu(cookies.map(p => ({
-          id: String(p.id), name: p.name, price: Number(p.price),
-          cat: 'Cookies',
-          rec: p.featured || p.tag === 'Recommended',
-          best: p.tag === 'Bestseller' || p.tag === 'Signature',
-          rating: ratingOf(p), rc: rcOf(p),
-          veg: true, img: firstImage(p.images), desc: p.description || '',
-        })) as any);
-      }
-
-      if (tinProds.length > 0) {
-        setTins(tinProds.map(p => ({
-          id: String(p.id), name: p.name, price: Number(p.price),
-          count: /biscoff/i.test(p.name) ? 9 : 6,
-          img: firstImage(p.images), desc: p.description || '',
-        })) as any);
-      }
-    }).catch(() => { setMenu(FALLBACK_MENU); setTins(FALLBACK_TINS); }) // fallback only if the fetch fails
-      .finally(() => setLoading(false));
-  }, [deliveryStore]);
-
-  // Deep-link from the home page: category cards (/order?cat=cookies|tins|corporate) and the
-  // home search bar (/order?q=<term>). Category words jump to that tab; any other term filters
-  // the Cookies tab by name.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const cat = params.get('cat');
-    const map: Record<string, string> = { cookies: 'Cookies', tins: 'Cookie Tins', corporate: 'Corporate Gifting' };
-    if (cat && map[cat]) setActive(map[cat]);
-    const q = params.get('q');
-    if (q) {
-      const ql = q.trim().toLowerCase();
-      if (/tin|gift/.test(ql)) setActive('Cookie Tins');
-      else if (/cookie/.test(ql)) setActive('Cookies');
-      else { setActive('Cookies'); setSearch(q); }
-    }
-  }, []);
-
-  const addTin = (t: typeof FALLBACK_TINS[0], qty: number) => {
-    setQty(t.id, (cart[t.id]?.qty || 0) + qty, t.name, t.price, t.img);
-    setTin(null);
-  };
-
-  // Search floats matches to the TOP but keeps every other cookie visible below it (cross-sell —
-  // e.g. searching "ADC Special" shows it first, then the rest of the menu). Never hides the menu.
-  const _q = search.trim().toLowerCase();
-  const filtered = active === 'Cookie Tins'
-    ? []
-    : (!_q ? menu : [...menu].sort((a, b) => (a.name.toLowerCase().includes(_q) ? 0 : 1) - (b.name.toLowerCase().includes(_q) ? 0 : 1)));
-  const cartLines = Object.values(cart);
-
-  // Checkout and payment are their own routes; render the combined flow on those URLs.
+  // Checkout and payment are the only routes that render this. /order was retired — it redirects
+  // to the home page, where the product grid now lives — so the standalone menu page that used to
+  // follow here was unreachable, along with the state and the products fetch that fed it.
   if (pathname === '/checkout') return <CheckoutFlow step="review" />;
   if (pathname === '/payment') return <CheckoutFlow step="pay" />;
-
-  /* Desktop layout */
-  if (desktop) {
-    return (
-      <>
-        <div className="adc-pattern-page order-cards" style={{ minHeight: '100vh' }}>
-          {/* Header — same two-row style as the home page: logo · search · location · cart · account, then nav links */}
-          <header style={{ position: 'sticky', top: 0, zIndex: 30, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-default)' }}>
-            <div style={{ maxWidth: 1680, margin: '0 auto', padding: '8px var(--gutter)', display: 'flex', alignItems: 'center', gap: 'clamp(14px,2vw,28px)' }}>
-              <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flex: 'none' }}>
-                <Image src="/assets/adc-logo.png" height={104} width={174} alt="a dough cookie" style={{ height: 140, width: 'auto', objectFit: 'contain', display: 'block', marginTop: 0, marginBottom: -50 }} />
-              </a>
-              <SearchSuggest value={search} onChange={setSearch} onPick={name => { setActive('Cookies'); setSearch(name); }} items={menu} placeholder="Search cookies…"
-                wrapStyle={{ flex: 1, maxWidth: 620, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-card)', borderRadius: 'var(--radius-pill)', padding: '9px 16px', border: '1.5px solid var(--border-default)' }} />
-              <LocationPill />
-              <button onClick={() => router.push('/checkout')} aria-label={`View cart, ${count} items`} style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)', flex: 'none' }}>
-                <ShoppingBag size={20} />
-                {count > 0 && <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 20, height: 20, padding: '0 5px', borderRadius: 10, background: 'var(--gradient-warm)', color: 'var(--white)', fontSize: 11, fontWeight: 800, display: 'grid', placeItems: 'center', lineHeight: 1 }}>{count}</span>}
-              </button>
-              {user ? (
-                <button onClick={() => router.push(user.role === 'ADMIN' ? '/admin' : '/account')} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px 8px 10px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
-                  <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}><User size={17} /></span>
-                  {user.name.split(' ')[0]}
-                </button>
-              ) : (
-                <button onClick={() => setLoginOpen(true)} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
-                  <User size={18} /> Login
-                </button>
-              )}
-            </div>
-            <div>
-              <div style={{ maxWidth: 1680, margin: '0 auto', padding: '8px var(--gutter)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(16px,2.4vw,40px)', flexWrap: 'wrap' }}>
-                {/* Labels and hrefs are shared (lib/navLinks); the dropdowns are checkout-specific,
-                    since they filter this page's own menu rather than navigating away. */}
-                {navLinksFor(ORDER_NAV_KEYS).map(lk => (
-                  <OrderNavItem key={lk.key} label={lk.label} href={lk.href} menu={
-                    lk.key === 'cookies' ? menu.map(m => ({ label: m.name, onClick: () => { setActive('Cookies'); setSearch(m.name); } }))
-                      : lk.key === 'tins' ? tins.map(t => ({ label: t.name, onClick: () => { setActive('Cookie Tins'); setSearch(''); } }))
-                        : lk.key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))
-                          : lk.key === 'franchise' ? [{ label: 'Corporate & Bulk Order', onClick: () => setActive('Corporate Gifting') }, { label: 'Franchise Enquiry', href: '/franchise' }]
-                            : undefined
-                  } />
-                ))}
-              </div>
-            </div>
-          </header>
-
-          {/* 3-col layout: category rail · product grid · live cart panel */}
-          <div style={{ maxWidth: 1680, margin: '0 auto', padding: '24px var(--gutter) 60px', display: 'grid', gridTemplateColumns: '210px minmax(0,1fr) 400px', gap: 28, alignItems: 'start' }}>
-            {/* Category rail */}
-            <aside style={{ position: 'sticky', top: 150, alignSelf: 'start' }}>
-              <div style={{ fontSize: 'var(--text-2xs)', letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--brand-secondary)', fontWeight: 800, margin: '4px 8px 14px' }}>Categories</div>
-              <div style={{ display: 'grid', gap: 10 }}>
-              {CATEGORIES.map(c => {
-                const on = c === active;
-                return (
-                  <CategoryTab key={c} label={c} selected={on} onClick={() => setActive(c)} />
-                );
-              })}
-              </div>
-            </aside>
-
-            {/* Menu */}
-            <main style={{ minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 20 }}>
-                <span style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>{active}</span>
-                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-subtle)', fontWeight: 600 }}>{loading || active === 'Corporate Gifting' ? '' : active === 'Cookie Tins' ? tins.length : filtered.length}</span>
-              </div>
-              <LocationBanner />
-              {active === 'Corporate Gifting' ? (
-                <CorporatePanel />
-              ) : active === 'Cookie Tins' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 20 }}>
-                  {loading
-                    ? Array.from({ length: 2 }).map((_, i) => <SkeletonCard key={i} />)
-                    : tins.map(t => (
-                        <DeskProductCard key={t.id} item={t as unknown as typeof FALLBACK_MENU[0]} qty={cart[t.id]?.qty || 0} onQtyChange={n => setQty(t.id, n, t.name, t.price, t.img)} badge={`Tin · ${t.count} cookies`} />
-                      ))}
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 20 }}>
-                  {loading
-                    ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
-                    : filtered.map((m) => (
-                        <DeskProductCard key={m.id} item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} />
-                      ))}
-                </div>
-              )}
-            </main>
-
-            {/* Live cart panel — always visible so you see what you've added while browsing */}
-            <aside style={{ position: 'sticky', top: 150, alignSelf: 'start' }}>
-              <div style={{ background: 'var(--cream-lightest)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 172px)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 18px', borderBottom: '1px solid var(--border-soft)' }}>
-                  <ShoppingBag size={18} color="var(--brand-secondary)" />
-                  <span style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>Your cart</span>
-                  {count > 0 && <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--text-muted)' }}>{count} item{count !== 1 ? 's' : ''}</span>}
-                </div>
-                {cartLines.length === 0 ? (
-                  <div style={{ padding: '34px 20px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 34, marginBottom: 8 }}>🍪</div>
-                    <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 4 }}>Your cart is empty</div>
-                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>Add some warm cookies to get started — they&apos;ll show up right here.</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="hide-sb" style={{ overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {cartLines.map(l => (
-                        <div key={l.id} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                          <div style={{ position: 'relative', width: 54, height: 54, borderRadius: 12, overflow: 'hidden', flex: 'none', background: 'var(--surface-raised)' }}>
-                            {l.img && <Image src={l.img} alt={l.name} fill sizes="54px" style={{ objectFit: 'cover' }} />}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</div>
-                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>₹{l.price} × {l.qty}</div>
-                          </div>
-                          <QStepper value={l.qty} onChange={n => setQty(l.id, n, l.name, l.price, l.img)} size="sm" />
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ borderTop: '1px solid var(--border-soft)', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}><span>Subtotal</span><span>₹{total}</span></div>
-                      <button onClick={() => router.push('/checkout')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-button)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' }}>Checkout · ₹{total} <ArrowRight size={18} /></button>
-                      <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', textAlign: 'center', margin: 0, lineHeight: 1.4 }}>Taxes included. Shipping and discount codes calculated at checkout.</p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </aside>
-          </div>
-
-        <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
-        </div>
-      </>
-    );
-  }
-
-  /* Mobile layout */
-  return (
-    <>
-      <div className="adc-pattern-page order-cards" style={{ minHeight: '100vh' }}>
-        {/* Mobile top nav */}
-        <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-default)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 10px' }}>
-            <button onClick={() => router.push('/')} style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><ChevronLeft size={20} /></button>
-            <a href="/" aria-label="a dough cookie home" style={{ flex: 1, display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-              <Image src="/assets/adc-logo.png" height={54} width={92} alt="a dough cookie" style={{ objectFit: 'contain' }} />
-            </a>
-            {user ? (
-              <button onClick={() => router.push(user.role === 'ADMIN' ? '/admin' : '/account')} aria-label="Profile" style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><User size={20} /></button>
-            ) : (
-              <button onClick={() => setLoginOpen(true)} aria-label="Login" style={{ width: 42, height: 42, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><User size={20} /></button>
-            )}
-          </div>
-          <div style={{ padding: '0 18px 12px' }}>
-            <LocationPill block />
-          </div>
-          <div style={{ padding: '0 18px 14px' }}>
-            <SearchSuggest value={search} onChange={setSearch} onPick={name => { setActive('Cookies'); setSearch(name); }} items={menu} placeholder="Search Cookies…"
-              wrapStyle={{ display: 'flex', alignItems: 'center', background: 'var(--surface-raised)', borderRadius: 'var(--radius-input)', padding: '11px 16px', gap: 10, border: '1.5px solid var(--border-default)' }} />
-          </div>
-        </div>
-
-        {/* Category strip */}
-        <div className="hide-sb" style={{ display: 'flex', gap: 12, overflowX: 'auto', padding: '12px 18px 14px', position: 'sticky', top: 0 }}>
-          {CATEGORIES.map(c => {
-            const on = c === active;
-            return (
-              <CategoryTab key={c} label={c} selected={on} onClick={() => setActive(c)} compact />
-            );
-          })}
-        </div>
-
-        {/* Menu content */}
-        <div style={{ padding: '0 18px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-            <span style={{ font: 'var(--weight-bold) var(--text-h3)/1 var(--font-display)', color: 'var(--text-strong)' }}>{active}</span>
-          </div>
-          <LocationBanner />
-          {active === 'Corporate Gifting' ? (
-            <div style={{ paddingBottom: 24 }}><CorporatePanel /></div>
-          ) : active === 'Cookie Tins' ? (
-            loading
-              ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>{Array.from({ length: 2 }).map((_, i) => <SkeletonCard key={i} />)}</div>
-              : tins.map(t => (
-                  <div key={t.id} onClick={() => setTin(t as any)} style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 14, background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', marginBottom: 14, cursor: 'pointer' }}>
-                    <Thumb size={92} img={t.img} seed={2} />
-                    <div style={{ flex: 1 }}>
-                      <h3 style={{ font: 'var(--weight-bold) var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>{t.name}</h3>
-                      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 8px' }}>{t.desc}</p>
-                      <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>₹{t.price}</span>
-                    </div>
-                    <ChevronRight size={20} color="var(--text-subtle)" />
-                  </div>
-                ))
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
-              {loading
-                ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
-                : filtered.map((m) => (
-                    <MobileProductCard key={m.id} item={m} qty={cart[m.id]?.qty || 0} onQtyChange={n => setQty(m.id, n, m.name, cart[m.id]?.price ?? m.price, m.img)} />
-                  ))}
-            </div>
-          )}
-        </div>
-        <div style={{ height: count > 0 ? 150 : 96 }} />
-
-        {/* Floating bottom-right stack: menu on top, cart below it */}
-        <div style={{ position: 'fixed', right: 16, bottom: 18, zIndex: 40, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12 }}>
-          <button onClick={() => setDrawer(true)} aria-label="Menu" style={{ width: 60, height: 60, borderRadius: 18, border: 'none', background: 'var(--surface-inverse)', color: 'var(--white)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, boxShadow: 'var(--shadow-lg)' }}><BookOpen size={21} /><span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.04em' }}>Menu</span></button>
-          {count > 0 && (
-            <button onClick={() => router.push('/checkout')} aria-label="View cart" style={{ border: 'none', cursor: 'pointer', background: 'var(--gradient-warm)', color: 'var(--white)', borderRadius: 'var(--radius-pill)', boxShadow: 'var(--shadow-brand)', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', fontFamily: 'var(--font-body)', fontWeight: 800, animation: 'riseIn .3s var(--ease-spring) both' }}>
-              <span style={{ position: 'relative', display: 'grid', placeItems: 'center' }}>
-                <ShoppingBag size={22} />
-                <span style={{ position: 'absolute', top: -8, right: -10, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: 'var(--white)', color: 'var(--brand-secondary)', fontSize: 11, fontWeight: 900, display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-sm)' }}>{count}</span>
-              </span>
-              <span style={{ fontSize: 'var(--text-base)' }}>₹{total}</span>
-              <ArrowRight size={18} />
-            </button>
-          )}
-        </div>
-        <TinModal tin={tin} onClose={() => setTin(null)} onAdd={addTin} />
-        <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
-      </div>
-
-      {/* Category popup — compact dark menu, opens above the floating menu button */}
-      {drawer && (
-        <>
-          <div onClick={() => setDrawer(false)} style={{ position: 'fixed', inset: 0, zIndex: 45, background: 'var(--black-50)', backdropFilter: 'blur(2px)' }} />
-          <div className="hide-sb" style={{ position: 'fixed', right: 16, bottom: 84, zIndex: 47, width: 'min(252px,80vw)', maxHeight: '56vh', overflowY: 'auto', background: 'var(--ink-975)', borderRadius: 'var(--radius-sheet)', boxShadow: 'var(--shadow-xl)', padding: 6, animation: 'riseIn .25s var(--ease-spring) both' }}>
-            <div style={{ padding: '8px 12px 5px', fontSize: 'var(--text-2xs)', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--cream-100-50)', fontWeight: 800 }}>Menu</div>
-            {CATEGORIES.map(c => {
-              const on = c === active;
-              const cnt = c === 'Cookie Tins' ? tins.length : c === 'Cookies' ? menu.length : null;
-              return (
-                <button key={c} onClick={() => { setActive(c); setDrawer(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid var(--cream-100-08)', textAlign: 'left' }}>
-                  <span style={{ fontFamily: 'var(--font-body)', fontWeight: on ? 800 : 600, fontSize: 'var(--text-sm)', color: on ? 'var(--amber-400)' : 'var(--cream-100)' }}>{c}</span>
-                  {cnt != null && <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: on ? 'var(--amber-400)' : 'var(--cream-100-50)' }}>{cnt}</span>}
-                </button>
-              );
-            })}
-            <button onClick={() => setDrawer(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', marginTop: 6, padding: '9px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--white-12)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}><X size={14} /> Close</button>
-          </div>
-        </>
-      )}
-
-    </>
-  );
+  return null;
 }
