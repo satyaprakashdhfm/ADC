@@ -4,8 +4,13 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { getOrders, getAddresses, addAddress, trackOrderShipment, getSpinStatus, type DelhiveryTrackResult, type Address, type Order, type OrderItem, type SpinClaim } from '@/lib/api';
+import { getOrders, getAddresses, addAddress, trackOrderShipment, getSpinStatus, type DelhiveryTrackResult, type Address, type Order, type SpinClaim } from '@/lib/api';
 import { OrderNextStep } from '@/lib/orderNextStep';
+import {
+  parseOptions, optionList, hasGift, giftMessage, statusColor, formatMoney, formatDate,
+  friendlyDate, formatPhone, national10, SHIP_STAGES, shipStage, isCancelledStatus, whenLabel,
+} from '@/lib/orderFormat';
+import LoginModal from '@/components/ordering/LoginModal';
 import {
   ChevronLeft, Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
   Info, LifeBuoy, ChevronRight, LogOut, ShoppingBag, MapPin, Gift,
@@ -24,16 +29,6 @@ const sectionTitle: React.CSSProperties = {
   color: 'var(--text-strong)',
 };
 
-type ParsedOptions = {
-  giftPackaging?: boolean;
-  giftWrap?: boolean;
-  giftMessage?: string;
-  message?: string;
-  specialNotes?: string;
-  addOns?: string[];
-  addons?: string[];
-  [key: string]: unknown;
-};
 
 function AddressForm({ initial, onSave, onCancel }: { initial?: Address; onSave: (a: Omit<Address, 'id'>) => void; onCancel: () => void }) {
   const [f, setF] = useState<Omit<Address, 'id'>>({
@@ -68,99 +63,6 @@ function AddressForm({ initial, onSave, onCancel }: { initial?: Address; onSave:
   );
 }
 
-function parseOptions(raw?: string | null): ParsedOptions {
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as ParsedOptions : {};
-  } catch {
-    return {};
-  }
-}
-
-function optionList(options: ParsedOptions) {
-  const addOns = Array.isArray(options.addOns) ? options.addOns : Array.isArray(options.addons) ? options.addons : [];
-  return addOns.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
-}
-
-function hasGift(options: ParsedOptions) {
-  return Boolean(options.giftPackaging || options.giftWrap);
-}
-
-function giftMessage(item: OrderItem, options: ParsedOptions) {
-  const msg = options.giftMessage || options.message || options.specialNotes || item.specialNotes;
-  return typeof msg === 'string' && msg.trim() ? msg.trim() : '';
-}
-
-function statusColor(status: string) {
-  const s = status.toLowerCase();
-  if (s.includes('deliver')) return { bg: 'var(--status-success-bg)', fg: 'var(--status-success)' };
-  if (s.includes('cancel')) return { bg: 'var(--status-error-bg)', fg: 'var(--status-error)' };
-  return { bg: 'var(--amber-100)', fg: 'var(--amber-800)' };
-}
-
-function formatMoney(value?: number | null) {
-  return `₹${Number(value ?? 0).toLocaleString('en-IN')}`;
-}
-
-function formatDate(value: string) {
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? value : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
-
-const _WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const _MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function friendlyDate(s?: string | null): string | null {
-  if (!s) return null;
-  const d = new Date(String(s).replace(' ', 'T'));
-  if (isNaN(d.getTime())) return String(s);
-  return `${_WD[d.getDay()]}, ${d.getDate()} ${_MO[d.getMonth()]}`;
-}
-
-// Stored canonically as 91XXXXXXXXXX — show it as "+91 XXXXXXXXXX".
-function formatPhone(value?: string | null) {
-  const p = String(value ?? '');
-  if (/^91\d{10}$/.test(p)) return `+91 ${p.slice(2)}`;
-  if (/^\d{10}$/.test(p)) return `+91 ${p}`;
-  return p;
-}
-const national10 = (value?: string | null) => {
-  const p = String(value ?? '');
-  return /^91\d{10}$/.test(p) ? p.slice(2) : p;
-};
-
-/*
- * Fixed delivery milestones, and which one a carrier status has reached (0..3).
- *
- * "Shipped" means the parcel is PHYSICALLY WITH THE CARRIER — not that we've booked it. Delhivery
- * reports "Manifested" as soon as a waybill is generated, which happens seconds after payment
- * while the box is still on our counter; counting that as Shipped told customers their order had
- * left when it hadn't. Manifested/packed/pending therefore stay at "Order placed", and only a real
- * handover (picked up, in transit, bagged, at a hub) advances the tracker.
- */
-const SHIP_STAGES = ['Order placed', 'Shipped', 'Out for delivery', 'Delivered'];
-function shipStage(s?: string | null): number {
-  const t = (s || '').toLowerCase();
-  if (!t) return -1;
-  if ((t.includes('deliver') && !t.includes('out for') && !t.includes('attempt') && !t.includes('undeliver')) || t.includes('rts_d')) return 3;
-  if (t.includes('out for') || t === 'ofd' || t.includes('out_for') || t.includes('dispatch')) return 2;
-  // "Not picked" / "pickup not attempted" contain "picked" but mean the opposite — exclude them
-  // before the pickup check, or a failed pickup would read as Shipped.
-  const notPickedUp = /not\s*picked|pickup\s*(not|failed|cancel)|awaiting/.test(t);
-  if (!notPickedUp && (t.includes('transit') || t.includes('shipped') || t.includes('picked') || t.includes('bag') || t.includes('hub'))) return 1;
-  return 0; // placed / confirmed / manifested / packed / awaiting pickup / pending
-}
-const isCancelledStatus = (s?: string | null) => /cancel|\brto\b|returned|lost/i.test(s || '');
-function whenLabel(iso?: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const time = d.toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' });
-  return d.toDateString() === new Date().toDateString()
-    ? `Today, ${time}`
-    : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
-
 function ShipmentTracker({ order }: { order: Order }) {
   const [trackResult, setTrackResult] = useState<DelhiveryTrackResult | null>(null);
   const [tracking, setTracking] = useState(false);
@@ -184,10 +86,10 @@ function ShipmentTracker({ order }: { order: Order }) {
     await doTrack();
   };
 
-  // Backend normalizes BOTH carriers (Delhivery + Shadowfax) into { status, scans:[{time,event}] }.
+  // Backend normalizes BOTH carriers (Delhivery + Shiprocket) into { status, scans:[{time,event}] }.
   const latestStatus = trackResult?.status || trackResult?.data?.ShipmentData?.[0]?.Shipment?.Status?.Status || null;
   const rawScans = trackResult?.scans ?? [];
-  const isShadowfax = order.carrier === 'SHADOWFAX';
+  const isIntracity = order.carrier === 'SHIPROCKET';
   const delivered = order.orderStatus === 'DELIVERED' || shipStage(latestStatus || order.shipmentStatus) >= 3;
   const address = order.address;
   const mapQuery = address
@@ -204,14 +106,14 @@ function ShipmentTracker({ order }: { order: Order }) {
 
   return (
     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
-      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} style={{ marginBottom: 12 }} />
+      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ marginBottom: 12 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {order.delhiveryWaybill && (
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
             Waybill: <span style={{ fontFamily: 'monospace', color: 'var(--text-strong)' }}>{order.delhiveryWaybill}</span>
           </span>
         )}
-        {order.delhiveryWaybill && isShadowfax && !delivered ? (
+        {order.delhiveryWaybill && isIntracity && !delivered ? (
           <button onClick={openLiveTracking} disabled={tracking} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'var(--brand-secondary)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: tracking ? 'default' : 'pointer' }}>
             <MapPin size={14} /> {tracking ? 'Loading live…' : 'Live tracking'}
           </button>
@@ -227,7 +129,7 @@ function ShipmentTracker({ order }: { order: Order }) {
         </a>
       </div>
       {err && <p style={{ color: 'var(--status-error)', fontSize: 'var(--text-sm)', marginTop: 8, fontWeight: 700 }}>{err}</p>}
-      {isShadowfax && liveOpen && !delivered && (
+      {isIntracity && liveOpen && !delivered && (
         <div style={{ marginTop: 12, borderRadius: 14, overflow: 'hidden', background: 'var(--surface-card)', border: '1px solid var(--border-soft)' }}>
           <iframe
             title={`Live delivery area for ${order.orderNumber}`}
@@ -250,7 +152,7 @@ function ShipmentTracker({ order }: { order: Order }) {
               </p>
             )}
             <p style={{ margin: '7px 0 0', color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.45 }}>
-              Map shows the delivery area. Rider GPS is not exposed by Shadowfax, so live movement updates appear as status scans here.
+              Map shows the delivery area. Rider GPS is not exposed by the carrier, so live movement updates appear as status scans here.
             </p>
           </div>
         </div>
@@ -318,7 +220,7 @@ function ShipmentTracker({ order }: { order: Order }) {
   );
 }
 
-function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; expanded: boolean; onToggle: () => void; onReorder: () => void }) {
+function OrderCard({ order, onReorder }: { order: Order; onReorder: () => void }) {
   // Cancellation is terminal — if either the order OR the shipment is cancelled/RTO/returned,
   // show CANCELLED, never a stale "Delivered". Keeps the badge, meta line and refund note in sync.
   const cancelled = isCancelledStatus(order.orderStatus) || isCancelledStatus(order.shipmentStatus);
@@ -347,12 +249,11 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>{formatMoney(order.totalAmount)}</div>
-          <button onClick={onToggle} style={{ marginTop: 10, padding: '8px 13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 800, color: 'var(--text-body)', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>{expanded ? 'Hide details' : 'View full details'}</button>
         </div>
       </div>
 
       <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
-        {(expanded ? items : items.slice(0, 2)).map((item) => {
+        {items.map((item) => {
           const options = parseOptions(item.selectedOptions);
           const addOns = optionList(options);
           const message = giftMessage(item, options);
@@ -379,17 +280,15 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
             </div>
           );
         })}
-        {!expanded && items.length > 2 && <div style={{ color: 'var(--text-muted)', fontWeight: 700 }}>+ {items.length - 2} more item{items.length - 2 === 1 ? '' : 's'}</div>}
       </div>
 
-      {expanded && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }} className="account-order-detail-grid">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }} className="account-order-detail-grid">
           <div style={{ padding: 14, borderRadius: 18, background: 'var(--surface-sunken)' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-base)', marginBottom: 9, flexWrap: 'wrap' }}>
               <Truck size={17} /> Delivery details
               {order.carrier && (
-                <span style={{ padding: '2px 9px', borderRadius: 'var(--radius-pill)', background: order.carrier === 'SHADOWFAX' ? 'var(--amber-100)' : 'var(--surface-card)', border: order.carrier === 'SHADOWFAX' ? 'none' : '1px solid var(--border-default)', color: order.carrier === 'SHADOWFAX' ? 'var(--amber-800)' : 'var(--text-muted)', fontSize: 'var(--text-2xs)', fontWeight: 900 }}>
-                  {order.carrier === 'SHADOWFAX' ? 'Intracity · Shadowfax' : 'Pan-India · Delhivery'}
+                <span style={{ padding: '2px 9px', borderRadius: 'var(--radius-pill)', background: order.carrier === 'SHIPROCKET' ? 'var(--amber-100)' : 'var(--surface-card)', border: order.carrier === 'SHIPROCKET' ? 'none' : '1px solid var(--border-default)', color: order.carrier === 'SHIPROCKET' ? 'var(--amber-800)' : 'var(--text-muted)', fontSize: 'var(--text-2xs)', fontWeight: 900 }}>
+                  {order.carrier === 'SHIPROCKET' ? 'Intracity · Same-day' : 'Pan-India · Delhivery'}
                 </span>
               )}
             </h3>
@@ -429,7 +328,6 @@ function OrderCard({ order, expanded, onToggle, onReorder }: { order: Order; exp
             )}
           </div>
         </div>
-      )}
 
       <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
         <button onClick={onReorder} style={{ padding: '8px 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: 'pointer', display: 'flex', gap: 7, alignItems: 'center', fontSize: 'var(--text-sm)' }}><RotateCcw size={14} /> Reorder cookies</button>
@@ -443,7 +341,11 @@ export default function AccountPage() {
   const router = useRouter();
   const { user, loading, updateProfile, logout } = useAuth();
 
-  useEffect(() => { if (!loading && !user) router.replace('/'); }, [loading, user, router]);
+  // Arriving here signed out (e.g. tapping "Orders" in the navbar) used to silently bounce back
+  // to the homepage with no explanation. Ask them to log in instead — that's what they came here
+  // to do — and open the modal immediately since seeing past orders was the whole point of the click.
+  const [loginOpen, setLoginOpen] = useState(false);
+  useEffect(() => { if (!loading && !user) setLoginOpen(true); }, [loading, user]);
 
   const [editing, setEditing] = useState(false);
   const [profileErr, setProfileErr] = useState('');
@@ -451,7 +353,6 @@ export default function AccountPage() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [orders, setOrders] = useState<Order[] | null>(null);
-  const [expanded, setExpanded] = useState<number | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addingAddr, setAddingAddr] = useState(false);
   const [editingAddr, setEditingAddr] = useState<number | null>(null);
@@ -467,11 +368,42 @@ export default function AccountPage() {
     getSpinStatus().then(r => setSpinClaim(r.active)).catch(() => setSpinClaim(null));
   }, [user]);
 
+  // The header's "Track" button links straight here (/account#orders) so tapping it lands on an
+  // order's actual status, not just the account page in general. Waits for `orders` to render
+  // (the section is empty/loading beforehand) before scrolling, since the browser's own
+  // hash-scroll fires too early against content that hasn't laid out yet.
+  useEffect(() => {
+    if (orders === null || orders.length === 0) return;
+    if (typeof window === 'undefined' || window.location.hash !== '#orders') return;
+    document.getElementById('orders')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [orders]);
+
   const copySpinCode = async (code: string) => {
     try { await navigator.clipboard.writeText(code); setCopiedSpin(true); setTimeout(() => setCopiedSpin(false), 1800); } catch { /* ignore */ }
   };
 
-  if (loading || !user) return null;
+  if (loading) return null;
+
+  if (!user) {
+    return (
+      <main className="adc-pattern-page" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 'var(--gutter)' }}>
+        <div style={{ ...card, padding: 32, maxWidth: 420, width: '100%', textAlign: 'center', display: 'grid', gap: 14, justifyItems: 'center' }}>
+          <Image src="/assets/adc-logo.png" height={56} width={95} alt="a dough cookie" style={{ objectFit: 'contain' }} />
+          <h1 style={{ ...sectionTitle, fontSize: 'var(--text-h4)' }}>Log in to see your orders</h1>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0 }}>
+            Sign in to view past orders, track deliveries, and manage your saved addresses.
+          </p>
+          <button onClick={() => setLoginOpen(true)} style={{ marginTop: 4, padding: '11px 22px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
+            Log in
+          </button>
+          <button onClick={() => router.push('/')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', cursor: 'pointer', textDecoration: 'underline' }}>
+            Back to home
+          </button>
+        </div>
+        <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      </main>
+    );
+  }
 
   const startEdit = () => { setProfileErr(''); setName(user.name); setPhone(national10(user.phone)); setEditing(true); };
   const saveProfile = async () => {
@@ -587,7 +519,7 @@ export default function AccountPage() {
           </aside>
 
           <div style={{ display: 'grid', gap: 24 }}>
-            <section>
+            <section id="orders">
               <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 14, marginBottom: 12 }}>
                 <div>
                   <p style={{ fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 6 }}>Order history</p>
@@ -607,7 +539,7 @@ export default function AccountPage() {
                     <button onClick={() => router.push('/order')} style={{ padding: '10px 20px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, cursor: 'pointer' }}>Start an order</button>
                   </div>
                 ) : orders.map(o => (
-                  <OrderCard key={o.id} order={o} expanded={expanded === o.id} onToggle={() => setExpanded(expanded === o.id ? null : o.id)} onReorder={() => router.push('/order')} />
+                  <OrderCard key={o.id} order={o} onReorder={() => router.push('/order')} />
                 ))}
               </div>
             </section>

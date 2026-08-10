@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { zoneStores, storeForAddress, storeByCode, sameDayEligible } from '../stores.js';
+import { zoneStores, storeForAddress, storeByCode, deliveryEligible, isStoreActive } from '../stores.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -364,23 +364,28 @@ router.post('/', async (req, res) => {
   // Scope the address to the caller so an order can never reference another user's address.
   const address = await getOne('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [addressId, user.id]);
   if (!address) { console.log(`[ORDER] create | ✗ address_not_found | addressId=${addressId} user=${user?.id}`); throw new ApiError('Address not found'); }
+  const destPin = String(address.pincode || '').replace(/\D/g, '');
 
   /*
-   * A same-day-only product (Red Velvet: 24-hour shelf life) can never ride a multi-day Delhivery
-   * parcel — it would arrive spoiled. This is the ONE place that guarantee actually holds: rejected
-   * here, before payment, an order can never exist in a state where money is taken for something
-   * that cannot honestly be delivered. Checked with the exact same routine booking later uses
-   * (sameDayEligible -> zoneStores), so "accepted here" and "bookable later" cannot disagree.
+   * A product with either delivery mode switched off (structurally, like Red Velvet's 24h shelf
+   * life, or just an operational pause) can never ride the OTHER mode to reach an address it does
+   * not cover. This is the ONE place that guarantee actually holds: rejected here, before payment,
+   * an order can never exist in a state where money is taken for something that cannot honestly be
+   * delivered. Checked with the exact same routine booking later uses (deliveryEligible ->
+   * zoneStores), so "accepted here" and "bookable later" cannot disagree.
+   *
+   * The storefront already disables a product the customer's known location can't reach, so this
+   * only fires on the rare path where someone added it, then switched to a bad address before
+   * paying — the admin-supplied reason is shown when there is one; a plain fallback otherwise.
    */
-  const restricted = lineItems.filter((li) => li.product?.same_day_only);
-  if (restricted.length) {
-    const destPin = String(address.pincode || '').replace(/\D/g, '');
-    const failing = restricted.filter((li) => !sameDayEligible(destPin, li.product.restrict_cities));
-    if (failing.length) {
-      const names = [...new Set(failing.map((li) => li.productName))].join(', ');
-      console.log(`[ORDER] create | ✗ same_day_only_unreachable | pin=${destPin} | products=${names}`);
-      throw new ApiError(`${names} must be enjoyed within 24 hours, so we only deliver ${failing.length === 1 ? 'it' : 'them'} same-day within our Bengaluru delivery area. This address is outside that range — remove ${failing.length === 1 ? 'it' : 'them'} to continue, or choose an address we can reach same-day.`);
-    }
+  const failing = lineItems.filter((li) => li.product && !deliveryEligible(destPin, li.product));
+  if (failing.length) {
+    const reasonFor = (p) => (zoneStores(destPin).length ? p.intracity_unavailable_reason : p.intercity_unavailable_reason)
+      || 'not available for delivery to this address';
+    const lines = [...new Map(failing.map((li) => [li.productName, reasonFor(li.product)])).entries()]
+      .map(([name, reason]) => `${name} — ${reason}`);
+    console.log(`[ORDER] create | ✗ delivery_ineligible | pin=${destPin} | ${lines.join(' | ')}`);
+    throw new ApiError(`${lines.join('. ')}. Remove ${failing.length === 1 ? 'it' : 'them'} to continue, or choose a different address.`);
   }
 
   const subtotal = lineItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
@@ -398,29 +403,47 @@ router.post('/', async (req, res) => {
     discount = calculateDiscount(coupon, subtotal, giftProduct);
   }
 
-  // Intra-city orders (a pincode inside one of our store zones → same-day Shadowfax) ship FREE;
-  // everywhere else is the flat courier fee. Mirrors the storefront bill. Both amounts are
-  // env-overridable (DELIVERY_FEE_INTRACITY / DELIVERY_FEE_OUTSTATION) so a test environment can
-  // set them to ₹1 for cheap live testing; production keeps the real defaults (0 / 100).
-  const feeIntracity = Number(process.env.DELIVERY_FEE_INTRACITY ?? 0);
-  const feeOutstation = Number(process.env.DELIVERY_FEE_OUTSTATION ?? 100);
-  const intracity = zoneStores(String(address.pincode || '').replace(/\D/g, '')).length > 0;
+  // Which kitchen this belongs to, from the address alone. Assigned now rather than at booking so
+  // the store owns the order from the moment it is paid for — a courier that cannot be booked must
+  // not also mean no kitchen ever sees it. attemptShipment corrects this if the carrier ends up
+  // serving the drop from a different store.
+  const fulfillingStore = storeForAddress(address);
+  if (fulfillingStore && !(await isStoreActive(fulfillingStore.code))) {
+    console.log(`[ORDER] create | ✗ store_offline | store=${fulfillingStore.code}`);
+    throw new ApiError(`${fulfillingStore.name} isn't taking new orders right now. Please try again later, or choose a different address.`, 503);
+  }
+
+  const intracity = zoneStores(destPin).length > 0;
   // Intracity is OPEN again — Shiprocket Hyperlocal replaced Shadowfax and is proven end to end
   // (real Rapido rider, delivered in ~73 min). The old Shadowfax block that rejected these orders
   // is gone; SHIPROCKET_DISABLED remains as the kill switch if that carrier ever needs pausing.
   if (intracity && SHIPROCKET_DISABLED) {
     throw new ApiError('Same-day delivery is temporarily unavailable. Please try again shortly.', 503);
   }
-  const deliveryFee = subtotal > 0 ? (intracity ? feeIntracity : feeOutstation) : 0;
+  // Charge exactly what the customer will actually cost us: Shiprocket's own real-time quote for
+  // this address, from the SAME store attemptShipment will later try to book from (never a
+  // different, cheaper-looking one — matches the "store_code is fixed once decided" rule). Outstation
+  // stays a flat, admin-set number (site_settings) rather than a per-parcel Delhivery quote.
+  let deliveryFee = 0;
+  if (subtotal > 0) {
+    if (intracity) {
+      if (address.latitude == null || address.longitude == null) {
+        throw new ApiError('We need this address’s location to confirm same-day pricing — please edit and re-save it.');
+      }
+      const quote = await pickServiceableStore([fulfillingStore], { pin: destPin, lat: address.latitude, lng: address.longitude });
+      if (!quote) {
+        console.log(`[ORDER] create | ✗ intracity_quote_failed | store=${fulfillingStore?.code} | pin=${destPin}`);
+        throw new ApiError('Same-day delivery to this address could not be confirmed just now. Please try again in a moment.', 503);
+      }
+      deliveryFee = quote.rate;
+    } else {
+      const row = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
+      deliveryFee = row?.value != null ? Number(row.value) : 100;
+    }
+  }
   const total = subtotal - discount + deliveryFee;
   const ts = nowIso();
   const orderNumber = await genOrderNumber();
-
-  // Which kitchen this belongs to, from the address alone. Assigned now rather than at booking so
-  // the store owns the order from the moment it is paid for — a courier that cannot be booked must
-  // not also mean no kitchen ever sees it. attemptShipment corrects this if the carrier ends up
-  // serving the drop from a different store.
-  const fulfillingStore = storeForAddress(address);
 
   const orderId = await withTransaction(async (client) => {
     const { rows: [order] } = await client.query(

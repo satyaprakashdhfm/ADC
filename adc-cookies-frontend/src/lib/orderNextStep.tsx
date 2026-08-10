@@ -11,8 +11,13 @@ import { Info } from 'lucide-react';
 type NextStepSignals = {
   orderStatus?: string | null;   // PLACED -> CONFIRMED -> ... -> DELIVERED / CANCELLED
   shipmentStatus?: string | null; // carrier's own label (free text)
-  carrier?: string | null;        // 'SHADOWFAX' (intracity, same-day) | 'DELHIVERY' (outstation)
+  carrier?: string | null;        // 'SHIPROCKET' (intracity, same-day) | 'DELHIVERY' (outstation)
   paymentStatus?: string | null;  // PENDING -> PAID
+  /** Set once a store has an order code but hasn't tapped Accept yet. Manual-POS stores don't book
+   *  the same-day rider until they accept, so `carrier` is still null in this window — without this
+   *  signal that read as generic "preparing" instead of "we're confirming this with the store". */
+  hasStore?: boolean;
+  storeAccepted?: boolean;
 };
 
 const isCancelled = (s?: string | null) => /cancel|\brto\b|returned|lost/i.test(s || '');
@@ -28,10 +33,10 @@ function stageOf(s?: string | null): number {
   return 0; // placed / confirmed / new / preparing / pending
 }
 
-export function orderNextStep({ orderStatus, shipmentStatus, carrier, paymentStatus }: NextStepSignals): string {
+export function orderNextStep({ orderStatus, shipmentStatus, carrier, paymentStatus, hasStore, storeAccepted }: NextStepSignals): string {
   const os = (orderStatus || '').toUpperCase();
   const paid = (paymentStatus || '').toUpperCase() === 'PAID';
-  const shadowfax = (carrier || '').toUpperCase() === 'SHADOWFAX';
+  const intracity = (carrier || '').toUpperCase() === 'SHIPROCKET';
   const delhivery = (carrier || '').toUpperCase() === 'DELHIVERY';
 
   // Terminal states first.
@@ -52,12 +57,17 @@ export function orderNextStep({ orderStatus, shipmentStatus, carrier, paymentSta
 
   // Shipped / picked up / in transit.
   if (stage >= 1)
-    return shadowfax
+    return intracity
       ? 'On its way with a rider — arriving today. Keep your phone handy.'
       : "Handed to Delhivery and on the move — it'll arrive in a few days.";
 
+  // Paid, assigned to a store, but that store hasn't tapped Accept yet — no rider is booked until
+  // they do, so say that plainly rather than a generic "preparing" that implies it's already moving.
+  if (hasStore && !storeAccepted && !carrier)
+    return "We're confirming your order with the store — it'll start baking any moment.";
+
   // Paid & confirmed, still being made.
-  if (shadowfax)
+  if (intracity)
     return "We're baking your order — a rider will pick it up from our store and deliver today.";
   if (delhivery)
     return "We're packing your order — it'll be handed to Delhivery and arrive in a few days.";

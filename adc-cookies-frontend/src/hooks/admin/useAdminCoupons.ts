@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import {
-  adminGetCoupons, adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon,
+  adminGetCoupons, adminCreateCoupon, adminUpdateCoupon, adminToggleCoupon, adminDeleteCoupon, adminResetAllSpins,
   type AdminCoupon, type CouponInput,
 } from '@/lib/api';
 import { couponToDraft, type CouponDraft } from '@/components/admin/coupons/couponForm';
@@ -12,6 +12,7 @@ export function useAdminCoupons(enabled: boolean, onError: (s: string) => void) 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [couponForm, setCouponForm] = useState<CouponDraft | null>(null);
+  const [resettingSpins, setResettingSpins] = useState(false);
 
   useEffect(() => {
     if (enabled && coupons === null) adminGetCoupons().then(setCoupons).catch(() => setCoupons([]));
@@ -62,8 +63,22 @@ export function useAdminCoupons(enabled: boolean, onError: (s: string) => void) 
     setCoupons(c => (c || []).filter(x => x.id !== id));
   };
 
+  const resetAllSpins = async () => {
+    if (!confirm("Reset every customer's spin? It's one spin per customer — this lets everyone play again, effective immediately.")) return;
+    setResettingSpins(true);
+    try {
+      const r = await adminResetAllSpins();
+      alert(`Done — ${r.cleared} spin record(s) cleared. Everyone can spin again.`);
+    } catch {
+      alert('Could not reset spins right now — please try again.');
+    } finally {
+      setResettingSpins(false);
+    }
+  };
+
   return {
     coupons, search, setSearch, statusFilter, setStatusFilter,
     couponForm, setCouponForm, toggleCoupon, editCoupon, saveCoupon, removeCoupon,
+    resettingSpins, resetAllSpins,
   };
 }

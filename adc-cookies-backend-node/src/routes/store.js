@@ -369,7 +369,7 @@ router.get('/orders/:id/track', async (req, res) => {
 router.get('/menu', async (req, res) => {
   const restId = process.env.PETPOOJA_REST_ID || '';
   const rows = await getAll(
-    `SELECT p.id, p.name, p.category, p.price, p.is_available, p.menu_group, p.same_day_only, p.restrict_cities,
+    `SELECT p.id, p.name, p.category, p.price, p.is_available, p.menu_group, p.intracity_available, p.restrict_cities,
             pi.item_id AS pos_item_id, pi.variation_name AS pos_variation, pi.price AS pos_price, pi.in_stock AS pos_in_stock
        FROM products p
        LEFT JOIN petpooja_items pi ON pi.product_id = p.id AND pi.rest_id = $1
@@ -380,7 +380,8 @@ router.get('/menu', async (req, res) => {
     id: r.id, name: r.name, category: r.category, menuGroup: r.menu_group,
     price: r.price, available: !!r.is_available,
     // Whether THIS store carries it at all — separate from is_available, which is storewide.
-    // A same-day-only, Bengaluru-restricted item is a flat "no" at Besant Nagar regardless.
+    // A Bengaluru-restricted item (or one with intracity switched off entirely) is a flat "no"
+    // at Besant Nagar regardless.
     availableHere: !!r.is_available && storeProductAvailable(req.storeUser.storeCode, r),
     posItemId: r.pos_item_id, posVariation: r.pos_variation,
     posPrice: r.pos_price, posInStock: r.pos_in_stock,

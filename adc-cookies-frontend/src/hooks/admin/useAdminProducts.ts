@@ -5,7 +5,7 @@ import {
   type Product, type ProductInput,
 } from '@/lib/api';
 
-export const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, stockQuantity: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, images: '', sameDayOnly: false, restrictCities: '' };
+export const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, stockQuantity: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, images: '', intracityAvailable: true, intracityUnavailableReason: '', intercityAvailable: true, intercityUnavailableReason: '', restrictCities: '' };
 
 /**
  * Products list and its editor. `refreshProducts` is exported rather than kept private because the

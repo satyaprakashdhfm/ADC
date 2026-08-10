@@ -3,6 +3,7 @@ import { Trash2, RefreshCw } from 'lucide-react';
 import { type AdminStoresReport } from '@/lib/api';
 import { card, iconBtn, actionBtn, Panel } from '../shared/ui';
 import StoreCard from './StoreCard';
+import StoreAvailabilityPanel from './StoreAvailabilityPanel';
 
 interface Props {
   storeReport: AdminStoresReport | null;
@@ -32,6 +33,8 @@ export default function StoresTab({ storeReport, staffBusy, setStaffBusy, onRefr
           it is chased in <em>Needs attention</em>.
         </p>
       </Panel>
+
+      <StoreAvailabilityPanel setErr={setErr} setNotice={setNotice} />
 
       <Panel title="Stores" loading={storeReport === null}
         action={<button onClick={onRefresh} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>

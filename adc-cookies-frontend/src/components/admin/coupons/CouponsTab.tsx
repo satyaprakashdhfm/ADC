@@ -1,5 +1,5 @@
 'use client';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { type AdminCoupon } from '@/lib/api';
 import { PAGE_SIZE } from '@/hooks/admin/usePagination';
 import { money, fmtDate } from '../shared/format';
@@ -13,6 +13,8 @@ interface Props {
   statusFilter: string;
   onStatusFilter: (v: string) => void;
   onNewCoupon: (draft: CouponDraft) => void;
+  resettingSpins: boolean;
+  onResetAllSpins: () => void;
   onEdit: (c: AdminCoupon) => void;
   onToggle: (id: number) => void;
   onRemove: (id: number) => void;
@@ -20,7 +22,7 @@ interface Props {
   onPage: (n: number) => void;
 }
 
-export default function CouponsTab({ coupons, search, onSearch, statusFilter, onStatusFilter, onNewCoupon, onEdit, onToggle, onRemove, page, onPage }: Props) {
+export default function CouponsTab({ coupons, search, onSearch, statusFilter, onStatusFilter, onNewCoupon, onEdit, onToggle, onRemove, resettingSpins, onResetAllSpins, page, onPage }: Props) {
   const cq = search.trim().toLowerCase();
   const regular = (coupons || []).filter(c => c.spinWeight == null);
   const spinCoupons = (coupons || []).filter(c => c.spinWeight != null).sort((a, b) => (b.spinWeight ?? 0) - (a.spinWeight ?? 0));
@@ -74,7 +76,14 @@ export default function CouponsTab({ coupons, search, onSearch, statusFilter, on
           award, each with its own odds (weight %), usage limit, active window, and terms. ===== */}
       <div style={{ marginTop: 24 }}>
         <Panel title={`Spin Wheel Offers${coupons ? ` (${spinCoupons.length})` : ''}`} loading={coupons === null}
-          action={<button onClick={() => onNewCoupon({ ...EMPTY_SPIN_COUPON })} style={addBtn}><Plus size={16} /> New offer</button>}>
+          action={
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={onResetAllSpins} disabled={resettingSpins} style={{ ...iconBtn, width: 'auto', padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 700, fontSize: 'var(--text-xs)', opacity: resettingSpins ? 0.6 : 1 }}>
+                <RefreshCw size={14} /> {resettingSpins ? 'Resetting…' : 'Reset all spins'}
+              </button>
+              <button onClick={() => onNewCoupon({ ...EMPTY_SPIN_COUPON })} style={addBtn}><Plus size={16} /> New offer</button>
+            </div>
+          }>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 6px', lineHeight: 1.5 }}>
             Each offer&apos;s <strong>Weight</strong> is its % chance of landing when someone spins. Weights across active offers currently sum to <strong>{totalSpinWeight.toFixed(1)}%</strong> — the remaining <strong>{noRewardChance.toFixed(1)}%</strong> is &quot;Better luck next time&quot;.
           </p>
@@ -82,8 +91,7 @@ export default function CouponsTab({ coupons, search, onSearch, statusFilter, on
             <strong>How odds are guaranteed:</strong> every 1,000 spins draw from one shuffled batch pre-built to these exact weights (e.g. 5% weight = exactly 50 of the 1,000) — a real ratio per batch, not just an average over time. The batch auto-rebuilds the moment you change a weight here, and again once it runs out.
           </p>
           <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '0 0 14px', lineHeight: 1.5 }}>
-            <strong>Anti-abuse:</strong> re-spinning (reload, reopen) doesn&apos;t draw again — each device/account gets one locked-in result (win or miss) per 12h window, replayed if they retry, so no one can re-roll for a better prize or burn through other customers&apos; tickets.
-          </p>
+            <strong>One spin per customer:</strong> it's a single lifetime spin per device/account, not a daily reset — once their result (win or miss) is drawn, that's it for good. Use <strong>Reset all spins</strong> above to wipe everyone's record at once and open a fresh round (already-won coupons aren't affected).</p>
           <Table head={['Wheel label', 'Code', 'Discount', 'Weight', 'Uses', 'Status', '']}>
             {spinCoupons.map(c => {
               const st = couponStatus(c);

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo } from '@/lib/api';
+import { adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo, adminSetDeliveryFeeOutstation } from '@/lib/api';
 
 /**
  * The site-wide switches an admin edits from the Products tab: which product the homepage popup
@@ -13,12 +13,15 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
   const [headerOfferSaved, setHeaderOfferSaved] = useState(false);
   const [stallInfo, setStallInfo] = useState('');
   const [stallInfoSaved, setStallInfoSaved] = useState(false);
+  const [deliveryFeeOutstation, setDeliveryFeeOutstation] = useState('100');
+  const [deliveryFeeSaved, setDeliveryFeeSaved] = useState(false);
 
   useEffect(() => {
     if (enabled) adminGetSettings().then(s => {
       setPromoProductId(s.promoProductId);
       setHeaderOffer(s.headerOffer || '');
       setStallInfo(s.stallInfo || '');
+      setDeliveryFeeOutstation(String(s.deliveryFeeOutstation ?? 100));
     }).catch(() => {});
   }, [enabled]);
 
@@ -39,9 +42,18 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
     setStallInfoSaved(true);
   };
 
+  const changeDeliveryFeeOutstation = (v: string) => { setDeliveryFeeOutstation(v); setDeliveryFeeSaved(false); };
+  const saveDeliveryFeeOutstation = async () => {
+    const n = Number(deliveryFeeOutstation);
+    if (!Number.isFinite(n) || n < 0) { onError('Enter a valid, non-negative delivery fee.'); return; }
+    await adminSetDeliveryFeeOutstation(n).catch(err => onError(String(err.message || err)));
+    setDeliveryFeeSaved(true);
+  };
+
   return {
     promoProductId, savePromoProduct,
     headerOffer, headerOfferSaved, changeHeaderOffer, saveHeaderOffer,
     stallInfo, stallInfoSaved, changeStallInfo, saveStallInfo,
+    deliveryFeeOutstation, deliveryFeeSaved, changeDeliveryFeeOutstation, saveDeliveryFeeOutstation,
   };
 }
