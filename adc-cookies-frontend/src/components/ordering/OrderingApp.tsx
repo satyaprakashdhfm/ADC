@@ -12,10 +12,13 @@ import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { getProducts, getAddresses, addAddress, updateAddress, validateCoupon, createOrder, createRazorpayOrder, verifyPayment, firstImage, checkDeliveryPin, getAvailableCoupons, getSpinStatus, type Product, type Address, type OrderItemInput, type DeliveryCheck, type AvailableCoupon, type SpinClaim } from '@/lib/api';
+import { getProducts, getAddresses, addAddress, updateAddress, createOrder, createRazorpayOrder, verifyPayment, firstImage, type Product, type Address, type OrderItemInput } from '@/lib/api';
 import { formatRemaining } from '@/lib/spinReward';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { loadRazorpay } from '@/lib/razorpay';
+import { useUpsellCatalog } from '@/hooks/checkout/useUpsellCatalog';
+import { useDeliveryCheck } from '@/hooks/checkout/useDeliveryCheck';
+import { useCheckoutCoupons } from '@/hooks/checkout/useCheckoutCoupons';
 import { WEEKDAYS as _WD, MONTHS as _MO } from '@/lib/orderFormat';
 import { CATEGORIES, FALLBACK_MENU, FALLBACK_TINS } from './menuData';
 import { CategoryTab } from './ui/CategoryTab';
@@ -75,9 +78,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const { user } = useAuth();
   const { store: locationStore } = useLocation();
   const [addresses, setAddresses] = useState<Address[]>([]);
-  const [couponErr, setCouponErr] = useState('');
-  const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
-  const [mySpinReward, setMySpinReward] = useState<SpinClaim | null>(null);
+  const catalog = useUpsellCatalog();
+  const { couponErr, setCouponErr, availableCoupons, mySpinReward, applyCoupon } = useCheckoutCoupons();
   const [adding, setAdding] = useState(false);
   const [aform, setAform] = useState<{ fullName: string; phone: string; addressLine1: string; addressLine2: string; city: string; state: string; pincode: string; label: string; latitude: number | null; longitude: number | null }>({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home', latitude: null, longitude: null });
   const [editId, setEditId] = useState<number | null>(null);   // address being edited (null = adding new)
@@ -94,36 +96,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [placedOrderSummary, setPlacedOrderSummary] = useState<{ items: { name: string; qty: number }[]; couponCode: string | null } | null>(null);
   const [pendingPayment, setPendingPayment] = useState(false); // true when confirmed via stall mode (no Razorpay), not yet actually paid
   const [loginOpen, setLoginOpen] = useState(false);
-  const [delivCheck, setDelivCheck] = useState<DeliveryCheck | null>(null);
-  const [delivChecking, setDelivChecking] = useState(false);
-  const [catalog, setCatalog] = useState<Product[]>([]); // for the "Goes great with" upsell
-
-  // Catalog for the upsell row — show the cached products instantly (same cache the storefront
-  // fills), then refresh in the background.
-  useEffect(() => {
-    try { const c = localStorage.getItem('adc_products_cache'); if (c) { const arr = JSON.parse(c); if (Array.isArray(arr) && arr.length) setCatalog(arr); } } catch { /* ignore */ }
-    getProducts().then(ps => { if (ps?.length) setCatalog(ps); }).catch(() => {});
-  }, []);
 
   // Addresses are private to the signed-in user — fetch on login, clear on logout.
   useEffect(() => {
     if (user) getAddresses().then(setAddresses).catch(() => setAddresses([]));
     else setAddresses([]);
-  }, [user]);
-
-  // General, anyone-can-use coupons for the "Available offers" list — public, so it can render
-  // before login (applying one still requires being logged in, same as typing a code manually).
-  useEffect(() => {
-    getAvailableCoupons().then(setAvailableCoupons).catch(() => setAvailableCoupons([]));
-  }, []);
-
-  // This shopper's own won-and-claimed spin reward (if any and still unexpired) — shown as a
-  // tappable offer too, so they don't have to go dig the code back out of the spin popup. It's
-  // already account-bound server-side (validateCoupon requires a matching spin_claims row), so
-  // this is purely a convenience surface, not a new way to redeem someone else's code.
-  useEffect(() => {
-    if (!user) { setMySpinReward(null); return; }
-    getSpinStatus().then(r => setMySpinReward(r.active)).catch(() => setMySpinReward(null));
   }, [user]);
 
   // Auto-select an address once they load and nothing valid is selected:
@@ -151,18 +128,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     window.history.replaceState(null, '', '/checkout');
   }, [step]);
 
-  // Real serviceability + TAT from Delhivery when the selected address pincode changes.
   const chosen = addresses.find(a => a.id === addr);
-  useEffect(() => {
-    const pin = chosen?.pincode?.replace(/\D/g, '') || '';
-    if (pin.length !== 6) { setDelivCheck(null); return; }
-    let cancelled = false;
-    setDelivChecking(true);
-    checkDeliveryPin(pin).then(r => { if (!cancelled) { setDelivCheck(r); setDelivChecking(false); } })
-      .catch(() => { if (!cancelled) { setDelivCheck(null); setDelivChecking(false); } });
-    return () => { cancelled = true; };
-  }, [chosen?.pincode]);
-
+  const { delivCheck, delivChecking } = useDeliveryCheck(chosen?.pincode);
   const lines = Object.values(cart);
   // The real charge, straight from the backend's own quote: Shiprocket's live per-order rate for
   // intracity (varies by address/distance), or the admin-set flat fee for outstation. This is a
@@ -326,37 +293,6 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
   // Coupons are validated on the backend right here at apply-time — so an invalid code is caught
   // now, not later at payment. Only genuinely valid, active codes ever set `applied`.
-  const applyCoupon = async (overrideCode?: string) => {
-    const code = (overrideCode ?? coupon).trim().toUpperCase();
-    if (!code) return;
-    if (!user) { setCouponErr('Please log in to apply a coupon.'); setApplied(false); setDiscount(0); return; }
-    try {
-      const result = await validateCoupon(code, total);
-      if (result.valid) {
-        if (result.giftProduct) {
-          // A "free item" reward: the item itself is the prize (capped at maximumDiscount), not
-          // a generic amount off — add it to the cart if they don't already have one.
-          const gp = result.giftProduct;
-          setDiscount(Math.min(gp.price, result.maximumDiscount ?? gp.price));
-          const gid = String(gp.id);
-          if (!cart[gid]) {
-            setQty(gid, 1, gp.name, gp.price, firstImage(gp.images));
-            setGiftLineId(gid);
-          } else {
-            setGiftLineId(null); // already in their cart on its own merit — don't remove it later
-          }
-        } else {
-          const d = result.discountType === 'PERCENTAGE' ? Math.round(total * result.discountValue / 100) : result.discountValue;
-          setDiscount(Math.min(d, result.maximumDiscount || d));
-          setGiftLineId(null);
-        }
-        setApplied(true); setCouponErr('');
-      } else { setCouponErr(result.message || 'This code isn’t valid.'); setApplied(false); setDiscount(0); }
-    } catch (e) {
-      setCouponErr(e instanceof Error ? e.message : 'This code isn’t valid. Please check and try again.');
-      setApplied(false); setDiscount(0);
-    }
-  };
 
   // Resolve cart items to REAL backend product ids. The cart may hold fallback-menu items
   // whose ids aren't real ids (added before products finished loading) — resolve those by
