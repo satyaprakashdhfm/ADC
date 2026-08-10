@@ -63,3 +63,23 @@ export const STORES: Store[] = [
     image: '/assets/stores/besant-nagar.jpeg',
   },
 ];
+
+/**
+ * Mirrors the backend's storeProductAvailable (stores.js) — a city-restricted product only belongs
+ * on the menu for a shopper whose resolved store sits in one of its allowed cities. Tier 1 of two:
+ * a lightweight pre-filter using whatever coarse location signal we have, so an ineligible shopper
+ * doesn't add it to cart only to hit a rejection later. Tier 2 (checkDeliveryPin's
+ * sameDayRestrictions, checked once a real address exists) is precise — a real pincode-zone match,
+ * not "nearest of ours by straight-line distance" — and has the final word; this is a hint, not the
+ * guarantee. The backend's order-creation guard is the actual guarantee, independent of both.
+ *
+ * `store === null` means no location signal exists yet (no geolocation, no address, no manual
+ * pincode) — the menu shows normally until we actually know where the shopper is; restricting
+ * before that would be guessing.
+ */
+export function productAvailableFor(store: { city: string } | null, product: { intracityAvailable: boolean; restrictCities: string | null }): boolean {
+  if (!store) return true;
+  if (!product.intracityAvailable) return false;
+  const allowed = String(product.restrictCities || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+  return !allowed.length || allowed.includes(store.city.toLowerCase());
+}
