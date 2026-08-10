@@ -352,9 +352,15 @@ export interface DeliveryCheck {
 }
 
 /** Combined serviceability + TAT check — used at checkout when an address is selected. */
-export async function checkDeliveryPin(pincode: string): Promise<DeliveryCheck> {
-  console.log(`[delivery] checking pincode ${pincode} …`);
-  const r = await request<DeliveryCheck>(`/delivery/check?pincode=${encodeURIComponent(pincode)}`);
+export async function checkDeliveryPin(pincode: string, lat?: number | null, lng?: number | null): Promise<DeliveryCheck> {
+  // Coordinates are not optional in practice for intracity: Shiprocket hyperlocal prices by
+  // distance, so without a lat/lng the backend answers `location_required` and the address looks
+  // "not serviceable" even though same-day is available. Saved addresses are geocoded on save, so
+  // pass those through whenever we have them.
+  const qs = new URLSearchParams({ pincode });
+  if (lat != null && lng != null) { qs.set('lat', String(lat)); qs.set('lng', String(lng)); }
+  console.log(`[delivery] checking pincode ${pincode}${lat != null && lng != null ? ` @ ${lat},${lng}` : ' (no coordinates — intracity cannot be quoted)'} …`);
+  const r = await request<DeliveryCheck>(`/delivery/check?${qs.toString()}`);
   console.log(`[delivery] pincode ${pincode} →`, r.intracity ? `SHIPROCKET (intracity, ${r.store})` : r.serviceable ? 'DELHIVERY (pan-India)' : 'not serviceable', r);
   return r;
 }

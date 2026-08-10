@@ -69,7 +69,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => { setHydrated(true); }, []);
 
-  const { delivCheck, delivChecking } = useDeliveryCheck(chosen?.pincode);
+  const { delivCheck, delivChecking } = useDeliveryCheck(chosen?.pincode, chosen?.latitude, chosen?.longitude);
 
   const lines = Object.values(cart);
   // The real charge, straight from the backend's own quote: Shiprocket's live per-order rate for

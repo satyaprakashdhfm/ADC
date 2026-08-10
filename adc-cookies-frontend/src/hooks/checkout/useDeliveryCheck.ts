@@ -8,7 +8,7 @@ import { checkDeliveryPin, type DeliveryCheck } from '@/lib/api';
  * Display only: orders.js recomputes serviceability and the delivery fee authoritatively at
  * order-creation and never trusts what the client showed here.
  */
-export function useDeliveryCheck(pincode?: string | null) {
+export function useDeliveryCheck(pincode?: string | null, lat?: number | null, lng?: number | null) {
   const [delivCheck, setDelivCheck] = useState<DeliveryCheck | null>(null);
   const [delivChecking, setDelivChecking] = useState(false);
 
@@ -17,10 +17,10 @@ export function useDeliveryCheck(pincode?: string | null) {
     if (pin.length !== 6) { setDelivCheck(null); return; }
     let cancelled = false;
     setDelivChecking(true);
-    checkDeliveryPin(pin).then(r => { if (!cancelled) { setDelivCheck(r); setDelivChecking(false); } })
+    checkDeliveryPin(pin, lat, lng).then(r => { if (!cancelled) { setDelivCheck(r); setDelivChecking(false); } })
       .catch(() => { if (!cancelled) { setDelivCheck(null); setDelivChecking(false); } });
     return () => { cancelled = true; };
-  }, [pincode]);
+  }, [pincode, lat, lng]);
 
   return { delivCheck, delivChecking };
 }
