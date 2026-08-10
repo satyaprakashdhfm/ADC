@@ -3,17 +3,20 @@ import Image from 'next/image';
 import { X, Home, MapPin, Briefcase, Info, Mail, ShoppingBag, ChevronRight, LogOut, User, Package } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { navLinksFor } from '@/lib/navLinks';
 
 // Mirrors the desktop navbar, minus the product menus (Buy Cookies / Cookie Tins) —
-// those live behind the search + Order CTA on mobile.
-const NAV_LINKS = [
-  { label: 'Home', icon: <Home size={16} />, href: '/' },
-  { label: 'Locations', icon: <MapPin size={16} />, href: '/locations' },
-  { label: 'Partner with us', icon: <Briefcase size={16} />, href: '/franchise' },
-  { label: 'About Us', icon: <Info size={16} />, href: '/about' },
-  { label: 'Contact', icon: <Mail size={16} />, href: '/contact' },
-  { label: 'Orders', icon: <Package size={16} />, href: '/account' },
-];
+// those live behind the search + Order CTA on mobile. Labels and hrefs come from lib/navLinks;
+// only the icons are decided here, because they are presentation.
+const DRAWER_KEYS = ['home', 'locations', 'franchise', 'about', 'contact', 'orders'] as const;
+const DRAWER_ICON: Record<(typeof DRAWER_KEYS)[number], React.ReactNode> = {
+  home: <Home size={16} />,
+  locations: <MapPin size={16} />,
+  franchise: <Briefcase size={16} />,
+  about: <Info size={16} />,
+  contact: <Mail size={16} />,
+  orders: <Package size={16} />,
+};
 
 interface MenuDrawerProps {
   open: boolean;
@@ -100,9 +103,9 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
 
         {/* Nav links */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px' }}>
-          {NAV_LINKS.map(lk => (
+          {navLinksFor(DRAWER_KEYS).map(lk => (
             <a
-              key={lk.label}
+              key={lk.key}
               href={lk.href}
               onClick={e => {
                 // Already on this page? Don't reload — just glide back to the top.
@@ -114,7 +117,7 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
               <span style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--amber-50)', display: 'grid', placeItems: 'center', flex: 'none', color: 'var(--brand-secondary)' }}>
-                {lk.icon}
+                {DRAWER_ICON[lk.key as (typeof DRAWER_KEYS)[number]]}
               </span>
               <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>{lk.label}</span>
               <span style={{ marginLeft: 'auto' }}><ChevronRight size={16} color="var(--text-subtle)" /></span>

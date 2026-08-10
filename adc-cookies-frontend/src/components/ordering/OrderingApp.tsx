@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronLeft, User, BookOpen, X, ShoppingBag, ChevronRight, Check, ArrowRight, Gift, MapPin, CreditCard, Home, Briefcase, Lock, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, AlertTriangle } from 'lucide-react';
 import { STORES, productAvailableFor } from '@/lib/stores';
+import { navLinksFor } from '@/lib/navLinks';
 import { useLocation } from '@/context/LocationContext';
 import { LocationPill, LocationBanner } from '@/components/storefront/LocationPicker';
 import SiteHeader from '@/components/storefront/SiteHeader';
@@ -40,6 +41,9 @@ import { whatsappLink, SITE_PHONE } from '@/lib/site';
 // deleted — every bit of the real checkout/payment flow still exists, just not rendered while
 // this is true. Flip back to false (and it all comes straight back) once online payment resumes.
 const STALL_MODE = false;
+
+// The order page's own header row — every nav link except Orders, which is the account page.
+const ORDER_NAV_KEYS = ['home', 'cookies', 'tins', 'locations', 'corporate', 'franchise', 'about', 'contact'] as const;
 
 /* ---- Data ---- */
 function parseServerDate(s?: string | null): Date | null {
@@ -777,13 +781,17 @@ export default function OrderingApp() {
             </div>
             <div>
               <div style={{ maxWidth: 1680, margin: '0 auto', padding: '8px var(--gutter)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(16px,2.4vw,40px)', flexWrap: 'wrap' }}>
-                <OrderNavItem label="Home" href="/" />
-                <OrderNavItem label="Buy Cookies" href="/order?cat=cookies" menu={menu.map(m => ({ label: m.name, onClick: () => { setActive('Cookies'); setSearch(m.name); } }))} />
-                <OrderNavItem label="Cookie Tins" href="/order?cat=tins" menu={tins.map(t => ({ label: t.name, onClick: () => { setActive('Cookie Tins'); setSearch(''); } }))} />
-                <OrderNavItem label="Locations" href="/locations" menu={STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))} />
-                <OrderNavItem label="Partner with us" href="/franchise" menu={[{ label: 'Corporate & Bulk Order', onClick: () => setActive('Corporate Gifting') }, { label: 'Franchise Enquiry', href: '/franchise' }]} />
-                <OrderNavItem label="About Us" href="/about" />
-                <OrderNavItem label="Contact" href="/contact" />
+                {/* Labels and hrefs are shared (lib/navLinks); the dropdowns are checkout-specific,
+                    since they filter this page's own menu rather than navigating away. */}
+                {navLinksFor(ORDER_NAV_KEYS).map(lk => (
+                  <OrderNavItem key={lk.key} label={lk.label} href={lk.href} menu={
+                    lk.key === 'cookies' ? menu.map(m => ({ label: m.name, onClick: () => { setActive('Cookies'); setSearch(m.name); } }))
+                      : lk.key === 'tins' ? tins.map(t => ({ label: t.name, onClick: () => { setActive('Cookie Tins'); setSearch(''); } }))
+                        : lk.key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))
+                          : lk.key === 'franchise' ? [{ label: 'Corporate & Bulk Order', onClick: () => setActive('Corporate Gifting') }, { label: 'Franchise Enquiry', href: '/franchise' }]
+                            : undefined
+                  } />
+                ))}
               </div>
             </div>
           </header>
