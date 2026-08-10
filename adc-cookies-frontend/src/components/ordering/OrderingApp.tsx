@@ -12,15 +12,15 @@ import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { getProducts, createOrder, createRazorpayOrder, verifyPayment, firstImage, type Product, type OrderItemInput } from '@/lib/api';
+import { getProducts, firstImage, type Product } from '@/lib/api';
 import { formatRemaining } from '@/lib/spinReward';
 import { useIsDesktop } from '@/lib/useIsDesktop';
-import { loadRazorpay } from '@/lib/razorpay';
 import { INDIAN_STATES, PIN_RE, PHONE_RE } from '@/lib/indiaAddress';
 import { useUpsellCatalog } from '@/hooks/checkout/useUpsellCatalog';
 import { useDeliveryCheck } from '@/hooks/checkout/useDeliveryCheck';
 import { useCheckoutCoupons } from '@/hooks/checkout/useCheckoutCoupons';
 import { useCheckoutAddresses } from '@/hooks/checkout/useCheckoutAddresses';
+import { useCheckoutPayment } from '@/hooks/checkout/useCheckoutPayment';
 import { WEEKDAYS as _WD, MONTHS as _MO } from '@/lib/orderFormat';
 import { CATEGORIES, FALLBACK_MENU, FALLBACK_TINS } from './menuData';
 import { CategoryTab } from './ui/CategoryTab';
@@ -59,7 +59,7 @@ const GIFT_OCCASIONS = ['Birthday', 'Anniversary', 'Wedding', 'Love', 'Thank you
 function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const router = useRouter();
   const desktop = useIsDesktop(920);
-  const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, giftLineId, setGiftLineId, clearAll } = useCart();
+  const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, giftLineId, setGiftLineId } = useCart();
   const { user } = useAuth();
   const { store: locationStore } = useLocation();
   const {
@@ -68,14 +68,6 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   } = useCheckoutAddresses();
   const catalog = useUpsellCatalog();
   const { couponErr, setCouponErr, availableCoupons, mySpinReward, applyCoupon } = useCheckoutCoupons();
-  const [placing, setPlacing] = useState(false);
-  const [payError, setPayError] = useState('');
-  const [payFailMsg, setPayFailMsg] = useState(''); // shown on the review step after a failed payment redirect
-  const [done, setDone] = useState(false);
-  const [orderId, setOrderId] = useState('');
-  const [paid, setPaid] = useState(0);
-  const [placedOrderSummary, setPlacedOrderSummary] = useState<{ items: { name: string; qty: number }[]; couponCode: string | null } | null>(null);
-  const [pendingPayment, setPendingPayment] = useState(false); // true when confirmed via stall mode (no Razorpay), not yet actually paid
   const [loginOpen, setLoginOpen] = useState(false);
 
   // The cart is client-only (localStorage), so hold cart-derived UI until after mount to avoid a
@@ -83,18 +75,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => { setHydrated(true); }, []);
 
-  // A failed payment bounces back here (/checkout?payment=failed) — surface why, then clean the URL
-  // so a refresh doesn't keep showing it.
-  useEffect(() => {
-    if (step !== 'review' || typeof window === 'undefined') return;
-    if (new URLSearchParams(window.location.search).get('payment') !== 'failed') return;
-    let msg = 'Your payment didn’t go through — no money was taken. Please review and try again.';
-    try { const s = sessionStorage.getItem('adc_pay_error'); if (s) msg = s; sessionStorage.removeItem('adc_pay_error'); } catch {}
-    setPayFailMsg(msg);
-    window.history.replaceState(null, '', '/checkout');
-  }, [step]);
-
   const { delivCheck, delivChecking } = useDeliveryCheck(chosen?.pincode);
+
   const lines = Object.values(cart);
   // The real charge, straight from the backend's own quote: Shiprocket's live per-order rate for
   // intracity (varies by address/distance), or the admin-set flat fee for outstation. This is a
@@ -105,6 +87,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const gstIncl = total > 0 ? Math.round(total - total / 1.05) : 0;  // 5% GST is already inside the prices
   const giftFee = gift ? GIFT_FEE : 0;
   const grand = total + delivery + giftFee - discount;               // GST included in `total`, not added on top
+  const {
+    placing, payError, payFailMsg, setPayFailMsg, done, orderId, paid,
+    placedOrderSummary, pendingPayment, handlePlace,
+  } = useCheckoutPayment({ step, chosen, addresses, grand, onNeedLogin: () => setLoginOpen(true) });
   const selected = chosen || addresses[0];                           // fallback only for the pay-step display
   // Pan-India arrival date: prefer the carrier's own date, else today + TAT days.
   const deliverBy = delivCheck && delivCheck.serviceable && !delivCheck.intracity
@@ -137,103 +123,6 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   // Coupons are validated on the backend right here at apply-time — so an invalid code is caught
   // now, not later at payment. Only genuinely valid, active codes ever set `applied`.
 
-  // Resolve cart items to REAL backend product ids. The cart may hold fallback-menu items
-  // whose ids aren't real ids (added before products finished loading) — resolve those by
-  // name (the fallback names match the DB exactly), so the order works regardless. Shared by
-  // both the real Razorpay flow and the stall-mode "confirm order" flow below.
-  const resolveOrderItems = async (): Promise<OrderItemInput[]> => {
-    let catalog: Product[] = [];
-    try { catalog = await getProducts(); } catch {}
-    const idByName = new Map(catalog.map(p => [p.name.trim().toLowerCase(), p.id]));
-    return Object.values(cart)
-      .map((e, index) => {
-        const opts: Record<string, unknown> = {};
-        if (e.addOns && e.addOns.length) opts.addOns = e.addOns;
-        if (index === 0 && gift) { opts.giftWrap = true; opts.giftMessage = giftMessage; if (giftOccasion) opts.giftOccasion = giftOccasion; }
-        const numericId = Number(e.id);
-        const productId = Number.isFinite(numericId) ? numericId : idByName.get(e.name.trim().toLowerCase());
-        return {
-          productId: productId as number,
-          quantity: e.qty,
-          selectedOptions: Object.keys(opts).length ? opts : undefined,
-          specialNotes: e.note || undefined,
-        };
-      })
-      .filter(it => Number.isFinite(it.productId) && it.quantity > 0);
-  };
-
-  // Create the order, then open the Razorpay popup. On success the handler verifies the
-  // payment on our backend (which marks PAID + auto-creates the Delhivery shipment), then
-  // shows the success screen. The user never leaves this page.
-  const handlePlace = async () => {
-    if (!user) { setLoginOpen(true); return; }
-    if (!addr || !addresses.some(a => a.id === addr)) { setPayError('Please select a delivery address first.'); return; }
-    if (lines.length === 0) { setPayError('Your cart is empty.'); return; }
-    setPayError('');
-    setPlacing(true);
-    try {
-      const items = await resolveOrderItems();
-      if (items.length === 0) {
-        setPlacing(false);
-        setPayError('Could not match your cart items to the menu. Please refresh the page, add them again, and retry.');
-        return;
-      }
-
-      const order = await createOrder(addr, applied ? coupon : undefined, items);
-      const rp = await createRazorpayOrder(order.id);
-
-      const ready = await loadRazorpay();
-      if (!ready || !window.Razorpay) throw new Error('Could not load the payment window. Check your connection and try again.');
-
-      const rzp = new window.Razorpay({
-        key: rp.keyId,
-        order_id: rp.orderId,
-        amount: rp.amount,
-        currency: rp.currency,
-        name: 'A Dough Cookie',
-        description: `Order ${rp.orderNumber}`,
-        prefill: { name: user.name || '', email: user.email || '', contact: chosen?.phone || '' },
-        theme: { color: 'var(--orange-cta)' },
-        // Fallback path for Instagram/FB Messenger/Opera Mini/UC in-app browsers, which can't run
-        // the iframe/popup flow below — Checkout redirects there instead of calling `handler`.
-        // It's a browser navigation (not server-to-server), so `/api/...` works via the same
-        // Next.js rewrite proxy every other API call already uses.
-        callback_url: `${window.location.origin}/api/payment-callback/${order.id}?return=${encodeURIComponent(window.location.origin)}`,
-        handler: async (resp) => {
-          try {
-            await verifyPayment(order.id, {
-              razorpayPaymentId: resp.razorpay_payment_id,
-              razorpayOrderId: resp.razorpay_order_id,
-              razorpaySignature: resp.razorpay_signature,
-            });
-            // Snapshot before clearAll() wipes the cart — the success screen still needs to show
-            // what was actually ordered.
-            setPlacedOrderSummary({ items: lines.map(l => ({ name: l.name, qty: l.qty })), couponCode: applied ? coupon : null });
-            setPendingPayment(false);
-            setPaid(grand);
-            setOrderId(rp.orderNumber);
-            clearAll();
-            setDone(true);
-          } catch (e) {
-            setPlacing(false);
-            setPayError(e instanceof Error ? e.message : 'We could not confirm your payment. If money was deducted, contact us with your order number.');
-          }
-        },
-        modal: { ondismiss: () => setPlacing(false) },
-      });
-      rzp.on('payment.failed', (resp) => {
-        setPlacing(false);
-        // Don't strand the shopper on the payment screen — take them back to the cart/checkout
-        // to review and retry. Carry the reason across so we can show it there.
-        try { sessionStorage.setItem('adc_pay_error', resp?.error?.description || 'Payment failed. Please try again.'); } catch {}
-        router.push('/checkout?payment=failed');
-      });
-      rzp.open();
-    } catch (e) {
-      setPlacing(false);
-      setPayError(e instanceof Error ? e.message : 'Something went wrong starting the payment. Please try again.');
-    }
-  };
 
   // Flat warm-white panels (explicit, so it never picks up the peach --surface-card on this page) —
   // thin border, no chunky shadow, closer to the clean Forever21 / Baudville checkout look.
