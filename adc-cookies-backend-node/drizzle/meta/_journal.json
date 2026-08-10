@@ -15,6 +15,20 @@
       "when": 1786375266235,
       "tag": "0001_fk_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786378453612,
+      "tag": "0002_money_numeric",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786378453612,
+      "tag": "0003_timestamptz",
+      "breakpoints": true
     }
   ]
 }
