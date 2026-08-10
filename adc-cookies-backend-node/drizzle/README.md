@@ -26,16 +26,23 @@ to run against an existing environment: those tables are already there.
 Think of it as `git init` on a project that already has files. From here on, every schema change is
 a numbered file that can be reviewed, ordered and rolled back.
 
-## Current state — read this before applying anything
+## Current state
 
-| Migration | staging | production |
+| Migration | production (`adc-backend`) | staging (`adc-backend Copy`) |
 |---|---|---|
-| `0000_baseline` | already reflects reality | already reflects reality |
-| `0001_fk_indexes` | **applied** | **NOT applied** |
+| `0000_baseline` | reflects reality (introspected from here) | reflects reality |
+| `0001_fk_indexes` | **applied, all four valid** | **applied, all four valid** |
 
-`initSchema()` still runs at boot and is still the thing that creates tables. Drizzle is not wired
-into startup, and the routes still query through `query()` / `getOne()` / `getAll()` in `db.js` —
-nothing was rewritten. Drizzle is here for the schema history only.
+Note on which database is which — this is easy to get wrong and I did:
+the repo's local `.env` `DATABASE_URL` points at **production**, not staging. Production currently
+holds 13 products / 19 users / **0 orders**; the staging Copy holds 13 products / 5 users /
+**13 orders**. So "has orders" is the *staging* one. Check with
+`railway run --service <name> node scripts/db-inspect.mjs` before touching anything, rather than
+inferring from row counts.
+
+`initSchema()` still runs at boot and is still what creates tables. Drizzle is not wired into
+startup, and the routes still query through `query()` / `getOne()` / `getAll()` in `db.js` — nothing
+was rewritten. Drizzle is here for the schema history only.
 
 ## Applying a migration
 
