@@ -34,7 +34,8 @@ export const NAV_LINKS: NavLinkDef[] = [
   { key: 'franchise', label: 'Franchise', href: '/franchise' },
   { key: 'about', label: 'About Us', href: '/about' },
   { key: 'contact', label: 'Contact', href: '/contact' },
-  { key: 'orders', label: 'Orders', href: '/account' },
+  // #orders so it lands on the orders section rather than the top of the account page.
+  { key: 'orders', label: 'Orders', href: '/account#orders' },
 ];
 
 /** The links a surface shows, in canonical order. Each surface decides its own subset. */
