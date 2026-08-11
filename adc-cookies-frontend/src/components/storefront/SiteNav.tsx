@@ -27,7 +27,7 @@ import { LocationPill } from './LocationPicker';
 // Desktop navbar shows every link. Labels/hrefs come from lib/navLinks so a rename lands here, in
 // the mobile drawer and on the order page at once; the dropdown CONTENTS below stay local because
 // each surface fills them from different data.
-const DESKTOP_KEYS = ['home', 'cookies', 'tins', 'locations', 'franchise', 'about', 'contact', 'orders'] as const;
+const DESKTOP_KEYS = ['home', 'cookies', 'tins', 'locations', 'corporate', 'franchise', 'about', 'contact', 'orders'] as const;
 
 export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: boolean }) {
   const router = useRouter();
@@ -74,10 +74,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
     key === 'cookies' ? toMenu('COOKIES')
       : key === 'tins' ? toMenu('TINS')
         : key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))
-          // Corporate lives inside the Franchise dropdown here, rather than as its own top-level
-          // link — this branch's navbar keeps the two partnership routes together.
-          : key === 'franchise' ? [{ label: 'Corporate & Bulk Order', href: '/corporate' }, { label: 'Franchise Enquiry', href: '/franchise' }]
-            : undefined;
+          : undefined;
   // Account icon → login modal (or account/admin page if already signed in).
   const accountClick = () => { if (user) router.push(user.role === 'ADMIN' ? '/admin' : '/account'); else setLoginOpen(true); };
 
