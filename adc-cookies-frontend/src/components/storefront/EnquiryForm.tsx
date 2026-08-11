@@ -80,7 +80,7 @@ const VARIANTS: Record<EnquiryVariant, VariantConfig> = {
     extras: [
       { key: 'Company / organisation', label: 'Company / organisation *', placeholder: 'Your company name', required: true, half: true },
       { key: 'Occasion', label: 'Occasion', placeholder: 'e.g. Diwali gifting, office event', half: true },
-      { key: 'Approx quantity', label: 'Approx. quantity *', placeholder: 'e.g. 250 boxes', required: true, half: true, type: 'text' },
+      { key: 'Approx quantity', label: 'Approx. cookies needed *', placeholder: 'e.g. 250 cookies', required: true, half: true, type: 'text' },
       { key: 'Needed by', label: 'Needed by', placeholder: '', half: true, type: 'date' },
     ],
   },
