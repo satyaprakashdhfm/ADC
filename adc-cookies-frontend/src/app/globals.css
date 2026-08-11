@@ -152,9 +152,9 @@ body::before {
   z-index: 1;
 }
 
-/* Order / checkout / account pages — mirror the "Finest Ingredients" look: gold page
-   background (--gold) with lighter vanilla cards (--vanilla) on top. */
-.order-cards { background: var(--gold); --surface-card: var(--peach-300); }
+/* Checkout / order pages — clean, flat look: soft cream page with warm-white panels (see card$)
+   and thin borders instead of chunky orange cards. */
+.order-cards { background: var(--cream-bg); --surface-card: #fffdf8; }
 
 /* Home page keeps its ORIGINAL warm-beige cards (--vanilla) — the FFCD90 card colour above
    is only for the inner/checkout pages. (Home <main> also carries .adc-pattern-page.) */
@@ -279,6 +279,15 @@ body::before {
   .home-cat-grid { grid-template-columns: 1fr !important; }
   .home-corp-body { max-width: 100% !important; }
 }
+
+/* Checkout order-summary lines: roomy on desktop (the left column has space to fill), compact on
+   a phone where the same size just pushes the delivery form off-screen. */
+@media (max-width:680px) {
+  .co-line { gap: 10px !important; padding: 11px 0 !important; }
+  .co-line__img { width: 68px !important; height: 68px !important; }
+}
+/* The "Goes great with" upsell tiles grow with the column on desktop. */
+@media (min-width:961px) { .co-upsell-tile { width: 168px !important; } }
 
 /* The floating Spin & Win launcher's mini-wheel spins forever so it reads as a live prize wheel. */
 @keyframes miniWheelSpin { to { transform: rotate(360deg); } }
