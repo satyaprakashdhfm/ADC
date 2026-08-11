@@ -42,10 +42,16 @@ export default function FloatingDock() {
   // itself even after the wheel modal is closed — not just while it's open.
   const { activeReward, setActiveReward, checking: checkingReward, now, refresh } = useActiveSpinReward();
 
-  /* The wheel auto-opens on the FIRST visit (once ever, tracked in localStorage), homepage only so
-     it never ambushes anyone mid-checkout. It waits behind the "where are we delivering?" prompt:
-     a returning visitor who already has a location gets the wheel almost immediately, while a
-     brand-new one answers the location question first and sees the wheel ~10s in. */
+  /* The wheel opens by itself at most TWICE on a device, ever: once for a brand-new visitor (here)
+     and once when an account first signs in (below). Beyond that it is nagging, and the launcher is
+     always one tap away.
+
+     Homepage only, so it never ambushes anyone mid-checkout. It waits behind the "where are we
+     delivering?" prompt: a returning visitor who already has a location gets the wheel almost
+     immediately, while a brand-new one answers the location question first and sees it ~10s in.
+
+     The flag is written when the wheel actually OPENS, not when the timer is set — someone who
+     leaves during the countdown never saw it, so it should still be waiting for them next time. */
   useEffect(() => {
     if (typeof window === 'undefined' || spinDone.current || pathname !== '/') return;
     let seen = false;
@@ -64,12 +70,29 @@ export default function FloatingDock() {
     return () => clearTimeout(t);
   }, [pathname]);
 
-  // …and again right after they log in (transition from signed-out → signed-in), on the homepage,
-  // so a returning shopper is offered a spin the moment they sign in.
+  /* …and once more when an account first signs in here, so a shopper who logs in is offered a
+     spin. That is the whole budget: twice on a device, ever.
+
+     The "did they just sign in?" ref alone was not enough, because plenty of things that are NOT a
+     sign-in look exactly like one from here. A refresh remounts with `user` null and fills it in
+     asynchronously; a token refresh or tab refocus can briefly null it too. Each read as
+     signed-out → signed-in and re-opened the wheel, which is why it fired on every reload.
+
+     So the budget is spent in localStorage, keyed per account, and checked BEFORE the transition:
+     once an account has had its spin on this device, no sequence of remounts can produce another. */
   useEffect(() => {
     const was = prevUser.current;
     prevUser.current = user;
-    if (!was && user && pathname === '/') setSpin(true);
+    if (!user || pathname !== '/') return;
+    // Phone-only accounts have no email, so key on whichever identifies them.
+    const who = (user.email || user.phone || '').trim().toLowerCase();
+    if (!who) return;
+    const key = `adc_spin_login_seen_${who}`;
+    let already = false;
+    try { already = !!localStorage.getItem(key); } catch { /* ignore */ }
+    if (already || was) return;   // already spent, or not actually a sign-in
+    try { localStorage.setItem(key, '1'); } catch { /* ignore */ }
+    setSpin(true);
   }, [user, pathname]);
 
   // Lets other parts of the site (e.g. the footer's "FAQs" link) open this same chatbot instance.
