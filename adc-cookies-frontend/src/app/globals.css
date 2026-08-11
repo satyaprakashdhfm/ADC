@@ -53,6 +53,7 @@
   --space-9: 48px; --space-10: 64px; --space-11: 80px; --space-12: 96px;
   --gutter: clamp(18px,4vw,40px); /* side page padding — capped ~1cm so desktop fills the screen */
   --section-y: clamp(64px,9vw,128px);
+  --ribbon-h: 28px; /* height of the sticky top announcement ribbon — the home nav offsets below it */
   --control-h-sm: 36px; --control-h-md: 44px; --control-h-lg: 54px; --control-h-xl: 62px;
   --container-max: 1200px;
   --hc: min(420px,38vw);
