@@ -5,6 +5,7 @@ import { CartProvider } from '@/context/CartContext';
 import { LocationProvider } from '@/context/LocationContext';
 import ProfileGate from '@/components/ProfileGate';
 import FloatingDock from '@/components/storefront/FloatingDock';
+import CartBar from '@/components/storefront/CartBar';
 import { LocationGate } from '@/components/storefront/LocationPicker';
 
 /* App-wide providers, mounted once in the root layout so auth + cart state stay
@@ -22,6 +23,7 @@ export default function Providers({ children }: { children: ReactNode }) {
           {children}
           <ProfileGate />
           <LocationGate />
+          <CartBar />
           <FloatingDock />
         </LocationProvider>
       </CartProvider>
