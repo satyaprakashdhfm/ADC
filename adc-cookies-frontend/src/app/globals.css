@@ -286,27 +286,37 @@ body::before {
 .mini-wheel-disc { animation: miniWheelSpin 3.6s linear infinite; will-change: transform; }
 @media (prefers-reduced-motion: reduce) { .mini-wheel-disc { animation: none; } }
 
-/* Header doodle wash — a faint, sparse scatter of cookie doodles behind the nav band so it isn't a
-   flat orange block. Two cookie sizes + crumbs at offset positions break the grid feel; low opacity
-   keeps it a background texture, never dominating. The nav content sits above it (z-index below). */
-.home-sticky-header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  /* Hand-drawn cream cookie-doodle strip (client's reference art) tiled small and light, so the
-     band reads as a busy-but-subtle doodle texture rather than a flat orange block. The art's own
-     background is the same brand orange, so only the cream doodles show through at low opacity. */
-  background-image: url('/assets/doodles/header-doodles.png');
-  background-repeat: repeat-x;      /* a single horizontal band, not a full-grid wallpaper */
-  background-position: center;
-  background-size: auto 230%;       /* enlarge a lot so only a few big doodles show, not a swarm */
-  opacity: .055;                    /* barely-there ghost wash — tone-on-tone, never a glow */
-  filter: saturate(1.25) brightness(.92); /* nudge the cream doodles a touch warmer/darker */
-}
-.home-sticky-header > nav,
-.home-sticky-header > .home-topbar { position: relative; z-index: 1; }
+/* Header doodle wash — TURNED OFF, on both branches. A faint scatter of cookie doodles behind the
+   nav band so it wasn't a flat orange block. Kept here rather than deleted so it can come back
+   without re-doing the tuning, which is the fiddly part: the opacity and background-size below are
+   the settled values, and they are easy to get wrong.
+
+   The inline notes below start with -- because CSS comments do not nest; turn them back into real
+   comment markers if you uncomment this.
+
+   TO RE-ENABLE you also need the artwork at public/assets/doodles/header-doodles.png. It exists on
+   final_deploy ONLY. On main it must be copied across first, or the band renders a broken
+   background with no error to tell you why.
+
+   .home-sticky-header::before {
+     content: '';
+     position: absolute;
+     inset: 0;
+     z-index: 0;
+     pointer-events: none;
+     -- Hand-drawn cream cookie-doodle strip (client's reference art) tiled small and light. The
+     -- art's own background is the same brand orange, so only the cream doodles show through.
+     background-image: url('/assets/doodles/header-doodles.png');
+     background-repeat: repeat-x;      -- a single horizontal band, not a full-grid wallpaper
+     background-position: center;
+     background-size: auto 230%;       -- enlarge a lot so only a few big doodles show, not a swarm
+     opacity: .055;                    -- barely-there ghost wash, tone-on-tone, never a glow
+     filter: saturate(1.25) brightness(.92);
+   }
+   -- lifts the nav content above the ::before layer; only needed while the doodle is on
+   .home-sticky-header > nav,
+   .home-sticky-header > .home-topbar { position: relative; z-index: 1; }
+*/
 
 /* Product card image hover-swap — a second styled shot crossfades in over the first when the card
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
