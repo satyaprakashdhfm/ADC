@@ -112,6 +112,17 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const hasBlockingRestriction = lines.some(l => !!restrictionFor(l.id));
   const canProceed = hydrated && lines.length > 0 && !!chosen && chosenPinOk && chosenPhoneOk
     && (delivCheck ? delivCheck.serviceable : true) && !hasBlockingRestriction;
+  // Why the CTA is disabled, phrased as the next thing to do — and shown ON the button rather than
+  // as a line of text above it. The sticky bar deliberately has no panel behind it (so the button
+  // reads as a button, not a bar pasted over the footer), which meant a bare line of helper text
+  // sat unreadably on top of whatever happened to be scrolling underneath it.
+  // Ordered by what the customer can act on first; null once nothing is blocking.
+  const blockedReason = !hydrated || lines.length === 0 ? null
+    : !chosen ? 'Add a delivery address to continue'
+      : !chosenPinOk || !chosenPhoneOk ? 'Complete the delivery address to continue'
+        : delivCheck && !delivCheck.serviceable ? 'We don’t deliver to this address yet'
+          : hasBlockingRestriction ? 'Some items can’t be delivered to this address'
+            : null;
   const fieldStyle: React.CSSProperties = { flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
   const hintStyle: React.CSSProperties = { fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 600 };
   // Coupons are validated on the backend right here at apply-time — so an invalid code is caught
@@ -602,19 +613,15 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       <div style={{ position: 'sticky', bottom: 0, zIndex: 20, padding: '14px var(--gutter) 18px', background: 'transparent', flex: 'none' }}>
         {step === 'review' ? (
           <>
-            {hydrated && lines.length > 0 && user && !chosen && (
-              <div style={{ maxWidth: 720, margin: '0 auto 10px', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', textAlign: 'center', fontWeight: 700 }}>
-                Add &amp; select a delivery address to continue.
-              </div>
-            )}
             {hydrated && !user ? (
               // Guests: prompt login before anything else (the address card also shows a log-in prompt).
               <button onClick={() => setLoginOpen(true)} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: 'var(--shadow-xl)' }}>
                 <Lock size={18} /> Log in to continue
               </button>
             ) : (
-              <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!canProceed} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-pill)', border: 'none', background: canProceed ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: canProceed ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: canProceed ? 'var(--shadow-xl)' : 'var(--shadow-md)' }}>
-                {STALL_MODE ? <>Continue <ArrowRight size={18} /></> : <>Proceed to Pay · ₹{grand} <ArrowRight size={18} /></>}
+              <button suppressHydrationWarning onClick={() => router.push('/payment')} disabled={!canProceed} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-pill)', border: 'none', background: canProceed ? 'var(--gradient-warm)' : 'var(--border-default)', color: canProceed ? 'var(--white)' : 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: canProceed ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: canProceed ? 'var(--shadow-xl)' : 'var(--shadow-md)' }}>
+                {blockedReason ? blockedReason
+                  : STALL_MODE ? <>Continue <ArrowRight size={18} /></> : <>Proceed to Pay · ₹{grand} <ArrowRight size={18} /></>}
               </button>
             )}
           </>
