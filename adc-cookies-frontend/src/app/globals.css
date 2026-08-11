@@ -152,6 +152,8 @@ body::before {
   z-index: 1;
 }
 
+/* Order / checkout / account pages — mirror the "Finest Ingredients" look: gold page
+   background (--gold) with lighter vanilla cards (--vanilla) on top. */
 /* Checkout / order pages — clean, flat look: soft cream page with warm-white panels (see card$)
    and thin borders instead of chunky orange cards. */
 .order-cards { background: var(--cream-bg); --surface-card: #fffdf8; }
@@ -279,19 +281,42 @@ body::before {
   .home-corp-body { max-width: 100% !important; }
 }
 
-/* Checkout order-summary lines: roomy on desktop (the left column has space to fill), compact on
-   a phone where the same size just pushes the delivery form off-screen. */
-@media (max-width:680px) {
-  .co-line { gap: 10px !important; padding: 11px 0 !important; }
-  .co-line__img { width: 68px !important; height: 68px !important; }
-}
-/* The "Goes great with" upsell tiles grow with the column on desktop. */
-@media (min-width:961px) { .co-upsell-tile { width: 168px !important; } }
-
 /* The floating Spin & Win launcher's mini-wheel spins forever so it reads as a live prize wheel. */
 @keyframes miniWheelSpin { to { transform: rotate(360deg); } }
 .mini-wheel-disc { animation: miniWheelSpin 3.6s linear infinite; will-change: transform; }
 @media (prefers-reduced-motion: reduce) { .mini-wheel-disc { animation: none; } }
+
+/* Header doodle wash — TURNED OFF, on both branches. A faint scatter of cookie doodles behind the
+   nav band so it wasn't a flat orange block. Kept here rather than deleted so it can come back
+   without re-doing the tuning, which is the fiddly part: the opacity and background-size below are
+   the settled values, and they are easy to get wrong.
+
+   The inline notes below start with -- because CSS comments do not nest; turn them back into real
+   comment markers if you uncomment this.
+
+   TO RE-ENABLE you also need the artwork at public/assets/doodles/header-doodles.png. It exists on
+   final_deploy ONLY. On main it must be copied across first, or the band renders a broken
+   background with no error to tell you why.
+
+   .home-sticky-header::before {
+     content: '';
+     position: absolute;
+     inset: 0;
+     z-index: 0;
+     pointer-events: none;
+     -- Hand-drawn cream cookie-doodle strip (client's reference art) tiled small and light. The
+     -- art's own background is the same brand orange, so only the cream doodles show through.
+     background-image: url('/assets/doodles/header-doodles.png');
+     background-repeat: repeat-x;      -- a single horizontal band, not a full-grid wallpaper
+     background-position: center;
+     background-size: auto 230%;       -- enlarge a lot so only a few big doodles show, not a swarm
+     opacity: .055;                    -- barely-there ghost wash, tone-on-tone, never a glow
+     filter: saturate(1.25) brightness(.92);
+   }
+   -- lifts the nav content above the ::before layer; only needed while the doodle is on
+   .home-sticky-header > nav,
+   .home-sticky-header > .home-topbar { position: relative; z-index: 1; }
+*/
 
 /* Product card image hover-swap — a second styled shot crossfades in over the first when the card
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
@@ -301,6 +326,15 @@ body::before {
 .prod-media:hover .prod-media__hover { opacity: 1; }
 /* Subtle lift so the swap reads as interactive; the image itself eases in via the opacity above. */
 .prod-media { transition: transform .45s ease; }
+
+/* Checkout order-summary lines: roomy on desktop (the left column has space to fill), compact on
+   a phone where the same size just pushes the delivery form off-screen. */
+@media (max-width:680px) {
+  .co-line { gap: 10px !important; padding: 11px 0 !important; }
+  .co-line__img { width: 68px !important; height: 68px !important; }
+}
+/* The "Goes great with" upsell tiles grow with the column on desktop. */
+@media (min-width:961px) { .co-upsell-tile { width: 168px !important; } }
 
 /* Customer Love (Reviews) — compact cards on mobile, noticeably larger on desktop */
 .review-card { flex: none; width: min(80vw, 300px); }
