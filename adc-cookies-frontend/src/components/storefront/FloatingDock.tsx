@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Clock } from 'lucide-react';
 import { whatsappLink } from '@/lib/site';
 import { useActiveSpinReward, formatRemainingShort } from '@/lib/spinReward';
+import { useAuth } from '@/context/AuthContext';
 import { OPEN_CHAT_EVENT } from '@/lib/chatEvents';
 import SpinWheel from './SpinWheel';
 import Chatbot from './Chatbot';
@@ -14,7 +15,8 @@ const WHEEL_MINI = 'conic-gradient(var(--amber-400) 0 45deg, var(--orange-500) 4
 const MiniWheel = () => (
   <span style={{ position: 'relative', width: 32, height: 32, display: 'grid', placeItems: 'center' }}>
     <span aria-hidden style={{ position: 'absolute', top: -2, left: '50%', transform: 'translateX(-50%)', zIndex: 2, width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '7px solid var(--ink-900)' }} />
-    <span aria-hidden style={{ width: 30, height: 30, borderRadius: '50%', background: WHEEL_MINI, border: '2px solid var(--white)', boxShadow: '0 0 0 1px var(--amber-600)' }} />
+    {/* The disc spins continuously so the launcher always reads as a live, dynamic prize wheel. */}
+    <span aria-hidden className="mini-wheel-disc" style={{ width: 30, height: 30, borderRadius: '50%', background: WHEEL_MINI, border: '2px solid var(--white)', boxShadow: '0 0 0 1px var(--amber-600)' }} />
     <span aria-hidden style={{ position: 'absolute', width: 9, height: 9, borderRadius: '50%', background: 'var(--white)', boxShadow: '0 0 0 1.5px var(--amber-600)' }} />
   </span>
 );
@@ -34,28 +36,41 @@ export default function FloatingDock() {
   const [chat, setChat] = useState(false);
   const spinDone = useRef(false);
   const pathname = usePathname();
+  const { user } = useAuth();
+  const prevUser = useRef<typeof user>(user);
   // Lifted here (not inside SpinWheel) so the 12h claim countdown stays visible on the launcher
   // itself even after the wheel modal is closed — not just while it's open.
   const { activeReward, setActiveReward, checking: checkingReward, now, refresh } = useActiveSpinReward();
 
-  // Spin pops on its own a few seconds after load (at most once a day) — location is no longer a
-  // prerequisite; it's collected at checkout via the delivery address, so nothing gates the wheel
-  // on the homepage anymore.
-  // The dock is mounted app-wide (support has to be reachable from every page), but the wheel
-  // should still only ambush people on the homepage — not mid-checkout or on a contact form.
+  /* The wheel auto-opens on the FIRST visit (once ever, tracked in localStorage), homepage only so
+     it never ambushes anyone mid-checkout. It waits behind the "where are we delivering?" prompt:
+     a returning visitor who already has a location gets the wheel almost immediately, while a
+     brand-new one answers the location question first and sees the wheel ~10s in. */
   useEffect(() => {
     if (typeof window === 'undefined' || spinDone.current || pathname !== '/') return;
-    let last = 0;
-    try { last = Number(localStorage.getItem('adc_spin_last') || 0); } catch { /* ignore */ }
-    const DAY = 24 * 60 * 60 * 1000;
-    if (last && Date.now() - last <= DAY) { spinDone.current = true; return; }
+    let seen = false;
+    let locationKnown = false;
+    try {
+      seen = !!localStorage.getItem('adc_spin_first_seen');
+      // Either they've already picked/detected a location, or we've asked before and they declined.
+      locationKnown = !!localStorage.getItem('adc_location_pincode') || !!localStorage.getItem('adc_location_asked');
+    } catch { /* ignore */ }
+    if (seen) { spinDone.current = true; return; }
     spinDone.current = true;
     const t = setTimeout(() => {
       setSpin(true);
-      try { localStorage.setItem('adc_spin_last', String(Date.now())); } catch { /* ignore */ }
-    }, 3000);
+      try { localStorage.setItem('adc_spin_first_seen', '1'); } catch { /* ignore */ }
+    }, locationKnown ? 2800 : 10_000);
     return () => clearTimeout(t);
   }, [pathname]);
+
+  // …and again right after they log in (transition from signed-out → signed-in), on the homepage,
+  // so a returning shopper is offered a spin the moment they sign in.
+  useEffect(() => {
+    const was = prevUser.current;
+    prevUser.current = user;
+    if (!was && user && pathname === '/') setSpin(true);
+  }, [user, pathname]);
 
   // Lets other parts of the site (e.g. the footer's "FAQs" link) open this same chatbot instance.
   useEffect(() => {
@@ -64,10 +79,20 @@ export default function FloatingDock() {
     return () => window.removeEventListener(OPEN_CHAT_EVENT, open);
   }, []);
 
+  // A little "Hi, I'm Doughie" speech bubble pinned beside the support mascot — homepage only, a
+  // couple of seconds after load so it doesn't fight the first paint. It stays until dismissed or
+  // until the chat is opened.
+  const [bubble, setBubble] = useState(false);
+  useEffect(() => {
+    if (pathname !== '/') { setBubble(false); return; }
+    const t = setTimeout(() => setBubble(true), 2500);
+    return () => clearTimeout(t);
+  }, [pathname]);
+  useEffect(() => { if (chat) setBubble(false); }, [chat]);
+
   // The staff order board is not the storefront: a spin-wheel and a chat mascot floating over a
-  // kitchen's live orders are just things to tap by accident. Scoped to /store, so no page the
-  // public sees is affected. Hooks all run above this line, so the early return cannot change
-  // hook order.
+  // kitchen's live orders are just things to tap by accident. Hooks all run above this line, so the
+  // early return cannot change hook order.
   if (pathname?.startsWith('/store')) return null;
 
   return (
@@ -92,17 +117,39 @@ export default function FloatingDock() {
           )}
         </button>
 
-        {/* Chatbot (middle) — Doughie, the support mascot. No button chrome — the sticker itself
-            (transparent PNG) floats directly over the page, like the other dock items' own art. */}
-        <button onClick={() => setChat(o => !o)} aria-label="Help & support" title="Help & support"
-          style={{ ...fab, width: 54, height: 54, background: 'none', border: 'none', boxShadow: 'none', padding: 0 }}>
-          <Image src="/assets/mascots/doughie-support.png" alt="" width={54} height={54}
-            style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 8px 16px var(--black-18))' }} />
-        </button>
+        {/* Chatbot (middle) — Doughie, the support mascot, seated on a round white disk with a
+            pulsing ring, so it matches the spin (white disk) and WhatsApp (green disk) launchers and
+            the trio reads as one set. Same waPulse ring as WhatsApp, tinted amber to the brand. */}
+        <div style={{ position: 'relative', display: 'grid', placeItems: 'center' }}>
+          {bubble && (
+            <button
+              onClick={() => setChat(true)}
+              className="doughie-bubble"
+              style={{
+                position: 'absolute', right: 'calc(100% + 12px)', top: '50%', transform: 'translateY(-50%)',
+                width: 'max-content', maxWidth: 150, textAlign: 'left', cursor: 'pointer', whiteSpace: 'nowrap',
+                background: 'var(--white)', color: 'var(--text-strong)', border: '1.5px solid var(--border-default)',
+                borderRadius: 12, padding: '6px 10px', boxShadow: '0 8px 18px var(--black-18)',
+                fontFamily: 'var(--font-body)', fontSize: 'var(--text-2xs)', fontWeight: 800, lineHeight: 1.2,
+              }}
+            >
+              <span aria-hidden onClick={(e) => { e.stopPropagation(); setBubble(false); }} style={{ position: 'absolute', top: -7, right: -7, width: 17, height: 17, borderRadius: '50%', background: 'var(--white)', border: '1.5px solid var(--border-default)', color: 'var(--text-muted)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, lineHeight: 1 }}>×</span>
+              Hi! I&apos;m Doughie 🍪
+              {/* tail pointing right at the mascot */}
+              <span aria-hidden style={{ position: 'absolute', right: -6, top: '50%', transform: 'translateY(-50%) rotate(45deg)', width: 11, height: 11, background: 'var(--white)', borderRight: '1.5px solid var(--border-default)', borderTop: '1.5px solid var(--border-default)' }} />
+            </button>
+          )}
+          <button onClick={() => setChat(o => !o)} aria-label="Help & support" title="Help & support"
+            style={{ ...fab, background: 'var(--white)', border: '1.5px solid var(--border-default)' }}>
+            <span aria-hidden style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid rgba(242,159,5,.6)', animation: 'waPulse 2.4s ease-out infinite' }} />
+            <Image src="/assets/mascots/doughie-support.png" alt="" width={42} height={42}
+              style={{ width: 42, height: 42, objectFit: 'contain' }} />
+          </button>
+        </div>
 
         {/* WhatsApp (bottom) */}
         <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" aria-label="Chat with us on WhatsApp" title="WhatsApp"
-          style={{ ...fab, width: 62, height: 62, background: 'var(--whatsapp-green)', boxShadow: '0 12px 30px var(--wa-45), 0 4px 10px var(--black-18)', textDecoration: 'none' }}>
+          style={{ ...fab, background: 'var(--whatsapp-green)', boxShadow: '0 12px 30px var(--wa-45), 0 4px 10px var(--black-18)', textDecoration: 'none' }}>
           <span aria-hidden style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid var(--wa-60)', animation: 'waPulse 2.4s ease-out infinite' }} />
           <svg width={33} height={33} viewBox="0 0 32 32" aria-hidden style={{ fill: 'var(--white)' }}>
             <path d="M16.003 3.2c-7.06 0-12.8 5.74-12.8 12.8 0 2.26.6 4.46 1.74 6.4L3.2 28.8l6.56-1.72a12.74 12.74 0 0 0 6.24 1.6h.005c7.06 0 12.8-5.74 12.8-12.8s-5.745-12.68-12.8-12.68Zm0 23.04h-.004a10.6 10.6 0 0 1-5.4-1.48l-.388-.23-4.03 1.06 1.076-3.93-.252-.404a10.56 10.56 0 0 1-1.62-5.62c0-5.86 4.77-10.63 10.64-10.63 2.84 0 5.51 1.11 7.52 3.12a10.56 10.56 0 0 1 3.114 7.52c0 5.86-4.77 10.63-10.63 10.63Zm5.83-7.96c-.32-.16-1.89-.93-2.18-1.04-.29-.11-.5-.16-.71.16-.21.32-.82 1.04-1 1.25-.18.21-.37.24-.69.08-.32-.16-1.35-.5-2.57-1.58-.95-.85-1.59-1.9-1.78-2.22-.18-.32-.02-.49.14-.65.14-.14.32-.37.48-.55.16-.18.21-.32.32-.53.11-.21.05-.4-.03-.56-.08-.16-.71-1.71-.97-2.34-.26-.62-.52-.54-.71-.55l-.6-.01c-.21 0-.55.08-.84.4-.29.32-1.1 1.08-1.1 2.63 0 1.55 1.13 3.05 1.29 3.26.16.21 2.22 3.39 5.38 4.76.75.32 1.34.51 1.8.66.76.24 1.45.21 1.99.13.61-.09 1.89-.77 2.16-1.52.27-.75.27-1.39.19-1.52-.08-.13-.29-.21-.61-.37Z" />

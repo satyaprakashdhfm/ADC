@@ -196,7 +196,12 @@ body::before {
      makes rem inputs ~14px, so force real 16px on form fields to stop the zoom-in/out on focus. */
   input, select, textarea { font-size: 16px !important; }
   .floating-dock { right: 14px !important; bottom: 14px !important; gap: 10px !important; }
-  .floating-dock > * { width: 46px !important; height: 46px !important; }
+  /* Target the launchers themselves, not their wrappers: the chatbot sits inside a positioning
+     div (for its speech bubble), so a `> *` rule shrank the wrapper and left the button full size —
+     which is why the mascot looked bigger than the other two on a phone. */
+  .floating-dock > button,
+  .floating-dock > a,
+  .floating-dock > div > button { width: 46px !important; height: 46px !important; }
   /* Header icons sit bare on the orange band — the ring outlines read as hard white circles on a
      phone, which they don't on the roomier desktop bar. */
   .nav-round-btn { border-color: transparent !important; }
@@ -205,6 +210,9 @@ body::before {
   /* Compact cart bar, bottom-LEFT and only as wide as its content — small & precise, well clear of
      the floating dock on the right (no more stretched full-width bar colliding with it). */
   .home-cart-bar { left: 12px !important; right: auto !important; width: auto !important; max-width: calc(100vw - 96px) !important; transform: none !important; bottom: 16px !important; justify-content: center !important; gap: 8px !important; padding: 9px 15px !important; font-size: var(--text-sm) !important; }
+  /* The Doughie greeting bubble crowds the tight bottom-right on phones — hide it there (the
+     mascot itself is still tappable to open the chat). */
+  .doughie-bubble { display: none !important; }
 }
 @media (max-width:760px) { :root { --hc: 300px; } }
 @media (max-width:480px) { :root { --hc: 240px; } }
@@ -271,6 +279,11 @@ body::before {
   .home-cat-grid { grid-template-columns: 1fr !important; }
   .home-corp-body { max-width: 100% !important; }
 }
+
+/* The floating Spin & Win launcher's mini-wheel spins forever so it reads as a live prize wheel. */
+@keyframes miniWheelSpin { to { transform: rotate(360deg); } }
+.mini-wheel-disc { animation: miniWheelSpin 3.6s linear infinite; will-change: transform; }
+@media (prefers-reduced-motion: reduce) { .mini-wheel-disc { animation: none; } }
 
 /* Product card image hover-swap — a second styled shot crossfades in over the first when the card
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
