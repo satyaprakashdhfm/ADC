@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -11,8 +10,10 @@ import {
   friendlyDate, formatPhone, national10, SHIP_STAGES, shipStage, isCancelledStatus, whenLabel,
 } from '@/lib/orderFormat';
 import LoginModal from '@/components/ordering/LoginModal';
+import SiteHeader from '@/components/storefront/SiteHeader';
+import Footer from '@/components/storefront/Footer';
 import {
-  ChevronLeft, Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
+  Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
   Info, LifeBuoy, ChevronRight, LogOut, ShoppingBag, MapPin, Gift,
   MessageSquare, ReceiptText, PackageCheck, Truck, CreditCard, Copy, Clock,
 } from 'lucide-react';
@@ -386,9 +387,12 @@ export default function AccountPage() {
 
   if (!user) {
     return (
-      <main className="adc-pattern-page" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 'var(--gutter)' }}>
+      <main className="adc-pattern-page" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <SiteHeader />
+        {/* The card centres in whatever space is left between header and footer — not in the
+            viewport, which would have centred the header and footer along with it. */}
+        <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 'var(--gutter)' }}>
         <div style={{ ...card, padding: 32, maxWidth: 420, width: '100%', textAlign: 'center', display: 'grid', gap: 14, justifyItems: 'center' }}>
-          <Image src="/assets/adc-logo.png" height={56} width={95} alt="a dough cookie" style={{ objectFit: 'contain' }} />
           <h1 style={{ ...sectionTitle, fontSize: 'var(--text-h4)' }}>Log in to see your orders</h1>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0 }}>
             Sign in to view past orders, track deliveries, and manage your saved addresses.
@@ -400,7 +404,9 @@ export default function AccountPage() {
             Back to home
           </button>
         </div>
+        </div>
         <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+        <Footer />
       </main>
     );
   }
@@ -439,19 +445,14 @@ export default function AccountPage() {
 
   return (
     <main className="adc-pattern-page order-cards" style={{ minHeight: '100vh' }}>
-      <header style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--surface-glass)', backdropFilter: 'var(--blur-panel)', WebkitBackdropFilter: 'var(--blur-panel)', borderBottom: '1px solid var(--border-soft)' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto', padding: '12px var(--gutter)', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <button onClick={() => router.push('/')} aria-label="Back to home" style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronLeft size={20} /></button>
-          <Link href="/" aria-label="a dough cookie home" style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-            <Image src="/assets/adc-logo.png" height={66} width={112} alt="a dough cookie" style={{ objectFit: 'contain' }} />
-          </Link>
-          <span style={{ ...sectionTitle, fontSize: 'var(--text-h4)' }}>My Account</span>
-        </div>
-      </header>
+      {/* The shared navbar, not a bespoke one. This page used to carry its own header — back arrow,
+          logo, "My Account" — which meant arriving here dropped the customer out of the site's
+          navigation entirely. The <h1> in the profile card below already names the page. */}
+      <SiteHeader />
 
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '22px var(--gutter) 64px' }}>
         <section style={{ display: 'grid', gridTemplateColumns: '330px minmax(0,1fr)', gap: 24, alignItems: 'start' }} className="account-layout">
-          <aside style={{ display: 'grid', gap: 16, position: 'sticky', top: 92 }} className="account-sidebar">
+          <aside style={{ display: 'grid', gap: 16, position: 'sticky', top: 96 }} className="account-sidebar">
             <div style={{ ...card, padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
                 <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: 'var(--white)', fontSize: 'var(--text-h3)', fontWeight: 900, flex: 'none' }}>{user.initials}</div>
@@ -585,6 +586,7 @@ export default function AccountPage() {
           </div>
         </section>
       </div>
+      <Footer />
     </main>
   );
 }
