@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { ShoppingBag, Plus, Minus, ArrowRight, Cookie, Gift, Briefcase } from 'lucide-react';
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
+import { useLocation } from '@/context/LocationContext';
+import { productAvailableFor } from '@/lib/stores';
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
 const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'clamp(14px,1.8vw,22px)' };
@@ -56,6 +58,7 @@ function SubHead({ icon, title }: { icon: React.ReactNode; title: string }) {
 export default function HomeProducts() {
   const router = useRouter();
   const { count, total } = useCart();
+  const { store } = useLocation();
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState('');
   const sectionRef = useRef<HTMLElement>(null);
@@ -114,9 +117,9 @@ export default function HomeProducts() {
   // Selecting/searching a product floats it to the top but KEEPS every other cookie visible.
   const ql = q.trim().toLowerCase();
   const cookies = products
-    .filter(p => p.category === 'COOKIES' && p.isAvailable && !/sundae/i.test(p.name))
+    .filter(p => p.category === 'COOKIES' && p.isAvailable && !/sundae/i.test(p.name) && productAvailableFor(store, p))
     .sort((a, b) => (ql ? (a.name.toLowerCase().includes(ql) ? 0 : 1) - (b.name.toLowerCase().includes(ql) ? 0 : 1) : 0));
-  const tins = products.filter(p => p.category === 'TINS' && p.isAvailable);
+  const tins = products.filter(p => p.category === 'TINS' && p.isAvailable && productAvailableFor(store, p));
 
   return (
     <section ref={sectionRef} id="products" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
