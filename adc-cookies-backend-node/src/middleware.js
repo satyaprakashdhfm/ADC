@@ -101,6 +101,14 @@ async function syncUser({ email, phone, name }) {
   return null;
 }
 
+/*
+ * Why a bearer token did not become a req.user. Anonymous is a legitimate outcome here (plenty of
+ * routes allow it), so this is a warning and never throws — but it has to be visible, because the
+ * alternative is a 401 whose cause cannot be told apart from any other 401.
+ * Never logs the token; the method and path are enough to correlate with the request.
+ */
+const authLog = (req, why) => console.warn(`[AUTH] ${req.method} ${req.originalUrl || req.url} — ${why}`);
+
 // Reads the Supabase token (if any), verifies it, syncs the user, attaches req.user.
 // Always calls next() — an invalid/missing token simply leaves req.user undefined.
 export async function parseAuth(req, _res, next) {
@@ -117,8 +125,19 @@ export async function parseAuth(req, _res, next) {
         const name = meta.full_name || meta.name || (email ? email.split('@')[0] : '');
         const user = await syncUser({ email, phone, name });
         if (user) req.user = { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone };
+        else authLog(req, 'syncUser returned no row');
+      } else {
+        // Verified, but carries no identity we can key on. Happens when a phone-login token has
+        // only its synthetic email and no phone claim — the account then silently cannot act.
+        authLog(req, `token has no usable identity (email=${rawEmail ? 'synthetic' : 'none'}, phone=none)`);
       }
-    } catch { /* invalid/expired token — treat as anonymous */ }
+    } catch (e) {
+      // Still anonymous — but say WHY. This was a bare `catch {}`, which made an expired token, a
+      // Supabase project mismatch and a database failure all look identical from outside: a bald
+      // 401 "Authentication required" with nothing to diagnose from. The token itself is never
+      // logged; only the reason it was rejected.
+      authLog(req, `token rejected: ${e.message}`);
+    }
   }
   next();
 }

@@ -18,6 +18,9 @@ let cache = { keys: new Map(), fetchedAt: 0 };
 
 async function refreshJwks() {
   if (!SUPABASE_URL) throw new Error('SUPABASE_URL is not set');
+  // Reaching this from inside the container is not a given: an egress proxy sits in front of
+  // outbound traffic, and if supabase is not excluded from it the fetch dies here — which used to
+  // surface only as "no matching JWKS key", i.e. as if the token were from the wrong project.
   const res = await fetch(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`);
   if (!res.ok) throw new Error(`JWKS fetch failed (${res.status})`);
   const body = await res.json();
@@ -38,9 +41,18 @@ export async function verifySupabaseToken(token) {
   }
 
   if (!cache.keys.has(kid) && Date.now() - cache.fetchedAt > 60_000) {
-    await refreshJwks().catch(() => { /* keep stale cache; verify will fail cleanly below */ });
+    await refreshJwks().catch((e) => {
+      // Keep the stale cache and let verification fail below — but do not lose the reason, which
+      // is the difference between "unreachable" and "genuinely the wrong key".
+      console.warn(`[JWKS] refresh failed: ${e.message}`);
+    });
   }
   const key = cache.keys.get(kid);
-  if (!key) throw new Error('no matching JWKS key for token');
+  if (!key) {
+    // Name both sides: the token's issuer/kid and what we actually hold. A project mismatch and an
+    // empty cache both produced the same message before, and they need opposite fixes.
+    const iss = decoded.payload?.iss || 'unknown';
+    throw new Error(`no matching JWKS key — token kid=${kid} iss=${iss}; cached kids=[${[...cache.keys.keys()].join(', ') || 'EMPTY'}]`);
+  }
   return jwt.verify(token, key, { algorithms: ['ES256', 'RS256'] });
 }
