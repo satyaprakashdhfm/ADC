@@ -36,3 +36,7 @@ postman/*.postman_environment.json
 
 # All-in-one Postman collection embeds live API keys
 postman/ADC-ALL-INTEGRATIONS.postman_collection.json
+
+# Runtime logs
+logs/
+*.log
