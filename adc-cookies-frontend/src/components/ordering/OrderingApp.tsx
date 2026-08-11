@@ -201,9 +201,13 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         {gift && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}><span>Gift wrap</span><span>₹{giftFee}</span></div>}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
           <span>Delivery fee</span>
-          {intracity
-            ? <span style={{ display: 'inline-flex', gap: 7, alignItems: 'baseline' }}><span style={{ textDecoration: 'line-through', color: 'var(--text-subtle)' }}>₹100</span><span style={{ color: 'var(--green-success)', fontWeight: 800 }}>FREE</span></span>
-            : <span>₹{delivery}</span>}
+          {/* Show what is actually charged. This used to print a struck-through ₹100 and "FREE" for
+              every intracity address, while `grand` below still added the real Shiprocket quote —
+              so the bill read FREE and the customer was charged ₹109.74 anyway. Only say FREE when
+              the fee really is zero. */}
+          {delivery > 0
+            ? <span>₹{delivery}</span>
+            : <span style={{ display: 'inline-flex', gap: 7, alignItems: 'baseline' }}><span style={{ textDecoration: 'line-through', color: 'var(--text-subtle)' }}>₹100</span><span style={{ color: 'var(--green-success)', fontWeight: 800 }}>FREE</span></span>}
         </div>
         {applied && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--green-success)', fontWeight: 700 }}><span>Coupon ({coupon})</span><span>−₹{discount}</span></div>}
         <Dash />
@@ -615,22 +619,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             )}
           </>
         ) : STALL_MODE ? (
-          // STALL MODE, no order-placement path — online payments/delivery aren't live yet, so
-          // this step is just a handoff to WhatsApp/Call/in-person. Untouched real payment trigger
-          // is in the `false` branch below, ready to come straight back once STALL_MODE flips off.
-          <div style={{ maxWidth: 720, margin: '0 auto' }}>
-            <div style={{ textAlign: 'center', marginBottom: 12, fontSize: 'var(--text-sm)', color: 'var(--text-muted)', fontWeight: 700, lineHeight: 1.5 }}>
-              Online payments &amp; delivery launch in about a week. Please visit our store meanwhile, or reach us below to place this order.
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 'var(--radius-button)', background: 'var(--whatsapp-green)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
-                WhatsApp us
-              </a>
-              <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
-                Call us
-              </a>
-            </div>
-          </div>
+          // STALL MODE: the "How to get your order" card above already carries the WhatsApp/Call
+          // handoff, with the store-visit note and Locations link alongside it. Repeating the same
+          // two buttons in this sticky bar stacked a second, identical CTA under the first on
+          // mobile — one handoff is enough, and the richer one is the card.
+          null
         ) : (
           <>
             {payError && (
