@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -31,6 +31,25 @@ import { LocationPill } from './LocationPicker';
 const DESKTOP_KEYS = ['home', 'menu', 'corporate', 'franchise', 'about', 'locations', 'contact', 'orders'] as const;
 
 export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: boolean }) {
+  /* Publish the bar's real height as --nav-h so the home hero can start exactly below it.
+   *
+   * The hero used to offset itself by --header-h, which is a hand-written estimate of the DESKTOP
+   * header — ribbon plus the nav row plus the links row. On a phone there is no links row and the
+   * rows are shorter, so that estimate overshot by a wide margin and left a cream band between the
+   * navbar and the photograph. Measuring removes the guess, and a ResizeObserver keeps it right
+   * when the bar rewraps (rotation, a long announcement, the search box expanding). */
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const publish = () => document.documentElement.style.setProperty('--nav-h', `${el.offsetHeight}px`);
+    publish();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const router = useRouter();
   const { user } = useAuth();
   const { count } = useCart();
@@ -88,7 +107,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
       {/* On the home hero (revealOnScroll) the bar is fixed and offset down by the sticky
           announcement ribbon's height so it slides in just beneath it, not over it. Other pages
           have no ribbon, so the sticky bar sits flush at the top. */}
-      <div className="home-sticky-header" style={{ position: revealOnScroll ? 'fixed' : 'sticky', top: revealOnScroll ? 'var(--ribbon-h)' : 0, left: 0, right: 0, zIndex: 50, background: 'var(--navbar-bg)', boxShadow: 'var(--shadow-md)', borderBottom: '1px solid var(--white-16)', transform: hidden ? 'translateY(-130%)' : 'translateY(0)', transition: 'transform .35s var(--ease-out)' }}>
+      <div ref={barRef} className="home-sticky-header" style={{ position: revealOnScroll ? 'fixed' : 'sticky', top: revealOnScroll ? 'var(--ribbon-h)' : 0, left: 0, right: 0, zIndex: 50, background: 'var(--navbar-bg)', boxShadow: 'var(--shadow-md)', borderBottom: '1px solid var(--white-16)', transform: hidden ? 'translateY(-130%)' : 'translateY(0)', transition: 'transform .35s var(--ease-out)' }}>
         {/* Desktop — Row 1: search (left) · logo (centre) · cart + account (right). Row 2: nav links.
             Clicking search swaps row 1 for a centred search field (Dohful-style). */}
         <nav className="home-nav--desktop">

@@ -93,11 +93,17 @@ function SubHead({ icon, title }: { icon: React.ReactNode; title: string }) {
     borderRadius: 2,
     background: `linear-gradient(to ${dir}, var(--amber-300), transparent)`,
   });
+  // The icon is repeated on both sides so the heading is symmetrical about its title. The right-hand
+  // one is decorative only — a screen reader announcing the same category icon twice adds nothing.
+  const badge = (hidden?: boolean) => (
+    <span aria-hidden={hidden} style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--amber-50)', color: 'var(--brand-secondary)', display: 'grid', placeItems: 'center', flex: 'none' }}>{icon}</span>
+  );
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(10px,1.4vw,18px)', margin: 'clamp(34px,4.5vw,60px) 0 20px' }}>
       <span aria-hidden style={rule('left')} />
-      <span style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--amber-50)', color: 'var(--brand-secondary)', display: 'grid', placeItems: 'center', flex: 'none' }}>{icon}</span>
+      {badge()}
       <h3 style={{ font: '900 clamp(1.4rem,1.1rem + 1.2vw,2rem)/1 var(--font-display)', color: 'var(--text-strong)', margin: 0, letterSpacing: '-.02em', textAlign: 'center' }}>{title}</h3>
+      {badge(true)}
       <span aria-hidden style={rule('right')} />
     </div>
   );
