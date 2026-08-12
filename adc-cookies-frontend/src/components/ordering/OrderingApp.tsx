@@ -63,6 +63,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const catalog = useUpsellCatalog();
   const { couponErr, setCouponErr, availableCoupons, mySpinReward, applyCoupon } = useCheckoutCoupons();
   const [loginOpen, setLoginOpen] = useState(false);
+  // Taking the last unit off a line deletes it outright, which is a lot to happen on one tap of a
+  // small "−" — especially the tap that follows the one that took 2 down to 1. This holds the line
+  // being removed so we can ask first; null means nothing is pending.
+  const [pendingRemove, setPendingRemove] = useState<{ id: string; name: string; img?: string } | null>(null);
 
   // The cart is client-only (localStorage), so hold cart-derived UI until after mount to avoid a
   // hydration mismatch on first render. Guests are prompted to log in inline / on Pay — no auto-popup.
@@ -170,7 +174,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               {l.note && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', fontStyle: 'italic' }}>&ldquo;{l.note}&rdquo;</div>}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 8 }}>
                 <span style={{ fontSize: 'var(--text-base)', fontWeight: 900, color: 'var(--text-strong)' }}>₹{l.price}</span>
-                <QStepper value={l.qty} onChange={n => setQty(l.id, n, l.name, l.price, l.img)} size="sm" />
+                {/* Every quantity change goes straight through EXCEPT the one that would empty the
+                    line — that asks first. */}
+                <QStepper
+                  value={l.qty}
+                  onChange={n => {
+                    if (n <= 0) { setPendingRemove({ id: l.id, name: l.name, img: l.img }); return; }
+                    setQty(l.id, n, l.name, l.price, l.img);
+                  }}
+                  size="sm"
+                />
               </div>
               {applied && l.id === giftLineId && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--green-success)', fontWeight: 800, marginTop: 4 }}>🎁 Free — your spin reward</div>}
               {restriction && (
@@ -646,6 +659,47 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       </div>
       <Footer />
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+
+      {/* Confirm before a line disappears. Shows the actual cookie — name and picture — because
+          "remove this item?" on its own makes you scroll back to check WHICH item you were on.
+          Cancel is the wide, plain button and Remove the destructive one, so the safe choice is the
+          easy one to hit. */}
+      {pendingRemove && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Remove ${pendingRemove.name} from your order?`}
+          onClick={() => setPendingRemove(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'var(--black-18)', backdropFilter: 'blur(3px)', display: 'grid', placeItems: 'center', padding: 'var(--gutter)' }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ width: 'min(380px, 100%)', background: 'var(--surface-card)', borderRadius: 'var(--radius-modal)', padding: 24, boxShadow: 'var(--shadow-xl)', textAlign: 'center' }}>
+            {pendingRemove.img && (
+              <Image src={pendingRemove.img} alt="" width={96} height={96}
+                style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 'var(--radius-sm)', margin: '0 auto 14px' }} />
+            )}
+            <div style={{ font: 'var(--weight-extra) var(--text-h4)/1.25 var(--font-display)', color: 'var(--text-strong)' }}>
+              Remove {pendingRemove.name}?
+            </div>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 20px', lineHeight: 1.5 }}>
+              It&apos;ll come straight out of your order. You can always add it back.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setPendingRemove(null)}
+                style={{ flex: 1, padding: '13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-strong)', background: 'transparent', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
+              >
+                Keep it
+              </button>
+              <button
+                onClick={() => { setQty(pendingRemove.id, 0, pendingRemove.name, 0, pendingRemove.img); setPendingRemove(null); }}
+                style={{ flex: 1, padding: '13px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--status-error)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
