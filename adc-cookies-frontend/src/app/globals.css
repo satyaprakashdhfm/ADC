@@ -356,6 +356,27 @@ body::before {
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
 /* The hover shots are portrait with the cookie low in the frame — bias the crop downward so the
    cookie sits a little higher in the card (and its bottom isn't clipped), rather than centre. */
+/* Corporate & bulk gifting card — the gift boxes photographed behind the copy.
+   The photo is a 6.6:1 band, so `cover` on a card this shape shows it almost whole.
+   Side-to-side scrim on desktop: heavy where the heading sits, thinning to the right so the boxes
+   are actually visible — a photo you cannot see is just an expensive background colour.
+   The card wraps to stacked rows on a phone, where a left-to-right scrim would leave the CTA on
+   bare photo, so below 760px it runs top-to-bottom instead and holds a floor of darkness. */
+.corp-cta {
+  background:
+    linear-gradient(90deg, var(--espresso-95) 0%, var(--espresso-62) 52%, var(--espresso-30) 100%),
+    url('/assets/corporate-gifting.jpg') center/cover no-repeat,
+    var(--surface-inverse);
+}
+@media (max-width: 760px) {
+  .corp-cta {
+    background:
+      linear-gradient(180deg, var(--espresso-95) 0%, var(--espresso-62) 100%),
+      url('/assets/corporate-gifting.jpg') center/cover no-repeat,
+      var(--surface-inverse);
+  }
+}
+
 /* The hover shots are portrait (1085x1450) shown in a 4:3 card, so `cover` fills the width and only
    ~56% of the image height survives — object-position picks WHICH 56%.
    At 62% the visible band ended at 83.3% of the source. Most cookies bottom out around 80% and
