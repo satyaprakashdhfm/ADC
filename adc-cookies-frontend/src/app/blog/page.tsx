@@ -21,6 +21,14 @@ const POSTS = [
     excerpt: 'Nutella tins, Biscoff tins, handwritten notes, and the details that make a cookie box feel personal.',
     body: 'Gift tins work best when the flavor has a clear personality. Nutella is creamy and familiar, while Biscoff brings a caramel-spiced hit. At A Dough Cookie, tins are built for birthdays, team treats, festive tables, and last-minute surprises. Add a short note, choose the tin size based on how many people will share it, and keep the packaging neat enough that the box feels like a real present before it is even opened.',
   },
+  {
+    title: 'Why We Bake All Day Instead of All Morning',
+    date: 'August 12, 2026',
+    read: '3 min read',
+    image: '/assets/products/red-velvet.jpg',
+    excerpt: 'Most bakeries run one big morning batch. We run small trays through the day, and it changes what an evening cookie tastes like.',
+    body: 'A cookie is at its best in the first hour. Bake everything at seven in the morning and the tray that sells at seven in the evening has had twelve hours to dry out, however good the recipe was. So we bake in small trays through the day at each of our three Bengaluru stores — Jayanagar, S.G. Palya and Electronic City. It is more work and it wastes more dough, but it means there is no bad time to walk in. The same logic drives how we deliver: an order is routed to whichever store is nearest your address rather than to one central kitchen, so the cookie has a short trip and is still warm when it reaches you.',
+  },
 ];
 
 export const metadata = {

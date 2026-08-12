@@ -278,11 +278,14 @@ export default function BestCookiesInBangalorePage() {
           <h2 style={h2}>The cookies</h2>
           <p style={{ ...para, maxWidth: 760 }}>
             Eight cookies on the everyday menu, plus cookie tins, skillet cookies, shakes and coffee at
-            the stores. Every one of these has its own page with the full ingredient list.
+            the stores. Tap any of them to open it on the menu.
           </p>
+          {/* Links land on the menu with that cookie floated to the top (`?q=`) rather than on
+              /order, which robots.ts disallows — a link a crawler is told not to follow passes
+              nothing on to the page it points at. */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 'clamp(14px,2vw,20px)', marginTop: 24 }}>
             {COOKIES.map(p => (
-              <Link key={p.slug} href={`/products/${p.slug}`} style={{ background: 'var(--vanilla)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column' }}>
+              <Link key={p.slug} href={`/?q=${encodeURIComponent(p.name)}`} style={{ background: 'var(--vanilla)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: 'var(--surface-sunken)' }}>
                   <Image src={p.image} alt={`${p.name} — a dough cookie Bangalore`} fill sizes="(max-width: 760px) 50vw, 260px" style={{ objectFit: 'cover' }} />
                 </div>
