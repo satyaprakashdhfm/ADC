@@ -6,6 +6,7 @@ import { Plus, Minus, ArrowRight, Cookie, Briefcase, IceCreamBowl, IceCreamCone,
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { MENU_SECTIONS, menuRank, type ProductCategory } from '@/lib/categories';
+import MenuRail from './MenuRail';
 
 /* The registry says what the sections ARE and what order they come in; this says what each one
    looks like. Icons live here rather than in lib/categories.ts so that file stays free of React
@@ -179,6 +180,10 @@ export default function HomeProducts() {
     .filter(s => s.items.length > 0);
 
   return (
+    <>
+      {/* Left-margin section marker — see MenuRail. Rendered as a sibling so it can be
+          position:fixed without the section's own stacking context trapping it. */}
+      <MenuRail sections={sections.map(s => ({ label: s.label, anchor: s.anchor }))} />
     <section id="products" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
       <div style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter)' }}>
         <div style={{ textAlign: 'center', marginBottom: 'clamp(6px,1.5vw,14px)' }}>
@@ -197,7 +202,7 @@ export default function HomeProducts() {
             // Cookies anchors to the <section> wrapper's own id, so it must not re-declare it —
             // two elements with id="products" and the deep-link scroll lands on whichever the
             // browser finds first.
-            <div key={s.anchor} id={s.anchor === 'products' ? undefined : s.anchor} style={{ scrollMarginTop: 90 }}>
+            <div key={s.anchor} id={s.anchor === 'products' ? undefined : s.anchor} data-menu-section={s.anchor} style={{ scrollMarginTop: 90 }}>
               <SubHead icon={<Icon size={19} />} title={s.label} />
               <div className="home-products-grid" style={gridStyle}>
                 {s.items.map(p => <ProductCard key={p.id} p={p} />)}
@@ -234,5 +239,6 @@ export default function HomeProducts() {
 
 
     </section>
+    </>
   );
 }

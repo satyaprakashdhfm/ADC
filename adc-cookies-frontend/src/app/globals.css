@@ -380,6 +380,12 @@ body::before {
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
 /* The hover shots are portrait with the cookie low in the frame — bias the crop downward so the
    cookie sits a little higher in the card (and its bottom isn't clipped), rather than centre. */
+/* Menu section rail (see MenuRail.tsx) — desktop only.
+   Below ~1180px the menu grid has already eaten the page margins, so the dots would sit on top of
+   the product cards; and on a phone the section headings are close enough together that there is
+   nothing to keep track of. */
+@media (max-width: 1180px) { .menu-rail { display: none !important; } }
+
 /* Corporate & bulk gifting card — the gift boxes photographed behind the copy.
    The photo is a 6.6:1 band, so `cover` on a card this shape shows it almost whole.
    Side-to-side scrim on desktop: heavy where the heading sits, thinning to the right so the boxes
