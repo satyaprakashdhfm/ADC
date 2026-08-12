@@ -157,6 +157,26 @@ export function orderStoresByProximity(stores, lat, lng) {
     .sort((a, b) => a.km - b.km);
 }
 
+/** The store or warehouse a parcel leaves from, matched by the origin pincode the quote used. */
+export function storeByPincode(pin) {
+  const p = String(pin || '').replace(/\D/g, '');
+  return ADC_STORES.find((s) => String(s.pincode) === p) || null;
+}
+
+/**
+ * Straight-line km from a store to a customer's coordinates, to one decimal.
+ *
+ * For an outstation parcel there is no carrier-supplied routing distance — Delhivery prices by
+ * weight and zone and never reports one — so this is the only number available. It is as-the-crow-
+ * flies and will read shorter than the road, which is why anything showing it says "about". The
+ * intracity quote does NOT use this: Shiprocket returns its own real routing distance, and that is
+ * the figure the fee is actually calculated from.
+ */
+export function straightLineKm(store, lat, lng) {
+  if (!store || lat == null || lng == null) return null;
+  return Math.round(distanceKm(store, lat, lng) * 10) / 10;
+}
+
 /**
  * Nearest store to an actual customer location. Optionally constrained to one city — falling back
  * to the full list rather than returning nothing when that city has no store.
