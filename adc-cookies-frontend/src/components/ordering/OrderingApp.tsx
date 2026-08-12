@@ -173,20 +173,33 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {lines.map((l, i) => {
           const restriction = restrictionFor(l.id);
-          /* A line this address can't receive is blacked out rather than merely flagged: the photo
-             goes grey, the name and price go quiet, and the reason takes over the space. A warning
-             pinned under a full-colour, appetising product still reads as "you have this" — the
-             point here is that they do NOT, at this address, and the line has to look spent before
-             the sentence explaining it will be believed. The stepper stays live, since removing it
-             is the way out. */
+          /* A line this address can't receive is dimmed and labelled, not alarmed.
+             The first version shouted: red panel, red border, red text, struck-through name and
+             price. Nothing has gone wrong here — the cookie is fine, the address simply cannot have
+             it — and dressing that as an error made the calmest row in the basket the loudest thing
+             on the page. So the photo greys with a small label across it, the text quiets, and the
+             reason sits underneath in the site's own warm tones. The stepper stays live, since
+             removing it is the way out. */
           const blocked = !!restriction;
           return (
           <div key={l.id} className="co-line" style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 0', borderBottom: i < lines.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
             {l.img
-              ? <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} title={`View ${l.name}`} className="co-line__img" style={{ width: 112, height: 112, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none', cursor: 'pointer', filter: blocked ? 'grayscale(1)' : undefined, opacity: blocked ? 0.4 : 1 }}><Image src={l.img} alt={l.name} width={112} height={112} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+              ? (
+                <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} title={`View ${l.name}`} className="co-line__img" style={{ position: 'relative', width: 112, height: 112, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none', cursor: 'pointer' }}>
+                  {/* Desaturated, not faded to nothing. At 40% opacity the photo turned to mush
+                      against the card; greyscale alone still reads as a photograph of the thing
+                      they wanted, which is what makes the label on top land. */}
+                  <Image src={l.img} alt={l.name} width={112} height={112} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: blocked ? 'grayscale(1) contrast(.92)' : undefined, opacity: blocked ? 0.62 : 1 }} />
+                  {blocked && (
+                    <span style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '4px 6px', background: 'var(--ink-900-78)', color: 'var(--white)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.03em', textAlign: 'center' }}>
+                      Unavailable
+                    </span>
+                  )}
+                </div>
+              )
               : <Thumb size={112} seed={i} />}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} role="link" tabIndex={0} title={`View ${l.name}`} style={{ fontWeight: 800, color: blocked ? 'var(--text-subtle)' : 'var(--text-strong)', fontSize: 'var(--text-base)', lineHeight: 1.25, cursor: 'pointer', textDecoration: blocked ? 'line-through' : undefined }}>{l.name}</div>
+              <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} role="link" tabIndex={0} title={`View ${l.name}`} style={{ fontWeight: 800, color: blocked ? 'var(--text-muted)' : 'var(--text-strong)', fontSize: 'var(--text-base)', lineHeight: 1.25, cursor: 'pointer' }}>{l.name}</div>
               {/* The catalog blurb, so the summary reads like the product card rather than a bare
                   line item — it also fills the column instead of leaving a tall empty gap. */}
               {(() => {
@@ -196,7 +209,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               {l.addOns && l.addOns.length > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 600, marginTop: 3 }}>+ {l.addOns.join(', ')}</div>}
               {l.note && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', fontStyle: 'italic' }}>&ldquo;{l.note}&rdquo;</div>}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 8 }}>
-                <span style={{ fontSize: 'var(--text-base)', fontWeight: 900, color: blocked ? 'var(--text-subtle)' : 'var(--text-strong)', textDecoration: blocked ? 'line-through' : undefined }}>₹{l.price}</span>
+                <span style={{ fontSize: 'var(--text-base)', fontWeight: 900, color: blocked ? 'var(--text-muted)' : 'var(--text-strong)' }}>₹{l.price}</span>
                 {/* Every quantity change goes straight through EXCEPT the one that would empty the
                     line — that asks first. */}
                 <QStepper
@@ -209,15 +222,18 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 />
               </div>
               {applied && l.id === giftLineId && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--green-success)', fontWeight: 800, marginTop: 4 }}>🎁 Free — your spin reward</div>}
+              {/* Amber, not red. Red is for something broken; this is a fact about the address, and
+                  it belongs in the same warm palette as the rest of the page. One line of it, with
+                  the admin-written reason — which can say the true thing ("keeps 24 hours, so
+                  Bengaluru same-day only") rather than a generic sentence this code would guess at.
+                  The instruction to remove it is a quiet second line, not a shouted one. */}
               {restriction && (
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, marginTop: 8, padding: '9px 11px', borderRadius: 8, background: '#fdecec', color: '#a4231d', fontSize: 'var(--text-xs)', lineHeight: 1.45 }}>
-                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 2 }} />
-                  <span>
-                    <strong style={{ display: 'block', fontWeight: 800 }}>Not available at this address</strong>
-                    {/* The reason is written by an admin per product and per mode, so it can say the
-                        true thing — "same-day inside Bengaluru only, it keeps for 24 hours" — rather
-                        than a generic line this code would have to guess at. */}
-                    <span style={{ fontWeight: 600 }}>{restriction.reason} Remove it to continue, or deliver to a different address.</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 9, padding: '9px 12px', borderRadius: 10, background: 'var(--amber-50)', border: '1px solid var(--amber-200)', fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>
+                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 2, color: 'var(--amber-600)' }} />
+                  <span style={{ color: 'var(--orange-800)' }}>
+                    <strong style={{ fontWeight: 800 }}>We can&apos;t deliver this to your address.</strong>{' '}
+                    <span style={{ fontWeight: 500 }}>{restriction.reason}</span>
+                    <span style={{ display: 'block', marginTop: 3, color: 'var(--text-muted)', fontWeight: 500 }}>Remove it to carry on, or choose a different address.</span>
                   </span>
                 </div>
               )}
