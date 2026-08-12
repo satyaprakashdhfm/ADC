@@ -233,6 +233,17 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             ? <span>₹{delivery}</span>
             : <span style={{ display: 'inline-flex', gap: 7, alignItems: 'baseline' }}><span style={{ textDecoration: 'line-through', color: 'var(--text-subtle)' }}>₹100</span><span style={{ color: 'var(--green-success)', fontWeight: 800 }}>FREE</span></span>}
         </div>
+        {/* Why the fee is what it is. Same-day is priced by distance, so showing the distance turns
+            an arbitrary-looking number into an explicable one — and it is the distance to the
+            SELECTED ADDRESS, measured by the carrier from the store that will actually dispatch,
+            not to wherever the phone happens to be. Outstation parcels price by weight and zone, so
+            there is no distance to show and this line stays away. */}
+        {delivCheck?.intracity && delivCheck.distanceKm != null && (
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: -4, lineHeight: 1.45 }}>
+            Your cookies are <strong style={{ color: 'var(--text-muted)' }}>{Math.round(delivCheck.distanceKm * 10) / 10} km</strong> away
+            {delivCheck.store ? <> — riding over from {delivCheck.store}</> : null}
+          </div>
+        )}
         {applied && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--green-success)', fontWeight: 700 }}><span>Coupon ({coupon})</span><span>−₹{discount}</span></div>}
         <Dash />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}><span>To pay</span><span>₹{grand}</span></div>

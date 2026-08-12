@@ -151,8 +151,13 @@ router.get('/check', async (req, res) => {
       }
       const etaHours = chosen.etdHours ?? 1;
       console.log(`[DELIVERY] check | pin=${pin} | carrier=SHIPROCKET | SAME-DAY ~${etaHours}h from ${chosen.store.name} | fee=${chosen.rate}`);
+      // distanceKm is the carrier's own routing distance from the dispatching store to this
+      // address — the number the fee is actually calculated from. Passed through so checkout can
+      // explain the fee rather than just state it. Null when the quote omits it; intracity only,
+      // since an outstation parcel is priced by weight and zone, not by kilometres.
       return res.json({ serviceable: true, intracity: true, sameDay: true, carrier: 'SHIPROCKET',
         store: chosen.store.name, city: chosen.store.city, deliveryFee: chosen.rate, etaHours,
+        distanceKm: chosen.distance ?? null,
         etaLabel: 'within ~1 hour', tat: null, expectedDeliveryDate: null, pincode: pin });
     } catch (e) {
       // A carrier outage must not silently become a Delhivery quote — say we cannot confirm.
