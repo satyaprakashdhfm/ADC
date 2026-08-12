@@ -492,22 +492,26 @@ router.post('/', async (req, res) => {
 });
 
 /*
- * The customer's own order history — orders they actually placed, meaning ones that were paid for.
+ * The customer's own order history: orders they paid for, and nothing else.
  *
  * An order row is created BEFORE Razorpay opens, because Razorpay needs our order number as its
  * receipt and the row is what a payment later gets reconciled against. That is unavoidable. What it
  * used to mean, though, is that closing the payment popup left a PENDING row behind, and this list
  * returned it — so abandoning a payment produced an "order" in the customer's account that nobody
- * had paid for and nothing would ever ship. Understandably alarming.
+ * had paid for and nothing would ever ship.
  *
- * PENDING is therefore not history, it is an attempt in progress or an attempt given up on, and it
- * is excluded here. The admin list is separate and still sees every row, which is where an
- * abandoned attempt actually needs to be visible.
+ * PENDING is not a state an order rests in. It lasts only as long as the payment window is open,
+ * and resolves to PAID or CANCELLED either way (see /abandon below). Filtering on PAID rather than
+ * "not PENDING" is what makes that true from the customer's side: whatever went wrong, an order
+ * they were never charged for is not something to show them as an order.
+ *
+ * The admin list is a separate query and still sees every row, which is where an abandoned attempt
+ * genuinely needs to be visible.
  */
 router.get('/', async (req, res) => {
   const user = await userByEmail(req.user.email);
   const rows = await getAll(
-    `SELECT * FROM orders WHERE user_id = $1 AND payment_status <> 'PENDING'
+    `SELECT * FROM orders WHERE user_id = $1 AND payment_status = 'PAID'
       ORDER BY created_at DESC, id DESC`, [user.id]
   );
   const serialized = await Promise.all(rows.map(async (o) => {
@@ -568,6 +572,11 @@ router.get('/:id/delhivery-track', async (req, res) => {
  * and then rather than left as a PENDING row of unknown age. Without it the only thing separating
  * "gave up two minutes ago" from "gave up last month" is a timestamp nobody reads.
  *
+ * Both statuses move, not just the order status. PENDING means "a payment window is open right
+ * now"; once it closes without paying, that is no longer true and the payment is CANCELLED. An
+ * order is therefore only ever waiting, paid, or cancelled — there is no fourth state where a row
+ * sits unpaid forever with nothing deciding what it is.
+ *
  * Deliberately narrow: it only ever touches a PENDING order belonging to the caller. A PAID order
  * cannot be cancelled through here — if this could void a paid order, a stale retry firing after a
  * successful payment would do exactly that. Cancelling a paid order is a refund, and refunds are an
@@ -586,7 +595,8 @@ router.post('/:id/abandon', async (req, res) => {
 
   const ts = nowIso();
   await query(
-    "UPDATE orders SET order_status = 'CANCELLED', updated_at = $1 WHERE id = $2 AND payment_status = 'PENDING'",
+    `UPDATE orders SET payment_status = 'CANCELLED', order_status = 'CANCELLED', updated_at = $1
+      WHERE id = $2 AND payment_status = 'PENDING'`,
     [ts, order.id]
   );
   await query(
@@ -605,6 +615,12 @@ router.post('/:id/payment/razorpay-order', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) { console.log(`[PAYMENT] rzp-order | order=${req.params.id} | ✗ order_not_found`); throw new ApiError('Order not found'); }
   if (order.payment_status === 'PAID') { console.log(`[PAYMENT] rzp-order | order=${order.order_number} | ✗ already_paid`); throw new ApiError('Order already paid', 409); }
+  // A cancelled order is finished. Without this, a stale tab left open on the payment step could
+  // still open Checkout against an order that was abandoned and closed, and take real money for it.
+  if (order.payment_status === 'CANCELLED' || order.order_status === 'CANCELLED') {
+    console.log(`[PAYMENT] rzp-order | order=${order.order_number} | ✗ cancelled`);
+    throw new ApiError('This order was cancelled. Please start a new order.', 409);
+  }
 
   const amountPaise = Math.round(Number(order.total_amount) * 100);
   console.log(`[PAYMENT] rzp-order | order=${order.order_number} | amount=₹${order.total_amount} (${amountPaise}p) | creating…`);

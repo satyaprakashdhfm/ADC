@@ -21,6 +21,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/locations', changeFrequency: 'monthly', priority: 0.8 },
     { path: '/contact', changeFrequency: 'monthly', priority: 0.6 },
     { path: '/franchise', changeFrequency: 'monthly', priority: 0.6 },
+    // Low priority, but present: a payment provider's compliance check looks for these URLs, and
+    // they should be findable rather than only reachable from the footer.
+    { path: '/terms', changeFrequency: 'yearly', priority: 0.3 },
+    { path: '/refund-policy', changeFrequency: 'yearly', priority: 0.3 },
+    { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },
   ];
   return pages.map(p => ({
     url: `${SITE_URL}${p.path}`,
