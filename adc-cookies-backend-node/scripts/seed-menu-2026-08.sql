@@ -18,10 +18,10 @@
 --     boot by the ILIKE '%red velvet%' rule in src/db.js, so a Red Velvet item added later by hand
 --     through the admin still gets the rule applied.
 --
--- Images: 21 of the 29 point at files in public/assets/products/new_coming/ (URL-encoded, the
--- filenames contain spaces). The 4 Skillet Cookies and 4 Cookie Cakes have no photograph yet, so
--- their images column is NULL — firstImage() falls back to the ADC Special shot rather than
--- rendering a broken tile. Replace them from the admin Products tab as the photos arrive.
+-- Images point at files in public/assets/products/new_coming/, URL-encoded because the filenames
+-- contain spaces. Only the 4 Cookie Cakes are still without a photograph, so their images column is
+-- NULL — firstImage() falls back to the ADC Special shot rather than rendering a broken tile.
+-- Replace them from the admin Products tab as the photos arrive.
 
 BEGIN;
 
@@ -47,11 +47,11 @@ FROM (VALUES
   ('Double Choc Chip Hug in a Dip',      'HUG_IN_A_DIP', 230, '["/assets/products/new_coming/Hug%20in%20a%20Dip.jpeg"]',                            'Hug in a Dip',                  TRUE),
   ('Red Velvet Hug in a Dip',            'HUG_IN_A_DIP', 230, '["/assets/products/new_coming/Hug%20in%20a%20Dip.jpeg"]',                            'Hug in a Dip',                  FALSE),
 
-  -- Skillet Cookie with Ice Cream — no photographs yet.
-  ('Chocolate Chip Skillet Cookie',      'SKILLET',      220, NULL,                                                                                  'Skillet Cookie with Ice Cream', TRUE),
-  ('Double Choc Chip Skillet Cookie',    'SKILLET',      230, NULL,                                                                                  'Skillet Cookie with Ice Cream', TRUE),
-  ('Biscoff Filled Skillet Cookie',      'SKILLET',      270, NULL,                                                                                  'Skillet Cookie with Ice Cream', TRUE),
-  ('Nutella Filled Skillet Cookie',      'SKILLET',      260, NULL,                                                                                  'Skillet Cookie with Ice Cream', TRUE),
+  -- Skillet Cookie with Ice Cream
+  ('Chocolate Chip Skillet Cookie',      'SKILLET',      220, '["/assets/products/new_coming/Chocolate%20Chip%20Skillet%20Cookie.jpeg"]',            'Skillet Cookie with Ice Cream', TRUE),
+  ('Double Choc Chip Skillet Cookie',    'SKILLET',      230, '["/assets/products/new_coming/Double%20Choc%20Chip%20Skillet%20Cookie.jpeg"]',        'Skillet Cookie with Ice Cream', TRUE),
+  ('Biscoff Filled Skillet Cookie',      'SKILLET',      270, '["/assets/products/new_coming/Biscoff%20Filled%20Skillet%20Cookie.jpeg"]',            'Skillet Cookie with Ice Cream', TRUE),
+  ('Nutella Filled Skillet Cookie',      'SKILLET',      260, '["/assets/products/new_coming/Nutella%20Filled%20Skillet%20Cookie.jpeg"]',            'Skillet Cookie with Ice Cream', TRUE),
 
   -- Cookie Sundae is NOT inserted here — a disabled 'Cookie Sundae' row already exists and is
   -- reused instead, further down, so the menu doesn't end up with two sundaes one of which is
