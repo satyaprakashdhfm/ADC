@@ -4,7 +4,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Phone, Navigation, ShoppingBag, Search, MapPin, MessageCircle, Mail } from 'lucide-react';
+import { Phone, Navigation, ShoppingBag, Search, MapPin, Mail } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/icons/SocialIcons';
 import { STORES, type Store } from '@/lib/stores';
 import { useLocation } from '@/context/LocationContext';
 import { whatsappLink } from '@/lib/site';
@@ -69,7 +70,7 @@ export default function LocationsClient() {
                 <p style={{ color: 'var(--text-body)', lineHeight: 1.55, margin: '0 0 14px', fontSize: 'var(--text-sm)' }}>{s.address}</p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
                   <a href={`tel:${s.phone.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}><Phone size={14} /> {s.phone}</a>
-                  <a href={whatsappLink(`Hi! I'd like to ask about the ${s.name} store.`)} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--whatsapp-green)', fontWeight: 800, fontSize: 'var(--text-sm)' }}><MessageCircle size={14} /> WhatsApp</a>
+                  <a href={whatsappLink(`Hi! I'd like to ask about the ${s.name} store.`)} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--whatsapp-green)', fontWeight: 800, fontSize: 'var(--text-sm)' }}><WhatsAppIcon size={15} /> WhatsApp</a>
                   {s.email && <a href={`mailto:${s.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}><Mail size={14} /> Email</a>}
                   <Link href={s.map} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--brand-secondary)', fontWeight: 800, fontSize: 'var(--text-sm)' }}><Navigation size={14} /> Directions</Link>
                 </div>

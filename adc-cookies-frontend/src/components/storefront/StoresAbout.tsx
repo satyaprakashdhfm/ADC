@@ -2,7 +2,8 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ArrowRight, ShoppingBag, Mail, Phone, MessageCircle, ChevronDown } from 'lucide-react';
+import { ArrowRight, ShoppingBag, Mail, Phone, ChevronDown } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/icons/SocialIcons';
 import { STORES } from '@/lib/stores';
 import ContactForm from './ContactForm';
 import AboutVideo from './AboutVideo';
@@ -64,7 +65,7 @@ export default function StoresAbout() {
   const contactLinks = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={chip}>
-        <span style={{ ...chipIcon, background: 'var(--whatsapp-green)', color: 'var(--white)', border: 'none' }}><MessageCircle size={17} /></span>
+        <span style={{ ...chipIcon, background: 'var(--whatsapp-green)', color: 'var(--white)', border: 'none' }}><WhatsAppIcon size={18} /></span>
         WhatsApp us
       </a>
       <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={chip}>
