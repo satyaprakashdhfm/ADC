@@ -180,7 +180,15 @@ body::before {
 
 /* Hero height — shorter on phones so the fold isn't one giant photo, taller on desktop.
    svh (not vh) so mobile browser chrome appearing/disappearing doesn't cause a jump. */
-.home-hero { min-height: 78svh; }
+/* The hero begins BELOW the navbar, not behind it.
+   On the home page the bar is position:fixed at top:var(--ribbon-h), and SiteNav's scroll handler
+   shows it whenever scrollY < 90 — so at the top of the page, where the hero matters most, an
+   opaque orange band was sitting over the first ~128px of the photograph. The margin is the bar's
+   own height (--header-h counts the ribbon too, so the ribbon is subtracted: it is in flow and has
+   already pushed the hero down by its own height).
+   The image is position:absolute inset:0 within this section, so moving the section moves the
+   photograph with it — the whole frame is visible, with the bar sitting above rather than across. */
+.home-hero { min-height: 78svh; margin-top: calc(var(--header-h) - var(--ribbon-h)); }
 @media (max-width:900px) { .home-hero { min-height: 68svh; } }
 @media (max-width:680px) { .home-hero { min-height: 62svh; padding: clamp(40px,7vw,64px) 0 !important; } }
 

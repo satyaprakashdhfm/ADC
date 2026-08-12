@@ -225,7 +225,14 @@ const POOL_SIZE = 1000;
 const NO_REWARD = '__NONE__';
 // How long a draw (win or miss) — and separately, a claimed reward — is honoured before it
 // expires. Shared by /spin's device-lock and claim-spin's claim window (see spin_claims in db.js).
-const CLAIM_WINDOW_HOURS = 12;
+//
+// Seven days, not twelve hours. Half a day meant a code won in the evening was dead before most
+// people next thought about cookies, so the reward pushed for an order right now or went to waste —
+// which is a discount that mostly expires unused. A week is long enough to be worth keeping.
+//
+// It is also the device lock: this same window is how long a device/account waits before it could
+// spin again, so lengthening it makes a spin scarcer as well as its prize longer-lived.
+const CLAIM_WINDOW_HOURS = 7 * 24;
 // One spin per device/account, period — not a daily reset. Once a draw's own CLAIM_WINDOW_HOURS
 // window lapses, that device/account is done until an admin opens a fresh round for everyone at
 // once (POST /admin/coupons/reset-spins wipes spin_draws). There is no per-user timed cooldown.

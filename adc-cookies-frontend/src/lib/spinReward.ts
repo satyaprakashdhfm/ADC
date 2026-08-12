@@ -13,7 +13,7 @@ export interface ActiveReward {
 }
 
 export const PENDING_KEY = 'adc_spin_pending';
-export const CLAIM_WINDOW_HOURS = 12; // mirrors the backend — a guest win survives this long awaiting login
+export const CLAIM_WINDOW_HOURS = 7 * 24; // mirrors the backend — a guest win survives this long awaiting login
 
 export function readPending(): ActiveReward | null {
   try {
@@ -31,27 +31,35 @@ export function clearPending() { try { localStorage.removeItem(PENDING_KEY); } c
 export function formatRemaining(ms: number): string {
   if (ms <= 0) return 'Expired';
   const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
   const pad = (n: number) => String(n).padStart(2, '0');
+  // Days matter now the window is a week — without them a fresh win read "167h 59m 58s", which is
+  // a number nobody converts in their head. Seconds are dropped once there are days left: they are
+  // only worth watching when the deadline is close enough to act on.
+  if (d > 0) return `${d}d ${h}h ${pad(m)}m`;
   return h > 0 ? `${h}h ${pad(m)}m ${pad(s)}s` : m > 0 ? `${m}m ${pad(s)}s` : `${s}s`;
 }
 
-// Compact clock for the small launcher badge — "11:42:05" (H:MM:SS), still hr/min/sec but tight.
+// Compact clock for the small launcher badge — "6d 4h" while there is time, tightening to
+// "11:42:05" (H:MM:SS) on the last day, when a ticking clock is the useful thing to show.
 export function formatRemainingShort(ms: number): string {
   if (ms <= 0) return 'Now';
   const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
   const pad = (n: number) => String(n).padStart(2, '0');
+  if (d > 0) return `${d}d ${h}h`;
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
 // Resolves and tracks the shopper's active Spin & Win reward (claimed or pending-login),
 // independent of whether the wheel's modal is open — so a persistent badge (e.g. on the
-// floating dock launcher) can keep showing the 12h countdown after the modal is closed.
+// floating dock launcher) can keep showing the countdown after the modal is closed.
 export function useActiveSpinReward() {
   const { user } = useAuth();
   const [activeReward, setActiveReward] = useState<ActiveReward | null>(null);
