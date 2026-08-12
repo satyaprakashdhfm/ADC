@@ -23,7 +23,9 @@ export default function Footer() {
         overflow: 'hidden',
         background: 'var(--footer-bg)',
         color: 'var(--white)',
-        padding: '72px 0 40px',
+        /* Bottom padding clears the floating cart bar, which is fixed at bottom:20 and ~52 tall and
+           was sitting straight over the copyright. Nothing here is allowed to end up underneath it. */
+        padding: '72px 0 118px',
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -110,49 +112,60 @@ export default function Footer() {
             </div>
           ))}
 
-          {/* Social as glyphs, not a fifth column of words. The names carried no information the
-              icons don't — everyone recognises them — and four more text links made this column
-              read as more site navigation rather than a way out to our channels.
-              aria-label carries the name for anyone not seeing the glyph. */}
-          <div>
-            <div style={footerHeadingStyle}>Social</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              {([
-                ['WhatsApp', whatsappLink(), <WhatsAppIcon key="w" size={21} />],
-                ['Instagram', INSTAGRAM_URL, <InstagramIcon key="i" size={21} />],
-                ['YouTube', YOUTUBE_URL, <YouTubeIcon key="y" size={21} />],
-                ['LinkedIn', LINKEDIN_URL, <LinkedInIcon key="l" size={21} />],
-              ] as [string, string, React.ReactNode][]).map(([label, href, icon]) => (
-                <a
-                  key={label}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={label}
-                  title={label}
-                  className="footer-social"
-                  style={{ color: 'var(--white-82)', display: 'grid', placeItems: 'center', transition: 'color .15s ease, transform .15s ease' }}
-                >
-                  {icon}
-                </a>
-              ))}
-            </div>
+          {/* A word from us, rather than a fifth stack of links. Four columns of navigation in a row
+              gave the footer nothing but wayfinding; this is the one place the brand gets to speak.
+              Copy is deliberately ours, not the reference's — swap the wording freely. */}
+          <div className="footer-note" style={{ flex: '1 1 260px', maxWidth: 340 }}>
+            <div style={footerHeadingStyle}>Hey there, let&apos;s treat you!</div>
+            <p style={{ color: 'var(--white-72)', lineHeight: 1.65, fontSize: 'var(--text-sm)', margin: 0 }}>
+              Every cookie is handmade in small batches and baked through the day — never pulled from
+              a freezer, never sitting around waiting for you.
+            </p>
+            <p style={{ color: 'var(--white-72)', lineHeight: 1.65, fontSize: 'var(--text-sm)', margin: '14px 0 0' }}>
+              Order in the morning, and it reaches you the same day still warm. That&apos;s the whole
+              idea behind the Aroma of Freshness.
+            </p>
           </div>
         </div>
         </div>
 
-        {/* Baseline bar — last child, so it sits at the bottom of the footer while the columns
-            above absorb the slack. */}
-        <div style={{ maxWidth: 1180, margin: '30px auto 0', padding: '15px var(--gutter) 0', borderTop: '1px solid var(--white-16)' }}>
-          {/* Live cookies-sold count on its own line (left) so it reads clearly and never sits
-              under the floating dock in the bottom-right corner. */}
-          <div style={{ marginBottom: 10 }}><CookiesSoldCounter /></div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px 16px', color: 'var(--white-60)', fontSize: 'var(--text-xs)', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px 16px', flexWrap: 'wrap' }}>
+        {/* Social sits under the columns, centred — as on the reference. As glyphs, not words: the
+            names carried nothing the icons don't, and a fifth column of text links read as yet more
+            site navigation rather than a way out to our channels.
+            aria-label carries the name for anyone not seeing the glyph. */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 22, flexWrap: 'wrap', padding: '38px var(--gutter) 0' }}>
+          {([
+            ['WhatsApp', whatsappLink(), <WhatsAppIcon key="w" size={23} />],
+            ['Instagram', INSTAGRAM_URL, <InstagramIcon key="i" size={23} />],
+            ['YouTube', YOUTUBE_URL, <YouTubeIcon key="y" size={23} />],
+            ['LinkedIn', LINKEDIN_URL, <LinkedInIcon key="l" size={23} />],
+          ] as [string, string, React.ReactNode][]).map(([label, href, icon]) => (
+            <a
+              key={label}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={label}
+              title={label}
+              className="footer-social"
+              style={{ color: 'var(--white-82)', display: 'grid', placeItems: 'center', transition: 'color .15s ease, transform .15s ease' }}
+            >
+              {icon}
+            </a>
+          ))}
+        </div>
+
+        {/* Baseline band — last child, so it sits at the bottom while the columns absorb the slack.
+            Payments and the copyright are centred in their own strip below a full-width rule, as on
+            the reference, rather than sharing a row with the contact details. */}
+        <div className="footer-baseline" style={{ marginTop: 34, paddingTop: 26, borderTop: '1px solid var(--white-16)' }}>
+          <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center' }}><PaymentMarks /></div>
+            <CookiesSoldCounter />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px 16px', color: 'var(--white-60)', fontSize: 'var(--text-xs)', flexWrap: 'wrap' }}>
               <span>© 2026 a dough cookie. All rights reserved.</span>
               <span>{SITE_EMAIL} · {SITE_PHONE}</span>
             </div>
-            <PaymentMarks />
           </div>
         </div>
       </div>

@@ -257,8 +257,11 @@ body::before {
   .footer-grid > .footer-brand { flex: 0 0 100% !important; max-width: none !important; }
   /* Tighter link lists so the footer stays short on phones */
   .footer-grid > div > div:last-child { gap: 6px !important; }
-  /* Shorter footer on phones, but keep enough bottom room for the watermark to sit cleanly */
-  .site-footer { padding-top: 32px !important; padding-bottom: 64px !important; }
+  /* Shorter footer on phones — but the bottom still has to clear the floating cart bar (fixed at
+     bottom:16 there) plus the dock, or the copyright ends up underneath them. */
+  .site-footer { padding-top: 32px !important; padding-bottom: 104px !important; }
+  /* The note reads as a paragraph, not a column, once everything is stacked full width. */
+  .footer-grid > .footer-note { flex: 0 0 100% !important; max-width: none !important; }
 }
 
 /* The footer is sized so it MERGES with the header at the end of a page.
