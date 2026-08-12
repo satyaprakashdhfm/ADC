@@ -38,8 +38,9 @@ SELECT
   CASE WHEN v.intercity THEN NULL ELSE
     'This item must be enjoyed within 24 hours of baking, so we only deliver it same-day within our intracity area.' END,
   CASE WHEN v.intercity THEN NULL ELSE 'Bengaluru' END,
-  to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-  to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+  -- created_at/updated_at are timestamptz in the real database, whatever drizzle/schema.ts says
+  -- about them being text — that baseline predates the change and was never regenerated.
+  now(), now()
 FROM (VALUES
   -- Hug in a Dip — one photograph covers all three flavours for now.
   ('Chocolate Chip Hug in a Dip',        'HUG_IN_A_DIP', 230, '["/assets/products/new_coming/Hug%20in%20a%20Dip.jpeg"]',                            'Hug in a Dip',                  TRUE),
@@ -106,7 +107,7 @@ UPDATE products SET
   menu_group = 'Cookie Sundae',
   images = '["/assets/products/new_coming/Cookie%20Sundae.jpeg"]',
   is_available = TRUE,
-  updated_at = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+  updated_at = now()
 WHERE name = 'Cookie Sundae';
 
 COMMIT;
