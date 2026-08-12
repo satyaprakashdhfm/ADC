@@ -190,10 +190,15 @@ export default function HomeProducts() {
         })}
 
         {/* Corporate & bulk gifting — last, as a wide card */}
+        {/* The gift boxes themselves, behind the words. This was a flat dark-brown panel — the one
+            block on the page selling a product with nothing to look at, on a page that is otherwise
+            all photographs. The scrim is in the class (globals.css) rather than here, because it has
+            to change direction once the card wraps on a phone, and an inline style cannot. */}
         <button
           id="corporate-section"
+          className="corp-cta"
           onClick={() => router.push('/corporate')}
-          style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: 'var(--surface-inverse)', color: 'var(--cream-100)', padding: 'clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
+          style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', color: 'var(--cream-100)', padding: 'clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 260, flex: '1 1 320px' }}>
             <span style={{ width: 46, height: 46, borderRadius: 13, background: 'var(--white-16)', color: 'var(--white)', display: 'grid', placeItems: 'center', flex: 'none' }}><Briefcase size={22} /></span>
