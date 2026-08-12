@@ -2,16 +2,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * A dash per menu section, pinned to the left edge and centred vertically, marking which category
+ * A dot per menu section, pinned to the left edge and centred vertically, marking which category
  * you are currently scrolled into — and, on hover, a scrubber for moving between them.
  *
  * The menu is nine sections and forty products long. Once you are three screens into it there is
  * nothing telling you where you are or how much is left, and getting back to a category you passed
  * means scrolling and hoping.
  *
- * At rest it is only marks. Point at it and a five-item window opens — you are here, two above, two
- * below — the current one lit and its neighbours darkened, so the shape of the menu around you is
- * readable without the whole list being on screen. Scrolling over the rail moves that window rather
+ * At rest it is only dots. Point at one and a five-item window opens around IT — that one, two
+ * above, two below — that one lit and its neighbours darkened, so the shape of the menu around
+ * you is readable without the whole list being on screen. Scrolling over the rail moves that window rather
  * than the page; stop, and it takes you where you landed.
  *
  * Sections are found in the DOM by `data-menu-section` rather than by id, because the first section
@@ -138,8 +138,8 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
         flexDirection: 'column',
         gap: 13,
         alignItems: 'flex-start',
-        // Padding gives the pointer somewhere to land between the dashes, so the open state does
-        // not flicker as it crosses the gaps.
+        // Padding gives the pointer somewhere to land between the dots, so the open state does not
+        // flicker as it crosses the gaps.
         padding: '10px 8px',
         // Fades rather than unmounts, so it does not pop in mid-scroll.
         opacity: visible ? 1 : 0,
@@ -155,6 +155,15 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
           <button
             key={s.anchor}
             onClick={() => { jump(i); close(); }}
+            /* The window follows the pointer: whichever mark you are over becomes the focus, and
+               its two neighbours either side open around it. Without this the list opened around
+               wherever the PAGE happened to be, so moving down the rail changed nothing and the
+               thing felt dead under the cursor.
+               Pointing alone never navigates — only a click, or a wheel-scrub that settles. A rail
+               that jumped the page whenever the mouse crossed it would be a trap on the way to
+               anything else on that edge of the screen. */
+            onMouseEnter={() => setPicked(i)}
+            onFocus={() => { setOpen(true); setPicked(i); }}
             aria-label={`Go to ${s.label}`}
             aria-current={i === active ? 'true' : undefined}
             style={{
@@ -165,14 +174,14 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
             <span
               aria-hidden
               style={{
-                width: on ? 26 : 15,
-                height: 3,
-                borderRadius: 2,
+                width: on ? 11 : 7,
+                height: on ? 11 : 7,
+                borderRadius: '50%',
                 flex: 'none',
                 background: on ? 'var(--gradient-warm)' : 'var(--ink-700)',
-                opacity: on ? 1 : 0.45,
-                boxShadow: on ? '0 0 10px var(--amber-500-38)' : 'none',
-                transition: 'width .2s var(--ease-out), opacity .2s ease, box-shadow .2s ease',
+                opacity: on ? 1 : 0.42,
+                boxShadow: on ? '0 0 0 4px var(--amber-500-35)' : 'none',
+                transition: 'width .18s var(--ease-out), height .18s var(--ease-out), opacity .18s ease, box-shadow .18s ease',
               }}
             />
             {/* Neighbours darken so the current one reads as lit rather than merely present — the
