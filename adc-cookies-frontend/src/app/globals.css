@@ -261,6 +261,28 @@ body::before {
   .site-footer { padding-top: 32px !important; padding-bottom: 64px !important; }
 }
 
+/* The footer runs a full screen tall on desktop so it MERGES with the header.
+   At the end of a page the sticky header slides back in (see SiteNav's "atBottom" rule); if the
+   footer is shorter than the viewport, what reappears behind it is a band of page content, and the
+   two orange bars read as separate stripes with the page wedged between them. A full-height footer
+   means the header returns over footer, and since --footer-bg's gradient starts at exactly
+   --navbar-bg (#EF7507) the seam is invisible — one continuous brand block, as on the reference.
+
+   Only on desktop: a phone screen of solid orange is a lot of scrolling for a copyright line, and
+   the mobile footer already stacks tall enough to fill most of the viewport on its own.
+
+   svh, not vh: mobile browsers measure vh against the viewport WITHOUT their toolbars, which
+   overshoots by ~60-100px and leaves dead space below the fold. */
+@media (min-width: 901px) {
+  .site-footer { min-height: 100svh; }
+}
+@supports not (height: 100svh) {
+  @media (min-width: 901px) { .site-footer { min-height: 100vh; } }
+}
+
+/* Social glyphs sit at 82% white like the text links did; full white on hover, matching them. */
+.footer-social:hover { color: var(--white) !important; transform: translateY(-1px); }
+
 /* Home promo popup — portrait card on mobile, larger landscape card on desktop */
 .promo-card { width: min(400px, 92vw); aspect-ratio: 4 / 5; }
 @media (min-width: 900px) { .promo-card { width: 660px; aspect-ratio: 16 / 11; } }
