@@ -17,6 +17,7 @@ import { useIsDesktop } from '@/lib/useIsDesktop';
 import { INDIAN_STATES, PIN_RE, PHONE_RE } from '@/lib/indiaAddress';
 import { useUpsellCatalog } from '@/hooks/checkout/useUpsellCatalog';
 import { useColumnFill } from '@/hooks/checkout/useColumnFill';
+import { UPSELL_LADDER } from '@/lib/categories';
 import { useDeliveryCheck } from '@/hooks/checkout/useDeliveryCheck';
 import { useCheckoutCoupons } from '@/hooks/checkout/useCheckoutCoupons';
 import { useCheckoutAddresses } from '@/hooks/checkout/useCheckoutAddresses';
@@ -46,7 +47,7 @@ function addDays(n: number): Date { const d = new Date(); d.setDate(d.getDate() 
 
 /* Gap between "Goes great with" tiles. Shared by the layout and by the row-fitting measurement,
    which has to add it back when working out how many tiles a given height holds. */
-const UPSELL_GAP = 12;
+const UPSELL_GAP = 10;
 
 /* ---- Gift occasions — a short, friendly tag on the gift note ---- */
 const GIFT_OCCASIONS = ['Birthday', 'Anniversary', 'Wedding', 'Love', 'Thank you', 'Congrats', 'Other'];
@@ -165,13 +166,20 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {lines.map((l, i) => {
           const restriction = restrictionFor(l.id);
+          /* A line this address can't receive is blacked out rather than merely flagged: the photo
+             goes grey, the name and price go quiet, and the reason takes over the space. A warning
+             pinned under a full-colour, appetising product still reads as "you have this" — the
+             point here is that they do NOT, at this address, and the line has to look spent before
+             the sentence explaining it will be believed. The stepper stays live, since removing it
+             is the way out. */
+          const blocked = !!restriction;
           return (
           <div key={l.id} className="co-line" style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 0', borderBottom: i < lines.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
             {l.img
-              ? <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} title={`View ${l.name}`} className="co-line__img" style={{ width: 112, height: 112, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none', cursor: 'pointer' }}><Image src={l.img} alt={l.name} width={112} height={112} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+              ? <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} title={`View ${l.name}`} className="co-line__img" style={{ width: 112, height: 112, borderRadius: 'var(--radius-sm)', overflow: 'hidden', flex: 'none', cursor: 'pointer', filter: blocked ? 'grayscale(1)' : undefined, opacity: blocked ? 0.4 : 1 }}><Image src={l.img} alt={l.name} width={112} height={112} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
               : <Thumb size={112} seed={i} />}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} role="link" tabIndex={0} title={`View ${l.name}`} style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-base)', lineHeight: 1.25, cursor: 'pointer' }}>{l.name}</div>
+              <div onClick={() => router.push(`/?q=${encodeURIComponent(l.name)}`)} role="link" tabIndex={0} title={`View ${l.name}`} style={{ fontWeight: 800, color: blocked ? 'var(--text-subtle)' : 'var(--text-strong)', fontSize: 'var(--text-base)', lineHeight: 1.25, cursor: 'pointer', textDecoration: blocked ? 'line-through' : undefined }}>{l.name}</div>
               {/* The catalog blurb, so the summary reads like the product card rather than a bare
                   line item — it also fills the column instead of leaving a tall empty gap. */}
               {(() => {
@@ -181,7 +189,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               {l.addOns && l.addOns.length > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 600, marginTop: 3 }}>+ {l.addOns.join(', ')}</div>}
               {l.note && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', fontStyle: 'italic' }}>&ldquo;{l.note}&rdquo;</div>}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 8 }}>
-                <span style={{ fontSize: 'var(--text-base)', fontWeight: 900, color: 'var(--text-strong)' }}>₹{l.price}</span>
+                <span style={{ fontSize: 'var(--text-base)', fontWeight: 900, color: blocked ? 'var(--text-subtle)' : 'var(--text-strong)', textDecoration: blocked ? 'line-through' : undefined }}>₹{l.price}</span>
                 {/* Every quantity change goes straight through EXCEPT the one that would empty the
                     line — that asks first. */}
                 <QStepper
@@ -195,9 +203,15 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               </div>
               {applied && l.id === giftLineId && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--green-success)', fontWeight: 800, marginTop: 4 }}>🎁 Free — your spin reward</div>}
               {restriction && (
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fdecec', color: '#a4231d', fontSize: 'var(--text-xs)', fontWeight: 700, lineHeight: 1.4 }}>
-                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span>Not deliverable to this address — {restriction.reason} Remove it to continue, or choose a different address.</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, marginTop: 8, padding: '9px 11px', borderRadius: 8, background: '#fdecec', color: '#a4231d', fontSize: 'var(--text-xs)', lineHeight: 1.45 }}>
+                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+                  <span>
+                    <strong style={{ display: 'block', fontWeight: 800 }}>Not available at this address</strong>
+                    {/* The reason is written by an admin per product and per mode, so it can say the
+                        true thing — "same-day inside Bengaluru only, it keeps for 24 hours" — rather
+                        than a generic line this code would have to guess at. */}
+                    <span style={{ fontWeight: 600 }}>{restriction.reason} Remove it to continue, or deliver to a different address.</span>
+                  </span>
                 </div>
               )}
             </div>
@@ -293,13 +307,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 // falling back to the coarser "nearest store" location guess before that.
                 const upsellCity = delivCheck?.city ? { city: delivCheck.city } : locationStore;
                 /* Offer the NEXT thing up the ladder, not more of what they already have. Someone
-                   holding a bag of cookies is a candidate for a tin; someone holding both is a
-                   candidate for minis, and so on. So a category already in the cart is pushed to the
-                   back rather than hidden — if nothing else qualifies, more cookies still beats an
-                   empty row.
-                   MINI and SKILLET are not in the catalogue yet; they are listed here so they slot
-                   into the right rung the day they appear, with no code change. */
-                const LADDER = ['COOKIES', 'TINS', 'MINI', 'SKILLET'];
+                   holding a bag of cookies wants something to drink with it long before they want a
+                   second bag. So a category already in the cart is pushed to the back rather than
+                   hidden — if nothing else qualifies, more cookies still beats an empty row. The
+                   rung order lives in the category registry, next to the categories themselves. */
+                const LADDER: readonly string[] = UPSELL_LADDER;
                 const inCart = new Set<string>(
                   lines.flatMap(l => {
                     const cat = catalog.find(p => String(p.id) === String(l.id))?.category;
@@ -311,7 +323,17 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   const pos = i === -1 ? LADDER.length : i;   // unknown categories sort after known ones
                   return inCart.has(cat) ? pos + 100 : pos;   // already got it → back of the queue
                 };
-                const pool = catalog.filter(p => p.isAvailable && !cart[String(p.id)] && !/sundae/i.test(p.name) && productAvailableFor(upsellCity, p));
+                /* The menu shows everything to everyone, but a SUGGESTION is different: offering
+                   something that would be blacked out the moment it landed in the basket is just
+                   setting the shopper up. So once a real address has been checked, its own
+                   restriction list is the filter — the precise per-pincode answer, not the coarse
+                   nearest-store hint, which is all `productAvailableFor` can give before then. */
+                const undeliverable = new Set(
+                  (delivCheck?.sameDayRestrictions || []).filter(r => !r.eligible).map(r => String(r.productId))
+                );
+                const pool = catalog.filter(p => p.isAvailable && !cart[String(p.id)]
+                  && !undeliverable.has(String(p.id))
+                  && (delivCheck ? true : productAvailableFor(upsellCity, p)));
                 if (pool.length === 0) return null;
                 /* Deal one product from each category in turn instead of listing a category at a
                    time. The grid is cut off wherever it runs out of height, and a category listed
@@ -346,20 +368,20 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       ref={gridRef}
                       className={desktop ? undefined : 'hide-sb co-upsell-row'}
                       style={desktop
-                        ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: UPSELL_GAP, alignContent: 'start' }
+                        ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: UPSELL_GAP, alignContent: 'start' }
                         : { display: 'flex', gap: UPSELL_GAP, overflowX: 'auto', paddingBottom: 4 }}
                     >
                       {suggestions.map(p => (
-                        <div key={p.id} className="co-upsell-tile" style={{ flex: 'none', width: desktop ? 'auto' : 132, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div key={p.id} className="co-upsell-tile" style={{ flex: 'none', width: desktop ? 'auto' : 116, display: 'flex', flexDirection: 'column', gap: 5 }}>
                           <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'var(--surface-sunken)' }}>
-                            <Image src={firstImage(p.images)} alt={p.name} fill sizes={desktop ? '220px' : '132px'} style={{ objectFit: 'cover' }} />
+                            <Image src={firstImage(p.images)} alt={p.name} fill sizes="150px" style={{ objectFit: 'cover' }} />
                           </div>
-                          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)', lineHeight: 1.25, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.name}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 'auto' }}>
-                            <span style={{ fontWeight: 900, fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>₹{Number(p.price)}</span>
+                          <div style={{ fontSize: 'var(--text-2xs)', fontWeight: 700, color: 'var(--text-strong)', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 'auto' }}>
+                            <span style={{ fontWeight: 900, fontSize: 'var(--text-xs)', color: 'var(--text-strong)' }}>₹{Number(p.price)}</span>
                             <button onClick={() => setQty(String(p.id), (cart[String(p.id)]?.qty || 0) + 1, p.name, Number(p.price), firstImage(p.images))}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '5px 10px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
-                              <Plus size={13} /> Add
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '4px 8px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-2xs)', cursor: 'pointer' }}>
+                              <Plus size={11} /> Add
                             </button>
                           </div>
                         </div>

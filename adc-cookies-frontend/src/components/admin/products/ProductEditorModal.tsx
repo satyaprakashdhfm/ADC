@@ -1,6 +1,7 @@
 'use client';
 import { X, Check } from 'lucide-react';
 import { type ProductInput } from '@/lib/api';
+import { PRODUCT_CATEGORIES, type ProductCategory } from '@/lib/categories';
 import { inp, addBtn, iconBtn, Field } from '../shared/ui';
 import DeliveryModeToggle from './DeliveryModeToggle';
 
@@ -25,8 +26,11 @@ export default function ProductEditorModal({ editing, setEditing, onSave }: Prop
           <Field label="Name"><input style={inp} value={editing.data.name} onChange={e => set({ name: e.target.value })} /></Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="Category">
-              <select style={inp} value={editing.data.category} onChange={e => set({ category: e.target.value as 'COOKIES' | 'TINS' })}>
-                <option value="COOKIES">COOKIES</option><option value="TINS">TINS</option>
+              {/* Options come from the shared registry, so a category added there shows up here and
+                  on the storefront together — the old hard-coded pair let an admin save a product
+                  into a category the menu had no section for, which made it vanish silently. */}
+              <select style={inp} value={editing.data.category} onChange={e => set({ category: e.target.value as ProductCategory })}>
+                {PRODUCT_CATEGORIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
               </select>
             </Field>
             <Field label="Menu group"><input style={inp} value={editing.data.menuGroup || ''} onChange={e => set({ menuGroup: e.target.value })} /></Field>

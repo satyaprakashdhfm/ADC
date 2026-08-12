@@ -367,10 +367,9 @@ body::before {
   .co-line { gap: 10px !important; padding: 11px 0 !important; }
   .co-line__img { width: 68px !important; height: 68px !important; }
 }
-/* "Goes great with" tiles. Scoped to .co-upsell-row — the scrolling row used below the checkout
-   breakpoint — because above it the tiles sit in a grid that sizes its own tracks, and a fixed
-   width would override the track and leave a ragged gap on the right of every row. */
-@media (min-width:961px) { .co-upsell-row .co-upsell-tile { width: 168px !important; } }
+/* The "Goes great with" tiles used to be widened to 168px above 961px. They are now a grid that
+   sizes its own tracks from ~920px up, and the scrolling row only exists BELOW that — so a rule
+   keyed to 961px could never match anything again. Tile width lives with the tiles now. */
 
 /* Customer Love (Reviews) — compact cards on mobile, noticeably larger on desktop */
 .review-card { flex: none; width: min(80vw, 300px); }
