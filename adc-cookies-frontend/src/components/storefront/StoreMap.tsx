@@ -61,8 +61,11 @@ export default function StoreMap({ withHeadOffice = false }: { withHeadOffice?: 
         );
       }
       if (markers.length) {
+        // Padding is how much slack is left around the outermost pins. At 0.35 the shops sat in the
+        // middle of a third of a screen of empty map; 0.12 keeps them clear of the edges and the
+        // zoom controls while letting the tiles fill the frame.
         const group = L.featureGroup(markers);
-        m.fitBounds(group.getBounds().pad(0.35));
+        m.fitBounds(group.getBounds().pad(0.12));
       }
       // Re-measure after layout settles (avoids grey tiles when mounted in a flex/grid).
       setTimeout(() => m.invalidateSize(), 200);
