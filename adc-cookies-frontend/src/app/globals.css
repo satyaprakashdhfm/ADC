@@ -74,7 +74,19 @@
 
 /* ---- Base Reset ---- */
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+/* Scrolling stops at the ends rather than bouncing past them.
+   Overscrolling revealed the canvas — which takes its colour from here, and was the cream page
+   background — so dragging past the top flashed a white band above the orange ribbon. `none` stops
+   the bounce outright; the warm background is the belt-and-braces for engines that bounce anyway
+   (iOS Safari), so what shows there is ribbon-coloured rather than white.
+   Trade: this also disables pull-to-refresh on Android. Worth it here — nothing on this site needs
+   a manual refresh, and the flash was on every page. */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+  background: var(--orange-light);
+}
 body {
   margin: 0;
   font-family: var(--font-body);
@@ -187,8 +199,12 @@ body::before {
    own height (--header-h counts the ribbon too, so the ribbon is subtracted: it is in flow and has
    already pushed the hero down by its own height).
    The image is position:absolute inset:0 within this section, so moving the section moves the
-   photograph with it — the whole frame is visible, with the bar sitting above rather than across. */
-.home-hero { min-height: 78svh; margin-top: calc(var(--header-h) - var(--ribbon-h)); }
+   photograph with it — the whole frame is visible, with the bar sitting above rather than across.
+   The 10px is deliberate overlap. --header-h is an ESTIMATE (see its own comment: "only needs to be
+   close"), so offsetting by exactly it left a sliver of cream page showing between the bar and the
+   photograph whenever the real bar came up short. Tucking the hero slightly under an opaque bar
+   costs nothing visible; a gap costs a stripe across the top of the page. */
+.home-hero { min-height: 78svh; margin-top: calc(var(--header-h) - var(--ribbon-h) - 10px); }
 @media (max-width:900px) { .home-hero { min-height: 68svh; } }
 @media (max-width:680px) { .home-hero { min-height: 62svh; padding: clamp(40px,7vw,64px) 0 !important; } }
 
