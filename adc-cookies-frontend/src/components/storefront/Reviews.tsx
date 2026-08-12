@@ -72,8 +72,8 @@ export default function Reviews() {
 
   const cards = [...REVIEWS, ...REVIEWS];
 
-  // Cream band with peach cards — the same pairing as the Our Stores section, so the two read as
-  // one rhythm rather than two different treatments of the same idea.
+  // Cream band, light-orange cards — the same pairing as the Our Stores section, so the two read
+  // as one rhythm rather than two treatments of the same idea.
   return (
     <section style={{ padding: 'clamp(20px,3vw,40px) 0', background: 'var(--gold)', borderTop: '1px solid var(--border-default)', borderBottom: '1px solid var(--border-default)' }}>
       <div style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter)' }}>
@@ -87,7 +87,7 @@ export default function Reviews() {
 
           <div ref={track} className="hide-sb" style={{ display: 'flex', gap: 16, overflowX: 'auto', scrollBehavior: 'auto' }}>
             {cards.map((rv, i) => (
-              <article key={i} className="review-card" style={{ background: 'var(--peach-400)', border: '1px solid var(--peach-400)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column' }}>
+              <article key={i} className="review-card" style={{ background: 'var(--peach-300)', border: '1px solid var(--peach-400)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column' }}>
                 <div className="rv-inner" style={{ padding: '20px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 7 }}>
                   <div aria-hidden className="rv-stars" style={{ color: 'var(--amber-500)', fontSize: 14, letterSpacing: 2 }}>★★★★★</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
