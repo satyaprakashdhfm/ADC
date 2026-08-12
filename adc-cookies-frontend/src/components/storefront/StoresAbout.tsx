@@ -160,10 +160,11 @@ export default function StoresAbout() {
               <p style={{ ...body, marginBottom: 14 }}>Walk in for warm cookies, or order online for delivery from your nearest store.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                 {STORES.map(s => (
-                  /* Peach cards on the cream band — the site's alternating pair, used here and in
-                     Customer Love so the two sections read as the same rhythm. The text darkens to
-                     match: --text-muted was tuned for a near-white card and is too faint on peach. */
-                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: '1px solid var(--peach-400)', borderRadius: 'var(--radius-image)', background: 'var(--peach-400)', boxShadow: 'var(--shadow-sm)' }}>
+                  /* Cards in the light-orange the home page alternates its bands with, on the cream
+                     band — the same pair Customer Love uses, so both sections read as one rhythm.
+                     A peach-400 edge gives the card definition without a grey line. Text darkens
+                     to ink: --text-muted was tuned for a near-white card and goes faint here. */
+                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: '1px solid var(--peach-400)', borderRadius: 'var(--radius-image)', background: 'var(--peach-300)', boxShadow: 'var(--shadow-sm)' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--orange-800)', textTransform: 'uppercase', letterSpacing: '.08em', margin: '0 0 1px' }}>{s.city}</p>
                       <h4 style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--ink-900)', margin: '0 0 2px' }}>{s.name}</h4>
