@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Clock } from 'lucide-react';
 import { whatsappLink } from '@/lib/site';
+import { getSpinCooldown } from '@/lib/api';
 import { useActiveSpinReward, formatRemainingShort } from '@/lib/spinReward';
 import { useAuth } from '@/context/AuthContext';
 import { OPEN_CHAT_EVENT } from '@/lib/chatEvents';
@@ -42,6 +43,28 @@ export default function FloatingDock() {
   // itself even after the wheel modal is closed — not just while it's open.
   const { activeReward, setActiveReward, checking: checkingReward, now, refresh } = useActiveSpinReward();
 
+  /* Once the one spin is used AND its window has run out, the launcher goes away entirely.
+   *
+   * The wheel is a one-shot offer: spin, and the code is good for seven days. After that there is
+   * nothing behind the button — opening it only produced a "you've already spun" panel, which is a
+   * launcher whose whole purpose is to tell you it has no purpose. It stays gone until an admin
+   * opens a fresh round for everyone (POST /admin/coupons/reset-spins), which is the only thing
+   * that can revive it; there is no timed reset to wait for.
+   *
+   * Hidden by default until the check answers, so it cannot flash on and then disappear. Re-checked
+   * whenever the modal closes or the reward changes, so it retires the moment the window lapses in
+   * a tab that has been left open.
+   */
+  const [spinSpent, setSpinSpent] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getSpinCooldown()
+      .then(c => { if (!cancelled) setSpinSpent(!!c.completed); })
+      // A failed check must not hide a working wheel — show it and let the modal say the rest.
+      .catch(() => { if (!cancelled) setSpinSpent(false); });
+    return () => { cancelled = true; };
+  }, [spin, activeReward, user]);
+
   /* The wheel opens by itself at most TWICE on a device, ever: once for a brand-new visitor (here)
      and once when an account first signs in (below). Beyond that it is nagging, and the launcher is
      always one tap away.
@@ -54,6 +77,9 @@ export default function FloatingDock() {
      leaves during the countdown never saw it, so it should still be waiting for them next time. */
   useEffect(() => {
     if (typeof window === 'undefined' || spinDone.current || pathname !== '/') return;
+    // Before the check answers (null) or once the spin is spent, there is nothing to open. Placed
+    // above spinDone so a `null` pass does not burn the one attempt — it re-runs when it resolves.
+    if (spinSpent !== false) return;
     let seen = false;
     let locationKnown = false;
     try {
@@ -68,7 +94,7 @@ export default function FloatingDock() {
       try { localStorage.setItem('adc_spin_first_seen', '1'); } catch { /* ignore */ }
     }, locationKnown ? 2800 : 10_000);
     return () => clearTimeout(t);
-  }, [pathname]);
+  }, [pathname, spinSpent]);
 
   /* …and once more when an account first signs in here, so a shopper who logs in is offered a
      spin. That is the whole budget: twice on a device, ever.
@@ -83,7 +109,7 @@ export default function FloatingDock() {
   useEffect(() => {
     const was = prevUser.current;
     prevUser.current = user;
-    if (!user || pathname !== '/') return;
+    if (!user || pathname !== '/' || spinSpent !== false) return;
     // Phone-only accounts have no email, so key on whichever identifies them.
     const who = (user.email || user.phone || '').trim().toLowerCase();
     if (!who) return;
@@ -93,7 +119,7 @@ export default function FloatingDock() {
     if (already || was) return;   // already spent, or not actually a sign-in
     try { localStorage.setItem(key, '1'); } catch { /* ignore */ }
     setSpin(true);
-  }, [user, pathname]);
+  }, [user, pathname, spinSpent]);
 
   // Lets other parts of the site (e.g. the footer's "FAQs" link) open this same chatbot instance.
   useEffect(() => {
@@ -122,7 +148,9 @@ export default function FloatingDock() {
     <>
       <div className="floating-dock" style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
         {/* Spin & win (top) — a badge stays on the launcher itself while a won reward's
-            claim window is running, so it doesn't just vanish once the modal is closed. */}
+            claim window is running, so it doesn't just vanish once the modal is closed.
+            Absent once that spin is spent and expired: see spinSpent above. */}
+        {spinSpent === false && (
         <button onClick={() => setSpin(true)} aria-label="Spin & win a discount" title="Spin & win"
           style={{ ...fab, background: 'var(--white)', border: '1.5px solid var(--border-default)' }}>
           <MiniWheel />
@@ -139,6 +167,7 @@ export default function FloatingDock() {
             </span>
           )}
         </button>
+        )}
 
         {/* Chatbot (middle) — Doughie, the support mascot, seated on a round white disk with a
             pulsing ring, so it matches the spin (white disk) and WhatsApp (green disk) launchers and
