@@ -38,10 +38,37 @@ export default function CookiesSoldCounter() {
   }, []);
 
   if (n == null) return null;
+  /*
+   * Presented as a card rather than a line of text.
+   *
+   * It was set at the same size and weight as the copyright and the policy links it sits between,
+   * so the one genuinely interesting number in the footer — and the only thing on the page that
+   * moves — read as small print and got skimmed with it. A panel of its own, a larger figure and a
+   * live dot give it somewhere to be noticed.
+   *
+   * Not a button, though it borrows the shape: nothing happens when you press it, and a card that
+   * looks clickable and isn't is a worse outcome than one that goes unnoticed. No hover state and
+   * no pointer cursor, for the same reason.
+   */
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--white-72)', fontSize: 'var(--text-xs)', fontWeight: 700 }}>
-      <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
-      <span><b style={{ color: 'var(--white)' }}>{n.toLocaleString('en-IN')}+</b> cookies baked &amp; sold</span>
-    </span>
+    <div
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 11,
+        padding: '11px 20px', borderRadius: 'var(--radius-pill)',
+        background: 'var(--white-08)',
+        border: '1px solid var(--white-16)',
+        boxShadow: '0 1px 0 var(--white-08) inset',
+      }}
+    >
+      <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
+      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <b style={{ color: 'var(--white)', font: '900 var(--text-lg)/1 var(--font-display)', letterSpacing: '-.01em' }}>
+          {n.toLocaleString('en-IN')}+
+        </b>
+        <span style={{ color: 'var(--white-72)', fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '.02em' }}>
+          cookies baked &amp; sold
+        </span>
+      </span>
+    </div>
   );
 }
