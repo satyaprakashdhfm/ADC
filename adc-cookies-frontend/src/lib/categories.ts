@@ -12,21 +12,51 @@
  */
 
 export const PRODUCT_CATEGORIES = [
-  { code: 'COOKIES', label: 'Cookies', anchor: 'products' },
-  { code: 'HUG_IN_A_DIP', label: 'Hug in a Dip', anchor: 'hug-in-a-dip-section' },
-  { code: 'SKILLET', label: 'Skillet Cookie with Ice Cream', anchor: 'skillet-section' },
-  { code: 'TINS', label: 'Cookie Tins', anchor: 'tins-section' },
-  { code: 'SUNDAE', label: 'Cookie Sundae', anchor: 'sundae-section' },
-  { code: 'SHAKES', label: 'Cookie Shakes', anchor: 'shakes-section' },
-  { code: 'HOT_DRINKS', label: 'Hot Drinks', anchor: 'hot-drinks-section' },
-  { code: 'COLD_COFFEE', label: 'Cold Coffee', anchor: 'cold-coffee-section' },
-  { code: 'CAKES', label: 'Cookie Cake', anchor: 'cakes-section' },
-  { code: 'COMBOS', label: 'Combos', anchor: 'combos-section' },
+  { code: 'COOKIES', label: 'Cookies' },
+  { code: 'TINS', label: 'Cookie Tins' },
+  { code: 'SKILLET', label: 'Skillet Cookie with Ice Cream' },
+  { code: 'HUG_IN_A_DIP', label: 'Hug in a Dip' },
+  { code: 'SUNDAE', label: 'Cookie Sundae' },
+  { code: 'SHAKES', label: 'Cookie Shakes' },
+  { code: 'HOT_DRINKS', label: 'Hot Drinks' },
+  { code: 'COLD_COFFEE', label: 'Cold Coffee' },
+  { code: 'CAKES', label: 'Cookie Cake' },
+  { code: 'COMBOS', label: 'Combos' },
 ] as const;
 
 export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number]['code'];
 
 export const CATEGORY_CODES = PRODUCT_CATEGORIES.map(c => c.code) as readonly ProductCategory[];
+
+/**
+ * How the menu is broken into headed sections — which is not one-per-category.
+ *
+ * A section usually wraps a single category, but it can wrap several. Hug in a Dip and the Cookie
+ * Sundae hold one product each, and two headings over one card apiece read as two false starts;
+ * together they are a row. The categories stay separate everywhere it matters — a product still
+ * belongs to exactly one, the admin still picks one, and the delivery rules still key on one — this
+ * only decides what the menu draws.
+ *
+ * Order here is the order of the page. The anchors are what the nav dropdown and ?cat= links jump
+ * to; 'products' is the id of the section wrapper itself, so Cookies scrolls to the top of the menu.
+ */
+export interface MenuSection {
+  label: string;
+  anchor: string;
+  codes: readonly ProductCategory[];
+}
+
+export const MENU_SECTIONS: readonly MenuSection[] = [
+  { label: 'Cookies', anchor: 'products', codes: ['COOKIES'] },
+  { label: 'Cookie Tins', anchor: 'tins-section', codes: ['TINS'] },
+  { label: 'Skillet Cookies', anchor: 'skillet-section', codes: ['SKILLET'] },
+  { label: 'Hug in a Dip & Cookie Sundae', anchor: 'dip-sundae-section', codes: ['HUG_IN_A_DIP', 'SUNDAE'] },
+  { label: 'Cookie Shakes', anchor: 'shakes-section', codes: ['SHAKES'] },
+  { label: 'Hot Drinks', anchor: 'hot-drinks-section', codes: ['HOT_DRINKS'] },
+  { label: 'Cold Coffee', anchor: 'cold-coffee-section', codes: ['COLD_COFFEE'] },
+  { label: 'Cookie Cake', anchor: 'cakes-section', codes: ['CAKES'] },
+  { label: 'Combos', anchor: 'combos-section', codes: ['COMBOS'] },
+];
 
 /** Display name for a category code — falls back to the raw code so an unknown one is visible
  *  rather than silently blank. */

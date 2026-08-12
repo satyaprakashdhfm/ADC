@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Minus, ArrowRight, Cookie, Briefcase, IceCreamBowl, IceCreamCone, Flame, Milk, Coffee, CupSoda, CakeSlice, Boxes, Cylinder } from 'lucide-react';
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
-import { PRODUCT_CATEGORIES, menuRank, type ProductCategory } from '@/lib/categories';
+import { MENU_SECTIONS, menuRank, type ProductCategory } from '@/lib/categories';
 
 /* The registry says what the sections ARE and what order they come in; this says what each one
    looks like. Icons live here rather than in lib/categories.ts so that file stays free of React
@@ -78,11 +78,26 @@ function ProductCard({ p }: { p: Product }) {
   );
 }
 
+/* Centred, with a short rule either side.
+   Left-aligned, a heading is just the first line of the block under it — which is why ten of them
+   down one cream page read as one long list. Centred and flanked, it reads as a divider between
+   groups instead of a label on top of one.
+   The rules are deliberately short and fade outward rather than running to the page edges: a
+   full-width line would cut the page into slabs, which is louder than the separation needs to be. */
 function SubHead({ icon, title }: { icon: React.ReactNode; title: string }) {
+  const rule = (dir: 'left' | 'right'): React.CSSProperties => ({
+    height: 2,
+    width: 'clamp(28px,7vw,90px)',
+    flex: 'none',
+    borderRadius: 2,
+    background: `linear-gradient(to ${dir}, var(--amber-300), transparent)`,
+  });
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: 'clamp(26px,3.5vw,44px) 0 16px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(10px,1.4vw,18px)', margin: 'clamp(34px,4.5vw,60px) 0 20px' }}>
+      <span aria-hidden style={rule('left')} />
       <span style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--amber-50)', color: 'var(--brand-secondary)', display: 'grid', placeItems: 'center', flex: 'none' }}>{icon}</span>
-      <h3 style={{ font: '900 clamp(1.4rem,1.1rem + 1.2vw,2rem)/1 var(--font-display)', color: 'var(--text-strong)', margin: 0, letterSpacing: '-.02em' }}>{title}</h3>
+      <h3 style={{ font: '900 clamp(1.4rem,1.1rem + 1.2vw,2rem)/1 var(--font-display)', color: 'var(--text-strong)', margin: 0, letterSpacing: '-.02em', textAlign: 'center' }}>{title}</h3>
+      <span aria-hidden style={rule('right')} />
     </div>
   );
 }
@@ -120,7 +135,7 @@ export default function HomeProducts() {
     // tin, else cookies" guess that could only ever land on one of two places.
     const term = q.trim().toLowerCase();
     const hit = products.find(p => p.name.toLowerCase().includes(term));
-    const id = PRODUCT_CATEGORIES.find(c => c.code === hit?.category)?.anchor || 'products';
+    const id = MENU_SECTIONS.find(sec => hit && sec.codes.includes(hit.category))?.anchor || 'products';
     const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
     return () => clearTimeout(t);
   }, [q, products]);
@@ -130,7 +145,7 @@ export default function HomeProducts() {
     const cat = new URLSearchParams(window.location.search).get('cat');
     if (!cat) return;
     const slug = cat.trim().toLowerCase();
-    const hit = PRODUCT_CATEGORIES.find(c => c.code.toLowerCase() === slug || c.anchor === `${slug}-section`);
+    const hit = MENU_SECTIONS.find(sec => sec.codes.some(c => c.toLowerCase() === slug) || sec.anchor === `${slug}-section`);
     const id = slug === 'corporate' ? 'corporate-section' : hit?.anchor || 'products';
     const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
     try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignore */ }
@@ -151,11 +166,11 @@ export default function HomeProducts() {
 
      The old `!/sundae/i` exclusion is gone with it: sundaes were being kept out of the cookies
      grid by name because there was no category to put them in. Now there is one. */
-  const sections = PRODUCT_CATEGORIES
+  const sections = MENU_SECTIONS
     .map(c => ({
       ...c,
       items: products
-        .filter(p => p.category === c.code && p.isAvailable)
+        .filter(p => c.codes.includes(p.category) && p.isAvailable)
         // Menu order first; a search then floats whatever matched to the top of it, so typing a
         // name still finds it without permanently reshuffling the shelf underneath.
         .sort((a, b) => menuRank(a.name) - menuRank(b.name))
@@ -175,12 +190,14 @@ export default function HomeProducts() {
         {sections.length === 0 ? (
           <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0' }}>Loading fresh cookies…</p>
         ) : sections.map(s => {
-          const Icon = CATEGORY_ICONS[s.code];
+          // A section can span several categories (Hug in a Dip + Cookie Sundae), so the icon comes
+          // from the first of them rather than from the section itself.
+          const Icon = CATEGORY_ICONS[s.codes[0]];
           return (
             // Cookies anchors to the <section> wrapper's own id, so it must not re-declare it —
             // two elements with id="products" and the deep-link scroll lands on whichever the
             // browser finds first.
-            <div key={s.code} id={s.anchor === 'products' ? undefined : s.anchor} style={{ scrollMarginTop: 90 }}>
+            <div key={s.anchor} id={s.anchor === 'products' ? undefined : s.anchor} style={{ scrollMarginTop: 90 }}>
               <SubHead icon={<Icon size={19} />} title={s.label} />
               <div className="home-products-grid" style={gridStyle}>
                 {s.items.map(p => <ProductCard key={p.id} p={p} />)}

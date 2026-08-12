@@ -11,7 +11,7 @@ import { STORES } from '@/lib/stores';
 import { navLinksFor, type NavKey } from '@/lib/navLinks';
 import { RouteTrackIcon } from '@/components/icons/RouteTrackIcon';
 import { NavItem } from './nav/NavItem';
-import { PRODUCT_CATEGORIES } from '@/lib/categories';
+import { MENU_SECTIONS } from '@/lib/categories';
 import { SearchBox } from './nav/SearchBox';
 import MenuDrawer from './MenuDrawer';
 import LoginModal from '@/components/ordering/LoginModal';
@@ -72,9 +72,9 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
   /* The Menu dropdown lists the CATEGORIES, each jumping to its own section of the menu — not
      every product by name, which at forty-odd items would be a wall rather than a menu. A category
      with nothing in it is left out, so the navbar can never offer a section that isn't there. */
-  const categoryMenu = () => PRODUCT_CATEGORIES
-    .filter(c => products.some(p => p.category === c.code && p.isAvailable))
-    .map(c => ({ label: c.label, href: `/order?cat=${c.code.toLowerCase()}` }));
+  const categoryMenu = () => MENU_SECTIONS
+    .filter(sec => products.some(p => sec.codes.includes(p.category) && p.isAvailable))
+    .map(sec => ({ label: sec.label, href: `/order?cat=${sec.codes[0].toLowerCase()}` }));
   const menuFor = (key: NavKey) =>
     key === 'menu' ? categoryMenu()
       : key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))
