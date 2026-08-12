@@ -476,8 +476,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 )}
               </div>
 
+              {/* Gift wrap is laid out open rather than hidden behind its checkbox. Collapsed, the
+                  offer was a single line most people scrolled straight past — there was no way to
+                  see that it comes with a handwritten card until after you had agreed to pay for it.
+                  Showing the occasion chips and the note card is the offer.
+
+                  Touching either one ticks the box for you, because filling in a gift message and
+                  then not getting gift wrap is never what anyone meant. Unticking clears them back
+                  out, so a message can't be left behind on an order with no card to write it on. */}
               <div style={card$}>
-                <button onClick={() => setGift(!gift)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                <button onClick={() => { const next = !gift; setGift(next); if (!next) { setGiftOccasion(''); setGiftMessage(''); } }} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
                   <span style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Gift size={19} style={{ color: 'var(--white)' }} /></span>
                   <span style={{ flex: 1 }}>
                     <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Add this as a gift · +₹{GIFT_FEE}</span>
@@ -485,26 +493,24 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   </span>
                   <span style={{ width: 26, height: 26, borderRadius: 9, display: 'grid', placeItems: 'center', border: gift ? 'none' : '2px solid var(--border-strong)', background: gift ? 'var(--gradient-warm)' : 'transparent', color: 'var(--white)', flex: 'none' }}>{gift && <Check size={15} strokeWidth={3} />}</span>
                 </button>
-                {gift && (
-                  <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>What&apos;s the occasion?</div>
-                      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                        {GIFT_OCCASIONS.map(o => {
-                          const on = giftOccasion === o;
-                          return (
-                            <button key={o} onClick={() => setGiftOccasion(on ? '' : o)} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-card)', color: on ? 'var(--orange-800)' : 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)' }}>{o}</button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div>
-                      {/* Handwritten-style note card so it reads like a real gift message */}
-                      <textarea value={giftMessage} onChange={e => setGiftMessage(e.target.value.slice(0, 200))} placeholder="Write your gift message…" rows={3} maxLength={200} style={{ width: '100%', boxSizing: 'border-box', resize: 'none', padding: '14px 16px', border: '1.5px solid var(--amber-300)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-hand)', fontSize: '1.2rem', lineHeight: 1.5, color: 'var(--ink-800)', outline: 'none', background: 'var(--amber-50)' }} />
-                      <div style={{ textAlign: 'right', fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 4 }}>{giftMessage.length}/200</div>
+                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>What&apos;s the occasion?</div>
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                      {GIFT_OCCASIONS.map(o => {
+                        const on = giftOccasion === o;
+                        return (
+                          <button key={o} onClick={() => { const next = on ? '' : o; setGiftOccasion(next); if (next) setGift(true); }} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-card)', color: on ? 'var(--orange-800)' : 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)' }}>{o}</button>
+                        );
+                      })}
                     </div>
                   </div>
-                )}
+                  <div>
+                    {/* Handwritten-style note card so it reads like a real gift message */}
+                    <textarea value={giftMessage} onChange={e => { const v = e.target.value.slice(0, 200); setGiftMessage(v); if (v.trim()) setGift(true); }} placeholder="Write your gift message…" rows={3} maxLength={200} style={{ width: '100%', boxSizing: 'border-box', resize: 'none', padding: '14px 16px', border: '1.5px solid var(--amber-300)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-hand)', fontSize: '1.2rem', lineHeight: 1.5, color: 'var(--ink-800)', outline: 'none', background: 'var(--amber-50)' }} />
+                    <div style={{ textAlign: 'right', fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 4 }}>{giftMessage.length}/200</div>
+                  </div>
+                </div>
               </div>
 
               <div style={card$}>
