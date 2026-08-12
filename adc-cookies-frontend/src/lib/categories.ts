@@ -36,14 +36,17 @@ export function categoryLabel(code: string): string {
 
 /**
  * The order checkout's "Goes great with" offers things in — the next thing up the ladder, not more
- * of what's already in the basket. Someone holding a cookie wants something to drink with it long
- * before they want a second cookie; someone who has both is a candidate for a dessert; tins and
- * cakes come last because they're the take-home purchase, not the impulse one.
+ * of what's already in the basket.
+ *
+ * Tins lead, then the mini-cookie tub, then skillets: someone already holding a cookie has proved
+ * they want the cookie, and the useful next question is whether they want a boxful to take home or
+ * a plated version of it. Drinks follow, then everything else. A drink is an easy yes but a small
+ * one, so it earns its place after the things worth more.
  *
  * Separate from the array above on purpose: that one is the order the MENU reads in, this is the
  * order a suggestion is worth making in, and they are not the same question.
  */
 export const UPSELL_LADDER: readonly ProductCategory[] = [
-  'COOKIES', 'SHAKES', 'COLD_COFFEE', 'HOT_DRINKS',
-  'HUG_IN_A_DIP', 'SKILLET', 'SUNDAE', 'COMBOS', 'TINS', 'CAKES',
+  'TINS', 'HUG_IN_A_DIP', 'SKILLET',
+  'COOKIES', 'SUNDAE', 'SHAKES', 'COLD_COFFEE', 'HOT_DRINKS', 'COMBOS', 'CAKES',
 ];

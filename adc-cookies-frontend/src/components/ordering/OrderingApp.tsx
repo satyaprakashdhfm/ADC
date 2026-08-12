@@ -49,6 +49,13 @@ function addDays(n: number): Date { const d = new Date(); d.setDate(d.getDate() 
    which has to add it back when working out how many tiles a given height holds. */
 const UPSELL_GAP = 10;
 
+/* How wide the checkout is allowed to get. Matches the menu grid on the homepage (1680) rather
+   than the 1200 it used to be — on a wide screen that left a third of the display empty either
+   side while the order summary squeezed its own contents, which is the wrong trade in a two-column
+   layout whose whole job is to fit the cart and the delivery form side by side. `var(--gutter)`
+   still keeps it off the edge on smaller screens. */
+const CHECKOUT_MAX = 1680;
+
 /* ---- Gift occasions — a short, friendly tag on the gift note ---- */
 const GIFT_OCCASIONS = ['Birthday', 'Anniversary', 'Wedding', 'Love', 'Thank you', 'Congrats', 'Other'];
 
@@ -271,7 +278,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
       <SiteHeader />
 
       <div style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-glass)', flex: 'none' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '10px var(--gutter)' }}>
+        <div style={{ maxWidth: CHECKOUT_MAX, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: '10px var(--gutter)' }}>
           <button onClick={() => router.push(step === 'pay' ? '/checkout' : '/order')} aria-label="Go back" style={{ width: 40, height: 40, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronLeft size={20} /></button>
           <div style={{ flex: 'none' }}>
             <div style={{ font: 'var(--weight-bold) var(--text-h4)/1.1 var(--font-display)', color: 'var(--text-strong)' }}>{step === 'pay' ? 'Payment' : 'Checkout'}</div>
@@ -288,7 +295,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           the last card (bill details / secure-payment note) scrolls under the button. */}
       <div style={{ flex: 1, padding: '24px var(--gutter) 96px' }}>
         {step === 'review' ? (
-          <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ maxWidth: CHECKOUT_MAX, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {payFailMsg && (
               <div style={{ flex: '1 1 100%', display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', background: 'var(--red-wash)', border: '1.5px solid var(--status-error)' }}>
                 <span style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--status-error)', fontWeight: 700 }}>{payFailMsg}</span>
