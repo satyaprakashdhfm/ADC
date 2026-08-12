@@ -54,6 +54,7 @@
   --gutter: clamp(18px,4vw,40px); /* side page padding — capped ~1cm so desktop fills the screen */
   --section-y: clamp(64px,9vw,128px);
   --ribbon-h: 28px; /* height of the sticky top announcement ribbon — the home nav offsets below it */
+  --nav-h: 128px;   /* fallback only — SiteNav overwrites this with the bar's measured height */
   --control-h-sm: 36px; --control-h-md: 44px; --control-h-lg: 54px; --control-h-xl: 62px;
   --container-max: 1200px;
   --hc: min(420px,38vw);
@@ -200,11 +201,13 @@ body::before {
    already pushed the hero down by its own height).
    The image is position:absolute inset:0 within this section, so moving the section moves the
    photograph with it — the whole frame is visible, with the bar sitting above rather than across.
-   The 10px is deliberate overlap. --header-h is an ESTIMATE (see its own comment: "only needs to be
-   close"), so offsetting by exactly it left a sliver of cream page showing between the bar and the
-   photograph whenever the real bar came up short. Tucking the hero slightly under an opaque bar
-   costs nothing visible; a gap costs a stripe across the top of the page. */
-.home-hero { min-height: 78svh; margin-top: calc(var(--header-h) - var(--ribbon-h) - 10px); }
+   --nav-h is the bar's MEASURED height, published by SiteNav. It replaced --header-h, a
+   hand-written desktop estimate that overshot badly on a phone — no links row, shorter rows — and
+   left a cream band between the navbar and the photograph. The ribbon is not subtracted: it is in
+   flow and has already pushed the hero down by its own height.
+   The 10px is deliberate overlap, so rounding can never reopen that gap. Tucking the hero slightly
+   under an opaque bar costs nothing visible; a gap costs a stripe across the top of the page. */
+.home-hero { min-height: 78svh; margin-top: calc(var(--nav-h) - 10px); }
 @media (max-width:900px) { .home-hero { min-height: 68svh; } }
 @media (max-width:680px) { .home-hero { min-height: 62svh; padding: clamp(40px,7vw,64px) 0 !important; } }
 
