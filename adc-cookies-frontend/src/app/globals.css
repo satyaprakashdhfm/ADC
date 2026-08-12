@@ -261,6 +261,37 @@ body::before {
   .site-footer { padding-top: 32px !important; padding-bottom: 64px !important; }
 }
 
+/* The footer is sized so it MERGES with the header at the end of a page.
+   The header slides back in at the bottom (see SiteNav's "atBottom" rule) and, on the home page, is
+   `fixed` — so it OVERLAYS whatever is under it. The footer therefore has to satisfy exactly one
+   condition: its top edge must reach up to the header's bottom edge, no further.
+
+   At the page bottom the viewport shows the last 100svh of the document, so the footer's top edge
+   sits at (100svh - footer height). Setting that equal to the header height gives the size below.
+   Going taller — a full 100svh, say — pushes the footer's top ABOVE the viewport, which puts the
+   logo and column headings underneath the header and leaves a screen of empty orange in the middle.
+   Since --footer-bg's gradient starts at exactly --navbar-bg (#EF7507), the seam is invisible.
+
+   Desktop only: a phone screen of solid orange is a lot of scrolling for a copyright line, and the
+   mobile footer already stacks tall enough on its own.
+
+   svh, not vh: mobile browsers measure vh against the viewport WITHOUT their toolbars, which
+   overshoots and leaves dead space below the fold. */
+:root {
+  /* Sticky ribbon (28) + nav row 1 (92) + the links row (~36). Only needs to be close: too small
+     leaves a sliver of page between header and footer, too large just adds a little empty orange. */
+  --header-h: 156px;
+}
+@media (min-width: 901px) {
+  .site-footer { min-height: calc(100svh - var(--header-h)); }
+}
+@supports not (height: 100svh) {
+  @media (min-width: 901px) { .site-footer { min-height: calc(100vh - var(--header-h)); } }
+}
+
+/* Social glyphs sit at 82% white like the text links did; full white on hover, matching them. */
+.footer-social:hover { color: var(--white) !important; transform: translateY(-1px); }
+
 /* Home promo popup — portrait card on mobile, larger landscape card on desktop */
 .promo-card { width: min(400px, 92vw); aspect-ratio: 4 / 5; }
 @media (min-width: 900px) { .promo-card { width: 660px; aspect-ratio: 16 / 11; } }
