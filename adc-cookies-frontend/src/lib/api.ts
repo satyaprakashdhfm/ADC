@@ -312,6 +312,18 @@ export async function verifyPayment(orderId: number, confirmation?: PaymentConfi
   return request(`/orders/${orderId}/payment/verify`, { method: 'POST', body: JSON.stringify(confirmation || {}) });
 }
 
+/**
+ * Tell the backend the shopper closed or failed the payment, so the unpaid order it created to open
+ * Razorpay with is cancelled rather than left sitting as PENDING.
+ *
+ * Never throws. It runs on the way out of a payment the shopper has already given up on, and an
+ * error here must not become a second thing going wrong in front of them — the order stays
+ * invisible to them either way, since the account list excludes PENDING.
+ */
+export async function abandonOrder(orderId: number): Promise<void> {
+  try { await request(`/orders/${orderId}/abandon`, { method: 'POST' }); } catch { /* best effort */ }
+}
+
 export async function getOrders(): Promise<Order[]> { return request('/orders'); }
 
 export async function getOrder(id: number): Promise<Order> { return request(`/orders/${id}`); }

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getProducts, createOrder, createRazorpayOrder, verifyPayment, type Product, type OrderItemInput, type Address } from '@/lib/api';
+import { getProducts, createOrder, createRazorpayOrder, verifyPayment, abandonOrder, type Product, type OrderItemInput, type Address } from '@/lib/api';
 import { loadRazorpay } from '@/lib/razorpay';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
@@ -131,12 +131,27 @@ export function useCheckoutPayment({ step, chosen, addresses, grand, onNeedLogin
             setPayError(e instanceof Error ? e.message : 'We could not confirm your payment. If money was deducted, contact us with your order number.');
           }
         },
-        modal: { ondismiss: () => setPlacing(false) },
+        /*
+         * They closed the payment window. Two things have to happen, and neither used to.
+         *
+         * The order created a moment ago to open Razorpay with is now an order nobody is going to
+         * pay for, so cancel it. And send them back to checkout rather than leaving them sitting on
+         * a payment screen whose popup they just dismissed — the only thing to do there is press
+         * Pay again, which is not what closing the window meant.
+         */
+        modal: {
+          ondismiss: () => {
+            setPlacing(false);
+            void abandonOrder(order.id);
+            router.push('/checkout');
+          },
+        },
       });
       rzp.on('payment.failed', (resp) => {
         setPlacing(false);
-        // Don't strand the shopper on the payment screen — take them back to the cart/checkout
-        // to review and retry. Carry the reason across so we can show it there.
+        // Same as dismissing, with a reason to carry across: the unpaid order goes, and the shopper
+        // goes back to checkout to review and retry rather than being stranded on the pay screen.
+        void abandonOrder(order.id);
         try { sessionStorage.setItem('adc_pay_error', resp?.error?.description || 'Payment failed. Please try again.'); } catch {}
         router.push('/checkout?payment=failed');
       });

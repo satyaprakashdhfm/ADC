@@ -491,10 +491,24 @@ router.post('/', async (req, res) => {
   res.json(await fullOrder(orderId));
 });
 
+/*
+ * The customer's own order history — orders they actually placed, meaning ones that were paid for.
+ *
+ * An order row is created BEFORE Razorpay opens, because Razorpay needs our order number as its
+ * receipt and the row is what a payment later gets reconciled against. That is unavoidable. What it
+ * used to mean, though, is that closing the payment popup left a PENDING row behind, and this list
+ * returned it — so abandoning a payment produced an "order" in the customer's account that nobody
+ * had paid for and nothing would ever ship. Understandably alarming.
+ *
+ * PENDING is therefore not history, it is an attempt in progress or an attempt given up on, and it
+ * is excluded here. The admin list is separate and still sees every row, which is where an
+ * abandoned attempt actually needs to be visible.
+ */
 router.get('/', async (req, res) => {
   const user = await userByEmail(req.user.email);
   const rows = await getAll(
-    'SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC, id DESC', [user.id]
+    `SELECT * FROM orders WHERE user_id = $1 AND payment_status <> 'PENDING'
+      ORDER BY created_at DESC, id DESC`, [user.id]
   );
   const serialized = await Promise.all(rows.map(async (o) => {
     const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [o.id]);
@@ -545,6 +559,42 @@ router.get('/:id/delhivery-track', async (req, res) => {
     .map(s => ({ time: s.ScanDetail?.ScanDateTime || '', event: [s.ScanDetail?.Scan, s.ScanDetail?.Instructions].filter(Boolean).join(' — ') }))
     .reverse();
   return res.json({ tracked: true, carrier: 'DELHIVERY', waybill: order.delhivery_waybill, status: latestStatus, scans, data: result.data });
+});
+
+/*
+ * The shopper closed the payment window, or the payment failed outright.
+ *
+ * Called by the frontend the moment either happens, so an order nobody paid for is closed off there
+ * and then rather than left as a PENDING row of unknown age. Without it the only thing separating
+ * "gave up two minutes ago" from "gave up last month" is a timestamp nobody reads.
+ *
+ * Deliberately narrow: it only ever touches a PENDING order belonging to the caller. A PAID order
+ * cannot be cancelled through here — if this could void a paid order, a stale retry firing after a
+ * successful payment would do exactly that. Cancelling a paid order is a refund, and refunds are an
+ * admin action, not something a browser gets to trigger.
+ *
+ * Answers with ok either way. The shopper has already walked away from the payment; a failure to
+ * tidy up behind them is ours to notice in the logs, not theirs to be told about.
+ */
+router.post('/:id/abandon', async (req, res) => {
+  const user = await userByEmail(req.user.email);
+  const order = await getOne(
+    "SELECT * FROM orders WHERE id = $1 AND user_id = $2 AND payment_status = 'PENDING'",
+    [req.params.id, user.id]
+  );
+  if (!order) return res.json({ ok: true, cancelled: false });
+
+  const ts = nowIso();
+  await query(
+    "UPDATE orders SET order_status = 'CANCELLED', updated_at = $1 WHERE id = $2 AND payment_status = 'PENDING'",
+    [ts, order.id]
+  );
+  await query(
+    'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+    [order.id, 'CANCELLED', 'Payment not completed — checkout was closed before paying.', ts]
+  );
+  console.log(`[PAYMENT] abandon | order=${order.order_number} | cancelled unpaid order`);
+  res.json({ ok: true, cancelled: true });
 });
 
 // Step 1 of payment: create a Razorpay order for this DB order so Checkout can open.
