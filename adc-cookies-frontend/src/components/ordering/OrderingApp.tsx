@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { ChevronLeft, X, ShoppingBag, Check, ArrowRight, Gift, MapPin, CreditCard, Home, Briefcase, Lock, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, X, ShoppingBag, Check, ArrowRight, Gift, MapPin, Home, Briefcase, Lock, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, AlertTriangle } from 'lucide-react';
 import { productAvailableFor } from '@/lib/stores';
 import { useLocation } from '@/context/LocationContext';
 import SiteHeader from '@/components/storefront/SiteHeader';
@@ -710,19 +710,36 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 </div>
               </div>
             ) : (
+              /* The payment-method card is gone. It listed UPI, cards, netbanking and wallets as
+                 chips and explained that a secure window would open — all of which the Razorpay
+                 window itself says, a tap later, in its own words. Naming the methods here only
+                 risked disagreeing with what Razorpay actually offers on the day.
+
+                 What the last screen before paying should carry instead is the terms being agreed
+                 to. Short, in plain words, each linking to the full page — a shopper deciding
+                 whether to pay is exactly who needs to know that an order cannot be cancelled, and
+                 the moment after they have paid is exactly when it is too late to tell them. */
               <div style={card$}>
-                {head(<CreditCard size={18} color="var(--brand-secondary)" />, 'Payment method')}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                    Tap <strong style={{ color: 'var(--text-strong)' }}>Pay ₹{grand}</strong> to open the secure payment window. Pick <strong>UPI</strong> (GPay, PhonePe, Paytm), <strong>card</strong>, <strong>netbanking</strong> or <strong>wallet</strong> there — you&apos;ll come right back here once it&apos;s done.
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {['UPI', 'Cards', 'Netbanking', 'Wallets'].map(m => (
-                      <span key={m} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-raised)', border: '1.5px solid var(--border-default)', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)' }}>{m}</span>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
-                    <Lock size={13} /> Secured by Razorpay · your card / UPI details never touch our servers
+                {head(<Lock size={18} color="var(--brand-secondary)" />, 'Before you pay')}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {([
+                    ['We bake to order', 'Your cookies go into the oven as soon as this is paid, so an order can’t be cancelled or changed once placed. Do check your basket and address above.', '/terms', 'Terms of Service'],
+                    ['If anything is wrong, we fix it', 'Damaged, wrong or missing items, or an order that never arrives — tell us within 24 hours and you get it remade or refunded, back to the account you paid from.', '/refund-policy', 'Refund Policy'],
+                    ['How it reaches you', 'Same-day from the shop nearest your address inside our cities, courier elsewhere. The fee and the arrival date shown above are the real ones.', '/shipping-policy', 'Shipping Policy'],
+                    ['Your details stay yours', 'We never see your card or UPI details — they go straight to Razorpay. We keep only what’s needed to bake and deliver the order.', '/privacy', 'Privacy Policy'],
+                  ] as [string, string, string, string][]).map(([title, text, href, linkLabel]) => (
+                    <div key={href} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <Check size={15} strokeWidth={3} style={{ flex: 'none', marginTop: 3, color: 'var(--green-success)' }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>{title}</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.6, marginTop: 2 }}>
+                          {text} <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-link)', fontWeight: 700, whiteSpace: 'nowrap' }}>{linkLabel} ↗</a>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', lineHeight: 1.6, paddingTop: 4, borderTop: '1px solid var(--border-soft)' }}>
+                    By paying, you agree to our Terms of Service, Refund, Shipping and Privacy policies.
                   </div>
                 </div>
               </div>
