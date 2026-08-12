@@ -16,6 +16,7 @@ import { formatRemaining } from '@/lib/spinReward';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { INDIAN_STATES, PIN_RE, PHONE_RE } from '@/lib/indiaAddress';
 import { useUpsellCatalog } from '@/hooks/checkout/useUpsellCatalog';
+import { useColumnFill } from '@/hooks/checkout/useColumnFill';
 import { useDeliveryCheck } from '@/hooks/checkout/useDeliveryCheck';
 import { useCheckoutCoupons } from '@/hooks/checkout/useCheckoutCoupons';
 import { useCheckoutAddresses } from '@/hooks/checkout/useCheckoutAddresses';
@@ -43,6 +44,10 @@ function parseServerDate(s?: string | null): Date | null {
 }
 function addDays(n: number): Date { const d = new Date(); d.setDate(d.getDate() + n); return d; }
 
+/* Gap between "Goes great with" tiles. Shared by the layout and by the row-fitting measurement,
+   which has to add it back when working out how many tiles a given height holds. */
+const UPSELL_GAP = 12;
+
 /* ---- Gift occasions — a short, friendly tag on the gift note ---- */
 const GIFT_OCCASIONS = ['Birthday', 'Anniversary', 'Wedding', 'Love', 'Thank you', 'Congrats', 'Other'];
 
@@ -61,6 +66,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     detecting, detectErr, savingAddr, openAddForm, editAddr, closeAddrForm, saveAddr, detectLocation,
   } = useCheckoutAddresses();
   const catalog = useUpsellCatalog();
+  // Lets the upsell grid grow until the left column matches the right one. Desktop only — below
+  // the breakpoint the two columns stack, so there is no height to match.
+  const { leftRef, rightRef, gridRef, fit, cols } = useColumnFill(desktop, UPSELL_GAP);
   const { couponErr, setCouponErr, availableCoupons, mySpinReward, applyCoupon } = useCheckoutCoupons();
   const [loginOpen, setLoginOpen] = useState(false);
   // Taking the last unit off a line deletes it outright, which is a lot to happen on one tap of a
@@ -198,19 +206,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         })}
         {lines.length === 0 && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', padding: '8px 0' }}>Your cart is empty.</div>}
       </div>
-      {/* Delivery promise — EXPRESS badge + a real date, like the big marketplaces */}
-      {lines.length > 0 && delivCheck && delivCheck.serviceable && (delivCheck.intracity || deliverBy) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-soft)' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 800, fontSize: 'var(--text-2xs)', letterSpacing: '.05em', flex: 'none' }}>
-            <Truck size={13} /> {delivCheck.intracity ? 'SAME-DAY' : 'EXPRESS'}
-          </span>
-          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>
-            {delivCheck.intracity
-              ? `Delivery today, ${fmtDay(new Date())}`
-              : `Delivery ${delivCheck.tat != null ? `in ${delivCheck.tat} day${delivCheck.tat !== 1 ? 's' : ''}, ` : 'by '}${_WD[deliverBy!.getDay()]}`}
-          </span>
-        </div>
-      )}
+      {/* The arrival date used to be repeated here as a SAME-DAY / EXPRESS strip. It now lives in
+          the Delivery time card on the right and only there — one screen stating the same date
+          twice invites the reader to check whether the two agree. */}
     </div>
   );
 
@@ -283,11 +281,13 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 <button onClick={() => setPayFailMsg('')} aria-label="Dismiss" style={{ border: 'none', background: 'transparent', color: 'var(--status-error)', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: 'none' }}><X size={16} /></button>
               </div>
             )}
-            <div style={{ flex: '1 1 340px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div ref={leftRef} style={{ flex: '1 1 340px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
               {orderSummary}
               {(() => {
-                // "Goes great with" — a horizontal upsell of available cookies not already in the
-                // cart (Zomato "complete your meal with" style). Quick-add straight from here.
+                // "Goes great with" — available cookies not already in the cart, quick-add straight
+                // from here. On desktop it is a grid that grows downwards until the column catches
+                // up with the address/gift/coupon/bill stack opposite, so a one-item order doesn't
+                // leave half a screen of white beside a full right-hand column.
                 // A same-day-only product (e.g. Red Velvet) is filtered against the REAL dispatch
                 // city once an address is chosen (delivCheck.city, the actual zone/pincode match),
                 // falling back to the coarser "nearest store" location guess before that.
@@ -311,19 +311,48 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   const pos = i === -1 ? LADDER.length : i;   // unknown categories sort after known ones
                   return inCart.has(cat) ? pos + 100 : pos;   // already got it → back of the queue
                 };
-                const suggestions = catalog
-                  .filter(p => p.isAvailable && !cart[String(p.id)] && !/sundae/i.test(p.name) && productAvailableFor(upsellCity, p))
-                  .sort((a, b) => rank(a.category) - rank(b.category))
-                  .slice(0, 8);
-                if (suggestions.length === 0) return null;
+                const pool = catalog.filter(p => p.isAvailable && !cart[String(p.id)] && !/sundae/i.test(p.name) && productAvailableFor(upsellCity, p));
+                if (pool.length === 0) return null;
+                /* Deal one product from each category in turn instead of listing a category at a
+                   time. The grid is cut off wherever it runs out of height, and a category listed
+                   last would be the one that vanishes — dealing round-robin puts every category
+                   inside the very first row, so shrinking the grid only ever costs depth within a
+                   category, never a whole category. */
+                const byCat = new Map<string, typeof pool>();
+                for (const p of pool) {
+                  const k = String(p.category || 'OTHER');
+                  const g = byCat.get(k);
+                  if (g) g.push(p); else byCat.set(k, [p]);
+                }
+                const cats = [...byCat.keys()].sort((a, b) => rank(a) - rank(b));
+                const deepest = Math.max(...cats.map(c => byCat.get(c)!.length));
+                const ordered: typeof pool = [];
+                for (let i = 0; i < deepest; i++) {
+                  for (const c of cats) { const p = byCat.get(c)![i]; if (p) ordered.push(p); }
+                }
+                /* How many rows: whatever the measured gap between the columns has room for,
+                   floored at enough to show every category (a two-wide grid with three categories
+                   still owes the third one a tile) and capped at what actually exists. Before the
+                   first measurement `fit` is 0, so it starts at the floor and grows. */
+                const perRow = Math.max(1, cols);
+                const minRows = Math.ceil(cats.length / perRow);
+                const maxRows = Math.ceil(ordered.length / perRow);
+                const rows = Math.min(maxRows, Math.max(minRows, fit || minRows));
+                const suggestions = desktop ? ordered.slice(0, rows * perRow) : ordered.slice(0, 8);
                 return (
                   <div style={card$}>
                     {head(<Cookie size={18} color="var(--brand-secondary)" />, 'Goes great with')}
-                    <div className="hide-sb" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
+                    <div
+                      ref={gridRef}
+                      className={desktop ? undefined : 'hide-sb co-upsell-row'}
+                      style={desktop
+                        ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: UPSELL_GAP, alignContent: 'start' }
+                        : { display: 'flex', gap: UPSELL_GAP, overflowX: 'auto', paddingBottom: 4 }}
+                    >
                       {suggestions.map(p => (
-                        <div key={p.id} className="co-upsell-tile" style={{ flex: 'none', width: 132, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div key={p.id} className="co-upsell-tile" style={{ flex: 'none', width: desktop ? 'auto' : 132, display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'var(--surface-sunken)' }}>
-                            <Image src={firstImage(p.images)} alt={p.name} fill sizes="132px" style={{ objectFit: 'cover' }} />
+                            <Image src={firstImage(p.images)} alt={p.name} fill sizes={desktop ? '220px' : '132px'} style={{ objectFit: 'cover' }} />
                           </div>
                           <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)', lineHeight: 1.25, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.name}</div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 'auto' }}>
@@ -341,7 +370,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
               })()}
             </div>
 
-            <div style={{ flex: '1.4 1 440px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div ref={rightRef} style={{ flex: '1.4 1 440px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
               <div style={card$}>
                 {head(<MapPin size={18} color="var(--brand-secondary)" />, 'Delivery address')}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -438,14 +467,33 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   </>
                   )}
                 </div>
+              </div>
+
+              {/* Delivery time, on its own card. Sitting inside the address box it read as a
+                  footnote to the address — so the arrival date, the one thing most people want
+                  settled before they pay, was the easiest line on the page to skim past. The card
+                  also says something BEFORE an address exists, so the question has a visible place
+                  to be answered instead of going unasked. */}
+              <div style={card$}>
+                {head(<Truck size={18} color="var(--brand-secondary)" />, 'Delivery time')}
+                {!chosen || (!delivChecking && !delivCheck) ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)' }}>
+                    <Clock size={17} color="var(--brand-secondary)" style={{ flex: 'none' }} />
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                      {!chosen
+                        ? 'Add a delivery address above and we’ll tell you when your order reaches you.'
+                        : 'Complete this address with a valid 6-digit PIN code to see the arrival date.'}
+                    </div>
+                  </div>
+                ) : null}
                 {delivChecking && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
                     <Truck size={16} /> Checking delivery to {chosen?.pincode}…
                   </div>
                 )}
                 {!delivChecking && delivCheck && (
                   delivCheck.serviceable ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
                       <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} style={{ color: 'var(--white)' }} /></span>
                       <div>
                         {delivCheck.intracity
@@ -457,7 +505,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       </div>
                     </div>
                   ) : delivCheck.reason === 'same_day_unavailable' ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
                       <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Clock size={16} style={{ color: 'var(--white)' }} /></span>
                       <div>
                         <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Same-day delivery is paused</div>
@@ -465,7 +513,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--status-error)', background: 'var(--red-wash)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--status-error)', background: 'var(--red-wash)' }}>
                       <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--status-error)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} style={{ color: 'var(--white)' }} /></span>
                       <div>
                         <div style={{ fontWeight: 800, color: 'var(--status-error)', fontSize: 'var(--text-sm)' }}>Delivery not available to {chosen?.pincode}</div>
