@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Plus, Minus, ArrowRight, Cookie, Gift, Briefcase, IceCreamBowl, IceCreamCone, Flame, Milk, Coffee, CupSoda, CakeSlice, Boxes } from 'lucide-react';
+import { Plus, Minus, ArrowRight, Cookie, Briefcase, IceCreamBowl, IceCreamCone, Flame, Milk, Coffee, CupSoda, CakeSlice, Boxes, Cylinder } from 'lucide-react';
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { PRODUCT_CATEGORIES, menuRank, type ProductCategory } from '@/lib/categories';
@@ -15,7 +15,7 @@ const CATEGORY_ICONS: Record<ProductCategory, React.ComponentType<{ size?: numbe
   COOKIES: Cookie,
   HUG_IN_A_DIP: IceCreamBowl,
   SKILLET: Flame,
-  TINS: Gift,
+  TINS: Cylinder,
   SUNDAE: IceCreamCone,
   SHAKES: Milk,
   HOT_DRINKS: Coffee,
