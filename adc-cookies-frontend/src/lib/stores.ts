@@ -37,6 +37,7 @@ export const STORES: Store[] = [
     map: 'https://www.google.com/maps/search/?api=1&query=ADC+A+Dough+Cookie+SG+Palya+Bengaluru+560029',
     lat: 12.9357,
     lng: 77.6068,
+    image: '/assets/stores/sg-palya.jpeg',
   },
   {
     city: 'Bengaluru',
