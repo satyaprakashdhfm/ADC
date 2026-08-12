@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Mail, MapPin, Phone, ShoppingBag, MessageCircle, Wheat, Clock, Truck, HeartHandshake } from 'lucide-react';
+import { Mail, MapPin, Phone, ShoppingBag, Wheat, Clock, Truck, HeartHandshake } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/icons/SocialIcons';
 import Footer from '@/components/storefront/Footer';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import ContactForm from '@/components/storefront/ContactForm';
@@ -128,7 +129,7 @@ export default function ContactPage() {
             <h2 style={{ font: '900 clamp(2.2rem,1.6rem + 3vw,3.4rem)/1 var(--font-display)', letterSpacing: '-.02em', marginBottom: 16 }}>Leave your details and we&apos;ll reach out.</h2>
             <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, color: 'var(--text-body)', marginBottom: 18 }}>Have a bulk order, a gifting request, or a question about our cookies? Share your details and our team will get back to you.</p>
             <div style={{ display: 'grid', gap: 10, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
-              <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--whatsapp-green)', fontWeight: 800 }}><MessageCircle size={16} /> WhatsApp us</a>
+              <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--whatsapp-green)', fontWeight: 800 }}><WhatsAppIcon size={17} /> WhatsApp us</a>
               <a href={`mailto:${SITE_EMAIL}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit' }}><Mail size={16} /> {SITE_EMAIL}</a>
               <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit' }}><Phone size={16} /> {SITE_PHONE}</a>
             </div>

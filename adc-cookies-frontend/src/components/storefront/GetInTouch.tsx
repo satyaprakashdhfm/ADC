@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
-import { Mail, Phone, MessageCircle, ChevronDown } from 'lucide-react';
+import { Mail, Phone, ChevronDown } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/icons/SocialIcons';
 import ContactForm from './ContactForm';
 import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 
@@ -20,7 +21,7 @@ export default function GetInTouch() {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(16px,2.4vw,32px)', flexWrap: 'wrap', marginBottom: 18 }}>
         <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={chip}>
-          <span style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--whatsapp-green)', color: 'var(--white)', display: 'grid', placeItems: 'center', flex: 'none' }}><MessageCircle size={16} /></span>
+          <span style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--whatsapp-green)', color: 'var(--white)', display: 'grid', placeItems: 'center', flex: 'none' }}><WhatsAppIcon size={17} /></span>
           WhatsApp
         </a>
         <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={chip}>
