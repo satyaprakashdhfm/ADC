@@ -40,6 +40,47 @@ export function useCheckoutAddresses() {
     if (pick) setAddr(pick.id);
   }, [addresses, addr, setAddr]);
 
+  /*
+   * A PIN code determines its city and state, so once six digits are in, fill them rather than
+   * making someone type what we already know — and pick the state off a canonical list, which is
+   * where hand-typed addresses usually go wrong.
+   *
+   * India Post's own directory rather than the Nominatim geocoder used elsewhere in this file:
+   * Nominatim is queried by postalcode here too, but its Indian PIN coverage is patchy and it
+   * regularly returns nothing for a perfectly valid code. This endpoint is the authority for
+   * exactly this lookup.
+   *
+   * Never blocks and never reports an error: the fields stay editable, so a failed lookup just
+   * means typing them by hand, which is what happened before this existed. The PIN is the
+   * authority, so a NEW pin overwrites what is there — someone correcting the pin expects the
+   * city to follow, and they can still edit afterwards.
+   */
+  const [pinFilled, setPinFilled] = useState('');   // the pin we last auto-filled from, so it runs once per pin
+  useEffect(() => {
+    const pin = aform.pincode.trim();
+    if (!/^\d{6}$/.test(pin) || pin === pinFilled) return;
+    let cancelled = false;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    (async () => {
+      try {
+        const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal: ctrl.signal });
+        const body = await res.json();
+        const po = Array.isArray(body) && body[0]?.Status === 'Success' ? body[0]?.PostOffice?.[0] : null;
+        if (!po || cancelled) return;
+        const city = String(po.District || po.Block || '').trim();
+        const state = matchState(String(po.State || '')) || '';
+        if (!city && !state) return;
+        setPinFilled(pin);
+        setAform(f => (f.pincode.trim() === pin
+          ? { ...f, city: city || f.city, state: state || f.state }
+          : f));   // they kept typing and the pin moved on — leave it alone
+      } catch { /* offline, blocked, or unknown pin — the fields are still editable */ }
+      finally { clearTimeout(timer); }
+    })();
+    return () => { cancelled = true; ctrl.abort(); clearTimeout(timer); };
+  }, [aform.pincode, pinFilled]);
+
   const EMPTY_AFORM = { fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home', latitude: null, longitude: null };
   // New address starts pre-filled with the signed-in user's name & phone (they can edit it, e.g. gifting to someone else).
   const prefillAform = () => ({ ...EMPTY_AFORM, fullName: user?.name || '', phone: user?.phone || '' });
