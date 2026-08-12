@@ -53,9 +53,11 @@ SELECT
     ELSE
       'This is made fresh and served straight away, so we only deliver it same-day in the cities where we have a shop — it cannot travel by courier.'
   END,
-  -- restrict_cities narrows WHICH intracity city may sell it, and only Red Velvet is narrowed.
-  -- A milkshake is same-day-only everywhere, but every shop city can make one.
-  CASE WHEN v.name ILIKE '%red velvet%' THEN 'Bengaluru' ELSE NULL END,
+  -- restrict_cities narrows WHICH shop city may sell an item, and nothing on this menu is narrowed:
+  -- every city with a shop bakes the whole thing. "Same-day only" is intercity_available above and
+  -- is a different question — Red Velvet and a milkshake are both same-day everywhere, Chennai
+  -- included. Pinning Red Velvet to Bengaluru here is what used to lock Chennai out of it.
+  NULL,
   -- created_at/updated_at are timestamptz in the real database, whatever drizzle/schema.ts says
   -- about them being text — that baseline predates the change and was never regenerated.
   now(), now()
