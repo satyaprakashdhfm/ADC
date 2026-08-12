@@ -151,7 +151,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
 
   // Honest arrival line for the success screen — same-day for intra-city, a real date for courier, else generic.
   const successEta = intracity ? 'Arriving today' : deliverBy ? `Arriving ${fmtDay(deliverBy)}` : 'On its way — we’ll email tracking updates';
-  if (done) return <OrderSuccessPage show total={paid} orderId={orderId} eta={successEta} summary={placedOrderSummary} pendingPayment={pendingPayment} onBackToMenu={() => router.push('/')} onViewOrder={() => router.push('/account')} />;
+  if (done) return <OrderSuccessPage show total={paid} orderId={orderId} eta={successEta} summary={placedOrderSummary} pendingPayment={pendingPayment} onBackToMenu={() => router.push('/#products')} onViewOrder={() => router.push('/account')} />;
 
   if (placing) return (
     <div className="adc-pattern-page" style={{ position: 'fixed', inset: 0, zIndex: 72, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32, textAlign: 'center' }}>

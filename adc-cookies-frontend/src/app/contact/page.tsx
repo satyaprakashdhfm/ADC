@@ -1,16 +1,26 @@
 import Link from 'next/link';
-import { Mail, MapPin, Phone, ShoppingBag, MessageCircle } from 'lucide-react';
+import { Mail, MapPin, Phone, ShoppingBag, MessageCircle, Wheat, Clock, Truck, HeartHandshake } from 'lucide-react';
 import Footer from '@/components/storefront/Footer';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import ContactForm from '@/components/storefront/ContactForm';
-import StoreMap from '@/components/storefront/StoreMap';
 import { STORES } from '@/lib/stores';
-import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
+import { SITE_EMAIL, SITE_PHONE, whatsappLink, COMPANY_NAME, HEAD_OFFICE } from '@/lib/site';
 
 export const metadata = {
-  title: 'Contact Us - a dough cookie',
-  description: 'Contact A Dough Cookie and find our four store locations in India.',
+  title: `Contact Us — ${COMPANY_NAME} (a dough cookie)`,
+  description: `Contact ${COMPANY_NAME}, the company behind a dough cookie. Head office in Jayanagar, Bengaluru, with shops across Bengaluru and Chennai.`,
 };
+
+const BLR_STORE_COUNT = STORES.filter((s) => s.city === 'Bengaluru').length;
+
+/* Written as things a customer can verify on an order they actually placed, rather than adjectives.
+   "Real ingredients" is checkable; "premium quality" is not. */
+const COMMITMENTS = [
+  { icon: Wheat, title: 'Real ingredients, named', text: 'Président butter, couverture chocolate, and genuine Nutella and Lotus Biscoff. No compound coatings and no vegetable-fat “chocolate”. If we cannot get the real thing, we do not bake the cookie that day.' },
+  { icon: Clock, title: 'Baked the day you get it', text: 'Small trays through the day at every shop rather than one batch each morning. Nothing is baked from frozen and nothing sits waiting for you.' },
+  { icon: Truck, title: 'An honest delivery promise', text: 'The arrival time and the delivery fee are worked out from your actual address and the shop that will dispatch it, and both are shown before you pay. We would rather say no to an address than quietly turn a same-day order into a three-day parcel.' },
+  { icon: HeartHandshake, title: 'A real person answers', text: 'Call, WhatsApp or email and you reach the team, not a queue. If an order arrives wrong, tell us and we will put it right — that is the whole policy.' },
+];
 
 export default function ContactPage() {
   return (
@@ -19,8 +29,8 @@ export default function ContactPage() {
       <section style={{ padding: '36px var(--gutter) 48px' }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Contact Us</p>
-          <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 22 }}>Four A Dough Cookie stores across India.</h1>
-          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>Visit A Dough Cookie for warm cookies, premium tins, gifting orders, and quick dessert pick-ups. Each store is positioned around busy neighborhoods so customers can order online, collect in person, or coordinate bulk boxes for events and celebrations.</p>
+          <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 22 }}>Talk to the people who bake them.</h1>
+          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>a dough cookie is run by {COMPANY_NAME}, from a head office in Jayanagar, Bengaluru. Whether it is a bulk order for an office, a gifting request with a deadline, a franchise enquiry, or something that went wrong with an order — this is where it reaches us, and a person will answer.</p>
           {/* Plain feature tags — not buttons (no card/pill background) */}
           <div style={{ display: 'flex', gap: 'clamp(14px,3vw,28px)', flexWrap: 'wrap', marginTop: 22, color: 'var(--text-body)' }}>
             {['Store pickup', 'Bulk gifting', 'Fresh delivery', 'Custom notes'].map((item) => (
@@ -33,32 +43,68 @@ export default function ContactPage() {
         </div>
       </section>
 
-      <section style={{ padding: '0 var(--gutter) 96px' }}>
+      {/* Head office, on its own. This page used to open with all four shopfronts, which put the
+          question "where do I write to you" behind four answers to a different question. The shops
+          have their own page; this one leads with the company. */}
+      <section style={{ padding: '0 var(--gutter) 72px' }}>
         <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr minmax(320px,460px)', gap: 28, alignItems: 'start' }} className="contact-layout contact-stores">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }} className="store-grid">
-            {STORES.map((store) => (
-              <article key={store.name} style={{ background: 'var(--panel-86)', border: '1px solid var(--border-default)', borderRadius: 16, padding: 16, boxShadow: 'var(--shadow-sm)' }}>
-                <p style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>{store.city}</p>
-                <h2 style={{ font: 'var(--weight-bold) var(--text-base)/1.2 var(--font-display)', marginBottom: 6 }}>{store.name}</h2>
-                <p style={{ color: 'var(--text-body)', lineHeight: 1.5, marginBottom: 12, fontSize: 'var(--text-xs)' }}>{store.address}</p>
-                <div style={{ display: 'grid', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-xs)', marginBottom: 12 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Phone size={14} /> {store.phone}</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Mail size={14} /> {store.email}</span>
-                </div>
-                <Link href={store.map} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--brand-secondary)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>
-                  <MapPin size={15} /> Open map
-                </Link>
+          <article style={{ background: 'var(--panel-86)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 'clamp(20px,2.6vw,30px)', boxShadow: 'var(--shadow-sm)' }}>
+            <p style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>Head office</p>
+            <h2 style={{ font: '900 var(--text-h3)/1.15 var(--font-display)', marginBottom: 6 }}>{COMPANY_NAME}</h2>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 14 }}>The company behind a dough cookie.</p>
+            <p style={{ display: 'flex', gap: 9, color: 'var(--text-body)', lineHeight: 1.65, marginBottom: 16 }}>
+              <MapPin size={17} style={{ flex: 'none', marginTop: 3, color: 'var(--brand-secondary)' }} />
+              <span>{HEAD_OFFICE.address}</span>
+            </p>
+            <div style={{ display: 'grid', gap: 9, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)', marginBottom: 18 }}>
+              <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit' }}><Phone size={15} /> {SITE_PHONE}</a>
+              <a href={`mailto:${SITE_EMAIL}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit' }}><Mail size={15} /> {SITE_EMAIL}</a>
+            </div>
+            <Link href={HEAD_OFFICE.map} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--brand-secondary)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>
+              <MapPin size={16} /> Open in Google Maps
+            </Link>
+          </article>
+
+          {/* The shops get a mention and a door out to them, not a directory reprinted here. */}
+          <aside style={{ background: 'var(--panel-90)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 'clamp(20px,2.6vw,30px)', boxShadow: 'var(--shadow-md)' }}>
+            <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 10 }}>Come and see us</h2>
+            <p style={{ fontSize: 'var(--text-base)', lineHeight: 1.75, color: 'var(--text-body)', marginBottom: 14 }}>
+              We bake at {BLR_STORE_COUNT} shops across Bengaluru — Jayanagar, S.G. Palya and
+              Electronic City — and one in Chennai at Besant Nagar. Every one of them bakes its own
+              trays through the day, so there is no wrong time to walk in.
+            </p>
+            <p style={{ fontSize: 'var(--text-base)', lineHeight: 1.75, color: 'var(--text-body)', marginBottom: 18 }}>
+              Ordering online works the same way: your order goes to whichever shop is nearest your
+              address, not to one central kitchen, which is what makes same-day delivery in about an
+              hour possible.
+            </p>
+            <Link href="/locations" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '13px 26px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 900, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}>
+              <MapPin size={17} /> All store locations
+            </Link>
+          </aside>
+        </div>
+      </section>
+
+      {/* What we hold ourselves to — the things a customer can actually check us on. */}
+      <section style={{ padding: '0 var(--gutter) 88px' }}>
+        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+          <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Our commitment</p>
+          <h2 style={{ font: '900 clamp(2rem,1.5rem + 2.4vw,3rem)/1.05 var(--font-display)', letterSpacing: '-.02em', marginBottom: 14 }}>What we promise, and what to hold us to.</h2>
+          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, color: 'var(--text-body)', maxWidth: 780, marginBottom: 30 }}>
+            These are not slogans. Each one is something you can check on any order, and something
+            worth telling us about if we get it wrong.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'clamp(14px,2vw,20px)' }}>
+            {COMMITMENTS.map((c) => (
+              <article key={c.title} style={{ background: 'var(--panel-86)', border: '1px solid var(--border-default)', borderRadius: 18, padding: 22, boxShadow: 'var(--shadow-sm)' }}>
+                <span style={{ width: 44, height: 44, borderRadius: 13, background: 'var(--gradient-warm)', color: 'var(--white)', display: 'grid', placeItems: 'center', marginBottom: 14 }}>
+                  <c.icon size={21} />
+                </span>
+                <h3 style={{ font: '900 var(--text-base)/1.25 var(--font-display)', marginBottom: 8 }}>{c.title}</h3>
+                <p style={{ fontSize: 'var(--text-sm)', lineHeight: 1.7, color: 'var(--text-body)', margin: 0 }}>{c.text}</p>
               </article>
             ))}
           </div>
-
-          <aside style={{ position: 'sticky', top: 24, background: 'var(--panel-90)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 16, boxShadow: 'var(--shadow-md)' }}>
-            <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 12 }}>Find A Dough Cookie on the map</h2>
-            {/* Real interactive map of our 4 stores (Bengaluru ×3 + Chennai) — no wrong pins, no API key */}
-            <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border-default)', height: 360 }}>
-              <StoreMap />
-            </div>
-          </aside>
         </div>
       </section>
 
