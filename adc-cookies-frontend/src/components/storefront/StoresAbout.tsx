@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { ArrowRight, ShoppingBag, Mail, Phone, MessageCircle, ChevronDown } from 'lucide-react';
 import { STORES } from '@/lib/stores';
@@ -9,6 +9,15 @@ import AboutVideo from './AboutVideo';
 import InstagramReels from './InstagramReels';
 import IngredientsCarousel from './IngredientsCarousel';
 import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
+
+// Loaded on the client only, same as the locations page does it: Leaflet needs a window, and this
+// keeps its CSS and bundle off the homepage's first paint.
+const StoreMap = dynamic(() => import('./StoreMap'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Loading map…</div>
+  ),
+});
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
 const heading: React.CSSProperties = { font: '900 clamp(1.5rem,1.1rem + 1.7vw,2.25rem)/1.08 var(--font-display)', letterSpacing: '-.02em', margin: '0 0 12px', color: 'var(--text-strong)' };
@@ -136,8 +145,13 @@ export default function StoresAbout() {
         <div style={inner}>
           <div style={split}>
             <div style={col}>
-              <div style={imgWrap}>
-                <Image src="/assets/gallery/ADC1.jpeg" alt="Inside a dough cookie store" fill sizes="(max-width:860px) 100vw, 540px" style={{ objectFit: 'cover' }} />
+              {/* A map, not a photograph of one shop. The heading says "across India" and the list
+                  beside it names four places in two cities — a single interior shot answers none of
+                  that, while a map showing where they actually are answers all of it at a glance.
+                  It frames itself to the pins, so the view is the South India footprint rather than
+                  a hardcoded region that would go wrong the day a shop opens elsewhere. */}
+              <div style={{ ...imgWrap, background: 'var(--surface-sunken)' }}>
+                <StoreMap withHeadOffice />
               </div>
             </div>
             <div style={col}>
@@ -146,11 +160,14 @@ export default function StoresAbout() {
               <p style={{ ...body, marginBottom: 14 }}>Walk in for warm cookies, or order online for delivery from your nearest store.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                 {STORES.map(s => (
-                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-image)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)' }}>
+                  /* Peach cards on the cream band — the site's alternating pair, used here and in
+                     Customer Love so the two sections read as the same rhythm. The text darkens to
+                     match: --text-muted was tuned for a near-white card and is too faint on peach. */
+                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: '1px solid var(--peach-400)', borderRadius: 'var(--radius-image)', background: 'var(--peach-400)', boxShadow: 'var(--shadow-sm)' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.08em', margin: '0 0 1px' }}>{s.city}</p>
-                      <h4 style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 2px' }}>{s.name}</h4>
-                      <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.address}</p>
+                      <p style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--orange-800)', textTransform: 'uppercase', letterSpacing: '.08em', margin: '0 0 1px' }}>{s.city}</p>
+                      <h4 style={{ font: 'var(--weight-bold) var(--text-sm)/1.2 var(--font-display)', color: 'var(--ink-900)', margin: '0 0 2px' }}>{s.name}</h4>
+                      <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--ink-700)', margin: 0, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.address}</p>
                     </div>
                     <Link href={`/locations#store-${s.pincode}`} aria-label={`See ${s.name}`} style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 800, fontSize: 'var(--text-2xs)' }}><ShoppingBag size={12} /> View</Link>
                   </div>
