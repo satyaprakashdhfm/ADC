@@ -54,18 +54,20 @@ export default function CookiesSoldCounter() {
     <div
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 11,
-        padding: '11px 20px', borderRadius: 'var(--radius-pill)',
-        background: 'var(--white-08)',
-        border: '1px solid var(--white-16)',
-        boxShadow: '0 1px 0 var(--white-08) inset',
+        padding: '12px 22px', borderRadius: 'var(--radius-pill)',
+        /* Deep warm near-black, the token the theme already reserves for badge fills. A white tint
+           over an orange footer is barely a shade lighter than the orange, which is why this did
+           not stand out at all — it needs to leave the background colour, not sit on it. */
+        background: 'var(--ink-950)',
+        boxShadow: '0 3px 14px var(--black-18)',
       }}
     >
       <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
       <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <b style={{ color: 'var(--white)', font: '900 var(--text-lg)/1 var(--font-display)', letterSpacing: '-.01em' }}>
+        <b style={{ color: 'var(--amber-300)', font: '900 var(--text-lg)/1 var(--font-display)', letterSpacing: '-.01em' }}>
           {n.toLocaleString('en-IN')}+
         </b>
-        <span style={{ color: 'var(--white-72)', fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '.02em' }}>
+        <span style={{ color: 'var(--cream-100-72)', fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '.02em' }}>
           cookies baked &amp; sold
         </span>
       </span>

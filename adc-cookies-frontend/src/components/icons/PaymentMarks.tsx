@@ -27,19 +27,39 @@ import Image from 'next/image';
  * nothing goes here on the assumption that it probably works.
  */
 
-const CHIP_H = 30;   // every chip is this tall, so the row sits on one line
-const LOGO_H = 19;   // and every mark inside is this tall, whatever its width works out to
+/*
+ * Every chip is the same card, and each mark is fitted inside it — rather than each chip taking the
+ * width its own logo happened to want. Ragged widths made the row look like four things collected
+ * from four places; a fixed card is what makes it read as a set, and it is what every checkout
+ * footer worth copying does.
+ *
+ * The trade is that a wide wordmark ends up shorter than a compact one: RuPay is nearly four times
+ * as wide as it is tall, so fitting it by width leaves it around half the height of the Mastercard
+ * circles. That is correct — the alternative is either cropping the mark or letting one chip run
+ * twice the width of its neighbours.
+ */
+const CHIP_W = 54;
+const CHIP_H = 32;
+const PAD = 6;                       // breathing room inside the card
+const FIT_W = CHIP_W - PAD * 2;      // usable box the artwork is contained within
+const FIT_H = CHIP_H - PAD * 2;
 
 const chip: React.CSSProperties = {
+  width: CHIP_W,
   height: CHIP_H,
-  padding: '0 9px',
-  borderRadius: 5,
-  background: 'var(--white)',
+  borderRadius: 6,
+  // Vanilla, not white. Against the orange footer a pure-white block reads as something pasted on
+  // top of the page; this is the same warm card colour used across the rest of the site, and the
+  // marks are all dark enough to sit on it comfortably.
+  background: 'var(--vanilla)',
+  border: '1px solid var(--cream-200)',
   display: 'grid',
   placeItems: 'center',
   flex: 'none',
   boxShadow: '0 1px 3px var(--black-18)',
 };
+
+const fit: React.CSSProperties = { maxWidth: FIT_W, maxHeight: FIT_H, width: 'auto', height: 'auto', objectFit: 'contain' };
 
 const IMAGE_MARKS = [
   { src: '/assets/payments/upi.png', alt: 'UPI', w: 120, h: 72 },
@@ -51,19 +71,18 @@ const RUPAY = { src: '/assets/payments/rupay.png', alt: 'RuPay', w: 270, h: 72 }
 function ImageMark({ src, alt, w, h }: { src: string; alt: string; w: number; h: number }) {
   return (
     <span style={chip} title={alt}>
-      {/* Height is what makes the row read as one band; width follows the logo's own ratio. */}
-      <Image src={src} alt={alt} width={w} height={h} style={{ height: LOGO_H, width: 'auto' }} />
+      {/* Contained, not sized: whichever of the two limits the logo's own ratio hits first wins. */}
+      <Image src={src} alt={alt} width={w} height={h} style={fit} />
     </span>
   );
 }
 
 function Mastercard() {
-  // Drawn at the same height as the artwork in its neighbours so the row stays even. The darker
-  // orange lens is the brand's own overlap colour, not a blend.
-  const w = Math.round(LOGO_H * 1.7);
+  // The mark is 1.7:1, so it fits by height like the other compact logos. The darker orange lens is
+  // the brand's own overlap colour, not a blend of the two discs.
   return (
     <span style={chip} title="Mastercard">
-      <svg width={w} height={LOGO_H} viewBox="0 0 34 20" aria-hidden focusable="false">
+      <svg width={Math.round(FIT_H * 1.7)} height={FIT_H} viewBox="0 0 34 20" style={fit} aria-hidden focusable="false">
         <circle cx="13.5" cy="10" r="6.4" fill="#EB001B" />
         <circle cx="20.5" cy="10" r="6.4" fill="#F79E1B" />
         <path d="M17 5.1a6.4 6.4 0 0 0 0 9.8 6.4 6.4 0 0 0 0-9.8Z" fill="#FF5F00" />
