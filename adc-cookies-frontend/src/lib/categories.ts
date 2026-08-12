@@ -50,3 +50,25 @@ export const UPSELL_LADDER: readonly ProductCategory[] = [
   'TINS', 'HUG_IN_A_DIP', 'SKILLET',
   'COOKIES', 'SUNDAE', 'SHAKES', 'COLD_COFFEE', 'HOT_DRINKS', 'COMBOS', 'CAKES',
 ];
+
+/**
+ * The order products appear in on the menu, best-sellers first.
+ *
+ * Without this the menu ran in database id order — the order things happened to be created in,
+ * which is not a merchandising decision, just an accident of history that put the plainest cookie
+ * at the top and the newest arrival at the bottom.
+ *
+ * Matched loosely on the name so it survives the renames the menu keeps going through ("Red Velvet
+ * Filled Cookie" and "Red Velvet with Cheese" are the same rung). Anything not listed keeps its
+ * existing position after the named ones, so a new product appears rather than disappearing — the
+ * failure mode of a strict allow-list.
+ */
+const MENU_ORDER = ['nutella', 'biscoff', 'red velvet', 'adc special', 'chocolate chip', 'double choc', 'matcha'];
+const LAST = ['ragi', 'raagi'];   // gluten-free, the one people go looking for rather than browse into
+
+export function menuRank(name: string): number {
+  const n = name.toLowerCase();
+  if (LAST.some(k => n.includes(k))) return 900;
+  const i = MENU_ORDER.findIndex(k => n.includes(k));
+  return i === -1 ? 500 : i;      // unlisted sits between the named ones and the deliberate last
+}
