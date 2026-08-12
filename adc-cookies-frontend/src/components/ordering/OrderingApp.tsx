@@ -390,13 +390,17 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                         <input key={k} value={aform[k]} onChange={aset(k)} placeholder={ph} inputMode={k === 'phone' ? 'tel' : undefined} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                       ))}
                       {aform.phone.trim().length > 0 && !phoneOk && <div style={hintStyle}>Enter a valid 10-digit mobile number — needed to deliver this order.</div>}
+                      {/* PIN code leads, because it fills the two after it. Typing six digits looks
+                          up the city and state (see useCheckoutAddresses) — so the order on screen
+                          now matches the order of work, instead of asking for a city we are about
+                          to overwrite. Both stay editable; the lookup is a head start, not a lock. */}
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <input value={aform.pincode} onChange={e => setAform(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))} placeholder="Pincode" inputMode="numeric" maxLength={6} style={fieldStyle} />
                         <input value={aform.city} onChange={aset('city')} placeholder="City" style={fieldStyle} />
                         <select value={aform.state} onChange={e => setAform(f => ({ ...f, state: e.target.value }))} style={{ ...fieldStyle, cursor: 'pointer', color: aform.state ? 'var(--text-strong)' : 'var(--text-subtle)', appearance: 'none' }}>
                           <option value="">State</option>
                           {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
-                        <input value={aform.pincode} onChange={e => setAform(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))} placeholder="Pincode" inputMode="numeric" maxLength={6} style={fieldStyle} />
                       </div>
                       {aform.pincode.length > 0 && !pinOk && <div style={hintStyle}>Enter a valid 6-digit PIN code.</div>}
                       {!aform.state && <div style={{ ...hintStyle, color: 'var(--text-muted)', fontWeight: 500 }}>Select your state to continue.</div>}
