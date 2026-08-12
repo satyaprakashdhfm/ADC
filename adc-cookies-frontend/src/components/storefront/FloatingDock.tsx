@@ -38,7 +38,7 @@ export default function FloatingDock() {
   const pathname = usePathname();
   const { user } = useAuth();
   const prevUser = useRef<typeof user>(user);
-  // Lifted here (not inside SpinWheel) so the 12h claim countdown stays visible on the launcher
+  // Lifted here (not inside SpinWheel) so the claim countdown stays visible on the launcher
   // itself even after the wheel modal is closed — not just while it's open.
   const { activeReward, setActiveReward, checking: checkingReward, now, refresh } = useActiveSpinReward();
 
@@ -121,7 +121,7 @@ export default function FloatingDock() {
   return (
     <>
       <div className="floating-dock" style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-        {/* Spin & win (top) — a badge stays on the launcher itself while a won reward's 12h
+        {/* Spin & win (top) — a badge stays on the launcher itself while a won reward's
             claim window is running, so it doesn't just vanish once the modal is closed. */}
         <button onClick={() => setSpin(true)} aria-label="Spin & win a discount" title="Spin & win"
           style={{ ...fab, background: 'var(--white)', border: '1.5px solid var(--border-default)' }}>

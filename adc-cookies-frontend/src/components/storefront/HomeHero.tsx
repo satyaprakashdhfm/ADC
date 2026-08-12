@@ -2,7 +2,7 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowRight, ChevronDown } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import SiteNav from './SiteNav';
 
 const ctaPrimary: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 20px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' };
@@ -25,7 +25,8 @@ export default function HomeHero() {
 
   return (
     <>
-      {/* Full nav (with cart + account) is hidden at the top and slides in after the first scroll */}
+      {/* Fixed bar, shown at the top of the page and tucked away while scrolling down. The hero
+          is offset below it in globals.css so it never sits across the photograph. */}
       <SiteNav revealOnScroll />
 
       <section className="home-hero" style={{ position: 'relative', overflow: 'hidden', display: 'grid', placeItems: 'center', padding: 'clamp(56px,8vw,96px) 0' }}>
@@ -68,14 +69,9 @@ export default function HomeHero() {
           </div>
         </motion.div>
 
-        {/* Scroll cue */}
-        <div style={{ position: 'absolute', bottom: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 4 }}>
-          <motion.button onClick={scrollToProducts} aria-label="Scroll to cookies"
-            animate={{ y: [0, 8, 0] }} transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-            style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: 'var(--surface-card)', boxShadow: 'var(--shadow-md)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--brand-secondary)' }}>
-            <ChevronDown size={22} />
-          </motion.button>
-        </div>
+        {/* The bouncing scroll-down chevron is gone. "Order Cookies" above already scrolls to the
+            menu, so it was a second control doing the same thing, animating forever at the foot of
+            the photograph. */}
       </section>
     </>
   );

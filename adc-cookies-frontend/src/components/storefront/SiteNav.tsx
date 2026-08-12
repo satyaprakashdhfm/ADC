@@ -11,6 +11,7 @@ import { STORES } from '@/lib/stores';
 import { navLinksFor, type NavKey } from '@/lib/navLinks';
 import { RouteTrackIcon } from '@/components/icons/RouteTrackIcon';
 import { NavItem } from './nav/NavItem';
+import { PRODUCT_CATEGORIES } from '@/lib/categories';
 import { SearchBox } from './nav/SearchBox';
 import MenuDrawer from './MenuDrawer';
 import LoginModal from '@/components/ordering/LoginModal';
@@ -27,7 +28,7 @@ import { LocationPill } from './LocationPicker';
 // Desktop navbar shows every link. Labels/hrefs come from lib/navLinks so a rename lands here, in
 // the mobile drawer and on the order page at once; the dropdown CONTENTS below stay local because
 // each surface fills them from different data.
-const DESKTOP_KEYS = ['home', 'cookies', 'tins', 'locations', 'corporate', 'franchise', 'about', 'contact', 'orders'] as const;
+const DESKTOP_KEYS = ['home', 'menu', 'corporate', 'franchise', 'about', 'locations', 'contact', 'orders'] as const;
 
 export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: boolean }) {
   const router = useRouter();
@@ -68,12 +69,15 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
     try { const c = localStorage.getItem('adc_products_cache'); if (c) { const arr = JSON.parse(c); if (Array.isArray(arr) && arr.length) setProducts(arr); } } catch { /* ignore */ }
     getProducts().then(ps => setProducts(ps || [])).catch(() => {});
   }, []);
-  // Cookies deep-link to that cookie (floats it to the top); tins all jump to the Cookie Tins section.
-  const toMenu = (cat: 'COOKIES' | 'TINS') => products.filter(p => p.category === cat && p.isAvailable).map(p => ({ label: p.name, href: cat === 'TINS' ? '/order?cat=tins' : `/order?q=${encodeURIComponent(p.name)}` }));
+  /* The Menu dropdown lists the CATEGORIES, each jumping to its own section of the menu — not
+     every product by name, which at forty-odd items would be a wall rather than a menu. A category
+     with nothing in it is left out, so the navbar can never offer a section that isn't there. */
+  const categoryMenu = () => PRODUCT_CATEGORIES
+    .filter(c => products.some(p => p.category === c.code && p.isAvailable))
+    .map(c => ({ label: c.label, href: `/order?cat=${c.code.toLowerCase()}` }));
   const menuFor = (key: NavKey) =>
-    key === 'cookies' ? toMenu('COOKIES')
-      : key === 'tins' ? toMenu('TINS')
-        : key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))
+    key === 'menu' ? categoryMenu()
+      : key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))
           : undefined;
   // Account icon → login modal (or account/admin page if already signed in).
   const accountClick = () => { if (user) router.push(user.role === 'ADMIN' ? '/admin' : '/account'); else setLoginOpen(true); };
