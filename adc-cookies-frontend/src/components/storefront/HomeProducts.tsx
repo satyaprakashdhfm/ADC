@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Minus, ArrowRight, Cookie, Gift, Briefcase, IceCreamBowl, IceCreamCone, Flame, Milk, Coffee, CupSoda, CakeSlice, Boxes } from 'lucide-react';
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
-import { PRODUCT_CATEGORIES, type ProductCategory } from '@/lib/categories';
+import { PRODUCT_CATEGORIES, menuRank, type ProductCategory } from '@/lib/categories';
 
 /* The registry says what the sections ARE and what order they come in; this says what each one
    looks like. Icons live here rather than in lib/categories.ts so that file stays free of React
@@ -56,7 +56,11 @@ function ProductCard({ p }: { p: Product }) {
         <h3 style={{ font: 'var(--weight-extra) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>{p.name}</h3>
         {p.description && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0, overflowWrap: 'anywhere' }}>{p.description}</p>}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 'auto', paddingTop: 8 }}>
-          <span style={{ fontWeight: 900, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}>₹{price}</span>
+          {/* "Rs" rather than the ₹ glyph, and sized to stand level with the Add button beside it.
+              At --text-base the price was the quietest thing in a row whose other half is a filled
+              orange pill, which is the wrong way round: the price is the decision, the button is
+              only how you act on it. */}
+          <span style={{ fontWeight: 900, color: 'var(--text-strong)', font: '900 var(--text-lg)/1 var(--font-display)', letterSpacing: '-.01em' }}>Rs {price}</span>
           {qty === 0 ? (
             <button onClick={() => change(1)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}>
               <Plus size={15} /> Add
@@ -152,6 +156,9 @@ export default function HomeProducts() {
       ...c,
       items: products
         .filter(p => p.category === c.code && p.isAvailable)
+        // Menu order first; a search then floats whatever matched to the top of it, so typing a
+        // name still finds it without permanently reshuffling the shelf underneath.
+        .sort((a, b) => menuRank(a.name) - menuRank(b.name))
         .sort((a, b) => (ql ? (a.name.toLowerCase().includes(ql) ? 0 : 1) - (b.name.toLowerCase().includes(ql) ? 0 : 1) : 0)),
     }))
     .filter(s => s.items.length > 0);
