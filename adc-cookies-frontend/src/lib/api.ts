@@ -342,6 +342,7 @@ export interface DeliveryCheck {
   sameDay?: boolean;
   deliveryFee?: number;         // the REAL charge: Shiprocket's live quote (intracity) or the admin-set flat outstation fee
   etaHours?: number;            // intracity only — real ETA from the carrier quote
+  distanceKm?: number | null;   // intracity only — carrier's routing distance from the dispatching store, which is what the fee is priced on
   etaLabel?: string;            // e.g. "within ~1 hour" — same-day intracity promise
   maintenanceMessage?: string;  // shown when same-day is unavailable and checkout is blocked
   /** Per-product delivery eligibility for THIS pincode — independent of `serviceable`, which is
