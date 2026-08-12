@@ -4,7 +4,7 @@ import Link from 'next/link';
 import FooterCookies from './FooterCookies';
 import CookiesSoldCounter from './CookiesSoldCounter';
 import { footerHeadingStyle, footerLinkStyle } from './footerStyles';
-import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
+import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, SITE_EMAIL, SITE_PHONE, whatsappLink, COMPANY_NAME } from '@/lib/site';
 import { openChatbot } from '@/lib/chatEvents';
 import PaymentMarks from '@/components/icons/PaymentMarks';
 import { WhatsAppIcon, InstagramIcon, YouTubeIcon, LinkedInIcon } from '@/components/icons/SocialIcons';
@@ -162,8 +162,17 @@ export default function Footer() {
           <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' }}>
             <div style={{ display: 'flex', justifyContent: 'center' }}><PaymentMarks /></div>
             <CookiesSoldCounter />
+            {/* The policies belong at the very bottom, where people look for them, and they have to
+                be real pages rather than anchors on Contact — a payment provider checks that these
+                URLs exist, and a customer looking for the refund terms is usually already unhappy
+                and should not have to hunt. */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px 18px', flexWrap: 'wrap' }}>
+              {([['Terms of Service', '/terms'], ['Refund Policy', '/refund-policy'], ['Privacy Policy', '/privacy'], ['Contact', '/contact']] as [string, string][]).map(([label, href]) => (
+                <Link key={href} href={href} className="footer-link" style={{ ...footerLinkStyle, fontSize: 'var(--text-xs)' }}>{label}</Link>
+              ))}
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px 16px', color: 'var(--white-60)', fontSize: 'var(--text-xs)', flexWrap: 'wrap' }}>
-              <span>© 2026 a dough cookie. All rights reserved.</span>
+              <span>© 2026 {COMPANY_NAME}. All rights reserved.</span>
               <span>{SITE_EMAIL} · {SITE_PHONE}</span>
             </div>
           </div>
