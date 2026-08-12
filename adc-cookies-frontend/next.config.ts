@@ -26,6 +26,16 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      // /products/<slug> pages have been retired. They were live and indexable, so deleting the
+      // route without this would turn every one of them — plus any link or bookmark pointing at
+      // them — into a 404. A permanent redirect hands whatever ranking they had back to the
+      // homepage instead of throwing it away, and `q` drops the visitor at that cookie in the menu
+      // rather than at the top of an unrelated page.
+      { source: '/products/:slug', destination: '/?q=:slug', permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

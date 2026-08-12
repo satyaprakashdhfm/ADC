@@ -189,10 +189,10 @@ export const PRODUCT_DOCS: ProductDoc[] = [
   },
 ];
 
-export function productPath(name: string) {
-  const product = PRODUCT_DOCS.find((item) => item.name === name);
-  return product ? `/products/${product.slug}` : `/products/${slugify(name)}`;
-}
+/* productPath() lived here and built `/products/<slug>` URLs. Those pages no longer exist, so it
+   could only ever have produced a link to a 404 — deleted rather than left as a trap for whoever
+   reaches for it next. PRODUCT_DOCS itself stays: it is the written copy behind the Bangalore
+   landing page, which is the one place the long-form product writing is still read. */
 
 export function slugify(value: string) {
   return value
