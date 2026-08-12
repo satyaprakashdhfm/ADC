@@ -144,12 +144,23 @@ export async function initSchema() {
     -- Cookie Tin' and so quietly stopped covering the cookie the day it was renamed, and never
     -- covered a new Red Velvet item at all. Anything we call Red Velvet is intracity-only, and the
     -- rule should not have to be re-remembered each time the menu grows.
+    --
+    -- It does NOT touch restrict_cities. That column narrows WHICH shop city may sell an item, and
+    -- Red Velvet is not narrowed — every city with a shop bakes it, so Chennai sells it same-day
+    -- exactly as Bengaluru does. This used to force restrict_cities to 'Bengaluru', which is a
+    -- different rule wearing the same clothes, and it silently locked Chennai out.
+    --
     -- Still guarded by "intercity_available = TRUE" so it sets the rule once and never fights an
     -- admin who deliberately edits it afterward via the Products tab.
-    UPDATE products SET intercity_available = FALSE, restrict_cities = COALESCE(restrict_cities, 'Bengaluru'),
+    UPDATE products SET intercity_available = FALSE,
         intercity_unavailable_reason = COALESCE(intercity_unavailable_reason,
           'This item must be enjoyed within 24 hours of baking, so we only deliver it same-day within our intracity area.')
       WHERE name ILIKE '%red velvet%' AND intercity_available = TRUE;
+
+    -- One-time repair for databases seeded while the rule above still pinned Red Velvet to
+    -- Bengaluru. Without this the column keeps the old value forever, since nothing else clears it.
+    UPDATE products SET restrict_cities = NULL
+      WHERE name ILIKE '%red velvet%' AND restrict_cities = 'Bengaluru';
 
     -- A store not currently taking orders (closed for the day, out of stock entirely, whatever the
     -- reason) — distinct from posMode/staff login state, which is about HOW it fulfils, not WHETHER
