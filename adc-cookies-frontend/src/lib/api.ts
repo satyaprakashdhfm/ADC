@@ -1,6 +1,7 @@
 // Same-origin by default: the browser calls /api/... on whatever host served the page
 // (localhost or your LAN IP on a phone), and Next.js rewrites it to the backend server-side.
 import { supabase } from './supabase';
+import type { ProductCategory } from './categories';
 
 // Where the browser sends API calls. In the browser we ALWAYS use the same-origin `/api` path so
 // Next.js rewrites it to the backend (see next.config.ts). This keeps `next dev` hitting your LOCAL
@@ -73,7 +74,7 @@ export async function logLoginLocation(): Promise<{ ok: boolean }> {
 
 /* ---- Products ---- */
 export interface Product {
-  id: number; name: string; category: 'COOKIES' | 'TINS';
+  id: number; name: string; category: ProductCategory;
   description: string; price: number; stockQuantity: number;
   images: string; options: string; isAvailable: boolean;
   menuGroup: string; tag: string; featured: boolean;
@@ -379,7 +380,7 @@ export interface AdminCoupon { id: number; code: string; discountType: string; d
 export interface CouponInput { code: string; discountType: 'PERCENTAGE' | 'FIXED'; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive?: boolean; spinWeight?: number | null; spinLabel?: string | null; terms?: string | null; }
 export interface AdminMessage { id: number; name: string; email: string; phone?: string | null; message: string; handled: boolean; createdAt: string; }
 export interface ProductInput {
-  name: string; category: 'COOKIES' | 'TINS'; description?: string; price: number;
+  name: string; category: ProductCategory; description?: string; price: number;
   stockQuantity?: number; images?: string; options?: string; isAvailable?: boolean;
   menuGroup?: string; tag?: string; featured?: boolean;
   intracityAvailable?: boolean; intracityUnavailableReason?: string;

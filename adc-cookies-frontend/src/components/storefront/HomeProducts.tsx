@@ -2,11 +2,27 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Plus, Minus, ArrowRight, Cookie, Gift, Briefcase } from 'lucide-react';
+import { Plus, Minus, ArrowRight, Cookie, Gift, Briefcase, IceCreamBowl, IceCreamCone, Flame, Milk, Coffee, CupSoda, CakeSlice, Boxes } from 'lucide-react';
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
-import { useLocation } from '@/context/LocationContext';
-import { productAvailableFor } from '@/lib/stores';
+import { PRODUCT_CATEGORIES, type ProductCategory } from '@/lib/categories';
+
+/* The registry says what the sections ARE and what order they come in; this says what each one
+   looks like. Icons live here rather than in lib/categories.ts so that file stays free of React
+   and can be imported by plain logic — the admin dropdown and the checkout ladder both need the
+   category list and neither of them wants an icon. */
+const CATEGORY_ICONS: Record<ProductCategory, React.ComponentType<{ size?: number }>> = {
+  COOKIES: Cookie,
+  HUG_IN_A_DIP: IceCreamBowl,
+  SKILLET: Flame,
+  TINS: Gift,
+  SUNDAE: IceCreamCone,
+  SHAKES: Milk,
+  HOT_DRINKS: Coffee,
+  COLD_COFFEE: CupSoda,
+  CAKES: CakeSlice,
+  COMBOS: Boxes,
+};
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
 const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'clamp(14px,1.8vw,22px)' };
@@ -69,7 +85,7 @@ function SubHead({ icon, title }: { icon: React.ReactNode; title: string }) {
 
 export default function HomeProducts() {
   const router = useRouter();
-  const { store } = useLocation();
+  // No LocationContext here any more — the menu no longer varies by where the shopper is.
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState('');
   const deepLinkScrolled = useRef(false); // scroll a ?q= deep-link to its section only once, after products load
@@ -96,9 +112,11 @@ export default function HomeProducts() {
   useEffect(() => {
     if (!q || deepLinkScrolled.current || products.length === 0) return;
     deepLinkScrolled.current = true;
+    // Scroll to whichever section actually holds the match, rather than the old two-way "is it a
+    // tin, else cookies" guess that could only ever land on one of two places.
     const term = q.trim().toLowerCase();
-    const isTin = /tin/.test(term) || products.some(p => p.category === 'TINS' && p.name.toLowerCase().includes(term));
-    const id = isTin ? 'tins-section' : 'products';
+    const hit = products.find(p => p.name.toLowerCase().includes(term));
+    const id = PRODUCT_CATEGORIES.find(c => c.code === hit?.category)?.anchor || 'products';
     const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
     return () => clearTimeout(t);
   }, [q, products]);
@@ -107,7 +125,9 @@ export default function HomeProducts() {
   useEffect(() => {
     const cat = new URLSearchParams(window.location.search).get('cat');
     if (!cat) return;
-    const id = cat === 'tins' ? 'tins-section' : cat === 'corporate' ? 'corporate-section' : 'products';
+    const slug = cat.trim().toLowerCase();
+    const hit = PRODUCT_CATEGORIES.find(c => c.code.toLowerCase() === slug || c.anchor === `${slug}-section`);
+    const id = slug === 'corporate' ? 'corporate-section' : hit?.anchor || 'products';
     const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
     try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignore */ }
     return () => clearTimeout(t);
@@ -115,10 +135,26 @@ export default function HomeProducts() {
 
   // Selecting/searching a product floats it to the top but KEEPS every other cookie visible.
   const ql = q.trim().toLowerCase();
-  const cookies = products
-    .filter(p => p.category === 'COOKIES' && p.isAvailable && !/sundae/i.test(p.name) && productAvailableFor(store, p))
-    .sort((a, b) => (ql ? (a.name.toLowerCase().includes(ql) ? 0 : 1) - (b.name.toLowerCase().includes(ql) ? 0 : 1) : 0));
-  const tins = products.filter(p => p.category === 'TINS' && p.isAvailable && productAvailableFor(store, p));
+  /* One section per registry category, in menu order, carrying whatever products exist in it —
+     an empty category draws nothing at all.
+
+     Note what is deliberately NOT filtered here any more. Products used to be dropped from the
+     menu when the shopper's coarse location made them ineligible, so a visitor outside Bengaluru
+     was never shown Red Velvet at all. The whole menu is now shown to everyone, and the "not to
+     THIS address" conversation happens once, at checkout, against a real address — where the line
+     is blacked out with the reason written on it. Hiding an item early meant a shopper couldn't
+     even learn it exists, which is a worse answer than being told where it can go.
+
+     The old `!/sundae/i` exclusion is gone with it: sundaes were being kept out of the cookies
+     grid by name because there was no category to put them in. Now there is one. */
+  const sections = PRODUCT_CATEGORIES
+    .map(c => ({
+      ...c,
+      items: products
+        .filter(p => p.category === c.code && p.isAvailable)
+        .sort((a, b) => (ql ? (a.name.toLowerCase().includes(ql) ? 0 : 1) - (b.name.toLowerCase().includes(ql) ? 0 : 1) : 0)),
+    }))
+    .filter(s => s.items.length > 0);
 
   return (
     <section id="products" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
@@ -129,25 +165,22 @@ export default function HomeProducts() {
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-body)', maxWidth: 520, margin: '0 auto' }}>Pick your favourites and add them to the cart — checkout in a tap.</p>
         </div>
 
-        {/* Cookies */}
-        <SubHead icon={<Cookie size={19} />} title="Cookies" />
-        {cookies.length === 0 ? (
+        {sections.length === 0 ? (
           <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0' }}>Loading fresh cookies…</p>
-        ) : (
-          <div className="home-products-grid" style={gridStyle}>
-            {cookies.map(p => <ProductCard key={p.id} p={p} />)}
-          </div>
-        )}
-
-        {/* Cookie Tins */}
-        {tins.length > 0 && (
-          <div id="tins-section" style={{ scrollMarginTop: 90 }}>
-            <SubHead icon={<Gift size={19} />} title="Cookie Tins" />
-            <div className="home-products-grid" style={gridStyle}>
-              {tins.map(p => <ProductCard key={p.id} p={p} />)}
+        ) : sections.map(s => {
+          const Icon = CATEGORY_ICONS[s.code];
+          return (
+            // Cookies anchors to the <section> wrapper's own id, so it must not re-declare it —
+            // two elements with id="products" and the deep-link scroll lands on whichever the
+            // browser finds first.
+            <div key={s.code} id={s.anchor === 'products' ? undefined : s.anchor} style={{ scrollMarginTop: 90 }}>
+              <SubHead icon={<Icon size={19} />} title={s.label} />
+              <div className="home-products-grid" style={gridStyle}>
+                {s.items.map(p => <ProductCard key={p.id} p={p} />)}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })}
 
         {/* Corporate & bulk gifting — last, as a wide card */}
         <button

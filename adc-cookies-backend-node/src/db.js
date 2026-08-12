@@ -138,13 +138,18 @@ export async function initSchema() {
       END IF;
     END $$;
 
-    -- One-time: Red Velvet's 24-hour shelf life means it can never go by Delhivery. Guarded by
-    -- "intercity_available = TRUE" so this sets the rule once and never fights an admin who edits it
-    -- afterward via the Products tab.
+    -- Red Velvet's 24-hour shelf life means it can never go by Delhivery, in any form: the filled
+    -- cookie, the tin, the shake, the dip. Matched on the NAME rather than a list of exact titles,
+    -- which is what this used to be — that list named 'Red Velvet Filled Cookie' and 'Red Velvet
+    -- Cookie Tin' and so quietly stopped covering the cookie the day it was renamed, and never
+    -- covered a new Red Velvet item at all. Anything we call Red Velvet is intracity-only, and the
+    -- rule should not have to be re-remembered each time the menu grows.
+    -- Still guarded by "intercity_available = TRUE" so it sets the rule once and never fights an
+    -- admin who deliberately edits it afterward via the Products tab.
     UPDATE products SET intercity_available = FALSE, restrict_cities = COALESCE(restrict_cities, 'Bengaluru'),
         intercity_unavailable_reason = COALESCE(intercity_unavailable_reason,
           'This item must be enjoyed within 24 hours of baking, so we only deliver it same-day within our intracity area.')
-      WHERE name IN ('Red Velvet Filled Cookie', 'Red Velvet Cookie Tin') AND intercity_available = TRUE;
+      WHERE name ILIKE '%red velvet%' AND intercity_available = TRUE;
 
     -- A store not currently taking orders (closed for the day, out of stock entirely, whatever the
     -- reason) — distinct from posMode/staff login state, which is about HOW it fulfils, not WHETHER
