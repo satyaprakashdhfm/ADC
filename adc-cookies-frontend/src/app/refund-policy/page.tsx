@@ -28,16 +28,12 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: 'Cancelling an order',
+    heading: 'Orders cannot be cancelled once placed',
     body: [
-      'We start baking as soon as an order is confirmed, so the window is short.',
-      [
-        'Before we start baking: cancel it and you get a full refund, no questions.',
-        'Once baking has started: we usually cannot cancel, because the food is already made for you.',
-        'Once it has been handed to a rider or courier: it cannot be cancelled.',
-      ],
-      `To cancel, call or WhatsApp ${SITE_PHONE}, or email ${SITE_EMAIL} with your order number. Please call rather than email if you are in a hurry — it is faster, and the window is measured in minutes.`,
-      'If you close the payment window or your payment fails, no order is placed and nothing is charged. There is nothing to cancel.',
+      'We start baking the moment an order is confirmed. It is made for you, to order, and it will not keep — so once an order is placed it cannot be cancelled or changed.',
+      'Please check your basket, your address and your phone number before you pay.',
+      'If you close the payment window, or the payment fails, no order is placed and nothing is charged. There is nothing to cancel in that case.',
+      'This does not affect your right to a refund if something is actually wrong with the order — that is the next section, and it is where almost every real problem belongs.',
     ],
   },
   {
@@ -58,7 +54,7 @@ const SECTIONS: LegalSection[] = [
     heading: 'When we will not refund',
     body: [
       [
-        'The order arrived correctly and on time and you changed your mind.',
+        'You changed your mind, or no longer want an order that was baked correctly.',
         'The delivery failed because the address or phone number given was wrong, or nobody was there to receive it.',
         'A taste preference — a flavour you did not enjoy is not the same as an order that was wrong.',
         'A claim made more than 24 hours after delivery, where we have no way left to check what happened.',
@@ -71,7 +67,7 @@ const SECTIONS: LegalSection[] = [
     body: [
       'Refunds always go back to the account you paid from, through our payment provider. We cannot pay a refund to a different account, in cash, or as store credit unless you ask for credit instead.',
       'Once we approve a refund we raise it the same working day. Your bank then takes its own time — usually 5 to 7 working days for the money to appear, depending on the bank and the payment method.',
-      'Delivery charges are refunded too when the fault was ours. Where an order was cancelled after being dispatched at your request, the delivery charge may not be refundable.',
+      'Delivery charges are refunded along with the order when the fault was ours.',
     ],
   },
   {
