@@ -252,15 +252,27 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             ? <span>₹{delivery}</span>
             : <span style={{ display: 'inline-flex', gap: 7, alignItems: 'baseline' }}><span style={{ textDecoration: 'line-through', color: 'var(--text-subtle)' }}>₹100</span><span style={{ color: 'var(--green-success)', fontWeight: 800 }}>FREE</span></span>}
         </div>
-        {/* Why the fee is what it is. Same-day is priced by distance, so showing the distance turns
-            an arbitrary-looking number into an explicable one — and it is the distance to the
-            SELECTED ADDRESS, measured by the carrier from the store that will actually dispatch,
-            not to wherever the phone happens to be. Outstation parcels price by weight and zone, so
-            there is no distance to show and this line stays away. */}
-        {delivCheck?.intracity && delivCheck.distanceKm != null && (
+        {/* Why the fee is what it is, and how far the cookies are coming — measured to the SELECTED
+            ADDRESS, not to wherever the phone happens to be.
+
+            Both lanes say it now. Same-day quotes the carrier's real routing distance, the figure
+            its fee is actually priced on. An outstation parcel has no such number — Delhivery
+            prices by weight and zone — so that one is straight-line from the warehouse and says
+            "about", because the road is always longer than the crow flies and rounding an estimate
+            into a precise-looking figure is how a helpful line turns into a complaint. */}
+        {delivCheck?.distanceKm != null && (
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: -4, lineHeight: 1.45 }}>
-            Your cookies are <strong style={{ color: 'var(--text-muted)' }}>{Math.round(delivCheck.distanceKm * 10) / 10} km</strong> away
-            {delivCheck.store ? <> — riding over from {delivCheck.store}</> : null}
+            {delivCheck.intracity ? (
+              <>
+                Your cookies are <strong style={{ color: 'var(--text-muted)' }}>{Math.round(delivCheck.distanceKm * 10) / 10} km</strong> away
+                {delivCheck.store ? <> — riding over from {delivCheck.store}</> : null}
+              </>
+            ) : (
+              <>
+                Your cookies have about <strong style={{ color: 'var(--text-muted)' }}>{Math.round(delivCheck.distanceKm).toLocaleString('en-IN')} km</strong> to travel
+                {delivCheck.originStore ? <> — packed and posted from {delivCheck.originStore}</> : null}
+              </>
+            )}
           </div>
         )}
         {applied && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--green-success)', fontWeight: 700 }}><span>Coupon ({coupon})</span><span>−₹{discount}</span></div>}
@@ -562,14 +574,33 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   then not getting gift wrap is never what anyone meant. Unticking clears them back
                   out, so a message can't be left behind on an order with no card to write it on. */}
               <div style={card$}>
-                <button onClick={() => { const next = !gift; setGift(next); if (!next) { setGiftOccasion(''); setGiftMessage(''); } }} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                {/* An Add / Added button, not a tickbox.
+                    A checkbox is for a setting that is part of a form you are already filling in.
+                    This is a thing you buy, priced, sitting in its own card — and the rest of the
+                    site adds things you buy with a button that says Add. The tickbox also had to
+                    carry the price beside its label with a separator dot, which is what made the
+                    heading read as "Add this as a gift · +₹30". The price belongs on the button. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><Gift size={19} style={{ color: 'var(--white)' }} /></span>
-                  <span style={{ flex: 1 }}>
-                    <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Add this as a gift · +₹{GIFT_FEE}</span>
-                    <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Premium gift wrap with a handwritten message card.</span>
-                  </span>
-                  <span style={{ width: 26, height: 26, borderRadius: 9, display: 'grid', placeItems: 'center', border: gift ? 'none' : '2px solid var(--border-strong)', background: gift ? 'var(--gradient-warm)' : 'transparent', color: 'var(--white)', flex: 'none' }}>{gift && <Check size={15} strokeWidth={3} />}</span>
-                </button>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>Send this as a gift</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Premium gift wrap with a handwritten message card.</div>
+                  </div>
+                  <button
+                    onClick={() => { const next = !gift; setGift(next); if (!next) { setGiftOccasion(''); setGiftMessage(''); } }}
+                    aria-pressed={gift}
+                    style={{
+                      flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '9px 16px',
+                      borderRadius: 'var(--radius-pill)', cursor: 'pointer', fontFamily: 'var(--font-body)',
+                      fontWeight: 800, fontSize: 'var(--text-xs)',
+                      border: gift ? 'none' : '1.5px solid var(--brand-secondary)',
+                      background: gift ? 'var(--gradient-warm)' : 'var(--amber-50)',
+                      color: gift ? 'var(--white)' : 'var(--brand-secondary)',
+                    }}
+                  >
+                    {gift ? <><Check size={13} strokeWidth={3} /> Added</> : <><Plus size={13} /> Add · ₹{GIFT_FEE}</>}
+                  </button>
+                </div>
                 <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>What&apos;s the occasion?</div>
@@ -809,27 +840,30 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           onClick={() => setPendingRemove(null)}
           style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'var(--black-18)', backdropFilter: 'blur(3px)', display: 'grid', placeItems: 'center', padding: 'var(--gutter)' }}
         >
-          <div onClick={e => e.stopPropagation()} style={{ width: 'min(380px, 100%)', background: 'var(--surface-card)', borderRadius: 'var(--radius-modal)', padding: 24, boxShadow: 'var(--shadow-xl)', textAlign: 'center' }}>
+          {/* Sized for the screen it is on. At a fixed 380px this sat as a postage stamp in the
+              middle of a 1680px checkout, which reads as a toast that happens to have buttons
+              rather than a question that has taken over the page and wants an answer. */}
+          <div onClick={e => e.stopPropagation()} style={{ width: desktop ? 'min(520px, 100%)' : 'min(380px, 100%)', background: 'var(--surface-card)', borderRadius: 'var(--radius-modal)', padding: desktop ? 36 : 24, boxShadow: 'var(--shadow-xl)', textAlign: 'center' }}>
             {pendingRemove.img && (
-              <Image src={pendingRemove.img} alt="" width={96} height={96}
-                style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 'var(--radius-sm)', margin: '0 auto 14px' }} />
+              <Image src={pendingRemove.img} alt="" width={160} height={160}
+                style={{ width: desktop ? 140 : 96, height: desktop ? 140 : 96, objectFit: 'cover', borderRadius: 'var(--radius-sm)', margin: '0 auto 18px' }} />
             )}
-            <div style={{ font: 'var(--weight-extra) var(--text-h4)/1.25 var(--font-display)', color: 'var(--text-strong)' }}>
+            <div style={{ font: `var(--weight-extra) ${desktop ? 'var(--text-h3)' : 'var(--text-h4)'}/1.25 var(--font-display)`, color: 'var(--text-strong)' }}>
               Remove {pendingRemove.name}?
             </div>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 20px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: desktop ? 'var(--text-base)' : 'var(--text-sm)', color: 'var(--text-muted)', margin: '10px 0 24px', lineHeight: 1.55 }}>
               It&apos;ll come straight out of your order. You can always add it back.
             </p>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 12 }}>
               <button
                 onClick={() => setPendingRemove(null)}
-                style={{ flex: 1, padding: '13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-strong)', background: 'transparent', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
+                style={{ flex: 1, padding: desktop ? '15px' : '13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-strong)', background: 'transparent', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: desktop ? 'var(--text-base)' : 'var(--text-sm)', cursor: 'pointer' }}
               >
                 Keep it
               </button>
               <button
                 onClick={() => { setQty(pendingRemove.id, 0, pendingRemove.name, 0, pendingRemove.img); setPendingRemove(null); }}
-                style={{ flex: 1, padding: '13px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--status-error)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}
+                style={{ flex: 1, padding: desktop ? '15px' : '13px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--status-error)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: desktop ? 'var(--text-base)' : 'var(--text-sm)', cursor: 'pointer' }}
               >
                 Remove
               </button>

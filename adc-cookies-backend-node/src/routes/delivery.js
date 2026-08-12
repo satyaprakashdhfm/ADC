@@ -7,7 +7,7 @@ import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhiv
 // shopper is shown are the ones the order will actually be dispatched from. Quoting against a single
 // fixed origin is what let checkout advertise a store we then could not collect from.
 import { pickServiceableStore, shiprocketConfigured } from '../shiprocket.js';
-import { nearestStore, zoneStores, orderStoresByProximity, isStoreActive, deliveryEligible } from '../stores.js';
+import { nearestStore, zoneStores, orderStoresByProximity, isStoreActive, deliveryEligible, storeByPincode, straightLineKm } from '../stores.js';
 
 const router = Router();
 
@@ -88,11 +88,27 @@ router.get('/check', async (req, res) => {
 
   const delhiveryQuote = async () => {
     const deliveryFee = await outstationFee();
+    const origin = await getOriginPin();
+    /*
+     * How far the parcel has to come, and where from.
+     *
+     * Same-day already tells the shopper this, because Shiprocket hands back the routing distance
+     * its own fee was calculated from. Delhivery never does — an outstation parcel is priced by
+     * weight and zone, not by kilometres — so the trip was simply not mentioned for anyone outside
+     * a store city, which is exactly the customer with the least idea where their cookies are
+     * coming from.
+     *
+     * Straight-line from the dispatching warehouse, therefore, and flagged as approximate so the
+     * wording can say "about". It reads shorter than the road ever will, and quoting it as though
+     * it were exact would be inventing a precision Delhivery never gave us.
+     */
+    const originStore = storeByPincode(origin);
+    const approxKm = straightLineKm(originStore, lat, lng);
+    const journey = { distanceKm: approxKm, distanceApprox: approxKm != null, originStore: originStore?.name ?? null };
     if (!delhiveryConfigured()) {
       console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | delhivery=unconfigured → serviceable=true`);
-      return { serviceable: true, reason: 'unconfigured', carrier: 'DELHIVERY', pincode: pin, tat: null, expectedDeliveryDate: null, deliveryFee };
+      return { serviceable: true, reason: 'unconfigured', carrier: 'DELHIVERY', pincode: pin, tat: null, expectedDeliveryDate: null, deliveryFee, ...journey };
     }
-    const origin = await getOriginPin();
     const [svc, tat] = await Promise.all([
       checkServiceability(pin),
       (async () => {
@@ -100,11 +116,11 @@ router.get('/check', async (req, res) => {
         return expectedTat({ originPin: origin, destinationPin: pin });
       })(),
     ]);
-    console.log(`[DELIVERY] check result | pin=${pin} | carrier=DELHIVERY | serviceable=${svc.serviceable} | reason=${svc.reason} | tat=${tat.ok ? tat.tat : tat.reason}`);
+    console.log(`[DELIVERY] check result | pin=${pin} | carrier=DELHIVERY | serviceable=${svc.serviceable} | reason=${svc.reason} | tat=${tat.ok ? tat.tat : tat.reason} | approx=${approxKm ?? 'n/a'}km from ${originStore?.code || origin || 'unknown'}`);
     return {
       serviceable: svc.serviceable, embargo: svc.embargo || false, reason: svc.reason, cod: svc.cod,
       carrier: 'DELHIVERY', pincode: pin, tat: tat.ok ? tat.tat : null, expectedDeliveryDate: tat.ok ? tat.expectedDeliveryDate : null,
-      deliveryFee,
+      deliveryFee, ...journey,
     };
   };
 
