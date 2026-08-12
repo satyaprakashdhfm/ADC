@@ -1,6 +1,6 @@
 -- Full menu seed — August 2026.
 --
--- Adds the 28 products that exist on the printed menu but not yet in the database: Hug in a Dip,
+-- Adds the 26 products that exist on the printed menu but not yet in the database: Hug in a Dip,
 -- Skillet Cookies, Cookie Shakes, Hot Drinks, Cold Coffee, Cookie Cakes and Combos. The live
 -- products are NOT touched — not their prices, not their names, not their flags. The single
 -- exception is the already-disabled 'Cookie Sundae', which becomes the menu's Fudge & Fold Sundae
@@ -18,6 +18,12 @@
 --     boot by the ILIKE '%red velvet%' rule in src/db.js, so a Red Velvet item added later by hand
 --     through the admin still gets the rule applied.
 --
+-- Prices are the printed in-store menu, NOT the delivery-aggregator listing, which carries a
+-- platform markup of roughly 20-30% on the same items.
+--
+-- Descriptions come from the aggregator listing, which is the copy already written for these
+-- dishes. Six had none there and are marked below.
+--
 -- Images point at files in public/assets/products/new_coming/, URL-encoded because the filenames
 -- contain spaces. Only the 4 Cookie Cakes are still without a photograph, so their images column is
 -- NULL — firstImage() falls back to the ADC Special shot rather than rendering a broken tile.
@@ -32,7 +38,7 @@ INSERT INTO products (
   created_at, updated_at
 )
 SELECT
-  v.name, v.category, NULL, v.price, 100, v.images, NULL, TRUE,
+  v.name, v.category, v.description, v.price, 100, v.images, NULL, TRUE,
   v.menu_group, NULL, FALSE,
   TRUE, v.intercity,
   CASE WHEN v.intercity THEN NULL ELSE
@@ -42,52 +48,105 @@ SELECT
   -- about them being text — that baseline predates the change and was never regenerated.
   now(), now()
 FROM (VALUES
-  -- Hug in a Dip — one photograph covers all three flavours for now.
-  ('Chocolate Chip Hug in a Dip',        'HUG_IN_A_DIP', 230, '["/assets/products/new_coming/Hug%20in%20a%20Dip.jpeg"]',                            'Hug in a Dip',                  TRUE),
-  ('Double Choc Chip Hug in a Dip',      'HUG_IN_A_DIP', 230, '["/assets/products/new_coming/Hug%20in%20a%20Dip.jpeg"]',                            'Hug in a Dip',                  TRUE),
-  ('Red Velvet Hug in a Dip',            'HUG_IN_A_DIP', 230, '["/assets/products/new_coming/Hug%20in%20a%20Dip.jpeg"]',                            'Hug in a Dip',                  FALSE),
+  -- Hug in a Dip is ONE product, not one per flavour: a single tub of assorted mini cookies around
+  -- a pot of chocolate dip. Description written from the photograph, since the aggregator does not
+  -- list this dish.
+  ('Mini Cookies (Hug in a Dip)', 'HUG_IN_A_DIP', 230,
+   'A tub of assorted mini cookies — chocolate chip, double chocolate and red velvet — set around a pot of warm chocolate dip. Made for sharing.',
+   '["/assets/products/new_coming/Hug%20in%20a%20Dip.jpeg"]', 'Hug in a Dip', TRUE),
 
   -- Skillet Cookie with Ice Cream
-  ('Chocolate Chip Skillet Cookie',      'SKILLET',      220, '["/assets/products/new_coming/Chocolate%20Chip%20Skillet%20Cookie.jpeg"]',            'Skillet Cookie with Ice Cream', TRUE),
-  ('Double Choc Chip Skillet Cookie',    'SKILLET',      230, '["/assets/products/new_coming/Double%20Choc%20Chip%20Skillet%20Cookie.jpeg"]',        'Skillet Cookie with Ice Cream', TRUE),
-  ('Biscoff Filled Skillet Cookie',      'SKILLET',      270, '["/assets/products/new_coming/Biscoff%20Filled%20Skillet%20Cookie.jpeg"]',            'Skillet Cookie with Ice Cream', TRUE),
-  ('Nutella Filled Skillet Cookie',      'SKILLET',      260, '["/assets/products/new_coming/Nutella%20Filled%20Skillet%20Cookie.jpeg"]',            'Skillet Cookie with Ice Cream', TRUE),
+  ('Chocolate Chip Skillet Cookie', 'SKILLET', 220,
+   'Half-baked chocolate chip cookie dough topped with two scoops of ice cream and rich chocolate drizzle.',
+   '["/assets/products/new_coming/Chocolate%20Chip%20Skillet%20Cookie.jpeg"]', 'Skillet Cookie with Ice Cream', TRUE),
+  ('Double Choc Chip Skillet Cookie', 'SKILLET', 230,
+   'Warm double chocolate cookie dough served with two scoops of ice cream and decadent chocolate topping.',
+   '["/assets/products/new_coming/Double%20Choc%20Chip%20Skillet%20Cookie.jpeg"]', 'Skillet Cookie with Ice Cream', TRUE),
+  ('Biscoff Filled Skillet Cookie', 'SKILLET', 270,
+   'Half-baked cookie filled with creamy Biscoff spread, topped with two scoops of ice cream and Biscoff crumble.',
+   '["/assets/products/new_coming/Biscoff%20Filled%20Skillet%20Cookie.jpeg"]', 'Skillet Cookie with Ice Cream', TRUE),
+  ('Nutella Filled Skillet Cookie', 'SKILLET', 260,
+   'Half-baked cookie filled with molten Nutella, topped with two scoops of ice cream and chocolate drizzle.',
+   '["/assets/products/new_coming/Nutella%20Filled%20Skillet%20Cookie.jpeg"]', 'Skillet Cookie with Ice Cream', TRUE),
 
   -- Cookie Sundae is NOT inserted here — a disabled 'Cookie Sundae' row already exists and is
   -- reused instead, further down, so the menu doesn't end up with two sundaes one of which is
   -- invisible.
 
   -- Cookie Shakes
-  ('Chocolate Cookie Shake',             'SHAKES',       180, '["/assets/products/new_coming/Chocolate%20Cookie%20Shake.jpeg"]',                     'Cookie Shakes',                 TRUE),
-  ('Red Velvet Cookie Shake',            'SHAKES',       190, '["/assets/products/new_coming/Red%20Velvet%20Cookie%20Shake.jpeg"]',                  'Cookie Shakes',                 FALSE),
-  ('Hazelnut Cookie Shake',              'SHAKES',       210, '["/assets/products/new_coming/Hazelnut%20Cookie%20Shake.jpeg"]',                      'Cookie Shakes',                 TRUE),
-  ('Mocha Cookie Shake',                 'SHAKES',       230, '["/assets/products/new_coming/Mocha%20Cookie%20shake.jpeg"]',                         'Cookie Shakes',                 TRUE),
+  ('Chocolate Cookie Shake', 'SHAKES', 180,
+   'Creamy milkshake blended with chocolate cookies and ice cream for a rich, velvety treat.',
+   '["/assets/products/new_coming/Chocolate%20Cookie%20Shake.jpeg"]', 'Cookie Shakes', TRUE),
+  ('Red Velvet Cookie Shake', 'SHAKES', 190,
+   'Creamy shake blended with red velvet cookies for a smooth, rich dessert in every sip.',
+   '["/assets/products/new_coming/Red%20Velvet%20Cookie%20Shake.jpeg"]', 'Cookie Shakes', FALSE),
+  ('Hazelnut Cookie Shake', 'SHAKES', 210,
+   'Smooth hazelnut cookie shake blended with creamy ice cream for a nutty, indulgent sip.',
+   '["/assets/products/new_coming/Hazelnut%20Cookie%20Shake.jpeg"]', 'Cookie Shakes', TRUE),
+  ('Mocha Cookie Shake', 'SHAKES', 230,
+   'Coffee meets chocolate cookies in a creamy shake made for true mocha lovers.',
+   '["/assets/products/new_coming/Mocha%20Cookie%20shake.jpeg"]', 'Cookie Shakes', TRUE),
 
   -- Hot Drinks — Hazelnut Latte uses the Hazelnut Cappuccino shot, the nearest available.
-  ('Hot Chocolate',                      'HOT_DRINKS',   149, '["/assets/products/new_coming/Hot%20Chocolate.jpeg"]',                                'Hot Drinks',                    TRUE),
-  ('Americano',                          'HOT_DRINKS',    99, '["/assets/products/new_coming/Americano.jpeg"]',                                      'Hot Drinks',                    TRUE),
-  ('Cappuccino',                         'HOT_DRINKS',   119, '["/assets/products/new_coming/Cappuccino.jpeg"]',                                     'Hot Drinks',                    TRUE),
-  ('Latte',                              'HOT_DRINKS',   119, '["/assets/products/new_coming/Latte.jpeg"]',                                          'Hot Drinks',                    TRUE),
-  ('Caramel Latte',                      'HOT_DRINKS',   139, '["/assets/products/new_coming/Caramel%20latte.jpeg"]',                                'Hot Drinks',                    TRUE),
-  ('Hazelnut Latte',                     'HOT_DRINKS',   169, '["/assets/products/new_coming/Hazelnut%20Cappuccino.jpeg"]',                          'Hot Drinks',                    TRUE),
+  ('Hot Chocolate', 'HOT_DRINKS', 149,
+   'Rich, velvety hot chocolate crafted for a smooth, comforting, chocolate-filled indulgence.',
+   '["/assets/products/new_coming/Hot%20Chocolate.jpeg"]', 'Hot Drinks', TRUE),
+  ('Americano', 'HOT_DRINKS', 99,
+   'Bold Arabica espresso with hot water for a smooth, clean coffee experience.',
+   '["/assets/products/new_coming/Americano.jpeg"]', 'Hot Drinks', TRUE),
+  ('Cappuccino', 'HOT_DRINKS', 119,
+   'Rich Arabica espresso topped with silky steamed milk and a velvety foam finish.',
+   '["/assets/products/new_coming/Cappuccino.jpeg"]', 'Hot Drinks', TRUE),
+  ('Latte', 'HOT_DRINKS', 119,
+   'Fresh Arabica espresso blended with silky steamed milk for a smooth, balanced coffee.',
+   '["/assets/products/new_coming/Latte.jpeg"]', 'Hot Drinks', TRUE),
+  ('Caramel Latte', 'HOT_DRINKS', 139,
+   'Smooth Arabica espresso blended with steamed milk and luscious caramel for a comforting sip.',
+   '["/assets/products/new_coming/Caramel%20latte.jpeg"]', 'Hot Drinks', TRUE),
+  ('Hazelnut Latte', 'HOT_DRINKS', 169,
+   'Creamy latte infused with rich hazelnut flavour and freshly brewed Arabica espresso.',
+   '["/assets/products/new_coming/Hazelnut%20Cappuccino.jpeg"]', 'Hot Drinks', TRUE),
 
   -- Cold Coffee
-  ('Iced Cappuccino',                    'COLD_COFFEE',  129, '["/assets/products/new_coming/Iced%20Cappuccino.jpeg"]',                              'Cold Coffee',                   TRUE),
-  ('Iced Caramel Macchiato',             'COLD_COFFEE',  149, '["/assets/products/new_coming/Iced%20Caramel%20Macchiato.jpeg"]',                     'Cold Coffee',                   TRUE),
-  ('Iced Hazelnut Coffee',               'COLD_COFFEE',  179, '["/assets/products/new_coming/Iced%20hazelnut%20coffee.jpeg"]',                       'Cold Coffee',                   TRUE),
-  ('Double Chocolate Chip Frappuccino',  'COLD_COFFEE',  179, '["/assets/products/new_coming/Double%20Choco%20Chip%20Frapuccino.jpeg"]',             'Cold Coffee',                   TRUE),
+  ('Iced Cappuccino', 'COLD_COFFEE', 129,
+   'Chilled Arabica espresso blended with creamy milk and finished with a light foam.',
+   '["/assets/products/new_coming/Iced%20Cappuccino.jpeg"]', 'Cold Coffee', TRUE),
+  ('Iced Caramel Macchiato', 'COLD_COFFEE', 149,
+   'Refreshing iced milk layered with caramel and bold Arabica espresso for a smooth coffee finish.',
+   '["/assets/products/new_coming/Iced%20Caramel%20Macchiato.jpeg"]', 'Cold Coffee', TRUE),
+  ('Iced Hazelnut Coffee', 'COLD_COFFEE', 179,
+   'Cold Arabica coffee blended with creamy milk and rich hazelnut flavour.',
+   '["/assets/products/new_coming/Iced%20hazelnut%20coffee.jpeg"]', 'Cold Coffee', TRUE),
+  ('Double Chocolate Chip Frappuccino', 'COLD_COFFEE', 179,
+   'Creamy iced coffee blended with rich chocolate and double chocolate chips for an indulgent refreshment.',
+   '["/assets/products/new_coming/Double%20Choco%20Chip%20Frapuccino.jpeg"]', 'Cold Coffee', TRUE),
 
-  -- Cookie Cake — no photographs yet.
-  ('Chocolate Chip Cookie Cake - 1/2 KG',   'CAKES',      800, NULL,                                                                                 'Cookie Cake',                   TRUE),
-  ('Double Choc Chip Cookie Cake - 1/2 KG', 'CAKES',      900, NULL,                                                                                 'Cookie Cake',                   TRUE),
-  ('Chocolate Chip Cookie Cake - 1 KG',     'CAKES',     1600, NULL,                                                                                 'Cookie Cake',                   TRUE),
-  ('Double Choc Chip Cookie Cake - 1 KG',   'CAKES',     1700, NULL,                                                                                 'Cookie Cake',                   TRUE),
+  -- Cookie Cake — no photographs and no aggregator copy; these descriptions state only what the
+  -- name already promises, and are the ones to replace first once the real wording exists.
+  ('Chocolate Chip Cookie Cake - 1/2 KG', 'CAKES', 800,
+   'Our chocolate chip cookie baked as one half-kilo cake, ready to slice and share.',
+   NULL, 'Cookie Cake', TRUE),
+  ('Double Choc Chip Cookie Cake - 1/2 KG', 'CAKES', 900,
+   'Our double chocolate chip cookie baked as one half-kilo cake, ready to slice and share.',
+   NULL, 'Cookie Cake', TRUE),
+  ('Chocolate Chip Cookie Cake - 1 KG', 'CAKES', 1600,
+   'A full kilo of our chocolate chip cookie, baked as one cake for a bigger table.',
+   NULL, 'Cookie Cake', TRUE),
+  ('Double Choc Chip Cookie Cake - 1 KG', 'CAKES', 1700,
+   'A full kilo of our double chocolate chip cookie, baked as one cake for a bigger table.',
+   NULL, 'Cookie Cake', TRUE),
 
-  -- Combos
-  ('Chocolate Chip + Hot Chocolate',     'COMBOS',       190, '["/assets/products/new_coming/Hot%20Chocolate%20and%20Chocolate%20Chunk%20Cookie.jpeg"]', 'Combos',                    TRUE),
-  ('Mini Cookie + Cookie Shake',         'COMBOS',       300, '["/assets/products/new_coming/Cookie%20Shake%20and%20Mini%20Cookies.jpeg"]',          'Combos',                        TRUE),
-  ('8 Pack Cookies',                     'COMBOS',       600, '["/assets/products/new_coming/Pack%20of%208%20Cookies.jpeg"]',                        'Combos',                        TRUE)
-) AS v(name, category, price, images, menu_group, intercity)
+  -- Combos — the shake combo has no aggregator copy either; written from its photograph.
+  ('Chocolate Chip + Hot Chocolate', 'COMBOS', 190,
+   'A comforting hot chocolate paired with our freshly baked signature chocolate chip cookie.',
+   '["/assets/products/new_coming/Hot%20Chocolate%20and%20Chocolate%20Chunk%20Cookie.jpeg"]', 'Combos', TRUE),
+  ('Mini Cookie + Cookie Shake', 'COMBOS', 300,
+   'A thick cookie shake served with a handful of freshly baked mini cookies on the side.',
+   '["/assets/products/new_coming/Cookie%20Shake%20and%20Mini%20Cookies.jpeg"]', 'Combos', TRUE),
+  ('8 Pack Cookies', 'COMBOS', 600,
+   'Choose any eight freshly baked cookies and enjoy your favourite flavours in one delicious assortment.',
+   '["/assets/products/new_coming/Pack%20of%208%20Cookies.jpeg"]', 'Combos', TRUE)
+) AS v(name, category, price, description, images, menu_group, intercity)
 WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.name = v.name);
 
 -- The one existing row this script touches, and the only one.
@@ -105,6 +164,7 @@ UPDATE products SET
   category = 'SUNDAE',
   price = 250,
   menu_group = 'Cookie Sundae',
+  description = 'Four scoops of vanilla ice cream, six mini cookies, one classic cookie, rich chocolate sauce, and indulgent toppings.',
   images = '["/assets/products/new_coming/Cookie%20Sundae.jpeg"]',
   is_available = TRUE,
   updated_at = now()
@@ -115,3 +175,4 @@ COMMIT;
 -- Check what landed:
 --   SELECT category, count(*), min(price), max(price) FROM products GROUP BY category ORDER BY 1;
 --   SELECT name, intercity_available, restrict_cities FROM products WHERE name ILIKE '%red velvet%';
+--   SELECT name FROM products WHERE description IS NULL OR images IS NULL;
