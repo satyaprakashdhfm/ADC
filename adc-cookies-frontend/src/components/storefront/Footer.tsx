@@ -36,9 +36,14 @@ export default function Footer() {
         {/* No nav strip here — it repeated the header link-for-link, which just read as the header
             printed twice. The footer's own columns below already carry the wayfinding. */}
 
+        {/* The columns take whatever height is left over and sit centred in it, so the slack from
+            the min-height above is shared above and below them rather than dumped in one block
+            between the columns and the baseline. */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
         <div
           className="footer-grid"
           style={{
+            width: '100%',
             maxWidth: 1180,
             margin: '0 auto',
             padding: '0 var(--gutter)',
@@ -134,11 +139,11 @@ export default function Footer() {
             </div>
           </div>
         </div>
+        </div>
 
-        {/* Baseline bar. marginTop:auto pins it to the bottom of the (now full-height) footer, so
-            the columns sit up top and this sits down here instead of everything bunching at the top
-            with a screen of empty orange underneath. */}
-        <div style={{ maxWidth: 1180, margin: '30px auto 0', padding: '15px var(--gutter) 0', borderTop: '1px solid var(--white-16)', marginTop: 'auto' }}>
+        {/* Baseline bar — last child, so it sits at the bottom of the footer while the columns
+            above absorb the slack. */}
+        <div style={{ maxWidth: 1180, margin: '30px auto 0', padding: '15px var(--gutter) 0', borderTop: '1px solid var(--white-16)' }}>
           {/* Live cookies-sold count on its own line (left) so it reads clearly and never sits
               under the floating dock in the bottom-right corner. */}
           <div style={{ marginBottom: 10 }}><CookiesSoldCounter /></div>
