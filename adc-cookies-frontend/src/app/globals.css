@@ -356,7 +356,14 @@ body::before {
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
 /* The hover shots are portrait with the cookie low in the frame — bias the crop downward so the
    cookie sits a little higher in the card (and its bottom isn't clipped), rather than centre. */
-.prod-media__hover { opacity: 0; transition: opacity .45s ease; object-position: center 62%; }
+/* The hover shots are portrait (1085x1450) shown in a 4:3 card, so `cover` fills the width and only
+   ~56% of the image height survives — object-position picks WHICH 56%.
+   At 62% the visible band ended at 83.3% of the source. Most cookies bottom out around 80% and
+   cleared it, but Red Velvet ends at 83.1% and Biscoff at 84.7%, so those two sat on the crop line
+   and looked shaved off along the bottom. 70% moves the band to 30.8%-86.8%, clearing the lowest
+   cookie by 2%; the extra taken off the top is forearm.
+   If a new hover shot is added, check its subject ends above ~86% or it will clip here too. */
+.prod-media__hover { opacity: 0; transition: opacity .45s ease; object-position: center 70%; }
 .prod-media:hover .prod-media__hover { opacity: 1; }
 /* Subtle lift so the swap reads as interactive; the image itself eases in via the opacity above. */
 .prod-media { transition: transform .45s ease; }
