@@ -161,6 +161,7 @@
   --orange-500-35: rgba(239,117,7,.35);
   --wa-60: rgba(37,211,102,.6);   /* WhatsApp pulse */
   --wa-45: rgba(37,211,102,.45);
+  --ink-900-78: rgba(43,29,18,.78);   /* scrim behind the label on a blocked checkout thumbnail */
   --ink-900-08: rgba(43,29,18,.08);
   --green-veg-14: rgba(48, 166, 92, .14);
   --teal-500-14: rgba(6,177,187,.14);
