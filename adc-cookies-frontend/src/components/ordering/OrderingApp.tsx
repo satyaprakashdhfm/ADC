@@ -281,7 +281,29 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 // city once an address is chosen (delivCheck.city, the actual zone/pincode match),
                 // falling back to the coarser "nearest store" location guess before that.
                 const upsellCity = delivCheck?.city ? { city: delivCheck.city } : locationStore;
-                const suggestions = catalog.filter(p => p.isAvailable && p.category === 'COOKIES' && !cart[String(p.id)] && !/sundae/i.test(p.name) && productAvailableFor(upsellCity, p)).slice(0, 8);
+                /* Offer the NEXT thing up the ladder, not more of what they already have. Someone
+                   holding a bag of cookies is a candidate for a tin; someone holding both is a
+                   candidate for minis, and so on. So a category already in the cart is pushed to the
+                   back rather than hidden — if nothing else qualifies, more cookies still beats an
+                   empty row.
+                   MINI and SKILLET are not in the catalogue yet; they are listed here so they slot
+                   into the right rung the day they appear, with no code change. */
+                const LADDER = ['COOKIES', 'TINS', 'MINI', 'SKILLET'];
+                const inCart = new Set<string>(
+                  lines.flatMap(l => {
+                    const cat = catalog.find(p => String(p.id) === String(l.id))?.category;
+                    return cat ? [cat as string] : [];
+                  })
+                );
+                const rank = (cat: string) => {
+                  const i = LADDER.indexOf(cat);
+                  const pos = i === -1 ? LADDER.length : i;   // unknown categories sort after known ones
+                  return inCart.has(cat) ? pos + 100 : pos;   // already got it → back of the queue
+                };
+                const suggestions = catalog
+                  .filter(p => p.isAvailable && !cart[String(p.id)] && !/sundae/i.test(p.name) && productAvailableFor(upsellCity, p))
+                  .sort((a, b) => rank(a.category) - rank(b.category))
+                  .slice(0, 8);
                 if (suggestions.length === 0) return null;
                 return (
                   <div style={card$}>
