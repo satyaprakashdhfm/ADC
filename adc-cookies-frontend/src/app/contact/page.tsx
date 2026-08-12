@@ -3,6 +3,7 @@ import { Mail, MapPin, Phone, ShoppingBag, MessageCircle, Wheat, Clock, Truck, H
 import Footer from '@/components/storefront/Footer';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import ContactForm from '@/components/storefront/ContactForm';
+import PointMap from '@/components/storefront/PointMap';
 import { STORES } from '@/lib/stores';
 import { SITE_EMAIL, SITE_PHONE, whatsappLink, COMPANY_NAME, HEAD_OFFICE } from '@/lib/site';
 
@@ -60,8 +61,20 @@ export default function ContactPage() {
               <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit' }}><Phone size={15} /> {SITE_PHONE}</a>
               <a href={`mailto:${SITE_EMAIL}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit' }}><Mail size={15} /> {SITE_EMAIL}</a>
             </div>
+            {/* The map itself rather than a link to one. "Open in Google Maps" asked the reader to
+                leave the page to find out where we are, which is the one question this card exists
+                to answer. The link still lives in the pin's popup, for directions. */}
+            <div style={{ height: 300, marginBottom: 12 }}>
+              <PointMap
+                lat={HEAD_OFFICE.lat}
+                lng={HEAD_OFFICE.lng}
+                label={COMPANY_NAME}
+                address={HEAD_OFFICE.address}
+                mapUrl={HEAD_OFFICE.map}
+              />
+            </div>
             <Link href={HEAD_OFFICE.map} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--brand-secondary)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>
-              <MapPin size={16} /> Open in Google Maps
+              <MapPin size={16} /> Get directions
             </Link>
           </article>
 

@@ -25,6 +25,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // they should be findable rather than only reachable from the footer.
     { path: '/terms', changeFrequency: 'yearly', priority: 0.3 },
     { path: '/refund-policy', changeFrequency: 'yearly', priority: 0.3 },
+    { path: '/shipping-policy', changeFrequency: 'yearly', priority: 0.3 },
     { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },
   ];
   return pages.map(p => ({

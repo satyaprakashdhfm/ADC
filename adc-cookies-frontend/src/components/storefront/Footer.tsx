@@ -167,7 +167,7 @@ export default function Footer() {
                 URLs exist, and a customer looking for the refund terms is usually already unhappy
                 and should not have to hunt. */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px 18px', flexWrap: 'wrap' }}>
-              {([['Terms of Service', '/terms'], ['Refund Policy', '/refund-policy'], ['Privacy Policy', '/privacy'], ['Contact', '/contact']] as [string, string][]).map(([label, href]) => (
+              {([['Terms of Service', '/terms'], ['Refund Policy', '/refund-policy'], ['Shipping Policy', '/shipping-policy'], ['Privacy Policy', '/privacy'], ['Contact', '/contact']] as [string, string][]).map(([label, href]) => (
                 <Link key={href} href={href} className="footer-link" style={{ ...footerLinkStyle, fontSize: 'var(--text-xs)' }}>{label}</Link>
               ))}
             </div>

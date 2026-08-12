@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import SiteHeader from './SiteHeader';
 import Footer from './Footer';
-import { COMPANY_NAME, HEAD_OFFICE, SITE_EMAIL, SITE_PHONE } from '@/lib/site';
+import { COMPANY_NAME, COMPANY_CONSTITUTION, COMPANY_GSTIN, HEAD_OFFICE, SITE_EMAIL, SITE_PHONE } from '@/lib/site';
 
 /**
  * The shared frame for Terms, Refund Policy and Privacy Policy.
@@ -64,7 +64,9 @@ export default function LegalPage({ title, intro, updated, sections }: {
           <article style={{ marginTop: 6, padding: 'clamp(20px,2.6vw,28px)', borderRadius: 18, background: 'var(--panel-86)', border: '1px solid var(--border-default)' }}>
             <h2 style={{ font: '900 var(--text-lg)/1.2 var(--font-display)', marginBottom: 12 }}>Who we are</h2>
             <p style={{ fontSize: 'var(--text-base)', lineHeight: 1.8, color: 'var(--text-body)', margin: 0 }}>
-              a dough cookie is operated by {COMPANY_NAME}, {HEAD_OFFICE.address}.<br />
+              &ldquo;a dough cookie&rdquo; is the trading name of <strong>{COMPANY_NAME}</strong>, {COMPANY_CONSTITUTION}.<br />
+              Registered office: {HEAD_OFFICE.address}<br />
+              GSTIN: {COMPANY_GSTIN}<br />
               Email <a href={`mailto:${SITE_EMAIL}`} style={{ color: 'var(--text-link)', fontWeight: 700 }}>{SITE_EMAIL}</a>
               {' · '}Phone <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ color: 'var(--text-link)', fontWeight: 700 }}>{SITE_PHONE}</a>
             </p>

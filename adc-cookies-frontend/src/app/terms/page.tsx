@@ -71,7 +71,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: 'Cancellations and refunds',
     body: [
-      'We bake to order, so an order can only be cancelled before it goes into the kitchen. What happens after that, and how refunds work, is set out in our Refund Policy.',
+      'We bake to order, so an order cannot be cancelled once it is placed. If something is wrong with what arrives, we will put it right — our Refund Policy sets out how.',
     ],
   },
   {
@@ -111,10 +111,10 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: 'Governing law',
+    heading: 'Questions',
     body: [
-      'These terms are governed by the laws of India, and the courts of Bengaluru, Karnataka have jurisdiction over any dispute arising from them.',
-      `If any part of these terms turns out to be unenforceable, the rest still applies. If something here is unclear, write to ${SITE_EMAIL} and we will explain it in plain language.`,
+      `These terms follow Indian law. If any part of them turns out not to hold, the rest still does.`,
+      `If something here is unclear, or you think we have got something wrong, write to ${SITE_EMAIL}. We would far rather sort it out directly than have anyone reading this wondering what it means.`,
     ],
   },
 ];
