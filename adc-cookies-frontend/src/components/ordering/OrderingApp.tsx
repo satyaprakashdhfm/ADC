@@ -25,6 +25,7 @@ import { useCheckoutPayment } from '@/hooks/checkout/useCheckoutPayment';
 import { WEEKDAYS as _WD, MONTHS as _MO } from '@/lib/orderFormat';
 import { CheckoutStepper, Dot, Dash } from './ui/CheckoutStepper';
 import { Thumb, QStepper } from './ui/ProductCards';
+import OfferCard from './ui/OfferCard';
 import OrderSuccessPage from './OrderSuccessPage';
 
 const fmtDay = (d: Date) => `${_WD[d.getDay()]}, ${d.getDate()} ${_MO[d.getMonth()]}`;
@@ -110,6 +111,15 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const deliverBy = delivCheck && delivCheck.serviceable && !delivCheck.intracity
     ? (parseServerDate(delivCheck.expectedDeliveryDate) || (delivCheck.tat != null ? addDays(delivCheck.tat) : null))
     : null;
+
+  /* How far under a coupon's minimum this basket is, so an offer that cannot be used says why
+     before it is tapped rather than after. Measured against the item total, which is what the
+     backend checks — delivery and gift wrap are not part of it, so counting them here would have
+     offered a code the server then refused. */
+  const shortfallFor = (minimum?: number | null) => {
+    const need = Number(minimum || 0);
+    return need > total ? Math.ceil(need - total) : 0;
+  };
 
   const aset = (k: keyof typeof aform) => (e: React.ChangeEvent<HTMLInputElement>) => setAform({ ...aform, [k]: e.target.value });
   const pinOk = PIN_RE.test(aform.pincode.trim());
@@ -660,22 +670,17 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     {mySpinReward && (
                       <div style={{ marginBottom: 14 }}>
                         <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Your spin &amp; win reward</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--brand-secondary)', background: 'var(--amber-50)' }}>
-                          <Gift size={16} color="var(--brand-secondary)" style={{ flex: 'none' }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-sm)', letterSpacing: '.04em', color: 'var(--brand-secondary)' }}>{mySpinReward.code}</span>
-                              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{mySpinReward.label}</span>
-                            </div>
-                            <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 2 }}>
-                              Expires in {formatRemaining(new Date(mySpinReward.expiresAt).getTime() - Date.now())}
-                            </div>
-                          </div>
-                          <button onClick={() => { setCoupon(mySpinReward.code); setCouponErr(''); void applyCoupon(mySpinReward.code); }}
-                            style={{ flex: 'none', padding: '7px 14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
-                            Apply
-                          </button>
-                        </div>
+                        <OfferCard
+                          icon={<Gift size={16} color="var(--brand-secondary)" />}
+                          code={mySpinReward.code}
+                          label={mySpinReward.label}
+                          minimumOrderAmount={mySpinReward.minimumOrderAmount}
+                          expiresInMs={new Date(mySpinReward.expiresAt).getTime() - Date.now()}
+                          expiresLabel={formatRemaining(new Date(mySpinReward.expiresAt).getTime() - Date.now())}
+                          terms={mySpinReward.terms}
+                          shortfall={shortfallFor(mySpinReward.minimumOrderAmount)}
+                          onApply={() => { setCoupon(mySpinReward.code); setCouponErr(''); void applyCoupon(mySpinReward.code); }}
+                        />
                       </div>
                     )}
 
@@ -686,27 +691,27 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                         <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Available offers</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {availableCoupons.map(c => (
-                            <div key={c.code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--brand-secondary)', background: 'var(--amber-50)' }}>
-                              <Tag size={16} color="var(--brand-secondary)" style={{ flex: 'none' }} />
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-sm)', letterSpacing: '.04em', color: 'var(--brand-secondary)' }}>{c.code}</span>
-                                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{c.label}</span>
-                                </div>
-                                <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 2 }}>
-                                  {c.minimumOrderAmount ? `Min. order ₹${c.minimumOrderAmount}` : 'No minimum order'}
-                                </div>
-                              </div>
-                              <button onClick={() => { setCoupon(c.code); setCouponErr(''); void applyCoupon(c.code); }}
-                                style={{ flex: 'none', padding: '7px 14px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
-                                Apply
-                              </button>
-                            </div>
+                            <OfferCard
+                              key={c.code}
+                              icon={<Tag size={16} color="var(--brand-secondary)" />}
+                              code={c.code}
+                              label={c.label}
+                              minimumOrderAmount={c.minimumOrderAmount}
+                              terms={c.terms}
+                              shortfall={shortfallFor(c.minimumOrderAmount)}
+                              onApply={() => { setCoupon(c.code); setCouponErr(''); void applyCoupon(c.code); }}
+                            />
                           ))}
                         </div>
                       </div>
                     )}
-                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 10, fontWeight: 600 }}>Or tap the Spin &amp; Win wheel at the bottom-right of the screen to win a code.</div>
+                    {/* Only worth saying to somebody who has not already won one. With a reward
+                        sitting right above it, "go and win a code" reads as though the code they
+                        have does not count — and the wheel is a single spin, so there is nothing
+                        for them to go and do. */}
+                    {!mySpinReward && (
+                      <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 10, fontWeight: 600 }}>Or tap the Spin &amp; Win wheel at the bottom-right of the screen to win a code.</div>
+                    )}
                   </div>
                 )}
               </div>
