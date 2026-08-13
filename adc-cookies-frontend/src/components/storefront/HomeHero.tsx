@@ -29,6 +29,9 @@ export default function HomeHero() {
           is offset below it in globals.css so it never sits across the photograph. */}
       <SiteNav revealOnScroll />
 
+      {/* Sits under the fixed navbar and is painted its colour — see .home-hero-gap. */}
+      <div aria-hidden className="home-hero-gap" />
+
       <section className="home-hero" style={{ position: 'relative', overflow: 'hidden', display: 'grid', placeItems: 'center', padding: 'clamp(56px,8vw,96px) 0' }}>
         {/* Background photo — starts zoomed in, then eases out so the edge cookies drift into frame.
             Plain <picture>/<img> rather than next/image: art direction needs two sources behind a

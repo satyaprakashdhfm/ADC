@@ -207,7 +207,12 @@ body::before {
    flow and has already pushed the hero down by its own height.
    The 10px is deliberate overlap, so rounding can never reopen that gap. Tucking the hero slightly
    under an opaque bar costs nothing visible; a gap costs a stripe across the top of the page. */
-.home-hero { min-height: 78svh; margin-top: calc(var(--nav-h) - 10px); }
+/* The strip the fixed navbar sits over, as a real painted element rather than empty margin.
+   It was margin, which paints nothing — so the moment the bar tucked away on a fast scroll down,
+   that reserved space showed the cream page background as a white band under the ribbon. In the
+   navbar's own colour it simply reads as more header whether the bar is there or not. */
+.home-hero-gap { height: calc(var(--nav-h) - 10px); background: var(--navbar-bg); }
+.home-hero { min-height: 78svh; }
 @media (max-width:900px) { .home-hero { min-height: 68svh; } }
 @media (max-width:680px) { .home-hero { min-height: 62svh; padding: clamp(40px,7vw,64px) 0 !important; } }
 
