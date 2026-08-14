@@ -213,23 +213,37 @@ router.post('/orders/:id/rebook', async (req, res) => {
 router.get('/orders/:id/track', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
   if (!order) throw new ApiError('Order not found', 404);
-  if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
-
-  // Shiprocket (intracity) — normalize into the same { ok, carrier, status, scans } shape.
-  // Without this branch an intracity AWB was sent to Delhivery's tracker, which of course
-  // knows nothing about it, so the admin saw "not found" for a parcel that was moving fine.
+  /* Shiprocket is tracked by SHIPMENT ID, not by AWB — so it is handled before the AWB guard.
+   *
+   * That guard used to run first, and hyperlocal assignment is asynchronous: the shipment exists
+   * and the rider search is under way for minutes before an AWB is issued. Every intracity order
+   * therefore answered "no_shipment" to the admin during exactly the window someone is most likely
+   * to be looking, and a cancellation made in the Shiprocket panel never reached us at all — the
+   * store portal showed "Canceled" (it tracks by shipment id) while the admin still said CREATED.
+   * The two were reading different sources, not disagreeing about the same one. */
   if (order.carrier === 'SHIPROCKET') {
     const sid = order.delhivery_shipment_id;
     if (!sid) return res.json({ ok: false, carrier: 'SHIPROCKET', reason: 'no_shipment_id' });
     const result = await trackShiprocket(sid);
     if (result.ok && result.status) {
-      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [result.status, nowIso(), order.id]);
+      // Store the AWB the moment tracking reveals it. Assignment is asynchronous and the webhook
+      // does not always arrive, so this poll is the other way the number ever reaches us — without
+      // it the order stays AWB-less forever and keeps failing every waybill-keyed check.
+      await query(
+        `UPDATE orders SET shipment_status=$1,
+                delhivery_waybill = COALESCE(delhivery_waybill, $2),
+                tracking_url = COALESCE(tracking_url, $3),
+                updated_at=$4 WHERE id=$5`,
+        [result.status, result.awb || null,
+         result.awb ? `https://shiprocket.co/tracking/${result.awb}` : null, nowIso(), order.id]
+      );
     }
     const scans = (result.activities || []).map((a) => ({ time: a.date || a.time, event: a.activity || a.status }));
     return res.json({ ok: result.ok, carrier: 'SHIPROCKET', status: result.status || null, awb: result.awb || order.delhivery_waybill, scans });
   }
 
-  // Delhivery (outstation)
+  // Delhivery (outstation) — this one genuinely needs a waybill before there is anything to ask about.
+  if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
   if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
   const result = await trackShipment(order.delhivery_waybill);
   if (result.ok && result.data) {

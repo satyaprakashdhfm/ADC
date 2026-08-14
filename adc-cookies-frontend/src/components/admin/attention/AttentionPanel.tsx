@@ -40,12 +40,26 @@ export default function AttentionPanel({ report, busy, onRebook, onRetryPos, onO
             <span>{money(o.total_amount)}</span>
             {/* No address = nothing to ship to, and no retry can ever fix it. Say so instead of
                 offering a button that is guaranteed to fail. */}
-            <span style={why}>{o.has_address === false ? 'No delivery address on this order — it cannot be shipped.' : (o.shipment_error || 'No booking attempt recorded yet.')}</span>
+            {/* Three different situations wearing one sentence before this.
+                A hyperlocal booking exists as soon as Shiprocket accepts it, but the AWB is issued
+                asynchronously while a rider is found — and this list is keyed on the AWB. So a
+                perfectly healthy intracity order read "No booking attempt recorded yet" for the
+                whole rider search, next to a button offering to book it a second time. */}
+            <span style={why}>
+              {o.has_address === false
+                ? 'No delivery address on this order — it cannot be shipped.'
+                : o.shipment_error
+                  ? o.shipment_error
+                  : (o.shipment_id || o.carrier_order_id)
+                    ? `${o.carrier || 'Courier'} booking #${o.shipment_id || o.carrier_order_id} placed${o.shipment_status ? ` — ${o.shipment_status}` : ''}. Waiting for a rider to be assigned.`
+                    : 'No booking attempt recorded yet.'}
+            </span>
             {o.has_address === false ? (
               <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>Not shippable</span>
             ) : (
-              <button disabled={busy === o.id} onClick={() => onRebook(o.id)} style={{ ...actionBtn(), opacity: busy === o.id ? 0.5 : 1 }}>
-                <Truck size={13} /> {busy === o.id ? 'Booking…' : 'Book courier'}
+              <button disabled={busy === o.id} onClick={() => onRebook(o.id)} style={{ ...actionBtn(), opacity: busy === o.id ? 0.5 : 1 }}
+                title={(o.shipment_id || o.carrier_order_id) ? 'A booking already exists — this books a second one' : 'Book a courier for this order'}>
+                <Truck size={13} /> {busy === o.id ? 'Booking…' : (o.shipment_id || o.carrier_order_id) ? 'Book again' : 'Book courier'}
               </button>
             )}
           </div>

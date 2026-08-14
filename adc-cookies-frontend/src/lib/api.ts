@@ -470,7 +470,7 @@ export async function adminUpdateOrderStatus(id: number, status: string, remarks
 
 /** Everything that took money but did not complete downstream. Empty lists = nothing to chase. */
 export interface AttentionReport {
-  paidNoShipment: { id: number; order_number: string; total_amount: number; created_at: string; shipment_error: string | null; carrier: string | null; has_address: boolean }[];
+  paidNoShipment: { id: number; order_number: string; total_amount: number; created_at: string; shipment_error: string | null; carrier: string | null; has_address: boolean; carrier_order_id: string | null; shipment_id: string | null; shipment_status: string | null }[];
   paidNoPosTicket: { id: number; order_number: string; total_amount: number; created_at: string; last_error: string | null; attempts: number }[];
   cancelStuckDownstream: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
   moneyReversed: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];

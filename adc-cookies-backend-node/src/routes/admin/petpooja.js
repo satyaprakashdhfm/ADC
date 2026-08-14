@@ -149,7 +149,11 @@ router.get('/attention', async (_req, res) => {
     // A MANUAL store's order sitting unbooked because nobody there has tapped Accept yet is NOT a
     // failure — that's the deliberate deferred-booking flow (see finalizePaidOrder) — so it's
     // excluded here; if booking itself then fails after acceptance, it reappears normally.
+    // carrier_order_id / shipment id tell the UI a booking DID happen and is waiting on a rider,
+    // which is a different problem from never having been attempted — and reads very differently
+    // to whoever is deciding whether to press "Book courier" again.
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error, o.carrier,
+                   o.carrier_order_id, o.delhivery_shipment_id AS shipment_id, o.shipment_status,
                    (o.address_id IS NOT NULL) AS has_address
               FROM orders o
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
