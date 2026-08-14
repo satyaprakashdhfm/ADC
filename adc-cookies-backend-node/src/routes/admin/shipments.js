@@ -254,7 +254,8 @@ router.get('/orders/:id/track', async (req, res) => {
         `UPDATE orders SET shipment_status=$1,
                 delhivery_waybill = COALESCE(delhivery_waybill, $2),
                 tracking_url = COALESCE(tracking_url, $3),
-                updated_at=$4 WHERE id=$5`,
+                updated_at=$4
+          WHERE id=$5 AND shipment_status IS DISTINCT FROM 'CANCELLED'`,
         [result.status, result.awb || null,
          result.awb ? `https://shiprocket.co/tracking/${result.awb}` : null, nowIso(), order.id]
       );
@@ -273,7 +274,10 @@ router.get('/orders/:id/track', async (req, res) => {
     // shipment_status consistently formatted regardless of which route last updated it.
     const latestStatus = [pkg?.Status?.Status, pkg?.Status?.Instructions].filter(Boolean).join(' — ') || null;
     if (latestStatus) {
-      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3',
+      // A cancelled booking stays cancelled — see the same guard in routes/orders.js.
+      await query(
+        `UPDATE orders SET shipment_status=$1, updated_at=$2
+          WHERE id=$3 AND shipment_status IS DISTINCT FROM 'CANCELLED'`,
         [latestStatus, nowIso(), order.id]);
     }
   }

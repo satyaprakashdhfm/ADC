@@ -583,7 +583,14 @@ router.get('/:id/delhivery-track', async (req, res) => {
   // list below already does, so the customer sees more than a bare status word when one exists.
   const latestStatus = [pkg?.Status?.Status, pkg?.Status?.Instructions].filter(Boolean).join(' — ') || null;
   if (latestStatus) {
-    await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [latestStatus, nowIso(), order.id]);
+    /* Never over the top of a cancelled booking. Delhivery keeps answering for a waybill long after
+       it is cancelled — and answers "Not Picked", which is literally true and completely misleading:
+       it revived a cancelled order as in-transit the moment the customer opened tracking. A cancel
+       is ours to undo (a rebook writes CREATED here), not the carrier's. */
+    await query(
+      `UPDATE orders SET shipment_status=$1, updated_at=$2
+        WHERE id=$3 AND shipment_status IS DISTINCT FROM 'CANCELLED'`,
+      [latestStatus, nowIso(), order.id]);
   }
   const scans = (pkg?.Scans || [])
     .map(s => ({ time: s.ScanDetail?.ScanDateTime || '', event: [s.ScanDetail?.Scan, s.ScanDetail?.Instructions].filter(Boolean).join(' — ') }))
