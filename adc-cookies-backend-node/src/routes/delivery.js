@@ -7,7 +7,7 @@ import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhiv
 // shopper is shown are the ones the order will actually be dispatched from. Quoting against a single
 // fixed origin is what let checkout advertise a store we then could not collect from.
 import { pickServiceableStore, shiprocketConfigured } from '../shiprocket.js';
-import { nearestStore, zoneStores, orderStoresByProximity, isStoreActive, deliveryEligible, storeByPincode, straightLineKm } from '../stores.js';
+import { nearestStore, zoneStores, activeZoneStores, orderStoresByProximity, deliveryEligible, storeByPincode, straightLineKm } from '../stores.js';
 
 const router = Router();
 
@@ -148,7 +148,10 @@ router.get('/check', async (req, res) => {
       return res.json({ serviceable: false, intracity: true, sameDay: false, reason, message, pincode: pin, city: pickup.city });
     };
 
-    if (!(await isStoreActive(pickup.code))) {
+    // Any open store in the zone will do — see activeZoneStores. Asking only about the
+    // pincode-nearest one refused addresses that an open store was minutes away from.
+    const open = await activeZoneStores(pin);
+    if (!open.length) {
       return unavailable('same_day_unavailable', 'Same-day delivery is paused for this area right now. Please try again shortly.');
     }
     if (!shiprocketConfigured() || SHIPROCKET_DISABLED) {
@@ -160,8 +163,8 @@ router.get('/check', async (req, res) => {
       return unavailable('location_required', 'Share your location so we can confirm same-day delivery to this address.');
     }
     try {
-      const stores = zoneStores(pin);
-      const chosen = await pickServiceableStore(orderStoresByProximity(stores, lat, lng), { pin, lat, lng });
+      // Only the open ones are candidates, or a quote could promise a store that is shut.
+      const chosen = await pickServiceableStore(orderStoresByProximity(open, lat, lng), { pin, lat, lng });
       if (!chosen) {
         return unavailable('out_of_range', 'This address is outside same-day range from our stores. We are unable to deliver here yet.');
       }

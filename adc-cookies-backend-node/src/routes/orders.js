@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { zoneStores, storeForAddress, storeByCode, deliveryEligible, isStoreActive } from '../stores.js';
+import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, storeByCode, deliveryEligible, isStoreActive } from '../stores.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore, getWalletBalance } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -459,10 +459,19 @@ router.post('/', async (req, res) => {
   // the store owns the order from the moment it is paid for — a courier that cannot be booked must
   // not also mean no kitchen ever sees it. attemptShipment corrects this if the carrier ends up
   // serving the drop from a different store.
-  const fulfillingStore = storeForAddress(address);
+  let fulfillingStore = storeForAddress(address);
   if (fulfillingStore && !(await isStoreActive(fulfillingStore.code))) {
-    console.log(`[ORDER] create | ✗ store_offline | store=${fulfillingStore.code}`);
-    throw new ApiError(`${fulfillingStore.name} isn't taking new orders right now. Please try again later, or choose a different address.`, 503);
+    /* The nearest store is shut — hand the order to the nearest one that is open rather than
+       refusing it. Refusing was right when every store traded and one being off meant a genuine
+       local outage; with a single store trading it rejected orders the open shop was minutes from,
+       because "nearest" is decided before anyone asks who is working. */
+    const open = orderStoresByProximity(await activeZoneStores(destPin), address?.latitude, address?.longitude);
+    if (!open.length) {
+      console.log(`[ORDER] create | ✗ no_open_store | zone=${destPin}`);
+      throw new ApiError('None of our stores near this address are taking orders right now. Please try again later, or choose a different address.', 503);
+    }
+    console.log(`[ORDER] create | ${fulfillingStore.code} is closed → ${open[0].code}`);
+    fulfillingStore = open[0];
   }
 
   const intracity = zoneStores(destPin).length > 0;
