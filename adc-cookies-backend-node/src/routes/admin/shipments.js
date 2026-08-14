@@ -3,7 +3,7 @@ import { getOne, getAll, query, nowIso } from '../../db.js';
 import { ApiError } from '../../middleware.js';
 import { serializeOrder } from '../../serializers.js';
 import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../delhivery.js';
-import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, shiprocketConfigured } from '../../shiprocket.js';
+import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, walletStatus } from '../../shiprocket.js';
 import { autoCreateShipment } from '../orders.js';
 
 const router = Router();
@@ -219,16 +219,11 @@ router.post('/orders/:id/rebook', async (req, res) => {
  * balance is the one number that predicts it, and until now it existed only inside Shiprocket's
  * panel.
  *
- * LOW_WATERMARK is a couple of typical intracity fees, not a precise figure: the point is to be
- * told while there is still time to top up, rather than after an order has stranded.
+ * The watermark and the response shape live in shiprocket.js, because the store tablet shows the
+ * same number and the two must not be able to disagree about when it is low.
  */
-const WALLET_LOW_WATERMARK = 300;
-
 router.get('/delivery/wallet', async (_req, res) => {
-  if (!shiprocketConfigured()) return res.json({ ok: false, reason: 'not_configured' });
-  const balance = await getWalletBalance();
-  if (balance == null) return res.json({ ok: false, reason: 'lookup_failed' });
-  res.json({ ok: true, balance, low: balance < WALLET_LOW_WATERMARK, lowWatermark: WALLET_LOW_WATERMARK });
+  res.json(await walletStatus());
 });
 
 router.get('/orders/:id/track', async (req, res) => {

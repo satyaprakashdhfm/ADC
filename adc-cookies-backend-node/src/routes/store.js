@@ -6,7 +6,7 @@ import {
   requireStoreUser, signStoreToken, checkPassword, hashPassword, storeAuthConfigured,
 } from '../storeAuth.js';
 import { storeRelaysToPos, storeProductAvailable } from '../stores.js';
-import { trackShiprocket, getRiderData, shiprocketConfigured } from '../shiprocket.js';
+import { trackShiprocket, getRiderData, shiprocketConfigured, walletStatus } from '../shiprocket.js';
 import { trackShipment, delhiveryConfigured } from '../delhivery.js';
 import { bookShipmentAndRelay } from './orders.js';
 
@@ -222,10 +222,23 @@ router.get('/orders', async (req, res) => {
     posByOrder.get(o.id) || null, relays
   ));
 
+  /*
+   * The rider wallet rides along with the order list.
+   *
+   * Accepting is what books the rider, and this tablet is where Accept is tapped — so this is the
+   * last screen that can know, before the fact, that no rider is coming. The store cannot top the
+   * wallet up themselves; the point is that they find out here rather than half an hour later with
+   * a boxed order on the counter and nobody arriving for it.
+   *
+   * Cached for a minute upstream, so the few-second poll costs nothing.
+   */
+  const wallet = await walletStatus().catch(() => ({ ok: false, reason: 'lookup_failed' }));
+
   res.json({
     store: { code: store.code, name: store.name, posMode: store.posMode, relaysToPos: relays },
     orders: serialized,
     pendingCount: serialized.filter((o) => !o.workflow.acceptedAt && o.status !== 'CANCELLED').length,
+    wallet,
     serverTime: nowIso(),
   });
 });

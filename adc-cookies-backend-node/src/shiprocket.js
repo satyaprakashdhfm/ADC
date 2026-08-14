@@ -368,6 +368,39 @@ export async function getWalletBalance() {
   return balance;
 }
 
+/*
+ * The same balance, but safe to ask for on a poll.
+ *
+ * The store tablet re-reads its order list every few seconds and the balance moves only when an
+ * order is dispatched or someone tops up, so a fresh call per poll would be thousands of requests a
+ * day to learn the same number. One minute is well inside the window that matters: nobody empties a
+ * wallet and accepts an order in the same sixty seconds.
+ */
+const WALLET_TTL_MS = 60_000;
+let walletCache = { at: 0, balance: null };
+
+export async function getWalletBalanceCached() {
+  if (Date.now() - walletCache.at < WALLET_TTL_MS) return walletCache.balance;
+  const balance = await getWalletBalance().catch(() => null);
+  // A failed lookup is cached too, briefly. Otherwise every poll retries a carrier that is down.
+  walletCache = { at: Date.now(), balance };
+  return balance;
+}
+
+/*
+ * One shape for "can we still dispatch a rider", so the admin and the store tablet cannot disagree
+ * about it. 300 is roughly two intracity delivery fees: enough runway to notice and top up, not so
+ * little that the warning arrives after the first failure, not so much that it cries wolf all day.
+ */
+export const WALLET_LOW_WATERMARK = 300;
+
+export async function walletStatus() {
+  if (!shiprocketConfigured()) return { ok: false, reason: 'not_configured' };
+  const balance = await getWalletBalanceCached();
+  if (balance == null) return { ok: false, reason: 'lookup_failed' };
+  return { ok: true, balance, low: balance < WALLET_LOW_WATERMARK, lowWatermark: WALLET_LOW_WATERMARK };
+}
+
 /** Rider name/phone once assigned, for the order page. */
 export async function getRiderData(awb) {
   const r = await srRequest('GET', '/courier/hyperlocal/get_rider_data', { query: { awb: String(awb) } });

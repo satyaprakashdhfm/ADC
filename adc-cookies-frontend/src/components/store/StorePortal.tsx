@@ -9,7 +9,7 @@ import {
   storeMe, storeOrders, storeTrack, storeMenu,
   storeAcceptOrder, storeMarkReady, storeSetPosBill, storeChangePassword,
   getStoreToken, clearStoreToken, StoreAuthError,
-  type StoreSession, type StoreOrder, type StoreTrack, type StoreMenuItem,
+  type StoreSession, type StoreOrder, type StoreTrack, type StoreMenuItem, type StoreOrdersResponse,
 } from '@/lib/storeApi';
 
 /*
@@ -274,6 +274,8 @@ export default function StorePortal({ code }: { code: string }) {
   const [billDrafts, setBillDrafts] = useState<Record<number, string>>({});
   const [acceptBusy, setAcceptBusy] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  // Rides along with every poll — see the note on the /store/orders payload.
+  const [wallet, setWallet] = useState<StoreOrdersResponse['wallet']>(undefined);
 
   // Ids we have already announced. A ref, not state: it must not trigger a re-render, and the
   // polling closure has to read the CURRENT value rather than the one captured when it was created.
@@ -412,6 +414,7 @@ export default function StorePortal({ code }: { code: string }) {
     try {
       const r = await storeOrders(code);
       setOrders(r.orders);
+      setWallet(r.wallet);
       const waiting = r.orders.filter(o => !o.workflow.acceptedAt && o.status !== 'CANCELLED');
       const ids = new Set(waiting.map(o => o.id));
       if (announce && announced.current) {
@@ -539,6 +542,11 @@ export default function StorePortal({ code }: { code: string }) {
             <strong style={{ fontSize: 17, fontWeight: 900 }}>{session.store.name}</strong>
             <div style={{ fontSize: 12, color: 'var(--text-muted, #7b6a58)' }}>
               {session.username}{manual ? ' · you bill on your own POS' : ' · orders go to Petpooja automatically'}
+              {/* Always visible, quietly. The red banner below only appears once it is low, and by
+                  then it is news; this is so the number is a thing staff have seen before. */}
+              {wallet?.ok && wallet.balance != null && (
+                <> · <span style={{ fontWeight: 800, color: wallet.low ? '#a4231d' : 'inherit' }}>rider wallet ₹{wallet.balance}</span></>
+              )}
             </div>
           </div>
           <button onClick={() => setView(view === 'orders' ? 'menu' : 'orders')} style={btn()}>
@@ -569,6 +577,23 @@ export default function StorePortal({ code }: { code: string }) {
               New orders will show on screen but make no sound until you tap once.
             </span>
             <button onClick={() => void chime()} style={btn('primary')}>Turn the sound on</button>
+          </div>
+        )}
+
+        {/* Accepting an order is what books the rider, and it is booked against a company wallet
+            this counter cannot top up. So the warning is written for someone who can only pick up a
+            phone: what will happen, and who to call. Shown only when it is low — a healthy balance
+            is not news, and a tablet that warns every day is a tablet nobody reads. */}
+        {wallet?.ok && wallet.low && (
+          <div style={{ ...wrap, background: '#fdecec', borderColor: '#f3c9c6', padding: 14, marginBottom: 18, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <AlertTriangle size={18} style={{ color: '#a4231d', flexShrink: 0, marginTop: 2 }} />
+            <div style={{ fontSize: 15, lineHeight: 1.5 }}>
+              <strong style={{ display: 'block', color: '#a4231d', fontWeight: 900 }}>Delivery wallet is low — ₹{wallet.balance} left</strong>
+              <span style={{ fontWeight: 600 }}>
+                Riders are booked from this balance. Keep baking and accepting as normal, but tell head
+                office now — if it runs out, an accepted order can end up with no rider coming for it.
+              </span>
+            </div>
           </div>
         )}
 
