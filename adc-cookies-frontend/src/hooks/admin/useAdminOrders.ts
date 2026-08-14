@@ -62,7 +62,12 @@ export function useAdminOrders(enabled: boolean, { onError, onNotice, refreshSta
     setFixing(id); onError(''); onNotice('');
     try {
       const r = await adminRebookShipment(id);
-      onNotice(`Courier booked — ${r.carrier} ${r.waybill}`);
+      /* A hyperlocal booking succeeds before it has an AWB — the rider search runs after — so
+         printing r.waybill unconditionally produced "Courier booked — SHIPROCKET null". Report what
+         actually exists: the waybill if there is one, otherwise that we are waiting for a rider. */
+      onNotice(r.waybill
+        ? `Courier booked — ${r.carrier} ${r.waybill}`
+        : `Courier booked — ${r.carrier}. Waiting for a rider to be assigned.`);
       reloadOrdersAndModal();
       refreshAttention();
     } catch (e: unknown) {
