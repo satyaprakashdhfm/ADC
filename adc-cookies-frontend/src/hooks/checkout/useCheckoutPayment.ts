@@ -97,6 +97,23 @@ export function useCheckoutPayment({ step, chosen, addresses, grand, onNeedLogin
       const ready = await loadRazorpay();
       if (!ready || !window.Razorpay) throw new Error('Could not load the payment window. Check your connection and try again.');
 
+      /*
+       * Razorpay's checkout is one window with many attempts in it.
+       *
+       * `payment.failed` fires per FAILED ATTEMPT and the window stays open, so the shopper can pick
+       * another card or another method and carry on. Treating that event as the end of the payment
+       * was the bug: a card declined on the first try cancelled the order and threw the page back to
+       * checkout saying the payment had failed — while the window was still open, and the second
+       * attempt went through. The money was taken, the backend marked it PAID and the admin showed a
+       * real order, and the shopper was looking at a failure screen for it.
+       *
+       * So only two things end a payment: `handler` (one attempt succeeded) and `ondismiss` (they
+       * closed the window). A failed attempt just leaves its reason here in case the second ending
+       * turns out to be the second one.
+       */
+      let settled = false;   // an attempt succeeded — the order is theirs, hands off
+      let lastFailure = '';  // why the most recent attempt failed, if one did
+
       const rzp = new window.Razorpay({
         key: rp.keyId,
         order_id: rp.orderId,
@@ -112,6 +129,7 @@ export function useCheckoutPayment({ step, chosen, addresses, grand, onNeedLogin
         // Next.js rewrite proxy every other API call already uses.
         callback_url: `${window.location.origin}/api/payment-callback/${order.id}?return=${encodeURIComponent(window.location.origin)}`,
         handler: async (resp) => {
+          settled = true;
           try {
             await verifyPayment(order.id, {
               razorpayPaymentId: resp.razorpay_payment_id,
@@ -141,19 +159,25 @@ export function useCheckoutPayment({ step, chosen, addresses, grand, onNeedLogin
          */
         modal: {
           ondismiss: () => {
+            // Closing after a successful attempt is just the window tidying itself up. Nothing to
+            // cancel and nowhere to send them — they are already on the success screen, and
+            // abandoning here would try to cancel an order that has been paid for.
+            if (settled) return;
             setPlacing(false);
             void abandonOrder(order.id);
-            router.push('/checkout');
+            if (lastFailure) {
+              try { sessionStorage.setItem('adc_pay_error', lastFailure); } catch {}
+              router.push('/checkout?payment=failed');
+            } else {
+              router.push('/checkout');
+            }
           },
         },
       });
       rzp.on('payment.failed', (resp) => {
-        setPlacing(false);
-        // Same as dismissing, with a reason to carry across: the unpaid order goes, and the shopper
-        // goes back to checkout to review and retry rather than being stranded on the pay screen.
-        void abandonOrder(order.id);
-        try { sessionStorage.setItem('adc_pay_error', resp?.error?.description || 'Payment failed. Please try again.'); } catch {}
-        router.push('/checkout?payment=failed');
+        // Remember it, change nothing. The window is still open on their screen and the next
+        // attempt may well work; if they give up instead, ondismiss carries this across.
+        lastFailure = resp?.error?.description || 'Payment failed. Please try again.';
       });
       rzp.open();
     } catch (e) {
