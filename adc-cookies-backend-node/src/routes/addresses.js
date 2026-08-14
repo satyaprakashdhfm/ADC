@@ -66,8 +66,19 @@ router.post('/', async (req, res) => {
     [user.id, v.fullName, v.phone, v.addressLine1, b.addressLine2 ?? null,
      canonicalCity(b.city), titleCase(b.state), v.pincode, b.latitude ?? null, b.longitude ?? null, !!b.isDefault, b.label || 'Home']
   );
+  logAddress('create', row);
   res.json(serializeAddress(row));
 });
+
+
+/* One line per write, because this is the table where a wrong value is a rider at a stranger's
+   door. Coordinates are logged explicitly: an address saved without them cannot be quoted for
+   same-day at all, and one saved with the WRONG ones fails silently and looks correct on screen —
+   the failure that cost us a week. "no-coords" in this log is the thing to grep for. */
+function logAddress(verb, row) {
+  const at = row.latitude != null && row.longitude != null ? `${row.latitude},${row.longitude}` : 'no-coords';
+  console.log(`[ADDRESS] ${verb} | id=${row.id} | ${row.pincode} ${row.city || ''} | pin=${at}${row.is_default ? ' | default' : ''}`);
+}
 
 router.put('/:id', async (req, res) => {
   const user = await userByEmail(req.user.email);
@@ -103,6 +114,7 @@ router.put('/:id', async (req, res) => {
      b.latitude ?? null, b.longitude ?? null,
      req.params.id, user.id]
   );
+  logAddress('update', row);
   res.json(serializeAddress(row));
 });
 

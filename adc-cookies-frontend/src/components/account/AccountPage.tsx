@@ -3,19 +3,19 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { getOrders, getAddresses, addAddress, updateAddress, deleteAddress as apiDeleteAddress, trackOrderShipment, getSpinStatus, type DelhiveryTrackResult, type Address, type Order, type SpinClaim } from '@/lib/api';
+import { getOrders, getAddresses, addAddress, updateAddress, deleteAddress as apiDeleteAddress, trackOrderShipment, getSpinStatus, getOrderTracking, type DelhiveryTrackResult, type Address, type Order, type SpinClaim } from '@/lib/api';
 import dynamic from 'next/dynamic';
 
-const PIN_RE = /^[1-9][0-9]{5}$/;
 // Leaflet needs a window, and this only renders inside an open address form.
 const AddressWizard = dynamic(() => import('@/components/ordering/ui/AddressWizard'), {
   ssr: false,
   loading: () => <div style={{ height: 260, borderRadius: 'var(--radius-card)', background: 'var(--surface-sunken)' }} />,
 });
 import { OrderNextStep } from '@/lib/orderNextStep';
+import OrderProgress, { type ProgressEvent } from './OrderProgress';
 import {
   parseOptions, optionList, hasGift, giftMessage, statusColor, formatMoney, formatDate,
-  friendlyDate, formatPhone, national10, SHIP_STAGES, shipStage, isCancelledStatus, isDeadShipment, whenLabel,
+  friendlyDate, formatPhone, national10, shipStage, isCancelledStatus, isDeadShipment, whenLabel,
 } from '@/lib/orderFormat';
 import LoginModal from '@/components/ordering/LoginModal';
 import SiteHeader from '@/components/storefront/SiteHeader';
@@ -48,7 +48,10 @@ function ShipmentTracker({ order }: { order: Order }) {
   const [trackResult, setTrackResult] = useState<DelhiveryTrackResult | null>(null);
   const [tracking, setTracking] = useState(false);
   const [err, setErr] = useState('');
-  const [showAll, setShowAll] = useState(false);
+  /* Our own record of the order, which the carrier does not have: paid, accepted by the store,
+     baked, packed. Half the timeline happens before a courier has ever heard of it. */
+  const [ourEvents, setOurEvents] = useState<ProgressEvent[]>([]);
+  useEffect(() => { getOrderTracking(order.id).then(setOurEvents).catch(() => {}); }, [order.id]);
   const [liveOpen, setLiveOpen] = useState(false);
 
   const doTrack = async () => {
@@ -77,6 +80,16 @@ function ShipmentTracker({ order }: { order: Order }) {
     ? [address.addressLine1, address.addressLine2, address.city, address.state, address.pincode].filter(Boolean).join(', ')
     : order.delhiveryWaybill || 'Bengaluru';
   // Drop scans equal to the current status and collapse duplicates so the timeline shows real progress only.
+  /* Two sources, one list. Ours covers everything before a courier existed — paid, accepted at the
+     store, packed — and the carrier's covers everything after. Neither alone is the order. */
+  const cancelled = isCancelledStatus(order.orderStatus) || isDeadShipment(order.shipmentStatus);
+  const allEvents: ProgressEvent[] = [
+    ...ourEvents,
+    ...rawScans
+      .filter(s => s?.event && s?.time)
+      .map(s => ({ status: s.event as string, remarks: s.event as string, createdAt: s.time as string })),
+  ];
+
   const seenScan = new Set<string>();
   const timelineScans = rawScans.filter(s => {
     const t = s?.event || '';
@@ -87,7 +100,15 @@ function ShipmentTracker({ order }: { order: Order }) {
 
   return (
     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
-      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} bookingStatus={order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ marginBottom: 12 }} />
+      {/* The stepper first — "where is it" is the question people open this page to ask, and a
+          sentence answers it less quickly than four marks with the line filled in. The sentence is
+          still here, under it, because it says the thing a stepper cannot: what happens next. */}
+      <OrderProgress
+        events={allEvents}
+        cancelled={cancelled}
+        eta={order.estimatedDelivery ? `Arriving by ${friendlyDate(order.estimatedDelivery)}` : null}
+      />
+      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} bookingStatus={order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ margin: '12px 0' }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {order.delhiveryWaybill && (
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
@@ -138,64 +159,9 @@ function ShipmentTracker({ order }: { order: Order }) {
           </div>
         </div>
       )}
-      {trackResult && trackResult.tracked && (() => {
-        // Our own cancel counts here too. Delhivery answers for a cancelled waybill indefinitely,
-        // and its answer ("Not Picked") drew a live four-step ladder over a dead booking.
-        const cancelled = isCancelledStatus(latestStatus) || order.orderStatus === 'CANCELLED' || isCancelledStatus(order.shipmentStatus);
-        const reached = cancelled ? -1 : Math.max(shipStage(latestStatus), shipStage(order.orderStatus), 0);
-        const latestScan = timelineScans[0] || null; // newest first
-        const expectedDate = order.estimatedDelivery ? friendlyDate(order.estimatedDelivery) : null;
-        return (
-          <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 14, padding: '16px 16px 14px' }}>
-            {cancelled ? (
-              <span style={{ padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-xs)', fontWeight: 900 }}>{isCancelledStatus(order.shipmentStatus) ? 'Shipment cancelled' : (latestStatus || 'Cancelled')}</span>
-            ) : (
-              <>
-                {SHIP_STAGES.map((label, i) => {
-                  const done = i <= reached;
-                  const current = i === reached;
-                  const isLast = i === SHIP_STAGES.length - 1;
-                  const sub = current && latestScan?.time ? whenLabel(latestScan.time)
-                    : isLast && !done && expectedDate ? `Expected by ${expectedDate}`
-                    : '';
-                  return (
-                    <div key={label} style={{ display: 'flex', gap: 12 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none' }}>
-                        <span style={{ width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', flex: 'none', background: done ? 'var(--status-success)' : 'var(--surface-card)', border: done ? 'none' : '2px solid var(--border-strong)', color: 'var(--white)' }}>
-                          {done && <Check size={13} strokeWidth={3} />}
-                        </span>
-                        {!isLast && <span style={{ width: 2, flex: 1, minHeight: 22, background: i < reached ? 'var(--status-success)' : 'var(--border-strong)' }} />}
-                      </div>
-                      <div style={{ paddingBottom: isLast ? 0 : 12 }}>
-                        <div style={{ fontWeight: 800, fontSize: 'var(--text-sm)', color: done ? 'var(--text-strong)' : 'var(--text-muted)' }}>{label}</div>
-                        {sub && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}
-                      </div>
-                    </div>
-                  );
-                })}
-                {timelineScans.length > 0 && (
-                  <button onClick={() => setShowAll(v => !v)} style={{ marginTop: 4, border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)' }}>
-                    {showAll ? 'Hide updates' : 'See all updates ›'}
-                  </button>
-                )}
-                {showAll && (
-                  <div style={{ marginTop: 8, borderTop: '1px solid var(--border-soft)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {timelineScans.map((s, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 10 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--brand-secondary)', marginTop: 5, flex: 'none' }} />
-                        <div>
-                          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{s.event}</div>
-                          {s.time && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{whenLabel(s.time)}</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        );
-      })()}
+      {/* The four-stage ladder and the flat scan list that used to live here are gone: they said
+          the same thing OrderProgress says above, twice, one of them behind a "See all updates"
+          toggle. Two timelines on one screen is how they drift apart. */}
       {trackResult && !trackResult.tracked && (
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 8 }}>Tracking not available yet. Try again in a few minutes.</p>
       )}
@@ -331,7 +297,13 @@ export default function AccountPage() {
   // to the homepage with no explanation. Ask them to log in instead — that's what they came here
   // to do — and open the modal immediately since seeing past orders was the whole point of the click.
   const [loginOpen, setLoginOpen] = useState(false);
-  useEffect(() => { if (!loading && !user) setLoginOpen(true); }, [loading, user]);
+  useEffect(() => {
+    if (loading || user) return;
+    // Deferred by a tick: opening the modal synchronously inside the effect re-renders before the
+    // page behind it has painted, so the sheet appears over a blank card for a frame.
+    const t = setTimeout(() => setLoginOpen(true), 0);
+    return () => clearTimeout(t);
+  }, [loading, user]);
 
   const [editing, setEditing] = useState(false);
   const [profileErr, setProfileErr] = useState('');

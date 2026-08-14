@@ -84,10 +84,16 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
   /* ---------------- search ---------------- */
   useEffect(() => {
     const term = q.trim();
-    if (term.length < 3) { setHits([]); setSearching(false); return; }
-    setSearching(true);
     let live = true;
+    if (term.length < 3) {
+      // Deferred rather than set straight away: clearing state synchronously inside an effect
+      // re-renders before the browser has painted the keystroke that caused it.
+      const clear = setTimeout(() => { if (live) { setHits([]); setSearching(false); } }, 0);
+      return () => { live = false; clearTimeout(clear); };
+    }
     const t = setTimeout(async () => {
+      if (!live) return;
+      setSearching(true);
       const r = await searchNearby(term, {});
       if (!live) return;
       setHits(r); setSearching(false);
@@ -129,7 +135,12 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
     }));
   }, []);
 
-  useEffect(() => { if (step === 'map' && pin) void lookup(pin.lat, pin.lng); }, [step, pin, lookup]);
+  useEffect(() => {
+    if (step !== 'map' || !pin) return;
+    // Same reason as the search debounce: hop out of the effect before touching state.
+    const t = setTimeout(() => void lookup(pin.lat, pin.lng), 0);
+    return () => clearTimeout(t);
+  }, [step, pin, lookup]);
 
   const valid = !!(form.fullName.trim() && /^[6-9]\d{9}$/.test(form.phone.replace(/\D/g, '').slice(-10))
     && form.addressLine1.trim() && form.city.trim() && /^[1-9]\d{5}$/.test(form.pincode.trim()) && pin);
@@ -318,7 +329,7 @@ function PinMap({ lat, lng, onSettle, onUseGps, onConfirm, resolving, selected }
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const settleRef = useRef(onSettle);
-  settleRef.current = onSettle;
+  useEffect(() => { settleRef.current = onSettle; }, [onSettle]);
   const [moving, setMoving] = useState(false);
 
   useEffect(() => {
