@@ -167,8 +167,10 @@ router.get('/attention', async (_req, res) => {
      * because nobody there has tapped Accept yet is not a failure either — that is the deliberate
      * deferred-booking flow (see finalizePaidOrder).
      *
-     * A booking we cancelled on purpose is also not a failure. Someone decided that; nagging them
-     * about their own decision is how a panel like this stops being read.
+     * A cancelled booking is not a failure either — ours or theirs. Someone decided that, and
+     * nagging them about their own decision is how a panel like this stops being read. Matched
+     * loosely rather than against our own 'CANCELLED': Shiprocket spells it "Canceled", and an
+     * exact comparison would have quietly kept every carrier-side cancellation on the list.
      */
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error, o.carrier,
                    o.carrier_order_id, o.delhivery_shipment_id AS shipment_id, o.shipment_status,
@@ -176,7 +178,7 @@ router.get('/attention', async (_req, res) => {
               FROM orders o
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
                AND o.delhivery_waybill IS NULL
-               AND o.shipment_status IS DISTINCT FROM 'CANCELLED'
+               AND COALESCE(o.shipment_status, '') !~* 'cancel'
                AND NOT (o.store_code IS NOT NULL AND NOT (o.store_code = ANY($1::text[])) AND o.store_accepted_at IS NULL)
                AND (
                  -- The carrier said no. That is an answer, not silence, so it shows straight away.
@@ -199,7 +201,7 @@ router.get('/attention', async (_req, res) => {
                    p.last_error, COALESCE(p.attempts, 0) AS attempts
               FROM orders o LEFT JOIN petpooja_orders p ON p.order_id = o.id
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
-               AND o.shipment_status IS DISTINCT FROM 'CANCELLED'
+               AND COALESCE(o.shipment_status, '') !~* 'cancel'
                AND (p.relay_ok IS NULL OR p.relay_ok = FALSE)
                AND COALESCE(p.last_error, '') <> 'not_configured'
                AND o.store_code = ANY($1::text[])
