@@ -54,7 +54,11 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
   { label: 'Cookie Shakes', anchor: 'shakes-section', codes: ['SHAKES'] },
   { label: 'Hot Drinks', anchor: 'hot-drinks-section', codes: ['HOT_DRINKS'] },
   { label: 'Cold Coffee', anchor: 'cold-coffee-section', codes: ['COLD_COFFEE'] },
-  { label: 'Cookie Cake', anchor: 'cakes-section', codes: ['CAKES'] },
+  /* Cookie Cake is off the menu for now — no photographs for any of the four, and a cake is not
+     something anyone buys sight unseen. Uncommenting this line brings the section back everywhere
+     (menu page, nav dropdown, rail, ?cat= links); the products also need switching back on in the
+     admin, which is what stops them being orderable by any other route in the meantime.
+  { label: 'Cookie Cake', anchor: 'cakes-section', codes: ['CAKES'] }, */
   { label: 'Combos', anchor: 'combos-section', codes: ['COMBOS'] },
 ];
 
@@ -78,7 +82,8 @@ export function categoryLabel(code: string): string {
  */
 export const UPSELL_LADDER: readonly ProductCategory[] = [
   'TINS', 'HUG_IN_A_DIP', 'SKILLET',
-  'COOKIES', 'SUNDAE', 'SHAKES', 'COLD_COFFEE', 'HOT_DRINKS', 'COMBOS', 'CAKES',
+  'COOKIES', 'SUNDAE', 'SHAKES', 'COLD_COFFEE', 'HOT_DRINKS', 'COMBOS',
+  // 'CAKES' — off the menu, see MENU_SECTIONS above. Put it back at the end when it returns.
 ];
 
 /**

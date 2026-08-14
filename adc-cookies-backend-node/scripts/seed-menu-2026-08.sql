@@ -186,6 +186,12 @@ UPDATE products SET
   updated_at = now()
 WHERE name = 'Cookie Sundae';
 
+-- Cookie Cake goes in but stays switched off: there are no photographs for any of the four, and a
+-- cake is not a thing anyone buys sight unseen. The section is also commented out of MENU_SECTIONS
+-- in the frontend, so nothing links to it. Delete this statement and uncomment that line to launch
+-- the category — the products and their prices are already here and correct.
+UPDATE products SET is_available = FALSE, updated_at = now() WHERE category = 'CAKES';
+
 COMMIT;
 
 -- Check what landed:
