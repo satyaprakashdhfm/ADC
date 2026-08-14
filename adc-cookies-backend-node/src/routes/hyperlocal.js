@@ -69,7 +69,7 @@ router.post('/webhook', async (req, res) => {
     await query(
       `UPDATE orders SET shipment_status=$1, delhivery_waybill=COALESCE(NULLIF($2,''), delhivery_waybill),
               carrier='SHIPROCKET', updated_at=$3
-        WHERE id=$4 AND shipment_status IS DISTINCT FROM 'CANCELLED'`,
+        WHERE id=$4 AND (shipment_status IS NULL OR shipment_status !~* 'cancel')`,
       [status || 'IN_TRANSIT', awb, ts, order.id]
     );
 

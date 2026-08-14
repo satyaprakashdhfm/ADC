@@ -241,7 +241,7 @@ router.get('/orders/:id/track', async (req, res) => {
   if (order.carrier === 'SHIPROCKET') {
     const sid = order.delhivery_shipment_id;
     if (!sid) return res.json({ ok: false, carrier: 'SHIPROCKET', reason: 'no_shipment_id' });
-    const result = await trackShiprocket(sid);
+    const result = await trackShiprocket(sid, order.carrier_order_id);
     if (result.ok && result.status) {
       // Store the AWB the moment tracking reveals it. Assignment is asynchronous and the webhook
       // does not always arrive, so this poll is the other way the number ever reaches us — without
@@ -251,7 +251,7 @@ router.get('/orders/:id/track', async (req, res) => {
                 delhivery_waybill = COALESCE(delhivery_waybill, $2),
                 tracking_url = COALESCE(tracking_url, $3),
                 updated_at=$4
-          WHERE id=$5 AND shipment_status IS DISTINCT FROM 'CANCELLED'`,
+          WHERE id=$5 AND (shipment_status IS NULL OR shipment_status !~* 'cancel')`,
         [result.status, result.awb || null,
          result.awb ? `https://shiprocket.co/tracking/${result.awb}` : null, nowIso(), order.id]
       );
@@ -277,7 +277,7 @@ router.get('/orders/:id/track', async (req, res) => {
       // A cancelled booking stays cancelled — see the same guard in routes/orders.js.
       await query(
         `UPDATE orders SET shipment_status=$1, updated_at=$2
-          WHERE id=$3 AND shipment_status IS DISTINCT FROM 'CANCELLED'`,
+          WHERE id=$3 AND (shipment_status IS NULL OR shipment_status !~* 'cancel')`,
         [latestStatus, nowIso(), order.id]);
       // Delhivery has no webhook, so this poll is the ONLY way an intercity order ever reaches a
       // terminal state on our side.

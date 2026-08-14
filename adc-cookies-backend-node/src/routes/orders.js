@@ -124,7 +124,7 @@ async function attemptShipment(orderId, addressArg) {
       if (created.ok) {
         const assigned = await assignAwb(created.shipmentId, { vehicleType: 2 });
         // A pending assignment is a success, not a failure — the rider search is under way.
-        const track = assigned.ok ? await trackShiprocket(created.shipmentId) : null;
+        const track = assigned.ok ? await trackShiprocket(created.shipmentId, created.srOrderId) : null;
         const awb = assigned.awb || track?.awb || null;
         /* A REFUSED assignment is not the same thing, and used to be stored as though it were.
          *
@@ -598,10 +598,15 @@ router.get('/:id/delhivery-track', async (req, res) => {
     /* Never over the top of a cancelled booking. Delhivery keeps answering for a waybill long after
        it is cancelled — and answers "Not Picked", which is literally true and completely misleading:
        it revived a cancelled order as in-transit the moment the customer opened tracking. A cancel
-       is ours to undo (a rebook writes CREATED here), not the carrier's. */
+       is ours to undo (a rebook writes CREATED here), not the carrier's.
+
+       Matched on the word, not on our own spelling of it. This was `IS DISTINCT FROM 'CANCELLED'`,
+       which protected the value WE write and not the one Shiprocket does — they spell it
+       "Canceled", one L — so the carrier's own cancellation was left unguarded against the
+       carrier's own next poll. */
     await query(
       `UPDATE orders SET shipment_status=$1, updated_at=$2
-        WHERE id=$3 AND shipment_status IS DISTINCT FROM 'CANCELLED'`,
+        WHERE id=$3 AND (shipment_status IS NULL OR shipment_status !~* 'cancel')`,
       [latestStatus, nowIso(), order.id]);
     // Same rule as the admin's poll and the hyperlocal webhook: a carrier saying delivered or
     // cancelled moves the order, whoever happened to ask. The customer opening their own tracking
