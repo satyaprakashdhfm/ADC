@@ -21,6 +21,7 @@
  *   PETPOOJA_APP_KEY / _APP_SECRET / _ACCESS_TOKEN   from the dashboard's Configuration tab
  *   PETPOOJA_REST_ID      menu-sharing / mapping code
  */
+import { ProxyAgent } from 'undici';
 import { getAll, getOne, query, nowIso } from './db.js';
 import { logApiCall } from './apiLogger.js';
 import { storeRelaysToPos } from './stores.js';
@@ -41,6 +42,35 @@ const log = (op, msg) => console.log(`[PETPOOJA] ${op} | ${msg}`);
 const creds = () => ({ app_key: APP_KEY, app_secret: APP_SECRET, access_token: ACCESS_TOKEN });
 
 /** POST JSON and normalise their "HTTP 200 + success:'0'" convention into a plain result. */
+/*
+ * Petpooja is the ONE integration that has to leave from a fixed IP — they allowlist ours — so it,
+ * and only it, goes through the egress proxy.
+ *
+ * This used to be arranged the other way round, with NODE_USE_ENV_PROXY sending EVERY outbound
+ * request through the proxy and a NO_PROXY list naming the dozen hosts that should not. That list
+ * can only ever contain hosts somebody thought of in advance, and the failures it produced were
+ * silent and far from their cause: phone OTP died because messagecentral.com was missing from it,
+ * and Delhivery labels died because the PDF arrives on a pre-signed link at a host nobody can
+ * enumerate. Each one looked like a broken integration rather than a networking rule.
+ *
+ * Proxying the exception instead of the rule makes the blast radius exactly one file. Nothing else
+ * in the app can be affected by the proxy being wrong, unreachable, or absent.
+ *
+ * With no proxy configured this is undefined and fetch behaves normally, which is what staging
+ * wants — it has no Petpooja credentials and needs the static IP for nothing.
+ */
+const PROXY_URL = process.env.PETPOOJA_PROXY_URL || process.env.HTTPS_PROXY || '';
+let proxyAgent;
+if (PROXY_URL) {
+  try {
+    proxyAgent = new ProxyAgent(PROXY_URL);
+    console.log(`[PETPOOJA] outbound via proxy ${PROXY_URL.replace(/(:\/\/)[^@]*@/, '$1***@')}`);
+  } catch (e) {
+    // A malformed proxy URL must not take the POS integration down with it — go direct and say so.
+    console.warn(`[PETPOOJA] proxy url unusable (${e.message}) — calling Petpooja directly`);
+  }
+}
+
 async function ppRequest(path, body, { timeoutMs = 20_000 } = {}) {
   const url = `${BASE}${path}`;
   const ctrl = new AbortController();
@@ -49,6 +79,8 @@ async function ppRequest(path, body, { timeoutMs = 20_000 } = {}) {
   try {
     const res = await fetch(url, {
       method: 'POST',
+      // Scoped to this call — see PROXY_URL above. undefined means a normal direct request.
+      dispatcher: proxyAgent,
       // Their docs show credentials two ways: as snake_case fields in the body (Save Order) and as
       // hyphenated HEADERS (Fetch Menu). Send both — each endpoint reads whichever it expects, and
       // the unused form is ignored. Verified to make no difference where the body form suffices.

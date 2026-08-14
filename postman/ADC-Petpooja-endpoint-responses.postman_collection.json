@@ -1,0 +1,307 @@
+{
+  "info": {
+    "name": "ADC — Petpooja Endpoint Responses",
+    "description": "The five endpoints Petpooja calls on A Dough Cookie, plus a security check.\n\n**restID:** `bw8dz5o93u`  ·  **Base URL:** https://adc-backend-copy-production.up.railway.app/api/petpooja\n\nEvery request carries the same **Client Authorization** value configured in the Petpooja dashboard. Requests without it are refused with 401, and requests naming a different restID with 403.\n\nRun 1 through 6 in order and screenshot each response pane.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Menu Sharing  /pushmenu",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{client_authorization}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restaurants\": [\n    {\n      \"restaurantid\": \"5312\",\n      \"active\": \"1\",\n      \"details\": {\n        \"menusharingcode\": \"bw8dz5o93u\",\n        \"restaurantname\": \"A Dough Cookie - Begur\"\n      }\n    }\n  ],\n  \"categories\": [\n    {\n      \"categoryid\": \"88879\",\n      \"categoryname\": \"Accompaniments\",\n      \"active\": \"1\"\n    }\n  ],\n  \"items\": [\n    {\n      \"itemid\": \"9658\",\n      \"itemname\": \"Plain Dahi\",\n      \"price\": \"80\",\n      \"item_categoryid\": \"88879\",\n      \"item_tax\": \"11213,20375\",\n      \"in_stock\": \"2\",\n      \"active\": \"1\",\n      \"variation\": [],\n      \"addon\": []\n    }\n  ],\n  \"addongroups\": [],\n  \"taxes\": [\n    {\n      \"taxid\": \"11213\",\n      \"taxname\": \"CGST\",\n      \"tax\": \"2.5\",\n      \"active\": \"1\"\n    }\n  ],\n  \"discounts\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/pushmenu",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "pushmenu"
+          ]
+        },
+        "description": "Menu Sharing Endpoint. Petpooja pushes the full catalogue here.\n\n**Expected response**\n```json\n{\"success\":\"1\",\"message\":\"Menu saved (1 items, 0 addons)\"}\n```"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "console.log(JSON.stringify(pm.response.json(), null, 2));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Order Callback  /callback",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{client_authorization}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restID\": \"bw8dz5o93u\",\n  \"orderID\": \"TC1-1785566115277\",\n  \"status\": \"1\",\n  \"cancel_reason\": \"\",\n  \"minimum_prep_time\": 20\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/callback",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "callback"
+          ]
+        },
+        "description": "Order Callback. Petpooja notifies us when the merchant accepts, rejects or progresses an order.\n\nstatus: -1 Cancelled | 1/2/3 Accepted | 4 Dispatched | 5 Food Ready | 10 Delivered\n\n**Expected response**\n```json\n{\"success\":\"1\",\"message\":\"received\"}\n```\n\nAn unknown order id answers HTTP 200 with success \"0\" — a retry cannot fix a bad id."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "console.log(JSON.stringify(pm.response.json(), null, 2));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Item / Addon On-Off  /item-stock",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{client_authorization}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restID\": \"bw8dz5o93u\",\n  \"type\": \"item\",\n  \"inStock\": true,\n  \"itemID\": [\n    \"9658\"\n  ],\n  \"autoTurnOnTime\": \"\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/item-stock",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "item-stock"
+          ]
+        },
+        "description": "Item Off AND Item On endpoint — one URL serves both, as your documentation advises.\n\nSet inStock false to mark sold out, true to restore.\n\n**Expected response**\n```json\n{\"code\":\"200\",\"status\":\"success\",\"message\":\"Stock status updated successfully\"}\n```"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "console.log(JSON.stringify(pm.response.json(), null, 2));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Get Store Status  /get-store-status",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{client_authorization}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restID\": \"bw8dz5o93u\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/get-store-status",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "get-store-status"
+          ]
+        },
+        "description": "Get Store Status. store_status \"1\" = open, \"0\" = closed.\n\n**Expected response**\n```json\n{\"restID\":\"bw8dz5o93u\",\"status\":\"success\",\"store_status\":\"1\",\"http_code\":\"200\",\"message\":\"Store is open\"}\n```"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "console.log(JSON.stringify(pm.response.json(), null, 2));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Update Store Status  /update-store-status",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{client_authorization}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restID\": \"bw8dz5o93u\",\n  \"store_status\": \"1\",\n  \"turn_on_time\": \"\",\n  \"reason\": \"\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/update-store-status",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "update-store-status"
+          ]
+        },
+        "description": "Update Store Status. Send store_status \"0\" with an optional reason to close, \"1\" to reopen.\n\n**Expected response**\n```json\n{\"restID\":\"bw8dz5o93u\",\"status\":\"success\",\"store_status\":\"1\",\"message\":\"Store turned on\"}\n```"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "console.log(JSON.stringify(pm.response.json(), null, 2));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Security — no Authorization  (expect 401)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "{{client_authorization}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"restID\": \"bw8dz5o93u\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/get-store-status",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "get-store-status"
+          ]
+        },
+        "description": "Same call with the Authorization header REMOVED, to show the endpoints are protected.\n\n**Before running:** open the Headers tab and untick `Authorization`.\n\n**Expected response** — HTTP 401\n```json\n{\"status\":\"failed\",\"message\":\"unauthorized\"}\n```"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('rejected without credentials (401)', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://adc-backend-copy-production.up.railway.app/api/petpooja",
+      "type": "string"
+    },
+    {
+      "key": "client_authorization",
+      "value": "33766bea53de782d0437d981831f62294ffbb80eaabb1d28",
+      "type": "string"
+    },
+    {
+      "key": "rest_id",
+      "value": "bw8dz5o93u",
+      "type": "string"
+    }
+  ]
+}

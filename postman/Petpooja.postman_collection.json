@@ -1,0 +1,591 @@
+{
+  "info": {
+    "name": "Petpooja — A Dough Cookie",
+    "description": "All nine Petpooja endpoints for **A Dough Cookie - Begur**.\n\n## Two directions\n- **Requests 1-4** — we call Petpooja (`{{pp_base}}`)\n- **Requests 5-9** — Petpooja calls us (`{{our_base}}`). Sending these yourself simulates what their servers would do.\n\n## Identity\n| Id | Value | Use |\n|---|---|---|\n| Menu-sharing code | `bw8dz5o93u` | **`restID` in every order relay** |\n| Restaurant id | `449010` | A Dough Cookie - Begur, for their support |\n| Sandbox row id | `5312` | dashboard only |\n| Client id | `5147` | account level |\n\n## Read this before trusting a green tick\n**Petpooja returns HTTP 200 even when the call fails.** Success lives in the body, and `success` is the STRING `\"1\"`/`\"0\"` — except `rider_status_update`, which returns `\"success\"`. Checking the status code alone reports every failure as a success.\n\n## Status (verified 2026-07-29)\n✅ 2, 3, 5, 6, 7, 8, 9 — working\n❌ 1 `save_order` — blocked on Petpooja activating the API service for restID 449010\n⚰️ 4 `fetch menu` — deprecated by Petpooja\n\nFull notes: `Petpooja_integration/PETPOOJA_API_REFERENCE.md`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "A — We call Petpooja",
+      "item": [
+        {
+          "name": "1. Save Order  ❌ BLOCKED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "app-key",
+                "value": "{{app_key}}"
+              },
+              {
+                "key": "app-secret",
+                "value": "{{app_secret}}"
+              },
+              {
+                "key": "access-token",
+                "value": "{{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"app_key\": \"{{app_key}}\",\n  \"app_secret\": \"{{app_secret}}\",\n  \"access_token\": \"{{access_token}}\",\n  \"restID\": \"{{rest_id}}\",\n  \"device_type\": \"Web\",\n  \"udid\": \"\",\n  \"res_name\": \"A Dough Cookie - Begur\",\n  \"address\": \"167/3 First floor, Chickbegur Village, Begur, Bengaluru 560114\",\n  \"contact_information\": \"9381502998\",\n  \"OrderInfo\": {\n    \"Customer\": {\n      \"name\": \"Test Customer\",\n      \"address\": \"Begur, Bengaluru 560114\",\n      \"phone\": \"9999999999\",\n      \"email\": \"test@adoughcookie.com\",\n      \"latitude\": \"12.8845\",\n      \"longitude\": \"77.6270\"\n    },\n    \"Order\": {\n      \"orderID\": \"ADC{{$timestamp}}\",\n      \"preorder_date\": \"{{today}}\",\n      \"preorder_time\": \"14:30:00\",\n      \"advanced_order\": \"N\",\n      \"order_type\": \"H\",\n      \"payment_type\": \"ONLINE\",\n      \"total\": \"80.00\",\n      \"tax_total\": \"3.80\",\n      \"discount_total\": \"0\",\n      \"discount_type\": \"F\",\n      \"delivery_charges\": \"0\",\n      \"packing_charges\": \"0\",\n      \"service_charge\": \"0\",\n      \"enable_delivery\": 0,\n      \"dc_tax_percentage\": \"0\",\n      \"pc_tax_percentage\": \"0\",\n      \"min_prep_time\": 20,\n      \"description\": \"Integration test\",\n      \"created_on\": \"{{today}} 14:30:00\",\n      \"callback_url\": \"{{our_base}}/callback\"\n    },\n    \"OrderItem\": [\n      {\n        \"id\": \"9658\",\n        \"name\": \"Plain Dahi\",\n        \"gst_liability\": \"restaurant\",\n        \"tax_inclusive\": true,\n        \"price\": \"80.00\",\n        \"final_price\": \"80.00\",\n        \"quantity\": \"1\",\n        \"item_discount\": \"0\",\n        \"description\": \"\",\n        \"variation_name\": \"\",\n        \"variation_id\": \"\",\n        \"item_tax\": [\n          { \"id\": \"11213\", \"name\": \"CGST\", \"tax_percentage\": \"2.5\", \"amount\": \"1.90\" },\n          { \"id\": \"20375\", \"name\": \"SGST\", \"tax_percentage\": \"2.5\", \"amount\": \"1.90\" }\n        ],\n        \"AddonItem\": { \"details\": [] }\n      }\n    ],\n    \"Tax\": [\n      { \"id\": \"11213\", \"title\": \"CGST\", \"type\": \"P\", \"price\": \"2.5\", \"tax\": \"1.90\", \"restaurant_liable_amt\": \"0.00\" },\n      { \"id\": \"20375\", \"title\": \"SGST\", \"type\": \"P\", \"price\": \"2.5\", \"tax\": \"1.90\", \"restaurant_liable_amt\": \"0.00\" }\n    ],\n    \"Discount\": []\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{pp_base}}/save_order",
+              "host": [
+                "{{pp_base}}"
+              ],
+              "path": [
+                "save_order"
+              ]
+            },
+            "description": "Relays a paid order so the bill and KOT print at the store.\n\n**Currently fails** with `{\"success\":\"0\",\"message\":\"Invalid order relay payload \"}`.\n\nProven NOT to be our payload — the identical response comes back with invalid credentials, with a fabricated item id, with all three restIDs, and across six payload structures. It is rejected before it reads any of them.\n\nCompare with request 2, which succeeds using the SAME credentials."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 (they answer 200 even when failing)', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log('RESPONSE:', JSON.stringify(b, null, 2));",
+                  "pm.test('KNOWN BLOCKER — expected to fail until Petpooja activates the service', () =>",
+                  "  pm.expect(String(b.success)).to.eql('0'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Update Order Status  ✅ WORKS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "app-key",
+                "value": "{{app_key}}"
+              },
+              {
+                "key": "app-secret",
+                "value": "{{app_secret}}"
+              },
+              {
+                "key": "access-token",
+                "value": "{{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"app_key\": \"{{app_key}}\",\n  \"app_secret\": \"{{app_secret}}\",\n  \"access_token\": \"{{access_token}}\",\n  \"restID\": \"{{rest_id}}\",\n  \"orderID\": \"\",\n  \"clientorderID\": \"ADC{{$timestamp}}\",\n  \"cancelReason\": \"Cancelled by customer\",\n  \"status\": \"-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{pp_base}}/update_order_status",
+              "host": [
+                "{{pp_base}}"
+              ],
+              "path": [
+                "update_order_status"
+              ]
+            },
+            "description": "Cancels an order at the POS. **This is the only transition their API accepts** — `status` is always `-1`.\n\n✅ Works. Returns `{\"success\":\"1\",\"message\":\"Order status updated successfully.\"}`\n\n**Gotchas**\n- Request field is `clientorderID`, response field is `clientOrderID` — different casing.\n- Does NOT validate restID: a bogus code or an empty string still returns success:'1'.\n- It DOES validate credentials — break one and you get `\"Invalid client credentials.\" / GN_105`. That is the fastest way to prove the account is live (~400ms)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "// Petpooja returns HTTP 200 even on business failure — success lives in the BODY.",
+                  "pm.test(\"body says success ('1' or 'success')\", () =>",
+                  "  pm.expect(String(b.success || b.status || b.code)).to.be.oneOf(['1','success','200','success']));",
+                  "console.log(JSON.stringify(b, null, 2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Rider Status Update  ✅ WORKS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "app-key",
+                "value": "{{app_key}}"
+              },
+              {
+                "key": "app-secret",
+                "value": "{{app_secret}}"
+              },
+              {
+                "key": "access-token",
+                "value": "{{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"app_key\": \"{{app_key}}\",\n  \"app_secret\": \"{{app_secret}}\",\n  \"access_token\": \"{{access_token}}\",\n  \"status\": \"pickedup\",\n  \"order_id\": \"ADC{{$timestamp}}\",\n  \"external_order_id\": \"\",\n  \"rider_data\": {\n    \"name\": \"Delhivery\",\n    \"contact\": \"\",\n    \"waybill\": \"1234567890\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{pp_base}}/rider_status_update",
+              "host": [
+                "{{pp_base}}"
+              ],
+              "path": [
+                "rider_status_update"
+              ]
+            },
+            "description": "Tells the POS the parcel moved, so the merchant sees delivery progress without polling. Maps onto Delhivery scan events.\n\n`status`: `rider-assigned` | `rider-arrived` | `pickedup` | `delivered`\n\n✅ Works. Returns `{\"success\":\"success\",\"message\":\"Your reuqest received succesfully\"}`\n\n⚠️ **`success` is the string `\"success\"` here, NOT `\"1\"`** as on every other endpoint. Code that checks `success === '1'` will treat every successful call as a failure."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "// Petpooja returns HTTP 200 even on business failure — success lives in the BODY.",
+                  "pm.test(\"body says success ('1' or 'success')\", () =>",
+                  "  pm.expect(String(b.success || b.status || b.code)).to.be.oneOf(['1','success','200','success']));",
+                  "console.log(JSON.stringify(b, null, 2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Fetch Menu  ⚰️ DEPRECATED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "app-key",
+                "value": "{{app_key}}"
+              },
+              {
+                "key": "app-secret",
+                "value": "{{app_secret}}"
+              },
+              {
+                "key": "access-token",
+                "value": "{{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restID\": \"{{rest_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{pp_base}}/mapped_restaurant_menus",
+              "host": [
+                "{{pp_base}}"
+              ],
+              "path": [
+                "mapped_restaurant_menus"
+              ]
+            },
+            "description": "Pulls the catalogue.\n\n⚰️ **Deprecated.** Confirmed by Shivam Tiwari (Petpooja) by email 2026-07-29: *\"the menu fetch method is deprecated. The only way to receive the menu now is through a menu push.\"*\n\nAlways returns `unable to fetch Object from s3 bucket` — it served a pre-generated FILE written by the menu trigger, not a live database read. No trigger, no file.\n\nKept here for reference. Do not build against it."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 (they answer 200 even when failing)', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "console.log('RESPONSE:', JSON.stringify(b, null, 2));",
+                  "pm.test('KNOWN BLOCKER — expected to fail until Petpooja activates the service', () =>",
+                  "  pm.expect(String(b.success)).to.eql('0'));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Outbound. Credentials go in the body as `app_key`/`app_secret`/`access_token` and also as hyphenated headers — each endpoint reads whichever it wants."
+    },
+    {
+      "name": "B — Petpooja calls us",
+      "item": [
+        {
+          "name": "5. Push Menu — they send us the catalogue",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "app-key",
+                "value": "{{app_key}}"
+              },
+              {
+                "key": "app-secret",
+                "value": "{{app_secret}}"
+              },
+              {
+                "key": "access-token",
+                "value": "{{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restaurants\": [\n    {\n      \"restaurantid\": \"5312\",\n      \"active\": \"1\",\n      \"details\": {\n        \"menusharingcode\": \"{{rest_id}}\",\n        \"restaurantname\": \"A Dough Cookie - Begur\"\n      }\n    }\n  ],\n  \"categories\": [\n    { \"categoryid\": \"88879\", \"categoryname\": \"Accompaniments\", \"active\": \"1\" }\n  ],\n  \"items\": [\n    {\n      \"itemid\": \"9658\",\n      \"itemname\": \"Plain Dahi\",\n      \"price\": \"80\",\n      \"item_categoryid\": \"88879\",\n      \"item_tax\": \"11213,20375\",\n      \"in_stock\": \"2\",\n      \"active\": \"1\",\n      \"variation\": [],\n      \"addon\": []\n    },\n    {\n      \"itemid\": \"9999\",\n      \"itemname\": \"Test Item With Variation\",\n      \"price\": \"0\",\n      \"item_categoryid\": \"88879\",\n      \"item_tax\": \"11213,20375\",\n      \"in_stock\": \"2\",\n      \"active\": \"1\",\n      \"itemallowvariation\": \"1\",\n      \"variation\": [\n        { \"id\": \"111\", \"variationid\": \"12489\", \"name\": \"Half\", \"groupname\": \"Size\", \"price\": \"150.00\" },\n        { \"id\": \"112\", \"variationid\": \"12490\", \"name\": \"Full\", \"groupname\": \"Size\", \"price\": \"300.00\" }\n      ],\n      \"addon\": []\n    }\n  ],\n  \"addongroups\": [\n    {\n      \"addongroupid\": \"13039\",\n      \"addongroup_name\": \"Customization\",\n      \"active\": \"1\",\n      \"addongroupitems\": [\n        { \"addonitemid\": \"72290\", \"addonitem_name\": \"Coke\", \"addonitem_price\": \"40\", \"active\": \"1\" }\n      ]\n    }\n  ],\n  \"taxes\": [\n    { \"taxid\": \"11213\", \"taxname\": \"CGST\", \"tax\": \"2.5\", \"taxtype\": \"1\", \"active\": \"1\" },\n    { \"taxid\": \"20375\", \"taxname\": \"SGST\", \"tax\": \"2.5\", \"taxtype\": \"1\", \"active\": \"1\" }\n  ],\n  \"discounts\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{our_base}}/pushmenu",
+              "host": [
+                "{{our_base}}"
+              ],
+              "path": [
+                "pushmenu"
+              ]
+            },
+            "description": "**Petpooja calls this on US.** They send the entire catalogue — a real one is 250-300 KB.\n\n✅ Our side works: their 288 KB demo menu ingested in 3.2s (253 rows).\n❌ **They have never actually called it.** Their trigger reports `request:[]`, `response:[]` — the outbound call is never constructed.\n\n**Parsing traps**\n- `in_stock: \"2\"` means **AVAILABLE**, not out of stock. Reading it the other way marks the whole catalogue unavailable and empties the storefront.\n- Key on `details.menusharingcode`, NOT `restaurantid` — orders are relayed with the sharing code.\n- `item_tax` is a comma-separated STRING here, but an ARRAY OF OBJECTS in an order.\n\nThis sample includes a variation item so you can see the expansion: 2 items in → 3 rows stored."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "// Petpooja returns HTTP 200 even on business failure — success lives in the BODY.",
+                  "pm.test(\"body says success ('1' or 'success')\", () =>",
+                  "  pm.expect(String(b.success || b.status || b.code)).to.be.oneOf(['1','success','200','success']));",
+                  "console.log(JSON.stringify(b, null, 2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Order Callback — merchant accepted",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "app-key",
+                "value": "{{app_key}}"
+              },
+              {
+                "key": "app-secret",
+                "value": "{{app_secret}}"
+              },
+              {
+                "key": "access-token",
+                "value": "{{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restID\": \"{{rest_id}}\",\n  \"orderID\": \"{{test_order_number}}\",\n  \"status\": \"1\",\n  \"cancel_reason\": \"\",\n  \"minimum_prep_time\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{our_base}}/callback",
+              "host": [
+                "{{our_base}}"
+              ],
+              "path": [
+                "callback"
+              ]
+            },
+            "description": "**Petpooja calls this on US** when the merchant accepts, rejects or progresses an order. `callback_url` is sent per-order in Save Order — there is no dashboard field for it.\n\n`orderID` is OUR order_number, echoed back.\n\n| status | meaning | we set |\n|---|---|---|\n| -1 | Cancelled | CANCELLED |\n| 1, 2, 3 | Accepted | CONFIRMED |\n| 4 | Dispatched | OUT_FOR_DELIVERY |\n| 5 | Food ready | PREPARING |\n| 10 | Delivered | DELIVERED |\n\n⚠️ This **really changes the order** in the database. `{{test_order_number}}` points at a test order. A DELIVERED/CANCELLED order is never walked backwards by a late or duplicate callback. An unknown order id answers HTTP 200 with success:'0' — a retry cannot fix a bad id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "// Petpooja returns HTTP 200 even on business failure — success lives in the BODY.",
+                  "pm.test(\"body says success ('1' or 'success')\", () =>",
+                  "  pm.expect(String(b.success || b.status || b.code)).to.be.oneOf(['1','success','200','success']));",
+                  "console.log(JSON.stringify(b, null, 2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7. Item / Addon Stock — sold out or back",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "app-key",
+                "value": "{{app_key}}"
+              },
+              {
+                "key": "app-secret",
+                "value": "{{app_secret}}"
+              },
+              {
+                "key": "access-token",
+                "value": "{{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restID\": \"{{rest_id}}\",\n  \"type\": \"item\",\n  \"inStock\": true,\n  \"itemID\": [\"9658\"],\n  \"autoTurnOnTime\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{our_base}}/item-stock",
+              "host": [
+                "{{our_base}}"
+              ],
+              "path": [
+                "item-stock"
+              ]
+            },
+            "description": "**Petpooja calls this on US** when an item goes out of stock or comes back.\n\n**One endpoint for both on and off** — set it as BOTH \"Item Off API Endpoint\" and \"Item On API Endpoint\" in their Configuration screen, as their docs advise.\n\n`type` is `item` or `addon`. Set `inStock` to `false` to mark sold out.\n\nAlso mirrors onto `products.is_available`, so an item marked sold-out at the POS stops being orderable on our storefront — verified: flipping this really does flip the product."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "// Petpooja returns HTTP 200 even on business failure — success lives in the BODY.",
+                  "pm.test(\"body says success ('1' or 'success')\", () =>",
+                  "  pm.expect(String(b.success || b.status || b.code)).to.be.oneOf(['1','success','200','success']));",
+                  "console.log(JSON.stringify(b, null, 2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8. Get Store Status — are we open?",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "app-key",
+                "value": "{{app_key}}"
+              },
+              {
+                "key": "app-secret",
+                "value": "{{app_secret}}"
+              },
+              {
+                "key": "access-token",
+                "value": "{{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restID\": \"{{rest_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{our_base}}/get-store-status",
+              "host": [
+                "{{our_base}}"
+              ],
+              "path": [
+                "get-store-status"
+              ]
+            },
+            "description": "**Petpooja calls this on US** to ask whether we are accepting orders.\n\n`store_status` `1` = open, `0` = closed. An unknown store defaults to **open**, so a missing row can never silently block sales.\n\n⚠️ Note the direction: there is **no** endpoint for asking Petpooja whether a store is open. Store status flows POS → us only."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "// Petpooja returns HTTP 200 even on business failure — success lives in the BODY.",
+                  "pm.test(\"body says success ('1' or 'success')\", () =>",
+                  "  pm.expect(String(b.success || b.status || b.code)).to.be.oneOf(['1','success','200','success']));",
+                  "console.log(JSON.stringify(b, null, 2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9. Update Store Status — set open/closed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "app-key",
+                "value": "{{app_key}}"
+              },
+              {
+                "key": "app-secret",
+                "value": "{{app_secret}}"
+              },
+              {
+                "key": "access-token",
+                "value": "{{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restID\": \"{{rest_id}}\",\n  \"store_status\": \"1\",\n  \"turn_on_time\": \"\",\n  \"reason\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{our_base}}/update-store-status",
+              "host": [
+                "{{our_base}}"
+              ],
+              "path": [
+                "update-store-status"
+              ]
+            },
+            "description": "**Petpooja calls this on US** to open or close the store.\n\nSet `store_status` to `\"0\"` to close, with an optional `reason` and `turn_on_time`. Send `\"1\"` to reopen.\n\nVerified: closing then reopening persists in the database, not merely echoed back."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "// Petpooja returns HTTP 200 even on business failure — success lives in the BODY.",
+                  "pm.test(\"body says success ('1' or 'success')\", () =>",
+                  "  pm.expect(String(b.success || b.status || b.code)).to.be.oneOf(['1','success','200','success']));",
+                  "console.log(JSON.stringify(b, null, 2));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Inbound webhooks. Sending these from Postman simulates Petpooja's servers, which is how we verified all five without waiting on them."
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// `today` is used by Save Order's preorder_date / created_on.",
+          "const d = new Date();",
+          "const p = n => String(n).padStart(2, '0');",
+          "pm.collectionVariables.set('today', `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`);"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "pp_base",
+      "value": "https://qle1yy2ydc.execute-api.ap-southeast-1.amazonaws.com/V1",
+      "type": "string"
+    },
+    {
+      "key": "our_base",
+      "value": "https://adc-backend-copy-production.up.railway.app/api/petpooja",
+      "type": "string"
+    },
+    {
+      "key": "rest_id",
+      "value": "bw8dz5o93u",
+      "type": "string"
+    },
+    {
+      "key": "test_order_number",
+      "value": "ADC20260725061941",
+      "type": "string"
+    },
+    {
+      "key": "today",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

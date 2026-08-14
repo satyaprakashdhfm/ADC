@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { X, Gift, MessageCircle, Copy, Check, Mail, ArrowRight, Clock } from 'lucide-react';
+import { X, Gift, Copy, Check, Mail, ArrowRight, Clock } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/icons/SocialIcons';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import { getActiveCoupons, claimSpin, claimEmailSpin, spinDraw, getSpinCooldown, type ActiveCoupon, type EmailSpinClaim } from '@/lib/api';
@@ -415,7 +416,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
               {socialBtn(INSTAGRAM_URL, 'Instagram', <IgIcon />)}
               {socialBtn(YOUTUBE_URL, 'YouTube', <YtIcon />)}
               {socialBtn(LINKEDIN_URL, 'LinkedIn', <LiIcon />)}
-              {socialBtn(whatsappLink(), 'WhatsApp', <MessageCircle size={18} />)}
+              {socialBtn(whatsappLink(), 'WhatsApp', <WhatsAppIcon size={19} />)}
             </div>
           </div>
         </div>

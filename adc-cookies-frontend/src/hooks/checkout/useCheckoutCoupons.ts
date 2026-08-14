@@ -33,6 +33,18 @@ export function useCheckoutCoupons() {
     getSpinStatus().then(r => setMySpinReward(r.active)).catch(() => setMySpinReward(null));
   }, [user]);
 
+  /* A rejection is about the basket as it was, so editing the basket retires it.
+   *
+   * "Order amount below minimum for this coupon" sat there after the shopper did exactly what it
+   * asked and added more — the message outlived the condition it described, so a cart that now
+   * qualifies still looked rejected. Clearing on total means the only error on screen is one that
+   * is still true.
+   *
+   * Safe against the apply path: a failed apply never changes the cart, so it cannot clear its own
+   * message. A successful one may (a free-item reward adds the product), and by then there is no
+   * error to lose. */
+  useEffect(() => { setCouponErr(''); }, [total]);
+
   const applyCoupon = async (overrideCode?: string) => {
     const code = (overrideCode ?? coupon).trim().toUpperCase();
     if (!code) return;

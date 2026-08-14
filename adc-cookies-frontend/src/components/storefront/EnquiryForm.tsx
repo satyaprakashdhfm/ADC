@@ -1,7 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Send, Check } from 'lucide-react';
 import { submitContact } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { PHONE_RE } from '@/lib/indiaAddress';
 
 /*
  * One enquiry form, three purposes: general contact, franchise/partnership, and bulk/corporate.
@@ -95,12 +97,34 @@ const labelStyle: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight
 
 export default function EnquiryForm({ variant = 'contact', bare = false }: { variant?: EnquiryVariant; bare?: boolean }) {
   const cfg = VARIANTS[variant];
+  const { user } = useAuth();
   const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
   const [extras, setExtras] = useState<Record<string, string>>({});
   const [hp, setHp] = useState(''); // honeypot — real visitors never see/fill this; bots that auto-fill every field do
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
   const [topic, setTopic] = useState('');
+
+  /*
+   * Fill in what we already know about a signed-in visitor, and let them change any of it.
+   *
+   * Only ever writes into a field that is still EMPTY, and only once per account — otherwise
+   * clearing a box to correct it would refill itself under the cursor, and an enquiry sent on
+   * someone else's behalf could not be addressed to them. `prefilledFor` is what makes it once:
+   * AuthContext re-renders on refresh and refocus, and without it every one of those would reapply.
+   */
+  const prefilledFor = useRef<string | null>(null);
+  useEffect(() => {
+    const who = user ? (user.email || user.phone || '') : '';
+    if (!who || prefilledFor.current === who) return;
+    prefilledFor.current = who;
+    setForm(f => ({
+      ...f,
+      name: f.name || user?.name || '',
+      email: f.email || user?.email || '',
+      phone: f.phone || user?.phone || '',
+    }));
+  }, [user]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
   const setExtra = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setExtras(x => ({ ...x, [k]: e.target.value }));
@@ -115,7 +139,11 @@ export default function EnquiryForm({ variant = 'contact', bare = false }: { var
   };
 
   const missingExtra = cfg.extras.some(f => f.required && !(extras[f.key] || '').trim());
-  const valid = !!form.name.trim() && isEmail(form.email.trim()) && !!form.message.trim() && !missingExtra;
+  // A phone number is required, not optional. Every one of these enquiries — a bulk order, a
+  // franchise question, a problem with a delivery — is answered by calling somebody back, and an
+  // email address alone turns a two-minute call into a thread.
+  const phoneOk = PHONE_RE.test(form.phone.replace(/\D/g, ''));
+  const valid = !!form.name.trim() && isEmail(form.email.trim()) && phoneOk && !!form.message.trim() && !missingExtra;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,9 +155,11 @@ export default function EnquiryForm({ variant = 'contact', bare = false }: { var
       .map(([k, v]) => `${k}: ${v}`);
     const message = [cfg.heading, ...answered, '', form.message.trim()].join('\n');
     try {
-      await submitContact({ name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim() || undefined, message, company: hp });
+      await submitContact({ name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim(), message, company: hp });
       setStatus('done');
-      setForm({ name: '', email: '', phone: '', message: '' });
+      // Clear what they wrote, keep who they are — a signed-in visitor sending a second
+      // enquiry should not retype their own details.
+      setForm({ name: user?.name || '', email: user?.email || '', phone: user?.phone || '', message: '' });
       setExtras({}); setTopic('');
     } catch (err) {
       setStatus('error');
@@ -170,8 +200,11 @@ export default function EnquiryForm({ variant = 'contact', bare = false }: { var
           <input id={`ef-${variant}-email`} type="email" style={inputStyle} placeholder="you@email.com" value={form.email} onChange={set('email')} autoComplete="email" />
         </div>
         <div style={{ flex: '1 1 160px' }}>
-          <label style={labelStyle} htmlFor={`ef-${variant}-phone`}>Phone</label>
-          <input id={`ef-${variant}-phone`} style={inputStyle} placeholder="+91 …" value={form.phone} onChange={set('phone')} autoComplete="tel" />
+          <label style={labelStyle} htmlFor={`ef-${variant}-phone`}>Phone *</label>
+          <input id={`ef-${variant}-phone`} type="tel" inputMode="tel" style={inputStyle} placeholder="+91 …" value={form.phone} onChange={set('phone')} autoComplete="tel" />
+          {form.phone.trim().length > 0 && !phoneOk && (
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 600, marginTop: 5 }}>Enter a valid 10-digit mobile number.</div>
+          )}
         </div>
       </div>
 

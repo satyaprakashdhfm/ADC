@@ -1,10 +1,11 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { Plus, Pencil, Star, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Download, Truck, FileText, AlertTriangle, X } from 'lucide-react';
 import {
   adminGetWarehouses, adminSetDefaultWarehouse, adminToggleWarehouse, adminGetOrders,
   adminCreateShipment, adminCancelShipment, adminTrackOrder, openLabel,
-  adminCreatePickupRequest, adminFetchOrderDocument, adminGetStoreReadiness,
-  type Order, type Warehouse, type WarehouseInput, type StoreReadinessReport,
+  adminCreatePickupRequest, adminFetchOrderDocument, adminGetStoreReadiness, adminGetShiprocketWallet,
+  type Order, type Warehouse, type WarehouseInput, type StoreReadinessReport, type ShiprocketWallet,
 } from '@/lib/api';
 import { todayStr } from '../shared/format';
 import { card, td, inp, addBtn, iconBtn, actionBtn, Panel, Table, Badge, Empty, Field } from '../shared/ui';
@@ -43,6 +44,11 @@ export default function DeliveryTab({
   trackResult, setTrackResult, storeReadiness, setStoreReadiness,
   sfxStatesOpen, setSfxStatesOpen, setErr, setCancelInfo,
 }: Props) {
+  /* Kept local rather than lifted into useAdminDelivery: nothing else needs it, it is read-only,
+     and it must not join the props chain every other field here already travels through. */
+  const [wallet, setWallet] = useState<ShiprocketWallet | null>(null);
+  useEffect(() => { adminGetShiprocketWallet().then(setWallet).catch(() => {}); }, []);
+
   return (
 
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -372,7 +378,26 @@ export default function DeliveryTab({
           )}
         </Panel>
         <Panel title="Same-day — intracity orders" loading={orders === null}
-          action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+          action={orders === null ? undefined : (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+              {/* The balance a rider is dispatched against. Creating the order is free; assigning
+                  the rider is what spends, so an empty wallet fails AFTER the money is taken and the
+                  cookies are baked. This is the one number that predicts it, and it used to live
+                  only inside Shiprocket's own panel. */}
+              {wallet?.ok && wallet.balance != null && (
+                <span title={wallet.low ? 'Low — top up before the next same-day order' : 'Shiprocket wallet balance'}
+                  style={{
+                    padding: '4px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-2xs)', fontWeight: 800,
+                    background: wallet.low ? 'var(--red-wash)' : 'var(--green-wash)',
+                    color: wallet.low ? 'var(--red-danger)' : 'var(--green-success)',
+                    border: `1px solid ${wallet.low ? 'var(--red-danger)' : 'var(--green-success)'}`,
+                  }}>
+                  {wallet.low ? '⚠ ' : ''}Wallet ₹{wallet.balance}
+                </span>
+              )}
+              <button onClick={() => { adminGetOrders().then(setOrders).catch(() => {}); adminGetShiprocketWallet().then(setWallet).catch(() => {}); }} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>
+            </span>
+          )}>
           {orders && (() => {
             // Was filtered to the retired carrier, so every real intracity order since the
             // carrier changed was invisible on this screen.

@@ -21,7 +21,7 @@
  */
 
 export type NavKey =
-  | 'home' | 'cookies' | 'tins' | 'locations' | 'corporate' | 'franchise' | 'about' | 'contact' | 'orders';
+  | 'home' | 'menu' | 'locations' | 'corporate' | 'franchise' | 'about' | 'contact' | 'orders';
 
 export interface NavLinkDef {
   key: NavKey;
@@ -31,17 +31,20 @@ export interface NavLinkDef {
 
 export const NAV_LINKS: NavLinkDef[] = [
   { key: 'home', label: 'Home', href: '/' },
-  { key: 'cookies', label: 'Buy Cookies', href: '/order?cat=cookies' },
-  { key: 'tins', label: 'Cookie Tins', href: '/order?cat=tins' },
-  { key: 'locations', label: 'Locations', href: '/locations' },
+  /* One "Menu" entry, listing the categories, rather than a "Buy Cookies" and a "Cookie Tins"
+     dropdown. Those two were the whole menu when the menu was cookies and tins; it is ten
+     categories now, and hard-coding two of them into the navbar left the other eight unreachable
+     from it — with the navbar implying they did not exist. */
+  { key: 'menu', label: 'Menu', href: '/#products' },
   // Corporate is its own top-level link here, not tucked inside a "Partner with us" dropdown —
   // the client wants both visible directly in the navbar.
-  { key: 'corporate', label: 'Corporate', href: '/corporate' },
+  { key: 'corporate', label: 'Corporate Gifting', href: '/corporate' },
   { key: 'franchise', label: 'Franchise', href: '/franchise' },
   { key: 'about', label: 'About Us', href: '/about' },
+  { key: 'locations', label: 'Locations', href: '/locations' },
   { key: 'contact', label: 'Contact', href: '/contact' },
   // #orders so it lands on the orders section rather than the top of the account page.
-  { key: 'orders', label: 'Orders', href: '/account#orders' },
+  { key: 'orders', label: 'My Orders', href: '/account#orders' },
 ];
 
 /** The links a surface shows, in canonical order. Each surface decides its own subset. */

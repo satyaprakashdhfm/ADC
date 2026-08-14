@@ -348,6 +348,61 @@ export async function assignAwb(shipmentId, { courierId, vehicleType, futurePick
   return { ok: true, pending: false, awb, courierName: d?.courier_name, data: d };
 }
 
+/**
+ * Shiprocket wallet balance, in rupees.
+ *
+ * Creating a hyperlocal order is free; ASSIGNING a rider is what draws on the wallet. That split is
+ * why an empty wallet produced an order sitting at NEW with an unpaid "Ship Now" in their panel and
+ * nothing wrong on our side — the booking genuinely succeeded, the dispatch never happened.
+ *
+ * Returns null rather than throwing on any failure. This is advisory: nothing should refuse to sell
+ * a cookie because a balance lookup timed out.
+ */
+export async function getWalletBalance() {
+  // Relative to BASE, which already ends in /v1/external — spelling the prefix out here again
+  // produced .../v1/external/v1/external/... and a 404 that read exactly like "no such endpoint".
+  const r = await srRequest('GET', '/account/details/wallet-balance');
+  if (!r.ok) { log('wallet', `✗ ${JSON.stringify(r.reason).slice(0, 120)}`); return null; }
+  const raw = r.data?.data?.balance_amount ?? r.data?.balance_amount;
+  const balance = raw == null ? null : Number(raw);
+  if (balance == null || Number.isNaN(balance)) { log('wallet', `✗ unexpected shape: ${JSON.stringify(r.data).slice(0, 120)}`); return null; }
+  log('wallet', `balance=₹${balance}`);
+  return balance;
+}
+
+/*
+ * The same balance, but safe to ask for on a poll.
+ *
+ * The store tablet re-reads its order list every few seconds and the balance moves only when an
+ * order is dispatched or someone tops up, so a fresh call per poll would be thousands of requests a
+ * day to learn the same number. One minute is well inside the window that matters: nobody empties a
+ * wallet and accepts an order in the same sixty seconds.
+ */
+const WALLET_TTL_MS = 60_000;
+let walletCache = { at: 0, balance: null };
+
+export async function getWalletBalanceCached() {
+  if (Date.now() - walletCache.at < WALLET_TTL_MS) return walletCache.balance;
+  const balance = await getWalletBalance().catch(() => null);
+  // A failed lookup is cached too, briefly. Otherwise every poll retries a carrier that is down.
+  walletCache = { at: Date.now(), balance };
+  return balance;
+}
+
+/*
+ * One shape for "can we still dispatch a rider", so the admin and the store tablet cannot disagree
+ * about it. 300 is roughly two intracity delivery fees: enough runway to notice and top up, not so
+ * little that the warning arrives after the first failure, not so much that it cries wolf all day.
+ */
+export const WALLET_LOW_WATERMARK = 300;
+
+export async function walletStatus() {
+  if (!shiprocketConfigured()) return { ok: false, reason: 'not_configured' };
+  const balance = await getWalletBalanceCached();
+  if (balance == null) return { ok: false, reason: 'lookup_failed' };
+  return { ok: true, balance, low: balance < WALLET_LOW_WATERMARK, lowWatermark: WALLET_LOW_WATERMARK };
+}
+
 /** Rider name/phone once assigned, for the order page. */
 export async function getRiderData(awb) {
   const r = await srRequest('GET', '/courier/hyperlocal/get_rider_data', { query: { awb: String(awb) } });
@@ -367,12 +422,12 @@ export async function getRiderData(awb) {
  *
  * The awb is NOT available at assignment time (that call is async), so this is also how we learn it.
  */
-export async function trackShiprocket(shipmentId) {
+export async function trackShiprocket(shipmentId, srOrderId) {
   const r = await srRequest('GET', `/courier/track/shipment/${encodeURIComponent(shipmentId)}`);
   if (!r.ok) return r;
   const td = r.data?.tracking_data ?? r.data;
   const t = td?.shipment_track?.[0] ?? {};
-  return {
+  const out = {
     ok: true,
     awb: t.awb_code || null,
     status: t.current_status || null,
@@ -383,6 +438,24 @@ export async function trackShiprocket(shipmentId) {
     activities: td?.shipment_track_activities || [],
     data: td,
   };
+  if (out.status || !srOrderId) return out;
+
+  /*
+   * Nothing from shipment tracking — so ask about the ORDER instead.
+   *
+   * Shipment tracking answers about an AWB, and an AWB only exists once a rider has been found. An
+   * order still waiting for one therefore tracks as `status: null` with no activities, and stays
+   * that way forever if it is cancelled before a rider is ever assigned. Verified live on
+   * 2026-08-14: three orders cancelled in Shiprocket's own panel reported nothing at all here,
+   * while /orders/show said CANCELED for every one of them.
+   *
+   * So we were asking the one endpoint that could not answer and ignoring the one that could. The
+   * store portal sat on "Searching for a rider" for orders Shiprocket had already closed.
+   */
+  const o = await srRequest('GET', `/orders/show/${encodeURIComponent(srOrderId)}`);
+  const status = (o.ok && (o.data?.data?.status ?? o.data?.status)) || null;
+  if (status) log('track', `shipment ${shipmentId} silent → order ${srOrderId} says ${status}`);
+  return { ...out, status, statusFrom: status ? 'order' : 'shipment' };
 }
 
 export async function cancelShiprocketOrder(srOrderIds) {

@@ -147,22 +147,33 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
     const optionsWrap: React.CSSProperties = { alignSelf: 'flex-start', maxWidth: '92%', background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 14, borderBottomLeftRadius: 4, padding: '10px 12px', boxShadow: 'var(--shadow-xs)' };
 
     if (m.kind === 'categories') {
-      const remaining = FAQ_CATEGORIES.filter(c => !m.usedKeys.includes(c.key));
-      if (remaining.length === 0) {
-        return (
-          <div key={i} style={optionsWrap}>
-            <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 700, textDecoration: 'none' }}>
-              <Send size={14} /> Still need help? Message us on WhatsApp
-            </a>
-          </div>
-        );
-      }
+      /*
+       * Every topic, every time — including ones already visited.
+       *
+       * A used topic used to be filtered out of this list entirely, on the reasoning that you had
+       * been there. But a topic holds several questions, so asking one of them silently cost you
+       * the rest: ask whether the cookies are eggless and the whole Ingredients topic disappeared,
+       * taking the allergens and the gluten-free answers with it. Nothing told you that had
+       * happened, and there was no way back to them short of starting a new conversation.
+       *
+       * Every topic simply stays listed, unmarked. Re-reading an answer is not a wrong turn worth
+       * guarding against, and a menu that quietly rearranges itself as you use it is harder to
+       * navigate than one that always looks the same.
+       *
+       * `usedKeys` is still carried on the message — it is part of the persisted transcript shape,
+       * so dropping it would break saved conversations — it just no longer decides what is shown.
+       */
       return (
         <div key={i} style={optionsWrap}>
           <div style={{ fontSize: 'var(--text-2xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>WHAT WOULD YOU LIKE TO KNOW?</div>
           <div className="hide-sb" style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {remaining.map(cat => chip(`${cat.emoji} ${cat.label}`, () => pickCategory(cat, m.usedKeys), cat.key))}
+            {FAQ_CATEGORIES.map(cat => chip(`${cat.emoji} ${cat.label}`, () => pickCategory(cat, m.usedKeys), cat.key))}
           </div>
+          {/* Always reachable now that the list never empties — a bot that cannot answer something
+              should still be one tap from a person who can. */}
+          <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10, fontSize: 'var(--text-2xs)', color: 'var(--brand-secondary)', fontWeight: 700, textDecoration: 'none' }}>
+            <Send size={13} /> Not listed? Message us on WhatsApp
+          </a>
         </div>
       );
     }

@@ -22,7 +22,13 @@ function IngredientImage({ n, src, title }: { n: string; src?: string; title: st
         <img src={src} alt={title} loading="lazy" onError={() => setOk(false)}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       )}
-      <span aria-hidden style={{ position: 'absolute', top: 10, left: 12, font: '900 clamp(1.5rem,1.1rem + 1vw,2.1rem)/1 var(--font-display)', color: 'var(--white)', letterSpacing: '-.02em', textShadow: '0 2px 8px rgba(0,0,0,.25)' }}>{n}</span>
+      {/* Only when there is no photograph to show. Over a real one the number was a white figure
+          stamped across the corner of the shot, competing with it and counting a list nobody is
+          reading in order — but as the whole content of an empty tile it still beats a blank
+          orange rectangle if an image ever 404s. */}
+      {!ok && (
+        <span aria-hidden style={{ position: 'absolute', top: 10, left: 12, font: '900 clamp(1.5rem,1.1rem + 1vw,2.1rem)/1 var(--font-display)', color: 'var(--white)', letterSpacing: '-.02em', textShadow: '0 2px 8px rgba(0,0,0,.25)' }}>{n}</span>
+      )}
     </div>
   );
 }

@@ -54,6 +54,7 @@
   --gutter: clamp(18px,4vw,40px); /* side page padding — capped ~1cm so desktop fills the screen */
   --section-y: clamp(64px,9vw,128px);
   --ribbon-h: 28px; /* height of the sticky top announcement ribbon — the home nav offsets below it */
+  --nav-h: 128px;   /* fallback only — SiteNav overwrites this with the bar's measured height */
   --control-h-sm: 36px; --control-h-md: 44px; --control-h-lg: 54px; --control-h-xl: 62px;
   --container-max: 1200px;
   --hc: min(420px,38vw);
@@ -74,7 +75,19 @@
 
 /* ---- Base Reset ---- */
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+/* Scrolling stops at the ends rather than bouncing past them.
+   Overscrolling revealed the canvas — which takes its colour from here, and was the cream page
+   background — so dragging past the top flashed a white band above the orange ribbon. `none` stops
+   the bounce outright; the warm background is the belt-and-braces for engines that bounce anyway
+   (iOS Safari), so what shows there is ribbon-coloured rather than white.
+   Trade: this also disables pull-to-refresh on Android. Worth it here — nothing on this site needs
+   a manual refresh, and the flash was on every page. */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+  background: var(--orange-light);
+}
 body {
   margin: 0;
   font-family: var(--font-body);
@@ -180,6 +193,25 @@ body::before {
 
 /* Hero height — shorter on phones so the fold isn't one giant photo, taller on desktop.
    svh (not vh) so mobile browser chrome appearing/disappearing doesn't cause a jump. */
+/* The hero begins BELOW the navbar, not behind it.
+   On the home page the bar is position:fixed at top:var(--ribbon-h), and SiteNav's scroll handler
+   shows it whenever scrollY < 90 — so at the top of the page, where the hero matters most, an
+   opaque orange band was sitting over the first ~128px of the photograph. The margin is the bar's
+   own height (--header-h counts the ribbon too, so the ribbon is subtracted: it is in flow and has
+   already pushed the hero down by its own height).
+   The image is position:absolute inset:0 within this section, so moving the section moves the
+   photograph with it — the whole frame is visible, with the bar sitting above rather than across.
+   --nav-h is the bar's MEASURED height, published by SiteNav. It replaced --header-h, a
+   hand-written desktop estimate that overshot badly on a phone — no links row, shorter rows — and
+   left a cream band between the navbar and the photograph. The ribbon is not subtracted: it is in
+   flow and has already pushed the hero down by its own height.
+   The 10px is deliberate overlap, so rounding can never reopen that gap. Tucking the hero slightly
+   under an opaque bar costs nothing visible; a gap costs a stripe across the top of the page. */
+/* The strip the fixed navbar sits over, as a real painted element rather than empty margin.
+   It was margin, which paints nothing — so the moment the bar tucked away on a fast scroll down,
+   that reserved space showed the cream page background as a white band under the ribbon. In the
+   navbar's own colour it simply reads as more header whether the bar is there or not. */
+.home-hero-gap { height: calc(var(--nav-h) - 10px); background: var(--navbar-bg); }
 .home-hero { min-height: 78svh; }
 @media (max-width:900px) { .home-hero { min-height: 68svh; } }
 @media (max-width:680px) { .home-hero { min-height: 62svh; padding: clamp(40px,7vw,64px) 0 !important; } }
@@ -257,8 +289,11 @@ body::before {
   .footer-grid > .footer-brand { flex: 0 0 100% !important; max-width: none !important; }
   /* Tighter link lists so the footer stays short on phones */
   .footer-grid > div > div:last-child { gap: 6px !important; }
-  /* Shorter footer on phones, but keep enough bottom room for the watermark to sit cleanly */
-  .site-footer { padding-top: 32px !important; padding-bottom: 64px !important; }
+  /* Shorter footer on phones — but the bottom still has to clear the floating cart bar (fixed at
+     bottom:16 there) plus the dock, or the copyright ends up underneath them. */
+  .site-footer { padding-top: 32px !important; padding-bottom: 104px !important; }
+  /* The note reads as a paragraph, not a column, once everything is stacked full width. */
+  .footer-grid > .footer-note { flex: 0 0 100% !important; max-width: none !important; }
 }
 
 /* The footer is sized so it MERGES with the header at the end of a page.
@@ -353,7 +388,76 @@ body::before {
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
 /* The hover shots are portrait with the cookie low in the frame — bias the crop downward so the
    cookie sits a little higher in the card (and its bottom isn't clipped), rather than centre. */
-.prod-media__hover { opacity: 0; transition: opacity .45s ease; object-position: center 62%; }
+/* Address delivery pin (see AddressPinMap.tsx).
+   The carrier navigates to this point, so the pin has to read as something you pick up and place —
+   a flat dot reads as a label and gets left wherever it lands, which is the whole failure the map
+   exists to prevent. It sits above a target ring marking the exact coordinate, lifts on hover, and
+   presses down while dragging. */
+.adc-pin { cursor: grab; }
+.adc-pin:active { cursor: grabbing; }
+.adc-pin__body {
+  width: 34px; height: 34px; border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg) translateY(0);
+  background: linear-gradient(140deg, var(--amber-400, #FF9D42), var(--orange-600, #F0641E));
+  border: 3px solid #fff;
+  box-shadow: 0 5px 12px rgba(120, 50, 0, .45);
+  transition: transform .16s var(--ease-out), box-shadow .16s var(--ease-out);
+}
+.adc-pin:hover .adc-pin__body { transform: rotate(-45deg) translateY(-3px); box-shadow: 0 9px 16px rgba(120,50,0,.4); }
+.adc-pin:active .adc-pin__body { transform: rotate(-45deg) translateY(1px); box-shadow: 0 3px 7px rgba(120,50,0,.5); }
+.adc-pin__eye { position: absolute; left: 9px; top: 9px; width: 10px; height: 10px; border-radius: 50%; background: #fff; }
+/* The ring marks the coordinate itself — the pin's tip is the point, not its middle. */
+.adc-pin__ring {
+  position: absolute; left: 50%; bottom: -5px; width: 20px; height: 10px; margin-left: -10px;
+  border-radius: 50%; border: 2px solid var(--orange-600, #F0641E); opacity: .55;
+}
+/* Leaflet's own chrome, brought into the theme. */
+.adc-map .leaflet-control-zoom a {
+  border-radius: 9px !important; color: var(--text-strong, #3B2415) !important;
+  border: 1px solid var(--border-default, #EADFCE) !important; font-weight: 800;
+}
+.adc-map .leaflet-control-zoom { border: none !important; box-shadow: var(--shadow-sm); }
+.adc-map .leaflet-container { font-family: var(--font-body); background: var(--surface-sunken); }
+
+/* Menu section rail (see MenuRail.tsx).
+   The dots do not live in the page gutter — the product grid already owns that, which is why they
+   ended up sitting on top of the cards at every width below the grid's 1680px cap. #products
+   reserves this strip on its left instead, so the rail has space that is genuinely its own and the
+   menu column simply starts after it. Narrower on a phone, where 30px of margin is a real fraction
+   of the screen. */
+:root { --menu-rail-w: 30px; }
+@media (max-width: 760px) { :root { --menu-rail-w: 20px; } }
+.menu-rail-inset { padding-left: var(--menu-rail-w); }
+
+/* Corporate & bulk gifting card — the gift boxes photographed behind the copy.
+   The photo is a 6.6:1 band, so `cover` on a card this shape shows it almost whole.
+   Side-to-side scrim on desktop: heavy where the heading sits, thinning to the right so the boxes
+   are actually visible — a photo you cannot see is just an expensive background colour.
+   The card wraps to stacked rows on a phone, where a left-to-right scrim would leave the CTA on
+   bare photo, so below 760px it runs top-to-bottom instead and holds a floor of darkness. */
+.corp-cta {
+  background:
+    linear-gradient(90deg, var(--espresso-95) 0%, var(--espresso-62) 52%, var(--espresso-30) 100%),
+    url('/assets/corporate-gifting.jpg') center/cover no-repeat,
+    var(--surface-inverse);
+}
+@media (max-width: 760px) {
+  .corp-cta {
+    background:
+      linear-gradient(180deg, var(--espresso-95) 0%, var(--espresso-62) 100%),
+      url('/assets/corporate-gifting.jpg') center/cover no-repeat,
+      var(--surface-inverse);
+  }
+}
+
+/* The hover shots are portrait (1085x1450) shown in a 4:3 card, so `cover` fills the width and only
+   ~56% of the image height survives — object-position picks WHICH 56%.
+   At 62% the visible band ended at 83.3% of the source. Most cookies bottom out around 80% and
+   cleared it, but Red Velvet ends at 83.1% and Biscoff at 84.7%, so those two sat on the crop line
+   and looked shaved off along the bottom. 70% moves the band to 30.8%-86.8%, clearing the lowest
+   cookie by 2%; the extra taken off the top is forearm.
+   If a new hover shot is added, check its subject ends above ~86% or it will clip here too. */
+.prod-media__hover { opacity: 0; transition: opacity .45s ease; object-position: center 70%; }
 .prod-media:hover .prod-media__hover { opacity: 1; }
 /* Subtle lift so the swap reads as interactive; the image itself eases in via the opacity above. */
 .prod-media { transition: transform .45s ease; }
@@ -364,8 +468,9 @@ body::before {
   .co-line { gap: 10px !important; padding: 11px 0 !important; }
   .co-line__img { width: 68px !important; height: 68px !important; }
 }
-/* The "Goes great with" upsell tiles grow with the column on desktop. */
-@media (min-width:961px) { .co-upsell-tile { width: 168px !important; } }
+/* The "Goes great with" tiles used to be widened to 168px above 961px. They are now a grid that
+   sizes its own tracks from ~920px up, and the scrolling row only exists BELOW that — so a rule
+   keyed to 961px could never match anything again. Tile width lives with the tiles now. */
 
 /* Customer Love (Reviews) — compact cards on mobile, noticeably larger on desktop */
 .review-card { flex: none; width: min(80vw, 300px); }

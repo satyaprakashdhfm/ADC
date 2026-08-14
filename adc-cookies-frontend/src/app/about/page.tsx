@@ -14,6 +14,16 @@ const eyebrow: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 8
 const h2: React.CSSProperties = { font: '900 clamp(1.7rem,1.2rem + 2vw,2.6rem)/1.08 var(--font-display)', letterSpacing: '-.02em', marginBottom: 16, color: 'var(--text-strong)' };
 const para: React.CSSProperties = { fontSize: 'var(--text-base)', lineHeight: 1.85, color: 'var(--text-body)', marginBottom: 18 };
 
+/* Cards take whichever of the page's two band colours their own section is not, so a card always
+   reads as a card. They were all --surface-card, a near-white ivory tuned for modals over a dark
+   scrim — on the peach band it sat a hair away from the background and the grid dissolved into it.
+   Cream on peach, peach on cream: the same alternation the home page already runs on. */
+const cardOnCream: React.CSSProperties = { background: 'var(--peach-300)', border: '1px solid var(--peach-400)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)' };
+const cardOnPeach: React.CSSProperties = { background: 'var(--gold)', border: '1px solid var(--peach-400)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)' };
+/* --text-body/-muted were tuned against near-white; on a peach card they go faint. Ink instead. */
+const onPeachHeading = 'var(--ink-900)';
+const onPeachBody = 'var(--ink-700)';
+
 // The values that actually change how a cookie tastes — not generic brand adjectives.
 const VALUES = [
   { icon: Hand, title: 'Made by hand, not by machine', text: 'Every ball of dough is portioned, filled and shaped by hand. It is slower and it does not scale neatly, but it is the only way to get a centre that stays molten and an edge that stays crisp.' },
@@ -71,10 +81,10 @@ export default function AboutPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 'clamp(14px,1.8vw,22px)' }}>
             {STORY.map(s => (
-              <article key={s.step} style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', padding: 'clamp(18px,2vw,26px)', boxShadow: 'var(--shadow-sm)' }}>
-                <div style={{ font: '900 clamp(1.5rem,1.1rem + 1vw,2.1rem)/1 var(--font-display)', color: 'var(--brand-secondary)', marginBottom: 10, letterSpacing: '-.02em' }}>{s.step}</div>
-                <h3 style={{ font: 'var(--weight-extra) var(--text-lg)/1.25 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 8px' }}>{s.title}</h3>
-                <p style={{ fontSize: 'var(--text-sm)', lineHeight: 1.65, color: 'var(--text-body)', margin: 0 }}>{s.text}</p>
+              <article key={s.step} style={{ ...cardOnCream, padding: 'clamp(18px,2vw,26px)' }}>
+                <div style={{ font: '900 clamp(1.5rem,1.1rem + 1vw,2.1rem)/1 var(--font-display)', color: 'var(--orange-800)', marginBottom: 10, letterSpacing: '-.02em' }}>{s.step}</div>
+                <h3 style={{ font: 'var(--weight-extra) var(--text-lg)/1.25 var(--font-display)', color: onPeachHeading, margin: '0 0 8px' }}>{s.title}</h3>
+                <p style={{ fontSize: 'var(--text-sm)', lineHeight: 1.65, color: onPeachBody, margin: 0 }}>{s.text}</p>
               </article>
             ))}
           </div>
@@ -90,7 +100,7 @@ export default function AboutPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 'clamp(14px,1.8vw,22px)' }}>
             {VALUES.map(({ icon: Icon, title, text }) => (
-              <article key={title} style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', padding: 'clamp(20px,2.2vw,28px)', boxShadow: 'var(--shadow-sm)' }}>
+              <article key={title} style={{ ...cardOnPeach, padding: 'clamp(20px,2.2vw,28px)' }}>
                 <span style={{ width: 46, height: 46, borderRadius: 13, background: 'var(--gradient-warm)', color: 'var(--white)', display: 'grid', placeItems: 'center', marginBottom: 14 }}>
                   <Icon size={21} />
                 </span>
@@ -127,9 +137,9 @@ export default function AboutPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {STORES.map(s => (
-                <div key={s.name} style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-button)', padding: '13px 16px' }}>
-                  <div style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--brand-secondary)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>{s.city}</div>
-                  <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', lineHeight: 1.3 }}>{s.name}</div>
+                <div key={s.name} style={{ ...cardOnCream, borderRadius: 'var(--radius-button)', padding: '13px 16px' }}>
+                  <div style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--orange-800)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>{s.city}</div>
+                  <div style={{ fontWeight: 800, color: onPeachHeading, fontSize: 'var(--text-sm)', lineHeight: 1.3 }}>{s.name}</div>
                 </div>
               ))}
             </div>

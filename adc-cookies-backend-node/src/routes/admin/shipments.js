@@ -3,8 +3,9 @@ import { getOne, getAll, query, nowIso } from '../../db.js';
 import { ApiError } from '../../middleware.js';
 import { serializeOrder } from '../../serializers.js';
 import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../delhivery.js';
-import { cancelShiprocketOrder, trackShiprocket } from '../../shiprocket.js';
+import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, walletStatus } from '../../shiprocket.js';
 import { autoCreateShipment } from '../orders.js';
+import { applyCarrierTerminalStatus } from '../../orderProgress.js';
 
 const router = Router();
 
@@ -210,26 +211,61 @@ router.post('/orders/:id/rebook', async (req, res) => {
 });
 
 // GET /api/admin/orders/:id/track — pull fresh tracking from whichever carrier created the shipment.
+/*
+ * GET /api/admin/delivery/wallet — the Shiprocket balance, and whether it is low.
+ *
+ * Same-day is sold on the promise of a rider within the hour, and that rider is only dispatched if
+ * the wallet can pay for him. An empty wallet does not fail at checkout, or at payment, or at store
+ * accept — it fails silently at dispatch, after the money is taken and the cookies are baked. The
+ * balance is the one number that predicts it, and until now it existed only inside Shiprocket's
+ * panel.
+ *
+ * The watermark and the response shape live in shiprocket.js, because the store tablet shows the
+ * same number and the two must not be able to disagree about when it is low.
+ */
+router.get('/delivery/wallet', async (_req, res) => {
+  res.json(await walletStatus());
+});
+
 router.get('/orders/:id/track', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
   if (!order) throw new ApiError('Order not found', 404);
-  if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
-
-  // Shiprocket (intracity) — normalize into the same { ok, carrier, status, scans } shape.
-  // Without this branch an intracity AWB was sent to Delhivery's tracker, which of course
-  // knows nothing about it, so the admin saw "not found" for a parcel that was moving fine.
+  /* Shiprocket is tracked by SHIPMENT ID, not by AWB — so it is handled before the AWB guard.
+   *
+   * That guard used to run first, and hyperlocal assignment is asynchronous: the shipment exists
+   * and the rider search is under way for minutes before an AWB is issued. Every intracity order
+   * therefore answered "no_shipment" to the admin during exactly the window someone is most likely
+   * to be looking, and a cancellation made in the Shiprocket panel never reached us at all — the
+   * store portal showed "Canceled" (it tracks by shipment id) while the admin still said CREATED.
+   * The two were reading different sources, not disagreeing about the same one. */
   if (order.carrier === 'SHIPROCKET') {
     const sid = order.delhivery_shipment_id;
     if (!sid) return res.json({ ok: false, carrier: 'SHIPROCKET', reason: 'no_shipment_id' });
-    const result = await trackShiprocket(sid);
+    const result = await trackShiprocket(sid, order.carrier_order_id);
     if (result.ok && result.status) {
-      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [result.status, nowIso(), order.id]);
+      // Store the AWB the moment tracking reveals it. Assignment is asynchronous and the webhook
+      // does not always arrive, so this poll is the other way the number ever reaches us — without
+      // it the order stays AWB-less forever and keeps failing every waybill-keyed check.
+      await query(
+        `UPDATE orders SET shipment_status=$1,
+                delhivery_waybill = COALESCE(delhivery_waybill, $2),
+                tracking_url = COALESCE(tracking_url, $3),
+                updated_at=$4
+          WHERE id=$5 AND (shipment_status IS NULL OR shipment_status !~* 'cancel')`,
+        [result.status, result.awb || null,
+         result.awb ? `https://shiprocket.co/tracking/${result.awb}` : null, nowIso(), order.id]
+      );
     }
+    // A poll is the other way we learn a booking died. Without this the admin could read
+    // "Canceled" straight off the carrier while our own order still said PACKED, and the customer
+    // was told nothing at all.
+    if (result.ok && result.status) await applyCarrierTerminalStatus(order, result.status, 'SHIPROCKET');
     const scans = (result.activities || []).map((a) => ({ time: a.date || a.time, event: a.activity || a.status }));
     return res.json({ ok: result.ok, carrier: 'SHIPROCKET', status: result.status || null, awb: result.awb || order.delhivery_waybill, scans });
   }
 
-  // Delhivery (outstation)
+  // Delhivery (outstation) — this one genuinely needs a waybill before there is anything to ask about.
+  if (!order.delhivery_waybill) return res.json({ ok: false, reason: 'no_shipment' });
   if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
   const result = await trackShipment(order.delhivery_waybill);
   if (result.ok && result.data) {
@@ -238,8 +274,14 @@ router.get('/orders/:id/track', async (req, res) => {
     // shipment_status consistently formatted regardless of which route last updated it.
     const latestStatus = [pkg?.Status?.Status, pkg?.Status?.Instructions].filter(Boolean).join(' — ') || null;
     if (latestStatus) {
-      await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3',
+      // A cancelled booking stays cancelled — see the same guard in routes/orders.js.
+      await query(
+        `UPDATE orders SET shipment_status=$1, updated_at=$2
+          WHERE id=$3 AND (shipment_status IS NULL OR shipment_status !~* 'cancel')`,
         [latestStatus, nowIso(), order.id]);
+      // Delhivery has no webhook, so this poll is the ONLY way an intercity order ever reaches a
+      // terminal state on our side.
+      await applyCarrierTerminalStatus(order, latestStatus, 'DELHIVERY');
     }
   }
   res.json({ ...result, carrier: 'DELHIVERY' });

@@ -104,6 +104,18 @@ export async function validateCoupon(code, orderAmount, giftValue = 0, userId = 
       [userId, coupon.code, new Date().toISOString()]
     ) : null;
     if (!claim) throw new ApiError('This reward code isn’t linked to your account. Spin the wheel to win your own!');
+    /* One spin, one prize — spend it and it is gone.
+     *
+     * The claim row only proves the code was won and has not expired, both of which stay true
+     * after it is redeemed, and these coupons carry no usage_limit, so the global cap below never
+     * caught it either. A shopper could apply the same won code to order after order for the whole
+     * seven days. usage_limit is a cap for everyone sharing a public code; this is per-person,
+     * which is what a personal reward needs. */
+    const spent = await getOne(
+      'SELECT 1 FROM coupon_usage WHERE coupon_id = $1 AND user_id = $2 LIMIT 1',
+      [coupon.id, userId]
+    );
+    if (spent) throw new ApiError('You have already used this reward.');
   }
   if (coupon.usage_limit != null) {
     const row = await getOne('SELECT COUNT(*) AS c FROM coupon_usage WHERE coupon_id = $1', [coupon.id]);
@@ -225,7 +237,14 @@ const POOL_SIZE = 1000;
 const NO_REWARD = '__NONE__';
 // How long a draw (win or miss) — and separately, a claimed reward — is honoured before it
 // expires. Shared by /spin's device-lock and claim-spin's claim window (see spin_claims in db.js).
-const CLAIM_WINDOW_HOURS = 12;
+//
+// Seven days, not twelve hours. Half a day meant a code won in the evening was dead before most
+// people next thought about cookies, so the reward pushed for an order right now or went to waste —
+// which is a discount that mostly expires unused. A week is long enough to be worth keeping.
+//
+// It is also the device lock: this same window is how long a device/account waits before it could
+// spin again, so lengthening it makes a spin scarcer as well as its prize longer-lived.
+const CLAIM_WINDOW_HOURS = 7 * 24;
 // One spin per device/account, period — not a daily reset. Once a draw's own CLAIM_WINDOW_HOURS
 // window lapses, that device/account is done until an admin opens a fresh round for everyone at
 // once (POST /admin/coupons/reset-spins wipes spin_draws). There is no per-user timed cooldown.
@@ -353,10 +372,17 @@ function serializeClaim(row, coupon) {
 // showing their win across page loads/devices and (b) block spinning again inside the window.
 router.get('/spin-status', requireAuth, async (req, res) => {
   const nowIsoStr = new Date().toISOString();
+  /* Unexpired AND unspent. Expiry alone left a redeemed reward sitting in checkout and on the
+     account page for the rest of its week, still offering an Apply button that now refuses — which
+     reads as the site having lost track of an order the shopper definitely placed. */
   const claim = await getOne(
     `SELECT sc.*, c.discount_type, c.discount_value, c.minimum_order_amount, c.maximum_discount, c.terms
      FROM spin_claims sc JOIN coupons c ON c.id = sc.coupon_id
-     WHERE sc.user_id = $1 AND sc.expires_at > $2 ORDER BY sc.id DESC LIMIT 1`,
+     WHERE sc.user_id = $1 AND sc.expires_at > $2
+       AND NOT EXISTS (
+         SELECT 1 FROM coupon_usage cu WHERE cu.coupon_id = sc.coupon_id AND cu.user_id = sc.user_id
+       )
+     ORDER BY sc.id DESC LIMIT 1`,
     [req.user.id, nowIsoStr]
   );
   res.json({ active: claim ? serializeClaim(claim, claim) : null });

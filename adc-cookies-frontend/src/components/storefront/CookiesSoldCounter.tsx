@@ -38,10 +38,39 @@ export default function CookiesSoldCounter() {
   }, []);
 
   if (n == null) return null;
+  /*
+   * Presented as a card rather than a line of text.
+   *
+   * It was set at the same size and weight as the copyright and the policy links it sits between,
+   * so the one genuinely interesting number in the footer — and the only thing on the page that
+   * moves — read as small print and got skimmed with it. A panel of its own, a larger figure and a
+   * live dot give it somewhere to be noticed.
+   *
+   * Not a button, though it borrows the shape: nothing happens when you press it, and a card that
+   * looks clickable and isn't is a worse outcome than one that goes unnoticed. No hover state and
+   * no pointer cursor, for the same reason.
+   */
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--white-72)', fontSize: 'var(--text-xs)', fontWeight: 700 }}>
-      <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
-      <span><b style={{ color: 'var(--white)' }}>{n.toLocaleString('en-IN')}+</b> cookies baked &amp; sold</span>
-    </span>
+    <div
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 11,
+        padding: '12px 22px', borderRadius: 'var(--radius-pill)',
+        /* Deep warm near-black, the token the theme already reserves for badge fills. A white tint
+           over an orange footer is barely a shade lighter than the orange, which is why this did
+           not stand out at all — it needs to leave the background colour, not sit on it. */
+        background: 'var(--ink-950)',
+        boxShadow: '0 3px 14px var(--black-18)',
+      }}
+    >
+      <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
+      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <b style={{ color: 'var(--amber-300)', font: '900 var(--text-lg)/1 var(--font-display)', letterSpacing: '-.01em' }}>
+          {n.toLocaleString('en-IN')}+
+        </b>
+        <span style={{ color: 'var(--cream-100-72)', fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '.02em' }}>
+          cookies baked &amp; sold
+        </span>
+      </span>
+    </div>
   );
 }

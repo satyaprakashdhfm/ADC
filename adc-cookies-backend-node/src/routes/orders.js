@@ -7,9 +7,10 @@ import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct 
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
 import { zoneStores, storeForAddress, storeByCode, deliveryEligible, isStoreActive } from '../stores.js';
-import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore } from '../shiprocket.js';
+import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore, getWalletBalance } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
+import { applyCarrierTerminalStatus } from '../orderProgress.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -123,18 +124,44 @@ async function attemptShipment(orderId, addressArg) {
       if (created.ok) {
         const assigned = await assignAwb(created.shipmentId, { vehicleType: 2 });
         // A pending assignment is a success, not a failure — the rider search is under way.
-        const track = assigned.ok ? await trackShiprocket(created.shipmentId) : null;
+        const track = assigned.ok ? await trackShiprocket(created.shipmentId, created.srOrderId) : null;
         const awb = assigned.awb || track?.awb || null;
+        /* A REFUSED assignment is not the same thing, and used to be stored as though it were.
+         *
+         * Both landed on shipment_status 'CREATED' with shipment_error left null, so an order
+         * Shiprocket had declined — an empty wallet is the common one — was indistinguishable from
+         * one where the rider search was genuinely under way. The shop was told "searching for a
+         * rider" about an order nobody was ever coming for, and the only place the truth existed
+         * was the Shiprocket panel showing an unpaid "Ship Now".
+         *
+         * The reason is recorded now. The store portal and the admin's Needs-attention list both
+         * already read this column; neither had anything to read. */
+        /* On refusal, say what the wallet held at that moment.
+         *
+         * Assigning a rider draws on the Shiprocket wallet, and an empty one is by far the most
+         * common reason for a refusal — but the carrier's own message rarely says so plainly. Whoever
+         * reads this later needs to know whether to top up or to investigate, and that difference is
+         * one number. Looked up only on the failure path, so the happy path costs nothing. */
+        let assignError = null;
+        if (!assigned.ok) {
+          const reason = String(typeof assigned.reason === 'string' ? assigned.reason : JSON.stringify(assigned.reason ?? 'Carrier refused the booking'));
+          const balance = await getWalletBalance().catch(() => null);
+          assignError = (balance == null ? reason : `${reason} (Shiprocket wallet: ₹${balance})`).slice(0, 300);
+        }
         await query(
           `UPDATE orders SET delhivery_waybill=$1, delhivery_shipment_id=$2, carrier='SHIPROCKET',
                   carrier_order_id=$3, shipment_status=$4, tracking_url=$5, label_generated=FALSE,
-                  updated_at=$6 WHERE id=$7`,
+                  shipment_error=$6, updated_at=$7 WHERE id=$8`,
           // carrier_order_id is Shiprocket's own order id — their cancel API keys off it, not the
           // shipment id, so it has to be kept or the order can never be cancelled with them.
           [awb, String(created.shipmentId), created.srOrderId != null ? String(created.srOrderId) : null,
-           track?.status || 'CREATED', awb ? `https://shiprocket.co/tracking/${awb}` : null, nowIso(), orderId]
+           track?.status || 'CREATED', awb ? `https://shiprocket.co/tracking/${awb}` : null,
+           assignError, nowIso(), orderId]
         );
-        console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=SHIPROCKET | shipment=${created.shipmentId} | sr_order=${created.srOrderId || '?'} | awb=${awb || 'pending'}`);
+        if (assignError) {
+          console.log(`[SHIPMENT] auto | order=${order.order_number} | ✗ awb_assign_refused | ${assignError}`);
+        }
+        console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=SHIPROCKET | shipment=${created.shipmentId} | sr_order=${created.srOrderId || '?'} | awb=${awb || (assignError ? 'REFUSED' : 'pending')}`);
         return { ok: true, waybill: awb, shipmentId: created.shipmentId, carrier: 'SHIPROCKET' };
       }
       console.log(`[SHIPMENT] auto | order=${order.order_number} | ✗ shiprocket refused=${JSON.stringify(created.reason).slice(0, 120)} — NOT falling back to Delhivery`);
@@ -241,6 +268,17 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
   const cardLast4 = p.card?.last4 ?? null;
   const vpa = p.vpa ?? null;
   const bank = p.bank ?? null;
+
+  /* A payment can land on an order we had already given up on — a shopper who closed the window and
+     paid on a second device, a webhook arriving after an abandon, a retry that raced us. Money
+     arriving outranks our assumption that none would, so the order comes back. Said out loud in the
+     history, because "cancelled: payment not completed" followed by "confirmed" reads like a
+     contradiction otherwise, and this is the line that explains it. */
+  if (order.order_status === 'CANCELLED' || order.payment_status === 'CANCELLED') {
+    await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+      [orderId, 'PAYMENT_RECEIVED_AFTER_CANCEL', 'Payment arrived after this order was closed as unpaid — reinstating it.', ts]).catch(() => {});
+    console.log(`[PAYMENT] finalize | order=${order.order_number} | ⚠ was CANCELLED, reinstating on a real payment`);
+  }
 
   await query(`UPDATE orders SET payment_status='PAID', order_status='CONFIRMED', updated_at=$1 WHERE id=$2`, [ts, orderId]);
   await query(
@@ -491,10 +529,28 @@ router.post('/', async (req, res) => {
   res.json(await fullOrder(orderId));
 });
 
+/*
+ * The customer's own order history: orders they paid for, and nothing else.
+ *
+ * An order row is created BEFORE Razorpay opens, because Razorpay needs our order number as its
+ * receipt and the row is what a payment later gets reconciled against. That is unavoidable. What it
+ * used to mean, though, is that closing the payment popup left a PENDING row behind, and this list
+ * returned it — so abandoning a payment produced an "order" in the customer's account that nobody
+ * had paid for and nothing would ever ship.
+ *
+ * PENDING is not a state an order rests in. It lasts only as long as the payment window is open,
+ * and resolves to PAID or CANCELLED either way (see /abandon below). Filtering on PAID rather than
+ * "not PENDING" is what makes that true from the customer's side: whatever went wrong, an order
+ * they were never charged for is not something to show them as an order.
+ *
+ * The admin list is a separate query and still sees every row, which is where an abandoned attempt
+ * genuinely needs to be visible.
+ */
 router.get('/', async (req, res) => {
   const user = await userByEmail(req.user.email);
   const rows = await getAll(
-    'SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC, id DESC', [user.id]
+    `SELECT * FROM orders WHERE user_id = $1 AND payment_status = 'PAID'
+      ORDER BY created_at DESC, id DESC`, [user.id]
   );
   const serialized = await Promise.all(rows.map(async (o) => {
     const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [o.id]);
@@ -539,12 +595,70 @@ router.get('/:id/delhivery-track', async (req, res) => {
   // list below already does, so the customer sees more than a bare status word when one exists.
   const latestStatus = [pkg?.Status?.Status, pkg?.Status?.Instructions].filter(Boolean).join(' — ') || null;
   if (latestStatus) {
-    await query('UPDATE orders SET shipment_status=$1, updated_at=$2 WHERE id=$3', [latestStatus, nowIso(), order.id]);
+    /* Never over the top of a cancelled booking. Delhivery keeps answering for a waybill long after
+       it is cancelled — and answers "Not Picked", which is literally true and completely misleading:
+       it revived a cancelled order as in-transit the moment the customer opened tracking. A cancel
+       is ours to undo (a rebook writes CREATED here), not the carrier's.
+
+       Matched on the word, not on our own spelling of it. This was `IS DISTINCT FROM 'CANCELLED'`,
+       which protected the value WE write and not the one Shiprocket does — they spell it
+       "Canceled", one L — so the carrier's own cancellation was left unguarded against the
+       carrier's own next poll. */
+    await query(
+      `UPDATE orders SET shipment_status=$1, updated_at=$2
+        WHERE id=$3 AND (shipment_status IS NULL OR shipment_status !~* 'cancel')`,
+      [latestStatus, nowIso(), order.id]);
+    // Same rule as the admin's poll and the hyperlocal webhook: a carrier saying delivered or
+    // cancelled moves the order, whoever happened to ask. The customer opening their own tracking
+    // is often the first person to ask at all.
+    await applyCarrierTerminalStatus(order, latestStatus, 'DELHIVERY');
   }
   const scans = (pkg?.Scans || [])
     .map(s => ({ time: s.ScanDetail?.ScanDateTime || '', event: [s.ScanDetail?.Scan, s.ScanDetail?.Instructions].filter(Boolean).join(' — ') }))
     .reverse();
   return res.json({ tracked: true, carrier: 'DELHIVERY', waybill: order.delhivery_waybill, status: latestStatus, scans, data: result.data });
+});
+
+/*
+ * The shopper closed the payment window, or the payment failed outright.
+ *
+ * Called by the frontend the moment either happens, so an order nobody paid for is closed off there
+ * and then rather than left as a PENDING row of unknown age. Without it the only thing separating
+ * "gave up two minutes ago" from "gave up last month" is a timestamp nobody reads.
+ *
+ * Both statuses move, not just the order status. PENDING means "a payment window is open right
+ * now"; once it closes without paying, that is no longer true and the payment is CANCELLED. An
+ * order is therefore only ever waiting, paid, or cancelled — there is no fourth state where a row
+ * sits unpaid forever with nothing deciding what it is.
+ *
+ * Deliberately narrow: it only ever touches a PENDING order belonging to the caller. A PAID order
+ * cannot be cancelled through here — if this could void a paid order, a stale retry firing after a
+ * successful payment would do exactly that. Cancelling a paid order is a refund, and refunds are an
+ * admin action, not something a browser gets to trigger.
+ *
+ * Answers with ok either way. The shopper has already walked away from the payment; a failure to
+ * tidy up behind them is ours to notice in the logs, not theirs to be told about.
+ */
+router.post('/:id/abandon', async (req, res) => {
+  const user = await userByEmail(req.user.email);
+  const order = await getOne(
+    "SELECT * FROM orders WHERE id = $1 AND user_id = $2 AND payment_status = 'PENDING'",
+    [req.params.id, user.id]
+  );
+  if (!order) return res.json({ ok: true, cancelled: false });
+
+  const ts = nowIso();
+  await query(
+    `UPDATE orders SET payment_status = 'CANCELLED', order_status = 'CANCELLED', updated_at = $1
+      WHERE id = $2 AND payment_status = 'PENDING'`,
+    [ts, order.id]
+  );
+  await query(
+    'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+    [order.id, 'CANCELLED', 'Payment not completed — checkout was closed before paying.', ts]
+  );
+  console.log(`[PAYMENT] abandon | order=${order.order_number} | cancelled unpaid order`);
+  res.json({ ok: true, cancelled: true });
 });
 
 // Step 1 of payment: create a Razorpay order for this DB order so Checkout can open.
@@ -555,6 +669,12 @@ router.post('/:id/payment/razorpay-order', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) { console.log(`[PAYMENT] rzp-order | order=${req.params.id} | ✗ order_not_found`); throw new ApiError('Order not found'); }
   if (order.payment_status === 'PAID') { console.log(`[PAYMENT] rzp-order | order=${order.order_number} | ✗ already_paid`); throw new ApiError('Order already paid', 409); }
+  // A cancelled order is finished. Without this, a stale tab left open on the payment step could
+  // still open Checkout against an order that was abandoned and closed, and take real money for it.
+  if (order.payment_status === 'CANCELLED' || order.order_status === 'CANCELLED') {
+    console.log(`[PAYMENT] rzp-order | order=${order.order_number} | ✗ cancelled`);
+    throw new ApiError('This order was cancelled. Please start a new order.', 409);
+  }
 
   const amountPaise = Math.round(Number(order.total_amount) * 100);
   console.log(`[PAYMENT] rzp-order | order=${order.order_number} | amount=₹${order.total_amount} (${amountPaise}p) | creating…`);
