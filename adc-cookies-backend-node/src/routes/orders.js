@@ -269,6 +269,17 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
   const vpa = p.vpa ?? null;
   const bank = p.bank ?? null;
 
+  /* A payment can land on an order we had already given up on — a shopper who closed the window and
+     paid on a second device, a webhook arriving after an abandon, a retry that raced us. Money
+     arriving outranks our assumption that none would, so the order comes back. Said out loud in the
+     history, because "cancelled: payment not completed" followed by "confirmed" reads like a
+     contradiction otherwise, and this is the line that explains it. */
+  if (order.order_status === 'CANCELLED' || order.payment_status === 'CANCELLED') {
+    await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+      [orderId, 'PAYMENT_RECEIVED_AFTER_CANCEL', 'Payment arrived after this order was closed as unpaid — reinstating it.', ts]).catch(() => {});
+    console.log(`[PAYMENT] finalize | order=${order.order_number} | ⚠ was CANCELLED, reinstating on a real payment`);
+  }
+
   await query(`UPDATE orders SET payment_status='PAID', order_status='CONFIRMED', updated_at=$1 WHERE id=$2`, [ts, orderId]);
   await query(
     `INSERT INTO payments (order_id, provider, transaction_id, amount, status, paid_at, created_at, razorpay_fee, razorpay_tax, method, card_network, card_last4, vpa, bank)
