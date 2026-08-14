@@ -186,6 +186,18 @@ function OrderCard({
                 <span>Rider <strong>{track.rider.name}</strong> is assigned{track.status ? ` — ${track.status}` : ''}</span>
                 {track.rider.phone && <a href={`tel:${track.rider.phone}`} style={{ ...btn('primary'), textDecoration: 'none' }}><Phone size={13} /> {track.rider.phone}</a>}
               </div>
+            ) : order.delivery.shipmentError ? (
+              /* The carrier refused the booking — an empty Shiprocket wallet is the usual reason.
+                 "Searching for a rider" here was a lie the counter had no way to see through: they
+                 kept a bag packed for a rider nobody had successfully called. Say what actually
+                 happened, and that it needs the office rather than more waiting. */
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-start', color: 'var(--red-danger, #b3261e)' }}>
+                <Bike size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+                <span>
+                  <strong>No rider could be booked.</strong> {order.delivery.shipmentError}
+                  <br />The office has been alerted — do not wait on a rider for this one.
+                </span>
+              </div>
             ) : (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', color: 'var(--text-muted, #7b6a58)' }}>
                 <Bike size={16} />

@@ -125,16 +125,32 @@ async function attemptShipment(orderId, addressArg) {
         // A pending assignment is a success, not a failure — the rider search is under way.
         const track = assigned.ok ? await trackShiprocket(created.shipmentId) : null;
         const awb = assigned.awb || track?.awb || null;
+        /* A REFUSED assignment is not the same thing, and used to be stored as though it were.
+         *
+         * Both landed on shipment_status 'CREATED' with shipment_error left null, so an order
+         * Shiprocket had declined — an empty wallet is the common one — was indistinguishable from
+         * one where the rider search was genuinely under way. The shop was told "searching for a
+         * rider" about an order nobody was ever coming for, and the only place the truth existed
+         * was the Shiprocket panel showing an unpaid "Ship Now".
+         *
+         * The reason is recorded now. The store portal and the admin's Needs-attention list both
+         * already read this column; neither had anything to read. */
+        const assignError = assigned.ok ? null
+          : String(typeof assigned.reason === 'string' ? assigned.reason : JSON.stringify(assigned.reason ?? 'Carrier refused the booking')).slice(0, 300);
         await query(
           `UPDATE orders SET delhivery_waybill=$1, delhivery_shipment_id=$2, carrier='SHIPROCKET',
                   carrier_order_id=$3, shipment_status=$4, tracking_url=$5, label_generated=FALSE,
-                  updated_at=$6 WHERE id=$7`,
+                  shipment_error=$6, updated_at=$7 WHERE id=$8`,
           // carrier_order_id is Shiprocket's own order id — their cancel API keys off it, not the
           // shipment id, so it has to be kept or the order can never be cancelled with them.
           [awb, String(created.shipmentId), created.srOrderId != null ? String(created.srOrderId) : null,
-           track?.status || 'CREATED', awb ? `https://shiprocket.co/tracking/${awb}` : null, nowIso(), orderId]
+           track?.status || 'CREATED', awb ? `https://shiprocket.co/tracking/${awb}` : null,
+           assignError, nowIso(), orderId]
         );
-        console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=SHIPROCKET | shipment=${created.shipmentId} | sr_order=${created.srOrderId || '?'} | awb=${awb || 'pending'}`);
+        if (assignError) {
+          console.log(`[SHIPMENT] auto | order=${order.order_number} | ✗ awb_assign_refused | ${assignError}`);
+        }
+        console.log(`[SHIPMENT] auto | order=${order.order_number} | carrier=SHIPROCKET | shipment=${created.shipmentId} | sr_order=${created.srOrderId || '?'} | awb=${awb || (assignError ? 'REFUSED' : 'pending')}`);
         return { ok: true, waybill: awb, shipmentId: created.shipmentId, carrier: 'SHIPROCKET' };
       }
       console.log(`[SHIPMENT] auto | order=${order.order_number} | ✗ shiprocket refused=${JSON.stringify(created.reason).slice(0, 120)} — NOT falling back to Delhivery`);
