@@ -474,9 +474,6 @@ export interface AttentionReport {
   paidNoPosTicket: { id: number; order_number: string; total_amount: number; created_at: string; last_error: string | null; attempts: number }[];
   cancelStuckDownstream: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
   moneyReversed: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
-  /** Paid, made at a store that bills on its OWN Petpooja terminal, and no bill number typed back —
-   *  so there is nothing to reconcile the Razorpay settlement against. */
-  posManualUnbilled: { id: number; order_number: string; total_amount: number; created_at: string; store_code: string; store_accepted_at: string | null; store_ready_at: string | null }[];
   total: number;
 }
 export async function adminAttention(): Promise<AttentionReport> { return request('/admin/attention'); }
