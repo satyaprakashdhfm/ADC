@@ -359,7 +359,9 @@ export async function assignAwb(shipmentId, { courierId, vehicleType, futurePick
  * a cookie because a balance lookup timed out.
  */
 export async function getWalletBalance() {
-  const r = await srRequest('GET', '/v1/external/account/details/wallet-balance');
+  // Relative to BASE, which already ends in /v1/external — spelling the prefix out here again
+  // produced .../v1/external/v1/external/... and a 404 that read exactly like "no such endpoint".
+  const r = await srRequest('GET', '/account/details/wallet-balance');
   if (!r.ok) { log('wallet', `✗ ${JSON.stringify(r.reason).slice(0, 120)}`); return null; }
   const raw = r.data?.data?.balance_amount ?? r.data?.balance_amount;
   const balance = raw == null ? null : Number(raw);

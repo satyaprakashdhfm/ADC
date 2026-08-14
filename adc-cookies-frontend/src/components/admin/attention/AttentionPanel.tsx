@@ -40,18 +40,18 @@ export default function AttentionPanel({ report, busy, onRebook, onRetryPos, onO
             <span>{money(o.total_amount)}</span>
             {/* No address = nothing to ship to, and no retry can ever fix it. Say so instead of
                 offering a button that is guaranteed to fail. */}
-            {/* Three different situations wearing one sentence before this.
-                A hyperlocal booking exists as soon as Shiprocket accepts it, but the AWB is issued
-                asynchronously while a rider is found — and this list is keyed on the AWB. So a
-                perfectly healthy intracity order read "No booking attempt recorded yet" for the
-                whole rider search, next to a button offering to book it a second time. */}
+            {/* A hyperlocal booking exists as soon as Shiprocket accepts it, but the AWB is
+                issued asynchronously while a rider is found — and this list is keyed on the AWB.
+                Nothing reaches this panel during that search any more (the backend now waits out a
+                grace window), so an order that IS here with a booking on it is one where the search
+                has gone on far too long, and the sentence says that rather than "waiting". */}
             <span style={why}>
               {o.has_address === false
                 ? 'No delivery address on this order — it cannot be shipped.'
                 : o.shipment_error
                   ? o.shipment_error
                   : (o.shipment_id || o.carrier_order_id)
-                    ? `${o.carrier || 'Courier'} booking #${o.shipment_id || o.carrier_order_id} placed${o.shipment_status ? ` — ${o.shipment_status}` : ''}. Waiting for a rider to be assigned.`
+                    ? `${o.carrier || 'Courier'} booking #${o.shipment_id || o.carrier_order_id} placed${o.shipment_status ? ` — ${o.shipment_status}` : ''}, but no rider has been assigned since. Check the delivery wallet first.`
                     : 'No booking attempt recorded yet.'}
             </span>
             {o.has_address === false ? (
@@ -100,22 +100,6 @@ export default function AttentionPanel({ report, busy, onRebook, onRetryPos, onO
         ))}
       </>}
 
-      {/* Only the stores that bill on their own Petpooja terminal can land here — Begur relays
-          automatically. There is no button: nobody at head office can type a bill number that only
-          exists on a shop's till. The fix is to ring the store. */}
-      {!!report.posManualUnbilled?.length && <>
-        <div style={head}>Made at a store, but no POS bill number recorded ({report.posManualUnbilled.length})</div>
-        {report.posManualUnbilled.map(o => (
-          <div key={o.id} style={line}>
-            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
-            <span>{money(o.total_amount)}</span>
-            <span style={why}>
-              {o.store_code} — {o.store_accepted_at ? 'accepted' : 'not even accepted yet'}
-              {o.store_ready_at ? ', packed' : ''}. Nothing links this payment to a bill on their till.
-            </span>
-          </div>
-        ))}
-      </>}
     </div>
   );
 }

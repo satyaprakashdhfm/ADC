@@ -139,62 +139,102 @@ router.post('/petpooja/orders/:id/retry', async (req, res) => {
  * something a human has to act on; an empty response means every paid order reached both the
  * kitchen and a courier.
  */
+/*
+ * How long a stage is allowed to take before its silence counts as a failure.
+ *
+ * The panel used to list a stage the moment it was incomplete, which meant it listed every healthy
+ * order for the first minutes of its life: a hyperlocal booking is accepted instantly but the AWB
+ * arrives only once a rider has been found, so a perfectly normal order sat under "no courier
+ * booked" — beside a button offering to book it a second time — for the whole search. A list that
+ * is mostly orders doing exactly what they should be doing is a list nobody reads.
+ *
+ * A recorded failure still shows at once. These windows only govern silence.
+ */
+const RELAY_GRACE_MIN = 10;    // the POS ticket is a single call; ten minutes is already long
+const BOOKING_GRACE_MIN = 10;  // nothing should go this long without a booking even being attempted
+const RIDER_GRACE_MIN = 45;    // a rider search runs for a while; past this it is not searching
+
 router.get('/attention', async (_req, res) => {
   // Stores whose orders WE relay to Petpooja. Everywhere else the staff bill on their own terminal,
   // so "no POS ticket" is the normal state there and listing it would bury the real failures.
   const autoPosStores = ADC_STORES.filter((s) => s.posMode === 'AUTO').map((s) => s.code);
-  const [noShipment, noRelay, cancelStuck, disputes, manualUnbilled] = await Promise.all([
-    // Paid, not cancelled, and no courier booked. `has_address` matters: an order with no address
-    // can NEVER be booked, so the UI must explain that rather than offer a retry that always fails.
-    // A MANUAL store's order sitting unbooked because nobody there has tapped Accept yet is NOT a
-    // failure — that's the deliberate deferred-booking flow (see finalizePaidOrder) — so it's
-    // excluded here; if booking itself then fails after acceptance, it reappears normally.
-    // carrier_order_id / shipment id tell the UI a booking DID happen and is waiting on a rider,
-    // which is a different problem from never having been attempted — and reads very differently
-    // to whoever is deciding whether to press "Book courier" again.
+  const [noShipment, noRelay, cancelStuck, disputes] = await Promise.all([
+    /*
+     * Paid, live, and no courier is coming.
+     *
+     * `has_address` matters: an order with no address can NEVER be booked, so the UI must explain
+     * that rather than offer a retry that always fails. A MANUAL store's order sitting unbooked
+     * because nobody there has tapped Accept yet is not a failure either — that is the deliberate
+     * deferred-booking flow (see finalizePaidOrder).
+     *
+     * A booking we cancelled on purpose is also not a failure. Someone decided that; nagging them
+     * about their own decision is how a panel like this stops being read.
+     */
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error, o.carrier,
                    o.carrier_order_id, o.delhivery_shipment_id AS shipment_id, o.shipment_status,
                    (o.address_id IS NOT NULL) AS has_address
               FROM orders o
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
                AND o.delhivery_waybill IS NULL
+               AND o.shipment_status IS DISTINCT FROM 'CANCELLED'
                AND NOT (o.store_code IS NOT NULL AND NOT (o.store_code = ANY($1::text[])) AND o.store_accepted_at IS NULL)
-             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores]),
-    // Paid, not cancelled, relayed by us, and the kitchen never got the ticket.
+               AND (
+                 -- The carrier said no. That is an answer, not silence, so it shows straight away.
+                 o.shipment_error IS NOT NULL
+                 -- Nothing was ever attempted.
+                 OR (o.carrier_order_id IS NULL AND o.delhivery_shipment_id IS NULL
+                     AND o.created_at < now() - make_interval(mins => $2::int))
+                 -- Booked, but the rider search has run past the point of being a search.
+                 OR o.created_at < now() - make_interval(mins => $3::int)
+               )
+             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores, BOOKING_GRACE_MIN, RIDER_GRACE_MIN]),
+    /*
+     * Paid, relayed by us, and the kitchen never got the ticket.
+     *
+     * `not_configured` is excluded: it means Petpooja has no credentials on this deployment, which
+     * is one thing to fix once, not a fault in every order that happens to pass through afterwards.
+     * Listed per order it would fill this panel and hide the relays that genuinely broke.
+     */
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at,
                    p.last_error, COALESCE(p.attempts, 0) AS attempts
               FROM orders o LEFT JOIN petpooja_orders p ON p.order_id = o.id
              WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
+               AND o.shipment_status IS DISTINCT FROM 'CANCELLED'
                AND (p.relay_ok IS NULL OR p.relay_ok = FALSE)
+               AND COALESCE(p.last_error, '') <> 'not_configured'
                AND o.store_code = ANY($1::text[])
-             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores]),
-    // Cancelled on our side but a downstream leg refused — POS ticket or rider still live.
+               AND o.created_at < now() - make_interval(mins => $2::int)
+             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores, RELAY_GRACE_MIN]),
+    // Cancelled on our side but a downstream leg refused — POS ticket or rider still live. Drops
+    // off once a later cancel succeeds, so the list can actually reach empty; before this it could
+    // only ever grow, and a counter that never returns to zero stops meaning anything.
     getAll(`SELECT DISTINCT o.id, o.order_number, t.status, t.remarks, t.created_at
               FROM orders o JOIN order_tracking t ON t.order_id = o.id
              WHERE t.status IN ('POS_CANCEL_FAILED','SHIPMENT_CANCEL_FAILED')
+               AND NOT EXISTS (
+                 SELECT 1 FROM order_tracking d
+                  WHERE d.order_id = o.id AND d.created_at > t.created_at
+                    AND d.status = replace(t.status, '_CANCEL_FAILED', '_CANCELLED'))
              ORDER BY t.created_at DESC LIMIT 100`),
     // Money reversed or contested after the fact.
     getAll(`SELECT DISTINCT o.id, o.order_number, t.status, t.remarks, t.created_at
               FROM orders o JOIN order_tracking t ON t.order_id = o.id
              WHERE t.status IN ('DISPUTE_OPENED','REFUNDED','REFUND_FAILED','FULFILLED_THEN_REFUNDED')
              ORDER BY t.created_at DESC LIMIT 100`),
-    // Billed by a store on its own terminal, but no bill number typed back. Money Razorpay settled
-    // with no POS bill to reconcile it against — the manual flow's one failure mode.
-    getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.store_code,
-                   o.store_accepted_at, o.store_ready_at
-              FROM orders o
-             WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
-               AND o.store_code IS NOT NULL AND NOT (o.store_code = ANY($1::text[]))
-               AND (o.store_pos_bill_no IS NULL OR o.store_pos_bill_no = '')
-             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores]),
   ]);
+  /*
+   * The manual stores' missing bill numbers used to be a fifth list here. It is a real gap — a
+   * Razorpay settlement with nothing on a till to reconcile against — but head office cannot type a
+   * bill number that only exists on a shop's own terminal, so it appeared with no action beside it
+   * and one row per manual order. The store portal already asks for it at the counter, straight
+   * after Accept, which is the only place anyone can actually answer.
+   */
   res.json({
     paidNoShipment: noShipment,
     paidNoPosTicket: noRelay,
     cancelStuckDownstream: cancelStuck,
     moneyReversed: disputes,
-    posManualUnbilled: manualUnbilled,
-    total: noShipment.length + noRelay.length + cancelStuck.length + disputes.length + manualUnbilled.length,
+    total: noShipment.length + noRelay.length + cancelStuck.length + disputes.length,
   });
 });
 
