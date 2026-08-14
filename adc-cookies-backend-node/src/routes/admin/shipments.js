@@ -5,6 +5,7 @@ import { serializeOrder } from '../../serializers.js';
 import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../delhivery.js';
 import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, walletStatus } from '../../shiprocket.js';
 import { autoCreateShipment } from '../orders.js';
+import { applyCarrierTerminalStatus } from '../../orderProgress.js';
 
 const router = Router();
 
@@ -255,6 +256,10 @@ router.get('/orders/:id/track', async (req, res) => {
          result.awb ? `https://shiprocket.co/tracking/${result.awb}` : null, nowIso(), order.id]
       );
     }
+    // A poll is the other way we learn a booking died. Without this the admin could read
+    // "Canceled" straight off the carrier while our own order still said PACKED, and the customer
+    // was told nothing at all.
+    if (result.ok && result.status) await applyCarrierTerminalStatus(order, result.status, 'SHIPROCKET');
     const scans = (result.activities || []).map((a) => ({ time: a.date || a.time, event: a.activity || a.status }));
     return res.json({ ok: result.ok, carrier: 'SHIPROCKET', status: result.status || null, awb: result.awb || order.delhivery_waybill, scans });
   }
@@ -274,6 +279,9 @@ router.get('/orders/:id/track', async (req, res) => {
         `UPDATE orders SET shipment_status=$1, updated_at=$2
           WHERE id=$3 AND shipment_status IS DISTINCT FROM 'CANCELLED'`,
         [latestStatus, nowIso(), order.id]);
+      // Delhivery has no webhook, so this poll is the ONLY way an intercity order ever reaches a
+      // terminal state on our side.
+      await applyCarrierTerminalStatus(order, latestStatus, 'DELHIVERY');
     }
   }
   res.json({ ...result, carrier: 'DELHIVERY' });

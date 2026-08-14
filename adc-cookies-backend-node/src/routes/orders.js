@@ -10,6 +10,7 @@ import { zoneStores, storeForAddress, storeByCode, deliveryEligible, isStoreActi
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore, getWalletBalance } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
+import { applyCarrierTerminalStatus } from '../orderProgress.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -591,6 +592,10 @@ router.get('/:id/delhivery-track', async (req, res) => {
       `UPDATE orders SET shipment_status=$1, updated_at=$2
         WHERE id=$3 AND shipment_status IS DISTINCT FROM 'CANCELLED'`,
       [latestStatus, nowIso(), order.id]);
+    // Same rule as the admin's poll and the hyperlocal webhook: a carrier saying delivered or
+    // cancelled moves the order, whoever happened to ask. The customer opening their own tracking
+    // is often the first person to ask at all.
+    await applyCarrierTerminalStatus(order, latestStatus, 'DELHIVERY');
   }
   const scans = (pkg?.Scans || [])
     .map(s => ({ time: s.ScanDetail?.ScanDateTime || '', event: [s.ScanDetail?.Scan, s.ScanDetail?.Instructions].filter(Boolean).join(' — ') }))
