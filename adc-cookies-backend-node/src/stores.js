@@ -66,6 +66,21 @@ export async function isStoreActive(code) {
   return row ? !!row.is_active : true;
 }
 
+/**
+ * The stores in this pincode's zone that are actually switched on, nearest pincode first.
+ *
+ * Serviceability used to be decided from zoneStores()[0] alone — the single nearest store BY
+ * PINCODE NUMBER — and refused same-day if that one store was off. With only Jayanagar trading,
+ * that broke almost every Bengaluru pincode: 560011 sorts S.G. Palya (560029) closest by digits, so
+ * an address 2.4 km from an open Jayanagar shop was told same-day was paused. Whether we can bake
+ * an order is a question about the zone, not about whichever store happens to sort first.
+ */
+export async function activeZoneStores(destPincode) {
+  const zone = zoneStores(destPincode);
+  const flags = await Promise.all(zone.map((s) => isStoreActive(s.code)));
+  return zone.filter((_, i) => flags[i]);
+}
+
 const parseCities = (raw) => String(raw || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
 
 /**
