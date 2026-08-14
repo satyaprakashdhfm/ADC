@@ -21,6 +21,7 @@ import contactRoutes from './routes/contact.js';
 import deliveryRoutes from './routes/delivery.js';
 import petpoojaRoutes from './routes/petpooja.js';
 import hyperlocalRoutes from './routes/hyperlocal.js';
+import geoRoutes from './routes/geo.js';
 import storeRoutes from './routes/store.js';
 import { ensureStoreAccounts } from './storeAuth.js';
 import { paymentWebhook } from './routes/paymentsWebhook.js';
@@ -108,6 +109,8 @@ app.use('/api/store', storeRoutes);
 // Shiprocket Hyperlocal tracking. NOT /api/shiprocket — their panel rejects webhook URLs
 // containing shiprocket / kartrocket / sr / kr / localhost.
 app.use('/api/hyperlocal', hyperlocalRoutes);
+// Address search and reverse geocoding — the browser's only route to a geocoder. See routes/geo.js.
+app.use('/api/geo', geoRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found', message: 'Resource not found' }));
 
