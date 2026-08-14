@@ -388,6 +388,29 @@ body::before {
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
 /* The hover shots are portrait with the cookie low in the frame — bias the crop downward so the
    cookie sits a little higher in the card (and its bottom isn't clipped), rather than centre. */
+/* Track-status dialog (see OrderProgress.tsx).
+   A bottom sheet is the right shape on a phone, where it rises to meet the thumb, and the wrong one
+   on a desktop, where it pins itself to the bottom edge of a wide window with two rounded corners
+   and no reason to be there. Same component, two shapes. */
+.track-scrim {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(20, 12, 4, .55);
+  display: flex; justify-content: center; align-items: flex-end;
+}
+.track-sheet {
+  width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto;
+  background: var(--surface-card);
+  border-radius: 20px 20px 0 0;
+  padding: 18px 18px 26px;
+  box-shadow: var(--shadow-xl);
+  animation: track-rise .22s var(--ease-out);
+}
+@keyframes track-rise { from { transform: translateY(16px); opacity: .5 } to { transform: none; opacity: 1 } }
+@media (min-width: 641px) {
+  .track-scrim { align-items: center; padding: 24px; }
+  .track-sheet { border-radius: var(--radius-card); max-height: 78vh; padding: 22px 24px 26px; }
+}
+
 /* Address delivery pin (see AddressWizard.tsx).
    The carrier navigates to this point. The pin is painted at the centre of the frame and the map
    moves beneath it, so it cannot be left half-placed the way a draggable marker can — but it still

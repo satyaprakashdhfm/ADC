@@ -29,3 +29,12 @@ export async function applyCarrierTerminalStatus(order, carrierStatus, source) {
   console.log(`[ORDER] ${order.order_number || order.id} | ${order.order_status} → ${next} (${source}: ${carrierStatus})`);
   return next;
 }
+
+/* An intracity booking has no waybill until a rider is found, and this line is read by the customer
+   on their own tracking sheet — "SHIPROCKET waybill null" was going straight to them. Say what is
+   true at each stage instead of interpolating whatever the carrier has not given us yet.
+   Lives here because both routes/orders.js and routes/admin/shipments.js write this event, and
+   having either import the other makes a cycle. */
+export const bookingNote = (carrier, waybill, suffix = '') => (waybill
+  ? `${carrier || 'Courier'} booking confirmed — tracking ${waybill}${suffix}`
+  : `${carrier || 'Courier'} booking confirmed — finding a delivery partner${suffix}`);

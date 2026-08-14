@@ -36,9 +36,18 @@ const STAGES = [
  *  because carrier statuses are free text and a new one must land somewhere sensible, not vanish. */
 export function stageOfEvent(status: string, remarks?: string | null): number {
   const t = `${status} ${remarks || ''}`.toLowerCase();
+  /* Cancellations and refusals first, and they belong to Processing, not to Placed. Without this
+     "DELHIVERY booking 57064410000173 cancelled" matched none of the tests below and fell through
+     to the default — filing an event about a courier under the moment the basket was submitted, an
+     hour before that courier existed. Processing is where a booking lives, so it is where losing
+     one belongs. */
+  if (/cancel|refus|failed|reject|not picked/.test(t)) return 1;
   if (/deliver(ed)?\b/.test(t) && !/out for|undeliver|attempt/.test(t)) return 3;
   if (/out for delivery|in transit|picked ?up|dispatch|shipped|rider|on the way/.test(t)) return 2;
-  if (/prepar|packed|packing|accept|confirm|paid|payment|store|kitchen|awaiting|assigned|created|manifest|baking/.test(t)) return 1;
+  /* "waybill", "booking" and "ready for pickup" are in here because they were the other three that
+     fell to the default. Anything naming a courier or a collection is the order being got ready,
+     never the moment it was placed. */
+  if (/prepar|packed|packing|pickup|ready|accept|confirm|paid|payment|store|kitchen|awaiting|assigned|created|manifest|baking|waybill|booking|tracking/.test(t)) return 1;
   return 0;
 }
 
@@ -111,9 +120,8 @@ function TrackSheet({ events, reached, onClose }: { events: ProgressEvent[]; rea
       .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)));
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--scrim, rgba(20,12,4,.55))', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Track status"
-        style={{ width: '100%', maxWidth: 560, maxHeight: '82vh', overflowY: 'auto', background: 'var(--surface-card)', borderRadius: '20px 20px 0 0', padding: '18px 18px 26px' }}>
+    <div onClick={onClose} className="track-scrim">
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Track status" className="track-sheet">
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
           <strong style={{ font: 'var(--weight-extra) var(--text-lg)/1 var(--font-display)', color: 'var(--text-strong)' }}>Track status</strong>
           <button onClick={onClose} aria-label="Close" style={{ marginLeft: 'auto', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-link)', display: 'grid', placeItems: 'center' }}>
