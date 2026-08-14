@@ -106,7 +106,14 @@ async function geocodeTyped(a: AddressLike): Promise<ResolvedPoint | null> {
   return null;
 }
 
-export interface PlaceSuggestion { label: string; latitude: number; longitude: number }
+export interface PlaceSuggestion {
+  label: string;
+  /** Street + locality on its own, ready to drop straight into the Area field. */
+  street: string;
+  postcode: string | null;
+  latitude: number;
+  longitude: number;
+}
 
 /**
  * Landmark search, scoped to the pincode the customer already typed.
@@ -119,20 +126,50 @@ export interface PlaceSuggestion { label: string; latitude: number; longitude: n
 export async function searchNearby(query: string, within: { pincode?: string; city?: string }): Promise<PlaceSuggestion[]> {
   const q = query.trim();
   if (q.length < 3) return [];
-  const p = new URLSearchParams({ format: 'jsonv2', limit: '6', addressdetails: '1', countrycodes: 'in', q });
+  const p = new URLSearchParams({ format: 'jsonv2', limit: '8', addressdetails: '1', countrycodes: 'in' });
   const area = [within.pincode, within.city].filter(Boolean).join(' ');
-  if (area) p.set('q', `${q}, ${area}`);
-  const arr = await getJson(`${NOMINATIM}/search?${p}`) as Array<{ lat: string; lon: string; display_name?: string; name?: string }> | null;
+  p.set('q', area ? `${q}, ${area}` : q);
+  const arr = await getJson(`${NOMINATIM}/search?${p}`) as Array<{
+    lat: string; lon: string; display_name?: string; name?: string; address?: Record<string, string>;
+  }> | null;
   if (!Array.isArray(arr)) return [];
+
+  const seen = new Set<string>();
   return arr
     .filter(r => r.lat && r.lon)
-    .map(r => ({
-      // Their display_name is the full postal chain; the first three parts are the useful bit.
-      label: (r.display_name || r.name || '').split(',').slice(0, 3).join(',').trim(),
-      latitude: parseFloat(r.lat),
-      longitude: parseFloat(r.lon),
-    }))
-    .filter(r => r.label);
+    .map(r => {
+      const a = r.address ?? {};
+      /* Build the label out of the street and the locality rather than slicing the display_name.
+         Nominatim's chain runs house → road → suburb → city → district → state → postcode, and the
+         first three parts of it are often "Shop 4, , Bengaluru" — the useful pair is always the
+         road and whatever locality contains it. */
+      const street = r.name || a.road || a.pedestrian || a.residential || '';
+      const locality = a.neighbourhood || a.suburb || a.quarter || a.village || a.town || '';
+      const label = [street, locality].filter(Boolean).join(', ')
+        || (r.display_name || '').split(',').slice(0, 2).join(',').trim();
+      return {
+        label,
+        street: [street, locality].filter(Boolean).join(', '),
+        postcode: digits(a.postcode) || null,
+        latitude: parseFloat(r.lat),
+        longitude: parseFloat(r.lon),
+      };
+    })
+    .filter(r => {
+      if (!r.label || seen.has(r.label)) return false;   // the same road comes back once per segment
+      seen.add(r.label);
+      return true;
+    });
+}
+
+/** The street a point sits on — so dragging the pin can fill the address in, not just consume it. */
+export async function streetAt(lat: number, lng: number): Promise<{ street: string; postcode: string | null; city: string | null }> {
+  const j = await getJson(`${NOMINATIM}/reverse?format=jsonv2&addressdetails=1&zoom=17&lat=${lat}&lon=${lng}`) as
+    { address?: Record<string, string> } | null;
+  const a = j?.address ?? {};
+  const street = [a.road || a.pedestrian || a.residential, a.neighbourhood || a.suburb || a.quarter]
+    .filter(Boolean).join(', ');
+  return { street, postcode: digits(a.postcode) || null, city: a.city || a.town || a.village || null };
 }
 
 /** Straight-line kilometres — used to sanity-check a point against the PIN area it claims to be in. */

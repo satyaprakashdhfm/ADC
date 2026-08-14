@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Search, MapPin, Loader2 } from 'lucide-react';
-import { searchNearby, type PlaceSuggestion } from '@/lib/geocode';
+import { searchNearby, streetAt, type PlaceSuggestion } from '@/lib/geocode';
 
 /**
  * Where the rider is actually sent — searchable, and draggable.
@@ -23,10 +23,13 @@ import { searchNearby, type PlaceSuggestion } from '@/lib/geocode';
  * already carries Leaflet for the store maps.
  */
 export default function AddressPinMap({
-  lat, lng, onMove, hint, pincode, city,
+  lat, lng, onMove, onStreet, hint, pincode, city,
 }: {
   lat: number; lng: number;
   onMove: (lat: number, lng: number) => void;
+  /** The street the pin now sits on. Flows back into the Area field, so moving the map fills the
+   *  address in rather than only consuming it. */
+  onStreet?: (street: string) => void;
   hint?: string;
   pincode?: string;
   city?: string;
@@ -42,6 +45,20 @@ export default function AddressPinMap({
   const [hits, setHits] = useState<PlaceSuggestion[]>([]);
   const [searching, setSearching] = useState(false);
   const [dragged, setDragged] = useState(false);
+  const [here, setHere] = useState('');           // the street under the pin, as Nominatim reads it
+
+  const onStreetRef = useRef(onStreet);
+  onStreetRef.current = onStreet;
+
+  /* Whatever the pin lands on, name it. A point on a map means nothing to somebody checking their
+     own address — the street name is how they tell whether we got it right, and it saves them
+     typing the Area field themselves. */
+  const nameThePoint = useRef(async (la: number, ln: number) => {
+    const r = await streetAt(la, ln);
+    if (!r.street) return;
+    setHere(r.street);
+    onStreetRef.current?.(r.street);
+  });
 
   /* Debounced, because Nominatim asks for no more than one call a second and a keystroke-per-call
      search would be both rude and rate-limited into uselessness. */
@@ -84,12 +101,14 @@ export default function AddressPinMap({
     mk.on('dragend', () => {
       const p = mk.getLatLng();
       onMoveRef.current(+p.lat.toFixed(6), +p.lng.toFixed(6));
+      void nameThePoint.current(p.lat, p.lng);
     });
     // Tapping is the same gesture on a phone, where dragging a small pin is fiddly.
     m.on('click', (e: L.LeafletMouseEvent) => {
       mk.setLatLng(e.latlng);
       setDragged(true);
       onMoveRef.current(+e.latlng.lat.toFixed(6), +e.latlng.lng.toFixed(6));
+      void nameThePoint.current(e.latlng.lat, e.latlng.lng);
     });
 
     map.current = m;
@@ -114,7 +133,9 @@ export default function AddressPinMap({
     setQ(s.label);
     setHits([]);
     setDragged(true);
+    setHere(s.street || s.label);
     onMoveRef.current(s.latitude, s.longitude);
+    if (s.street) onStreetRef.current?.(s.street);
   };
 
   return (
@@ -124,7 +145,7 @@ export default function AddressPinMap({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search your apartment, office or landmark"
+          placeholder={pincode ? `Search a street or area in ${pincode}` : 'Search a street or area'}
           style={{ width: '100%', boxSizing: 'border-box', padding: '10px 34px 10px 34px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--white)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }}
         />
         {searching && <Loader2 size={15} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--brand-secondary)', animation: 'spin 1s linear infinite' }} />}
@@ -143,9 +164,11 @@ export default function AddressPinMap({
       <div ref={box} className="adc-map" style={{ width: '100%', height: 220, borderRadius: 'var(--radius-card)', overflow: 'hidden', border: '1.5px solid var(--border-strong)', background: 'var(--surface-sunken)', boxShadow: 'var(--shadow-sm)' }} />
 
       <p style={{ margin: 0, fontSize: 'var(--text-2xs)', lineHeight: 1.5, fontWeight: 700, color: dragged ? 'var(--status-success)' : 'var(--brand-secondary)' }}>
-        {dragged
-          ? '✓ Pin placed — this exact spot is where your cookies are delivered.'
-          : 'Drag the pin onto your building. The rider is sent to the pin, not the typed address.'}
+        {here
+          ? `${dragged ? '✓ ' : ''}Pin is on ${here} — this is where your cookies are delivered.`
+          : dragged
+            ? '✓ Pin placed — this exact spot is where your cookies are delivered.'
+            : 'Drag the pin onto your street. The rider is sent to the pin, not the typed address.'}
       </p>
       {hint && <p style={{ margin: 0, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', lineHeight: 1.45 }}>{hint}</p>}
     </div>

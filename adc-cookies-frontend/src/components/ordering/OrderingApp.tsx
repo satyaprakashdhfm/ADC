@@ -520,6 +520,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                           onMove={setPin}
                           pincode={aform.pincode}
                           city={aform.city}
+                          onStreet={(street) => setAform(f => ({ ...f, addressLine2: street }))}
                           hint={pointSource === 'pin'
                             ? 'Pinned by you — this exact spot is where the rider is sent.'
                             : `${pointNote || 'Our best guess from the address above.'} Drag the pin to your exact door.`}
