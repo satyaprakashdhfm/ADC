@@ -38,6 +38,14 @@ router.get('/announcement', async (_req, res) => {
 
 // Public: today's stall/store-visit note (or null) — shown as a homepage card.
 // Declared before '/:id' so "stall-info" isn't captured as an id.
+/* Public: is online ordering paused, and what should we say?
+   Read by checkout before it will place an order, and by the storefront so the message is on screen
+   long before anybody reaches the payment step. */
+router.get('/ordering-status', async (_req, res) => {
+  const row = await getOne("SELECT value FROM site_settings WHERE key = 'ordering_paused'");
+  res.json({ paused: !!row?.value, message: row?.value || null });
+});
+
 router.get('/stall-info', async (_req, res) => {
   const setting = await getOne("SELECT value FROM site_settings WHERE key = 'stall_info'");
   res.json({ text: setting?.value || null });

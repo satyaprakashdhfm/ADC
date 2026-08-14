@@ -422,7 +422,7 @@ export interface AdminAnalytics {
   topProducts: { name: string; qty: number; revenue: number }[];
 }
 
-interface SiteSettings { promoProductId: number | null; headerOffer: string | null; stallInfo: string | null; deliveryFeeOutstation: number; }
+interface SiteSettings { promoProductId: number | null; headerOffer: string | null; stallInfo: string | null; deliveryFeeOutstation: number; orderingPaused: string | null; }
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
 export async function adminGetSettings(): Promise<SiteSettings> { return request('/admin/settings'); }
 export async function adminSetPromoProduct(promoProductId: number | null): Promise<SiteSettings> {
@@ -435,6 +435,10 @@ export async function adminSetHeaderOffer(headerOffer: string | null): Promise<S
 // Free-text "today's stall / visit us" note shown as a homepage card. null/empty hides the card.
 export async function adminSetStallInfo(stallInfo: string | null): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ stallInfo }) });
+}
+/** Pause or resume online ordering. The message IS the switch — clearing it goes live. */
+export async function adminSetOrderingPaused(orderingPaused: string | null): Promise<SiteSettings> {
+  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ orderingPaused }) });
 }
 // Flat fee customers pay for outstation (Delhivery) delivery. Intracity is never set here — it's
 // Shiprocket's own live per-order quote, charged exactly as quoted (see orders.js).
@@ -460,6 +464,8 @@ export async function adminSetStoreProductOverride(code: string, productId: numb
 export async function getAnnouncement(): Promise<{ text: string | null }> { return request('/products/announcement'); }
 // Public: today's stall/store-visit note (or null if the admin hasn't set one).
 export async function getStallInfo(): Promise<{ text: string | null }> { return request('/products/stall-info'); }
+/** Is online ordering paused, and what do we tell the customer? Public — checkout reads it too. */
+export async function getOrderingStatus(): Promise<{ paused: boolean; message: string | null }> { return request('/products/ordering-status'); }
 export async function adminAnalytics(from?: string, to?: string): Promise<AdminAnalytics> {
   const qs = from && to ? `?from=${from}&to=${to}` : '';
   return request(`/admin/analytics${qs}`);

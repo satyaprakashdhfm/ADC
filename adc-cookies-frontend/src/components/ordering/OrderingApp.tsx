@@ -12,7 +12,7 @@ import { useCart, GIFT_FEE } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import LoginModal from './LoginModal';
 import MascotLoader from '@/components/MascotLoader';
-import { firstImage } from '@/lib/api';
+import { firstImage, getOrderingStatus } from '@/lib/api';
 import { formatRemaining } from '@/lib/spinReward';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { INDIAN_STATES, PIN_RE, PHONE_RE } from '@/lib/indiaAddress';
@@ -37,11 +37,14 @@ import OrderSuccessPage from './OrderSuccessPage';
 const fmtDay = (d: Date) => `${_WD[d.getDay()]}, ${d.getDate()} ${_MO[d.getMonth()]}`;
 import { whatsappLink, SITE_PHONE } from '@/lib/site';
 
-// STALL MODE — temporary, for the pop-up-stall launch: online payment is switched off and the
-// payment step instead points people at WhatsApp/call/in-person ordering. Nothing below this is
-// deleted — every bit of the real checkout/payment flow still exists, just not rendered while
-// this is true. Flip back to false (and it all comes straight back) once online payment resumes.
-const STALL_MODE = false;
+// STALL MODE — online payment is switched off and the payment step instead points people at
+// WhatsApp/call/in-person ordering. Nothing below is deleted: every bit of the real checkout still
+// exists, just not rendered while this is on.
+//
+// It used to be a hardcoded constant, which meant turning it on was a code change, a build and a
+// deploy — no use at all for something you want to flip on a morning when the kitchen is behind.
+// It now comes from the admin's own setting, and the server refuses orders independently, because
+// a switch that only lives in the browser is a suggestion.
 
 
 /* ---- Data ---- */
@@ -87,6 +90,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const { leftRef, rightRef, gridRef, fit, cols } = useColumnFill(desktop, UPSELL_GAP);
   const { couponErr, setCouponErr, availableCoupons, mySpinReward, applyCoupon } = useCheckoutCoupons();
   const [loginOpen, setLoginOpen] = useState(false);
+  /* Ordering paused, as set in admin. Starts null — unknown, not open — so a slow lookup cannot
+     flash the Pay button at somebody for a moment before pulling it away. */
+  const [ordering, setOrdering] = useState<{ paused: boolean; message: string | null } | null>(null);
+  useEffect(() => { getOrderingStatus().then(setOrdering).catch(() => setOrdering({ paused: false, message: null })); }, []);
+  const STALL_MODE = ordering?.paused ?? false;
   // Taking the last unit off a line deletes it outright, which is a lot to happen on one tap of a
   // small "−" — especially the tap that follows the one that took 2 down to 1. This holds the line
   // being removed so we can ask first; null means nothing is pending.
@@ -797,7 +805,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 {head(<ShoppingBag size={18} color="var(--brand-secondary)" />, 'How to get your order')}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                    Online payments and delivery are launching soon — about a week away. Meanwhile, please visit our store, or message us on WhatsApp / give us a call to place this order.
+                    {ordering?.message || 'Online payments and delivery are launching soon. Meanwhile, please visit our store, or message us on WhatsApp / give us a call to place this order.'}
                   </div>
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 160px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 'var(--radius-button)', background: 'var(--whatsapp-green)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', textDecoration: 'none' }}>

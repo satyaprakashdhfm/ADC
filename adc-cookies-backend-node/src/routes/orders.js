@@ -374,7 +374,21 @@ async function fullOrder(orderId) {
   return serializeOrder(order, items, address, payment);
 }
 
+/* Ordering paused — enforced here, not just hidden in the UI.
+ *
+ * A pause that only lives in the frontend is a suggestion: a stale tab, a cached bundle or anyone
+ * with the API can walk straight past it, and with live payment keys that means real money taken
+ * for an order nobody is going to bake. This is the single door every order comes through. */
+async function assertOrderingOpen() {
+  const row = await getOne("SELECT value FROM site_settings WHERE key = 'ordering_paused'");
+  if (row?.value) {
+    console.log('[ORDER] create | ✗ ordering is paused');
+    throw new ApiError(row.value, 503);
+  }
+}
+
 router.post('/', async (req, res) => {
+  await assertOrderingOpen();
   const user = await userByEmail(req.user.email);
   const { addressId, couponCode, items: bodyItems } = req.body || {};
   console.log(`[ORDER] create | user=${user?.id}(${req.user.email}) | addressId=${addressId} | items=${JSON.stringify((bodyItems || []).map(i => ({ p: i.productId, q: i.quantity })))}`);
@@ -664,6 +678,7 @@ router.post('/:id/abandon', async (req, res) => {
 // Step 1 of payment: create a Razorpay order for this DB order so Checkout can open.
 // Returns the public key id + razorpay order id; the frontend opens the popup with these.
 router.post('/:id/payment/razorpay-order', async (req, res) => {
+  await assertOrderingOpen();   // an order created before the pause must not still open a payment
   if (!razorpayConfigured()) { console.log(`[PAYMENT] rzp-order | order=${req.params.id} | ✗ not_configured`); throw new ApiError('Payments are not configured', 503); }
   const user = await userByEmail(req.user.email);
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
