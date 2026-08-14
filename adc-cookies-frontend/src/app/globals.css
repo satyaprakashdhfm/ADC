@@ -388,11 +388,11 @@ body::before {
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
 /* The hover shots are portrait with the cookie low in the frame — bias the crop downward so the
    cookie sits a little higher in the card (and its bottom isn't clipped), rather than centre. */
-/* Address delivery pin (see AddressPinMap.tsx).
-   The carrier navigates to this point, so the pin has to read as something you pick up and place —
-   a flat dot reads as a label and gets left wherever it lands, which is the whole failure the map
-   exists to prevent. It sits above a target ring marking the exact coordinate, lifts on hover, and
-   presses down while dragging. */
+/* Address delivery pin (see AddressWizard.tsx).
+   The carrier navigates to this point. The pin is painted at the centre of the frame and the map
+   moves beneath it, so it cannot be left half-placed the way a draggable marker can — but it still
+   has to read as a physical thing sitting on the map, hence the lift, the shadow it casts, and the
+   ring marking the exact coordinate under its tip. */
 .adc-pin { cursor: grab; }
 .adc-pin:active { cursor: grabbing; }
 .adc-pin__body {

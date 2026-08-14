@@ -1,30 +1,32 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { useAddressPoint } from '@/hooks/useAddressPoint';
-import { reverseGeocode } from '@/lib/geocode';
+import { useState, useEffect } from 'react';
 import { getAddresses, addAddress, updateAddress, type Address } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
-import { matchState } from '@/lib/indiaAddress';
+import type { AddressDraft } from '@/components/ordering/ui/AddressWizard';
 
 /**
- * The saved-address list and the add/edit form behind it, including GPS detection and the
- * forward-geocode that runs on save.
+ * The saved-address list, and which one this order goes to.
  *
- * Coordinates matter more than they look: the carriers return zero couriers for an address with no
- * lat/long, so a manually-typed address without them silently drops to multi-day shipping. Hence
- * the typed address is always re-geocoded on save, with any GPS-detected pair as the fallback.
+ * This used to be twice the size, and most of what left was machinery for reconciling a typed
+ * address against a set of coordinates: a forward geocode on save, a GPS fallback, a ranking of
+ * street over PIN-centroid over device location, a rule that snapped the pin back if it drifted
+ * more than twelve kilometres from its pincode, and a PIN-directory lookup to fill city and state.
+ *
+ * None of it is needed now. AddressWizard settles the point on a map before any field exists, and
+ * reads the pincode, city and state off that point — so there is one source of truth instead of
+ * three sources and a referee. The bug that motivated all of it, an address typed as Jayanagar
+ * saved at coordinates in Varthur, cannot occur when the pincode is derived from the pin rather
+ * than argued with.
+ *
+ * What is left is the part that was always this hook's job: fetch the list, pick one, save changes.
  */
 export function useCheckoutAddresses() {
   const { addrId: addr, setAddrId: setAddr } = useCart();
   const { user } = useAuth();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [adding, setAdding] = useState(false);
-  const [aform, setAform] = useState<{ fullName: string; phone: string; addressLine1: string; addressLine2: string; city: string; state: string; pincode: string; label: string; latitude: number | null; longitude: number | null }>({ fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home', latitude: null, longitude: null });
   const [editId, setEditId] = useState<number | null>(null);   // address being edited (null = adding new)
-  const [makeDefault, setMakeDefault] = useState(false);
-  const [detecting, setDetecting] = useState(false);
-  const [detectErr, setDetectErr] = useState('');
   const [savingAddr, setSavingAddr] = useState(false);
   const [saveErr, setSaveErr] = useState('');
 
@@ -34,173 +36,50 @@ export function useCheckoutAddresses() {
     else setAddresses([]);
   }, [user]);
 
-  // Auto-select an address once they load and nothing valid is selected:
-  // prefer the default, else fall back to the first address (so users without a
-  // default still get a valid address — otherwise the order 400s with "Address not found").
+  /* Auto-select once they load and nothing valid is selected: prefer the default, else the first,
+     so someone without a default still has a valid address — otherwise the order 400s with
+     "Address not found". */
   useEffect(() => {
     if (addr && addresses.some(a => a.id === addr)) return;
     const pick = addresses.find(a => a.isDefault) || addresses[0];
     if (pick) setAddr(pick.id);
   }, [addresses, addr, setAddr]);
 
-  /*
-   * A PIN code determines its city and state, so once six digits are in, fill them rather than
-   * making someone type what we already know — and pick the state off a canonical list, which is
-   * where hand-typed addresses usually go wrong.
-   *
-   * India Post's own directory rather than the Nominatim geocoder used elsewhere in this file:
-   * Nominatim is queried by postalcode here too, but its Indian PIN coverage is patchy and it
-   * regularly returns nothing for a perfectly valid code. This endpoint is the authority for
-   * exactly this lookup.
-   *
-   * Never blocks and never reports an error: the fields stay editable, so a failed lookup just
-   * means typing them by hand, which is what happened before this existed. The PIN is the
-   * authority, so a NEW pin overwrites what is there — someone correcting the pin expects the
-   * city to follow, and they can still edit afterwards.
+  const openAddForm = () => { setEditId(null); setSaveErr(''); setAdding(true); };
+  const editAddr = (a: Address) => { setEditId(a.id); setSaveErr(''); setAdding(true); };
+  const closeAddrForm = () => { setAdding(false); setEditId(null); setSaveErr(''); };
+
+  /**
+   * Save what the wizard produced. The coordinates come with it and are already confirmed on a map,
+   * so nothing here re-derives or second-guesses them.
    */
-  const [pinFilled, setPinFilled] = useState('');   // the pin we last auto-filled from, so it runs once per pin
-  useEffect(() => {
-    const pin = aform.pincode.trim();
-    if (!/^\d{6}$/.test(pin) || pin === pinFilled) return;
-    let cancelled = false;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
-    (async () => {
-      try {
-        const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal: ctrl.signal });
-        const body = await res.json();
-        const po = Array.isArray(body) && body[0]?.Status === 'Success' ? body[0]?.PostOffice?.[0] : null;
-        if (!po || cancelled) return;
-        const city = String(po.District || po.Block || '').trim();
-        const state = matchState(String(po.State || '')) || '';
-        if (!city && !state) return;
-        setPinFilled(pin);
-        setAform(f => (f.pincode.trim() === pin
-          ? { ...f, city: city || f.city, state: state || f.state }
-          : f));   // they kept typing and the pin moved on — leave it alone
-      } catch { /* offline, blocked, or unknown pin — the fields are still editable */ }
-      finally { clearTimeout(timer); }
-    })();
-    return () => { cancelled = true; ctrl.abort(); clearTimeout(timer); };
-  }, [aform.pincode, pinFilled]);
-
-  const EMPTY_AFORM = { fullName: '', phone: '', addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', label: 'Home', latitude: null, longitude: null };
-  // New address starts pre-filled with the signed-in user's name & phone (they can edit it, e.g. gifting to someone else).
-  const prefillAform = () => ({ ...EMPTY_AFORM, fullName: user?.name || '', phone: user?.phone || '' });
-  const closeAddrForm = () => { setAdding(false); setEditId(null); setMakeDefault(false); setDetectErr(''); setAform(EMPTY_AFORM); };
-
-  // Opening the "add address" form kicks off location detection by default, so the fields + GPS
-  // coordinates prefill without an extra tap. The customer can still correct anything they like —
-  // and whatever address they end up with is re-geocoded on save, so the coordinates follow the
-  // address they actually typed rather than wherever they happened to be standing.
-  const openAddForm = () => {
-    setEditId(null); setMakeDefault(false); setAform(prefillAform()); setDetectErr(''); setAdding(true);
-    detectLocation();
-  };
-
-  // Open the form pre-filled to edit an existing saved address.
-  const editAddr = (a: Address) => {
-    setAform({ fullName: a.fullName, phone: a.phone || '', addressLine1: a.addressLine1, addressLine2: a.addressLine2 || '', city: a.city, state: a.state || '', pincode: a.pincode, label: a.label || 'Home', latitude: a.latitude ?? null, longitude: a.longitude ?? null });
-    setMakeDefault(!!a.isDefault); setEditId(a.id); setDetectErr(''); setAdding(true);
-  };
-
-  // The pin, the debounce and the ranking rules are shared with the account page's editor.
-  const { pointSource, pointNote, setPin, markFromGps, resolveForSave } = useAddressPoint(aform, setAform, adding);
-
-  const saveAddr = async () => {
-    setSavingAddr(true);
-    setSaveErr('');
-    // Guarantee coordinates for intracity/same-day routing. The typed address is the source of
-    // truth: geocode it on save and use that; only fall back to any GPS-detected coordinates if the
-    // lookup fails — so a manually-typed address never ships without a location and quietly drops to
-    // multi-day (the carriers return zero couriers when there's no lat/long).
-    /* The carrier delivers to the coordinates, not to the text, so a point we are not sure of is
-       worse than no point at all: no point means no same-day quote, which is visible and
-       recoverable. A wrong one is a rider at the wrong house with every screen showing the right
-       address. resolveAddressPoint therefore returns nothing rather than guessing — see
-       lib/geocode.ts, and the Jayanagar order that prompted it. */
-    const point = await resolveForSave();
-    const latitude = point?.latitude ?? null;
-    const longitude = point?.longitude ?? null;
-    const data: Omit<Address, 'id'> = { ...aform, latitude, longitude, isDefault: makeDefault };
-    /* Trust what came back, and say so when nothing did.
-       Both branches used to swallow the error and pretend locally: an edit kept the typed values on
-       screen, an add invented an id from the clock. A save that failed therefore looked exactly like
-       one that worked, right up until the page was reloaded and the change was gone — which is the
-       shape "it is not saving" always takes. */
+  const saveAddr = async (data: AddressDraft) => {
+    setSavingAddr(true); setSaveErr('');
     try {
       if (editId != null) {
         const saved = await updateAddress(editId, data);
-        setAddresses(p => p.map(a => (a.id === editId ? saved : (makeDefault ? { ...a, isDefault: false } : a))));
+        setAddresses(p => p.map(a => (a.id === editId ? saved : (data.isDefault ? { ...a, isDefault: false } : a))));
         setAddr(editId);
       } else {
         const created = await addAddress(data);
-        setAddresses(p => [...(makeDefault ? p.map(a => ({ ...a, isDefault: false })) : p), created]);
+        setAddresses(p => [...(data.isDefault ? p.map(a => ({ ...a, isDefault: false })) : p), created]);
         setAddr(created.id);
       }
     } catch (e) {
+      // Keep the form open with what they typed. Both paths used to swallow the error and fake it
+      // locally, so a failed save looked identical to a good one until the page was reloaded.
       setSavingAddr(false);
       setSaveErr(e instanceof Error ? e.message : 'Could not save this address. Please try again.');
-      return;   // stay on the form, with what they typed still in it
+      return;
     }
     setSavingAddr(false);
     closeAddrForm();
   };
 
-  // Detect-my-location → reverse-geocode → prefill the address columns we can. Only runs on click.
-  const detectLocation = () => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) { setDetectErr('Location is not available on this device.'); return; }
-    // Browsers only show the permission prompt on a secure origin (localhost or https).
-    if (typeof window !== 'undefined' && window.isSecureContext === false) {
-      setDetectErr('Location needs a secure connection. Open the site on localhost or its https link — then it will ask permission.');
-      return;
-    }
-    setDetecting(true); setDetectErr('');
-    navigator.geolocation.getCurrentPosition(
-      async pos => {
-        try {
-          const { latitude, longitude } = pos.coords;
-          /* One reverse lookup through our own geo route, which is also the only place the provider
-             is chosen. The browser used to call Nominatim directly — against their usage policy, and
-             unable to send the User-Agent they require of every caller. */
-          const place = await reverseGeocode(latitude, longitude);
-          setAform(f => ({
-            ...f,
-            // Keep the coordinates themselves, not just the address they resolve to. Same-day
-            // intracity needs them: without a lat/long the carrier returns no couriers at all.
-            latitude, longitude,
-            // Flat / House / Building is user-specific — GPS cannot know it, so leave it to be typed.
-            addressLine2: f.addressLine2 || place?.street || place?.area || '',
-            city: place?.city || f.city,
-            state: matchState(place?.state || '') || f.state,
-            pincode: (place?.postcode || '').slice(0, 6) || f.pincode,
-          }));
-          if (!place?.postcode && !place?.city) setDetectErr('Got your location, but couldn’t read the full address — please complete it.');
-          else setDetectErr('');
-          markFromGps();
-        } catch {
-          setDetectErr('Could not look up your address. Please fill it in manually.');
-        } finally { setDetecting(false); }
-      },
-      err => {
-        setDetecting(false);
-        setDetectErr(
-          err.code === 1 ? 'Location permission denied — allow it in your browser, or just type your address below.'
-            : err.code === 3 ? 'Location timed out — try again, or type your address below.'
-              : 'Could not read your location — please type your address below.',
-        );
-      },
-      // High-accuracy often times out on desktops/indoors; coarse + a longer window is far more reliable.
-      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
-    );
-  };
-
   const chosen = addresses.find(a => a.id === addr);
 
   return {
-    addresses, chosen, adding, aform, setAform, editId, makeDefault, setMakeDefault,
-    detecting, detectErr, savingAddr, saveErr,
-    pointSource, pointNote, setPin,
-    openAddForm, editAddr, closeAddrForm, saveAddr, detectLocation,
+    addresses, chosen, adding, editId, savingAddr, saveErr,
+    openAddForm, editAddr, closeAddrForm, saveAddr,
   };
 }
