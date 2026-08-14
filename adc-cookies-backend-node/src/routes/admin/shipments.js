@@ -5,9 +5,11 @@ import { serializeOrder } from '../../serializers.js';
 import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../delhivery.js';
 import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, walletStatus } from '../../shiprocket.js';
 import { autoCreateShipment } from '../orders.js';
-import { applyCarrierTerminalStatus } from '../../orderProgress.js';
+import { applyCarrierTerminalStatus, bookingNote } from '../../orderProgress.js';
 
 const router = Router();
+
+
 
 /* ======================================================================
    Delivery — Shipment actions per order
@@ -206,7 +208,7 @@ router.post('/orders/:id/rebook', async (req, res) => {
     return res.status(status).json({ ok: false, reason: r.reason, error: message, message });
   }
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-    [order.id, 'SHIPMENT_CREATED', `${r.carrier || 'Carrier'} waybill ${r.waybill} (re-booked by admin)`, nowIso()]).catch(() => {});
+    [order.id, 'SHIPMENT_CREATED', bookingNote(r.carrier, r.waybill, ' (re-booked)'), nowIso()]).catch(() => {});
   res.json(r);
 });
 

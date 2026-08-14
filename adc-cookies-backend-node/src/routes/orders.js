@@ -10,7 +10,7 @@ import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, 
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore, getWalletBalance } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
-import { applyCarrierTerminalStatus } from '../orderProgress.js';
+import { applyCarrierTerminalStatus, bookingNote } from '../orderProgress.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -334,7 +334,7 @@ export function bookShipmentAndRelay(orderId) {
     .then((ship) => {
       if (ship?.ok && ship.waybill) {
         return query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-          [orderId, 'SHIPMENT_CREATED', `${ship.carrier || 'Carrier'} waybill ${ship.waybill}`, nowIso()]);
+          [orderId, 'SHIPMENT_CREATED', bookingNote(ship.carrier, ship.waybill), nowIso()]);
       }
     })
     .catch((err) => console.error(`[SHIPMENT] background create failed | order=${orderId} | ${err?.message || err}`))
