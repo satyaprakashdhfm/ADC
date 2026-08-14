@@ -155,6 +155,10 @@ export async function updateAddress(id: number, data: Omit<Address, 'id'>): Prom
   return request(`/addresses/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
+export async function deleteAddress(id: number): Promise<void> {
+  await request(`/addresses/${id}`, { method: 'DELETE' });
+}
+
 /* ---- Contact ---- */
 export interface ContactInput { name: string; email: string; phone?: string; message: string; company?: string; }
 

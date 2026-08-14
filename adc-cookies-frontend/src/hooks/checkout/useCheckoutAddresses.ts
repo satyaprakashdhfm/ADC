@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { resolveAddressPoint, kmBetween, PIN_RADIUS_KM, type PointSource } from '@/lib/geocode';
+import { useAddressPoint } from '@/hooks/useAddressPoint';
 import { getAddresses, addAddress, updateAddress, type Address } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
@@ -103,69 +103,8 @@ export function useCheckoutAddresses() {
     setMakeDefault(!!a.isDefault); setEditId(a.id); setDetectErr(''); setAdding(true);
   };
 
-  /* Where the point comes from, so the form can say so and so a hand-placed pin is never
-     overwritten by a geocode. 'pin' wins over everything — see lib/geocode.ts. */
-  const [pointSource, setPointSource] = useState<PointSource | null>(null);
-  const [pointNote, setPointNote] = useState('');
-
-  /* The pin follows whatever the customer most recently told us.
-   *
-   * GPS starts it off. From then on, editing the address is new information about where they live,
-   * so the pin re-derives from the text — including over a pin they placed by hand, because
-   * correcting a pincode after dropping a pin means the pin is now in the wrong city, and a pin
-   * that outranks everything forever would keep it there.
-   *
-   * But not every edit is news. Typing a flat number must not throw away a carefully placed pin and
-   * replace it with the middle of the PIN area, so a fresh street match always moves the pin, while
-   * a mere PIN-area centroid only moves it when the current pin is not already inside that area.
-   * Move on a real correction, hold on a detail.
-   */
-  const addressKey = [aform.pincode, aform.city, aform.addressLine1, aform.addressLine2].join('|');
-  const settledKey = useRef<string | null>(null);
-
-  // Read through a ref, not the dependency array: aform gets a new identity on every keystroke, so
-  // depending on it tore down and rebuilt the debounce timer on each one — it would never fire.
-  const formRef = useRef(aform);
-  formRef.current = aform;
-
-  useEffect(() => {
-    if (!adding) return;
-    if (formRef.current.pincode.replace(/\D/g, '').length !== 6) return;
-    if (settledKey.current === addressKey) return;      // nothing changed since we last resolved it
-    let live = true;
-    const t = setTimeout(async () => {
-      const f = formRef.current;
-      const { point } = await resolveAddressPoint(f, null);   // typed address only, never GPS
-      if (!live) return;
-      settledKey.current = addressKey;
-      if (!point) return;
-
-      const have = f.latitude != null && f.longitude != null;
-      const away = have ? kmBetween(f.latitude!, f.longitude!, point.latitude, point.longitude) : Infinity;
-      // A street match is house-level and genuinely new; an area centroid is only worth taking when
-      // we are not already somewhere better inside that same area.
-      if (point.source === 'postcode' && have && away <= PIN_RADIUS_KM) return;
-
-      setAform(f => ({ ...f, latitude: point.latitude, longitude: point.longitude }));
-      setPointSource(point.source);
-      setPointNote(
-        point.source === 'street' ? 'Found from the address you typed — check the pin.'
-          : have ? `Moved to PIN ${f.pincode} — the pin was ${Math.round(away)} km away.`
-            : `Centre of PIN ${f.pincode} — drag the pin to your door.`,
-      );
-    }, 700);
-    return () => { live = false; clearTimeout(t); };
-  }, [adding, addressKey]);
-
-  /** Dragging the pin is the customer telling us exactly where they are. Nothing outranks it. */
-  const setPin = (latitude: number, longitude: number) => {
-    setAform(f => ({ ...f, latitude, longitude }));
-    setPointSource('pin');
-    setPointNote('Pinned by you.');
-    // Bank the current text alongside it, or the effect above would treat the address as unresolved
-    // and immediately pull the pin back to a geocode.
-    settledKey.current = [aform.pincode, aform.city, aform.addressLine1, aform.addressLine2].join('|');
-  };
+  // The pin, the debounce and the ranking rules are shared with the account page's editor.
+  const { pointSource, pointNote, setPin, markFromGps, resolveForSave } = useAddressPoint(aform, setAform, adding);
 
   const saveAddr = async () => {
     setSavingAddr(true);
@@ -179,14 +118,9 @@ export function useCheckoutAddresses() {
        recoverable. A wrong one is a rider at the wrong house with every screen showing the right
        address. resolveAddressPoint therefore returns nothing rather than guessing — see
        lib/geocode.ts, and the Jayanagar order that prompted it. */
-    const { point, rejected } = await resolveAddressPoint(aform, {
-      latitude: aform.latitude, longitude: aform.longitude, source: pointSource ?? undefined,
-    });
+    const point = await resolveForSave();
     const latitude = point?.latitude ?? null;
     const longitude = point?.longitude ?? null;
-    console.log(point
-      ? `[address] saving at ${latitude},${longitude} (${point.source})${rejected ? ` — dropped ${rejected.source}: ${rejected.reason}` : ''}`
-      : '[address] saving WITHOUT coordinates — same-day cannot be quoted, which is the intended outcome when we cannot place it');
     const data: Omit<Address, 'id'> = { ...aform, latitude, longitude, isDefault: makeDefault };
     /* Trust what came back, and say so when nothing did.
        Both branches used to swallow the error and pretend locally: an edit kept the typed values on
@@ -244,8 +178,7 @@ export function useCheckoutAddresses() {
             state: matchState(a.state) || f.state,
             pincode: (a.postcode || '').replace(/\D/g, '').slice(0, 6) || f.pincode,
           }));
-          setPointSource('gps');
-          setPointNote('From your device location — check the pin below.');
+          markFromGps();
           if (!a.postcode && !a.city && !a.state_district) setDetectErr('Got your location, but couldn’t read the full address — please complete it.');
           else setDetectErr('');
         } catch {
