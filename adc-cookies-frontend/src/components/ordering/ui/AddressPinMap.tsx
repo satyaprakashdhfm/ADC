@@ -1,26 +1,35 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Search, MapPin, Loader2 } from 'lucide-react';
+import { searchNearby, type PlaceSuggestion } from '@/lib/geocode';
 
 /**
- * A draggable pin on the address form.
+ * Where the rider is actually sent — searchable, and draggable.
  *
- * Geocoding an Indian street address is a coin flip — blocks, cross roads and main roads are often
- * simply not in the map data — so the honest thing is to show the customer where we think they are
- * and let them correct it. Everything else here (which store bakes it, what the delivery costs,
- * where the rider actually goes) is decided from this one point, and it is the only part of the
- * address the customer cannot otherwise see.
+ * Geocoding an Indian street address is a coin flip: blocks, cross roads and main roads are
+ * frequently absent from the map data, so "9th Main Rd, 2nd Block" finds nothing far more often
+ * than it finds the right thing. Landmarks are the opposite — apartment complexes, tech parks,
+ * hospitals and temples are exactly what OSM has, and they are also how people describe where they
+ * live. So the search box asks for a landmark rather than an address, scoped to the pincode already
+ * typed, and the map is there to confirm or correct whatever comes back.
  *
- * Leaflet directly rather than react-leaflet: this is one marker and one drag handler, and the
- * project already carries Leaflet for the store maps.
+ * Everything downstream reads this one point: which store bakes the order, what delivery costs, and
+ * the coordinates the carrier navigates to. It used to be the only part of an address the customer
+ * could neither see nor fix.
+ *
+ * Leaflet directly rather than react-leaflet — one marker and one drag handler, and the project
+ * already carries Leaflet for the store maps.
  */
 export default function AddressPinMap({
-  lat, lng, onMove, hint,
+  lat, lng, onMove, hint, pincode, city,
 }: {
   lat: number; lng: number;
   onMove: (lat: number, lng: number) => void;
   hint?: string;
+  pincode?: string;
+  city?: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
@@ -29,25 +38,57 @@ export default function AddressPinMap({
   const onMoveRef = useRef(onMove);
   onMoveRef.current = onMove;
 
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<PlaceSuggestion[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [dragged, setDragged] = useState(false);
+
+  /* Debounced, because Nominatim asks for no more than one call a second and a keystroke-per-call
+     search would be both rude and rate-limited into uselessness. */
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 3) { setHits([]); setSearching(false); return; }
+    setSearching(true);
+    let live = true;
+    const t = setTimeout(async () => {
+      const r = await searchNearby(term, { pincode, city });
+      if (!live) return;
+      setHits(r);
+      setSearching(false);
+    }, 600);
+    return () => { live = false; clearTimeout(t); };
+  }, [q, pincode, city]);
+
   useEffect(() => {
     if (!box.current || map.current) return;
     const m = L.map(box.current, { attributionControl: false, zoomControl: true }).setView([lat, lng], 16);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(m);
 
+    /* The pin has to look like something you can pick up. A flat dot reads as a label, and people
+       leave it where it lands — which is the whole failure this component exists to prevent. Hence
+       the lift, the shadow it casts on the map, and the grab cursor. */
     const icon = L.divIcon({
-      className: '',
-      html: '<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--orange-cta,#F07C1E);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>',
-      iconSize: [26, 26],
-      iconAnchor: [13, 26],
+      className: 'adc-pin',
+      html: `
+        <div style="position:relative;width:34px;height:44px;cursor:grab">
+          <div style="position:absolute;left:11px;top:37px;width:12px;height:5px;border-radius:50%;background:rgba(0,0,0,.34);filter:blur(1px)"></div>
+          <div style="position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:linear-gradient(140deg,#FF9D42,#F0641E);border:3px solid #fff;box-shadow:0 4px 10px rgba(120,50,0,.4)">
+            <div style="position:absolute;left:9px;top:9px;width:10px;height:10px;border-radius:50%;background:#fff"></div>
+          </div>
+        </div>`,
+      iconSize: [34, 44],
+      iconAnchor: [17, 42],
     });
-    const mk = L.marker([lat, lng], { draggable: true, icon }).addTo(m);
+    const mk = L.marker([lat, lng], { draggable: true, icon, autoPan: true }).addTo(m);
+    mk.on('dragstart', () => setDragged(true));
     mk.on('dragend', () => {
       const p = mk.getLatLng();
       onMoveRef.current(+p.lat.toFixed(6), +p.lng.toFixed(6));
     });
-    // Tapping the map is the same gesture on a phone, where dragging a small pin is fiddly.
+    // Tapping is the same gesture on a phone, where dragging a small pin is fiddly.
     m.on('click', (e: L.LeafletMouseEvent) => {
       mk.setLatLng(e.latlng);
+      setDragged(true);
       onMoveRef.current(+e.latlng.lat.toFixed(6), +e.latlng.lng.toFixed(6));
     });
 
@@ -57,23 +98,56 @@ export default function AddressPinMap({
     // itself on creation and would otherwise render a quarter of a map.
     setTimeout(() => m.invalidateSize(), 60);
     return () => { m.remove(); map.current = null; marker.current = null; };
-  }, [lat, lng]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Follow the resolved point when geocoding produces a new one, but never fight a drag in progress.
+  // Follow the resolved point when something upstream produces a better one.
   useEffect(() => {
     if (!map.current || !marker.current) return;
     const cur = marker.current.getLatLng();
     if (Math.abs(cur.lat - lat) < 1e-6 && Math.abs(cur.lng - lng) < 1e-6) return;
     marker.current.setLatLng([lat, lng]);
-    map.current.setView([lat, lng], map.current.getZoom());
+    map.current.setView([lat, lng], Math.max(map.current.getZoom(), 16));
   }, [lat, lng]);
 
+  const pick = (s: PlaceSuggestion) => {
+    setQ(s.label);
+    setHits([]);
+    setDragged(true);
+    onMoveRef.current(s.latitude, s.longitude);
+  };
+
   return (
-    <div>
-      <div ref={box} style={{ width: '100%', height: 190, borderRadius: 'var(--radius-button)', overflow: 'hidden', border: '1.5px solid var(--border-default)', background: 'var(--surface-sunken)' }} />
-      <p style={{ margin: '6px 2px 0', fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-        {hint || 'Drag the pin to your exact door — this is where the rider is sent.'}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ position: 'relative' }}>
+        <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search your apartment, office or landmark"
+          style={{ width: '100%', boxSizing: 'border-box', padding: '10px 34px 10px 34px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--white)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }}
+        />
+        {searching && <Loader2 size={15} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--brand-secondary)', animation: 'spin 1s linear infinite' }} />}
+        {hits.length > 0 && (
+          <div style={{ position: 'absolute', zIndex: 500, top: 'calc(100% + 4px)', left: 0, right: 0, background: 'var(--white)', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-button)', boxShadow: 'var(--shadow-md)', overflow: 'hidden', maxHeight: 190, overflowY: 'auto' }}>
+            {hits.map((h, i) => (
+              <button key={`${h.latitude},${h.longitude},${i}`} onClick={() => pick(h)}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', borderTop: i ? '1px solid var(--border-soft)' : 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: 1.4 }}>
+                <MapPin size={13} style={{ color: 'var(--brand-secondary)', flex: 'none', marginTop: 1 }} /> {h.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div ref={box} style={{ width: '100%', height: 220, borderRadius: 'var(--radius-card)', overflow: 'hidden', border: '1.5px solid var(--border-strong)', background: 'var(--surface-sunken)', boxShadow: 'var(--shadow-sm)' }} />
+
+      <p style={{ margin: 0, fontSize: 'var(--text-2xs)', lineHeight: 1.5, fontWeight: 700, color: dragged ? 'var(--status-success)' : 'var(--brand-secondary)' }}>
+        {dragged
+          ? '✓ Pin placed — this exact spot is where your cookies are delivered.'
+          : 'Drag the pin onto your building. The rider is sent to the pin, not the typed address.'}
       </p>
+      {hint && <p style={{ margin: 0, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', lineHeight: 1.45 }}>{hint}</p>}
     </div>
   );
 }
