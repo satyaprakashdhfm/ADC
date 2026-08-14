@@ -422,12 +422,12 @@ export async function getRiderData(awb) {
  *
  * The awb is NOT available at assignment time (that call is async), so this is also how we learn it.
  */
-export async function trackShiprocket(shipmentId) {
+export async function trackShiprocket(shipmentId, srOrderId) {
   const r = await srRequest('GET', `/courier/track/shipment/${encodeURIComponent(shipmentId)}`);
   if (!r.ok) return r;
   const td = r.data?.tracking_data ?? r.data;
   const t = td?.shipment_track?.[0] ?? {};
-  return {
+  const out = {
     ok: true,
     awb: t.awb_code || null,
     status: t.current_status || null,
@@ -438,6 +438,24 @@ export async function trackShiprocket(shipmentId) {
     activities: td?.shipment_track_activities || [],
     data: td,
   };
+  if (out.status || !srOrderId) return out;
+
+  /*
+   * Nothing from shipment tracking — so ask about the ORDER instead.
+   *
+   * Shipment tracking answers about an AWB, and an AWB only exists once a rider has been found. An
+   * order still waiting for one therefore tracks as `status: null` with no activities, and stays
+   * that way forever if it is cancelled before a rider is ever assigned. Verified live on
+   * 2026-08-14: three orders cancelled in Shiprocket's own panel reported nothing at all here,
+   * while /orders/show said CANCELED for every one of them.
+   *
+   * So we were asking the one endpoint that could not answer and ignoring the one that could. The
+   * store portal sat on "Searching for a rider" for orders Shiprocket had already closed.
+   */
+  const o = await srRequest('GET', `/orders/show/${encodeURIComponent(srOrderId)}`);
+  const status = (o.ok && (o.data?.data?.status ?? o.data?.status)) || null;
+  if (status) log('track', `shipment ${shipmentId} silent → order ${srOrderId} says ${status}`);
+  return { ...out, status, statusFrom: status ? 'order' : 'shipment' };
 }
 
 export async function cancelShiprocketOrder(srOrderIds) {
