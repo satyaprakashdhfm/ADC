@@ -7,7 +7,7 @@ import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct 
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
 import { zoneStores, storeForAddress, storeByCode, deliveryEligible, isStoreActive } from '../stores.js';
-import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore } from '../shiprocket.js';
+import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore, getWalletBalance } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
 
@@ -135,8 +135,18 @@ async function attemptShipment(orderId, addressArg) {
          *
          * The reason is recorded now. The store portal and the admin's Needs-attention list both
          * already read this column; neither had anything to read. */
-        const assignError = assigned.ok ? null
-          : String(typeof assigned.reason === 'string' ? assigned.reason : JSON.stringify(assigned.reason ?? 'Carrier refused the booking')).slice(0, 300);
+        /* On refusal, say what the wallet held at that moment.
+         *
+         * Assigning a rider draws on the Shiprocket wallet, and an empty one is by far the most
+         * common reason for a refusal — but the carrier's own message rarely says so plainly. Whoever
+         * reads this later needs to know whether to top up or to investigate, and that difference is
+         * one number. Looked up only on the failure path, so the happy path costs nothing. */
+        let assignError = null;
+        if (!assigned.ok) {
+          const reason = String(typeof assigned.reason === 'string' ? assigned.reason : JSON.stringify(assigned.reason ?? 'Carrier refused the booking'));
+          const balance = await getWalletBalance().catch(() => null);
+          assignError = (balance == null ? reason : `${reason} (Shiprocket wallet: ₹${balance})`).slice(0, 300);
+        }
         await query(
           `UPDATE orders SET delhivery_waybill=$1, delhivery_shipment_id=$2, carrier='SHIPROCKET',
                   carrier_order_id=$3, shipment_status=$4, tracking_url=$5, label_generated=FALSE,

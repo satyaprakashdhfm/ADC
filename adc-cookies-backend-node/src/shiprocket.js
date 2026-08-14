@@ -348,6 +348,26 @@ export async function assignAwb(shipmentId, { courierId, vehicleType, futurePick
   return { ok: true, pending: false, awb, courierName: d?.courier_name, data: d };
 }
 
+/**
+ * Shiprocket wallet balance, in rupees.
+ *
+ * Creating a hyperlocal order is free; ASSIGNING a rider is what draws on the wallet. That split is
+ * why an empty wallet produced an order sitting at NEW with an unpaid "Ship Now" in their panel and
+ * nothing wrong on our side — the booking genuinely succeeded, the dispatch never happened.
+ *
+ * Returns null rather than throwing on any failure. This is advisory: nothing should refuse to sell
+ * a cookie because a balance lookup timed out.
+ */
+export async function getWalletBalance() {
+  const r = await srRequest('GET', '/v1/external/account/details/wallet-balance');
+  if (!r.ok) { log('wallet', `✗ ${JSON.stringify(r.reason).slice(0, 120)}`); return null; }
+  const raw = r.data?.data?.balance_amount ?? r.data?.balance_amount;
+  const balance = raw == null ? null : Number(raw);
+  if (balance == null || Number.isNaN(balance)) { log('wallet', `✗ unexpected shape: ${JSON.stringify(r.data).slice(0, 120)}`); return null; }
+  log('wallet', `balance=₹${balance}`);
+  return balance;
+}
+
 /** Rider name/phone once assigned, for the order page. */
 export async function getRiderData(awb) {
   const r = await srRequest('GET', '/courier/hyperlocal/get_rider_data', { query: { awb: String(awb) } });

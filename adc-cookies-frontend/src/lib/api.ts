@@ -541,6 +541,11 @@ export interface StoreReadinessReport {
 }
 export async function adminGetStoreReadiness(): Promise<StoreReadinessReport> { return request('/admin/delivery/stores'); }
 
+/** Shiprocket wallet — the balance a same-day rider is actually dispatched against. */
+export interface ShiprocketWallet { ok: boolean; reason?: string; balance?: number; low?: boolean; lowWatermark?: number }
+export async function adminGetShiprocketWallet(): Promise<ShiprocketWallet> { return request('/admin/delivery/wallet'); }
+
+
 /* ---- Admin: Petpooja (POS) ---- */
 
 /** One row of Petpooja's catalogue. `productId` null means it is not yet linked to a product. */
