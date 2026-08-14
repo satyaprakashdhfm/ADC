@@ -94,6 +94,8 @@ export interface StoreOrdersResponse {
   orders: StoreOrder[];
   /** Paid orders nobody at this store has accepted yet — what the new-order alert counts. */
   pendingCount: number;
+  /** Rider wallet. `ok:false` means we could not read it, never that it is empty. */
+  wallet?: { ok: boolean; reason?: string; balance?: number; low?: boolean; lowWatermark?: number };
   serverTime: string;
 }
 
