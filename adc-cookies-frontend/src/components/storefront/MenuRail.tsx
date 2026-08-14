@@ -17,6 +17,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * Sections are found in the DOM by `data-menu-section` rather than by id, because the first section
  * deliberately has no id of its own (it shares the wrapper's `#products`, so deep links land at the
  * top of the menu rather than below its intro).
+ *
+ * It sits in a strip the menu reserves for it (`--menu-rail-w`, applied as padding on #products),
+ * not in the page gutter. Pinning it to the viewport while the grid was pinned to the gutter meant
+ * that below ~1680px the two wanted the same pixels, and the dots landed on the product cards.
+ * Reserved space is the only version of "far enough left" that survives every window width.
  */
 
 const WINDOW = 2;        // how many neighbours each side open up on hover
@@ -28,6 +33,17 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
   const [open, setOpen] = useState(false);
   // Where scrubbing has got to. Null means "not scrubbing" and the focus follows the page instead.
   const [picked, setPicked] = useState<number | null>(null);
+
+  /* A phone gets smaller marks and smaller labels — the desktop sizes are tuned for a pointer and
+     a 1400px column, and at 390px they read as an overlay rather than a margin note. */
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 760px)');
+    const sync = () => setCompact(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   const railRef = useRef<HTMLElement>(null);
   const settleTimer = useRef<number | null>(null);
@@ -117,6 +133,17 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
 
   useEffect(() => () => { if (settleTimer.current) window.clearTimeout(settleTimer.current); }, []);
 
+  /* A tap has no hover to open the window with, so the tap itself does it: the label appears, the
+     page starts moving, and it closes again a beat later. Without this a phone got bare dots with
+     nothing to say which section each one was. */
+  const pick = (i: number) => {
+    setOpen(true);
+    setPicked(i);
+    jump(i);
+    if (settleTimer.current) window.clearTimeout(settleTimer.current);
+    settleTimer.current = window.setTimeout(close, 900);
+  };
+
   if (sections.length === 0) return null;
 
   const focus = picked ?? active;
@@ -130,17 +157,18 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
       onMouseLeave={close}
       style={{
         position: 'fixed',
-        left: 'clamp(10px,1.6vw,26px)',
+        // Centred in the strip #products reserves, so the dots sit in space nothing else wants.
+        left: 'calc(var(--menu-rail-w) / 2 - 8px)',
         top: '50%',
         transform: 'translateY(-50%)',
         zIndex: 40,
         display: 'flex',
         flexDirection: 'column',
-        gap: 13,
+        gap: compact ? 10 : 13,
         alignItems: 'flex-start',
         // Padding gives the pointer somewhere to land between the dots, so the open state does not
         // flicker as it crosses the gaps.
-        padding: '10px 8px',
+        padding: compact ? '8px 5px' : '10px 8px',
         // Fades rather than unmounts, so it does not pop in mid-scroll.
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? 'auto' : 'none',
@@ -154,7 +182,7 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
         return (
           <button
             key={s.anchor}
-            onClick={() => { jump(i); close(); }}
+            onClick={() => pick(i)}
             /* The window follows the pointer: whichever mark you are over becomes the focus, and
                its two neighbours either side open around it. Without this the list opened around
                wherever the PAGE happened to be, so moving down the rail changed nothing and the
@@ -167,20 +195,20 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
             aria-label={`Go to ${s.label}`}
             aria-current={i === active ? 'true' : undefined}
             style={{
-              display: 'flex', alignItems: 'center', gap: 10,
+              display: 'flex', alignItems: 'center', gap: compact ? 7 : 10,
               border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
             }}
           >
             <span
               aria-hidden
               style={{
-                width: on ? 11 : 7,
-                height: on ? 11 : 7,
+                width: on ? (compact ? 9 : 11) : (compact ? 5 : 7),
+                height: on ? (compact ? 9 : 11) : (compact ? 5 : 7),
                 borderRadius: '50%',
                 flex: 'none',
                 background: on ? 'var(--gradient-warm)' : 'var(--ink-700)',
                 opacity: on ? 1 : 0.42,
-                boxShadow: on ? '0 0 0 4px var(--amber-500-35)' : 'none',
+                boxShadow: on ? `0 0 0 ${compact ? 3 : 4}px var(--amber-500-35)` : 'none',
                 transition: 'width .18s var(--ease-out), height .18s var(--ease-out), opacity .18s ease, box-shadow .18s ease',
               }}
             />
@@ -189,13 +217,13 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
                 has an edge instead of just stopping. */}
             <span
               style={{
-                padding: '5px 12px',
+                padding: compact ? '3px 8px' : '5px 12px',
                 borderRadius: 'var(--radius-pill)',
                 background: on ? 'var(--gradient-warm)' : 'var(--ink-950)',
                 color: on ? 'var(--white)' : 'var(--cream-100-72)',
                 boxShadow: on ? 'var(--shadow-brand)' : 'var(--shadow-sm)',
                 fontFamily: 'var(--font-body)',
-                fontSize: 'var(--text-2xs)',
+                fontSize: compact ? 10 : 'var(--text-2xs)',
                 fontWeight: 800,
                 whiteSpace: 'nowrap',
                 opacity: near ? (on ? 1 : d === 1 ? 0.8 : 0.45) : 0,

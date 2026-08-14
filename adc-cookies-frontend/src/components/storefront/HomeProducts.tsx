@@ -190,7 +190,10 @@ export default function HomeProducts() {
       {/* Left-margin section marker — see MenuRail. Rendered as a sibling so it can be
           position:fixed without the section's own stacking context trapping it. */}
       <MenuRail sections={sections.map(s => ({ label: s.label, anchor: s.anchor }))} />
-    <section id="products" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
+    {/* menu-rail-inset reserves the strip the rail sits in. On the section rather than the inner
+        container so the background still runs edge to edge, and so the centred headings stay
+        centred — within a column that has simply moved over by the width of the rail. */}
+    <section id="products" className="menu-rail-inset" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
       <div style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter)' }}>
         <div style={{ textAlign: 'center', marginBottom: 'clamp(6px,1.5vw,14px)' }}>
           <p style={eyebrow}>Order online</p>
