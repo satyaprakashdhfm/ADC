@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useAddressPoint } from '@/hooks/useAddressPoint';
+import { reverseGeocode } from '@/lib/geocode';
 import { getAddresses, addAddress, updateAddress, type Address } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
@@ -159,28 +160,24 @@ export function useCheckoutAddresses() {
       async pos => {
         try {
           const { latitude, longitude } = pos.coords;
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`, { headers: { Accept: 'application/json' } });
-          const j = await res.json();
-          const a = j.address || {};
-          // "Bengaluru Urban" / "Mumbai Suburban" → "Bengaluru" / "Mumbai"
-          const cleanDistrict = (s: string | undefined) => (s || '').replace(/\s*(urban|rural|suburban|district|division)\s*$/i, '').trim();
-          // Street/cross + locality go into Area/Landmark (not the flat field).
-          const area = [a.road, a.neighbourhood || a.suburb || a.residential || a.quarter].filter(Boolean).join(', ');
+          /* One reverse lookup through our own geo route, which is also the only place the provider
+             is chosen. The browser used to call Nominatim directly — against their usage policy, and
+             unable to send the User-Agent they require of every caller. */
+          const place = await reverseGeocode(latitude, longitude);
           setAform(f => ({
             ...f,
             // Keep the coordinates themselves, not just the address they resolve to. Same-day
-            // intracity needs them: without a lat/long the carrier returns no couriers at all and
-            // the order quietly falls back to multi-day shipping.
+            // intracity needs them: without a lat/long the carrier returns no couriers at all.
             latitude, longitude,
-            // Flat / House / Building is user-specific — GPS can't know it, so leave it for the user to type.
-            addressLine2: f.addressLine2 || area,
-            city: a.city || cleanDistrict(a.state_district) || a.town || a.municipality || a.county || a.village || f.city,
-            state: matchState(a.state) || f.state,
-            pincode: (a.postcode || '').replace(/\D/g, '').slice(0, 6) || f.pincode,
+            // Flat / House / Building is user-specific — GPS cannot know it, so leave it to be typed.
+            addressLine2: f.addressLine2 || place?.street || place?.area || '',
+            city: place?.city || f.city,
+            state: matchState(place?.state || '') || f.state,
+            pincode: (place?.postcode || '').slice(0, 6) || f.pincode,
           }));
-          markFromGps();
-          if (!a.postcode && !a.city && !a.state_district) setDetectErr('Got your location, but couldn’t read the full address — please complete it.');
+          if (!place?.postcode && !place?.city) setDetectErr('Got your location, but couldn’t read the full address — please complete it.');
           else setDetectErr('');
+          markFromGps();
         } catch {
           setDetectErr('Could not look up your address. Please fill it in manually.');
         } finally { setDetecting(false); }

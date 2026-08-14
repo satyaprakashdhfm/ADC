@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { MapPin, Navigation, ChevronDown, X, Check, Home, Briefcase, Store as StoreIcon } from 'lucide-react';
 import { useLocation, nearestStore, storeArea } from '@/context/LocationContext';
 import { STORES } from '@/lib/stores';
+import { reverseGeocode } from '@/lib/geocode';
 import { useAuth } from '@/context/AuthContext';
 import { getAddresses, type Address } from '@/lib/api';
 
@@ -59,9 +60,10 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
     try {
       const pos = await new Promise<GeolocationPosition>((res, rej) =>
         navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }));
-      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`, { headers: { Accept: 'application/json' } });
-      const a = (await r.json())?.address || {};
-      areaName = [a.suburb || a.neighbourhood || a.road, a.city || a.town || a.state_district].filter(Boolean).join(', ');
+      // Through our own geo route like everything else — this is only for naming the area back to
+      // the customer, and it never becomes a delivery coordinate (see the note on this component).
+      const p = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+      areaName = [p?.area || p?.street, p?.city].filter(Boolean).join(', ');
     } catch { /* the store name alone still tells them something */ }
     setArea(areaName);
     setFound({ area: areaName || 'your current location', storeName: storeArea(s) });

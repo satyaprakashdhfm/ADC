@@ -18,8 +18,13 @@
  * a visible, recoverable failure. Confidently wrong coordinates are neither.
  */
 
-const NOMINATIM = 'https://nominatim.openstreetmap.org';
-const TIMEOUT_MS = 7000;
+/* Our own backend, never a geocoder directly.
+   Two reasons, both hard: the public Nominatim instance forbids autocomplete traffic and blocks by
+   IP, and a browser cannot send the User-Agent it asks callers to identify themselves with; and the
+   Mappls key is domain-locked, so shipping it here hands it to anyone reading the page source. The
+   server picks the provider — see adc-cookies-backend-node/src/geo.js. */
+const API = typeof window !== 'undefined' ? '/api' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api');
+const TIMEOUT_MS = 8000;
 
 export type PointSource = 'street' | 'postcode' | 'gps' | 'pin';
 
@@ -49,16 +54,17 @@ async function getJson(url: string): Promise<unknown | null> {
 
 const digits = (s: unknown) => String(s ?? '').replace(/\D/g, '');
 
-/** What postcode does this point actually sit in? */
-export async function reverseGeocode(lat: number, lng: number): Promise<{ postcode: string | null; city: string | null; state: string | null }> {
-  const j = await getJson(`${NOMINATIM}/reverse?format=jsonv2&addressdetails=1&lat=${lat}&lon=${lng}`) as
-    { address?: Record<string, string> } | null;
-  const a = j?.address ?? {};
-  return {
-    postcode: digits(a.postcode) || null,
-    city: a.city || a.town || a.municipality || a.village || a.county || null,
-    state: a.state || null,
-  };
+export interface Place {
+  street: string | null; area: string | null; city: string | null;
+  state: string | null; postcode: string | null; formatted: string | null;
+}
+
+/** Everything the map knows about a point: street, area, city, state and — the important one — the
+ *  postcode it actually sits in. This is the direction that matters now: the pin is the authority
+ *  and the pincode is derived from it, rather than the two being reconciled after the fact. */
+export async function reverseGeocode(lat: number, lng: number): Promise<Place | null> {
+  const j = await getJson(`${API}/geo/reverse?lat=${lat}&lng=${lng}`) as { place?: Place } | null;
+  return j?.place ?? null;
 }
 
 interface AddressLike {
@@ -79,37 +85,27 @@ interface AddressLike {
  */
 async function geocodeTyped(a: AddressLike): Promise<ResolvedPoint | null> {
   const pin = digits(a.pincode);
-  const street = [a.addressLine1, a.addressLine2].filter(Boolean).join(', ').trim();
-  const base = { format: 'jsonv2', limit: '1', addressdetails: '1', country: 'India' };
-
-  if (street && (pin || a.city)) {
-    const p = new URLSearchParams({ ...base, street });
-    if (pin) p.set('postalcode', pin);
-    if (a.city?.trim()) p.set('city', a.city.trim());
-    if (a.state?.trim()) p.set('state', a.state.trim());
-    const arr = await getJson(`${NOMINATIM}/search?${p}`) as Array<{ lat: string; lon: string; address?: Record<string, string> }> | null;
-    const hit = Array.isArray(arr) ? arr[0] : null;
-    if (hit?.lat && hit?.lon) {
-      return { latitude: parseFloat(hit.lat), longitude: parseFloat(hit.lon), source: 'street', postcode: digits(hit.address?.postcode) || null };
-    }
-  }
-
-  if (pin) {
-    const p = new URLSearchParams({ ...base, postalcode: pin });
-    const arr = await getJson(`${NOMINATIM}/search?${p}`) as Array<{ lat: string; lon: string; address?: Record<string, string> }> | null;
-    const hit = Array.isArray(arr) ? arr[0] : null;
-    if (hit?.lat && hit?.lon) {
-      return { latitude: parseFloat(hit.lat), longitude: parseFloat(hit.lon), source: 'postcode', postcode: digits(hit.address?.postcode) || pin };
-    }
-  }
-
-  return null;
+  const street = [a.addressLine1, a.addressLine2, a.city].filter(Boolean).join(', ').trim();
+  if (!street && !pin) return null;
+  const p = new URLSearchParams();
+  if (street) p.set('address', street);
+  if (pin) p.set('pincode', pin);
+  const j = await getJson(`${API}/geo/forward?${p}`) as { point?: { latitude: number; longitude: number; postcode: string | null } } | null;
+  const hit = j?.point;
+  if (!hit) return null;
+  /* A result that came back carrying the pincode we asked for is a street-level answer; one that
+     did not is the PIN area itself. The distinction drives how much the caller trusts it. */
+  const source: PointSource = street && hit.postcode && pin && hit.postcode === pin ? 'street' : 'postcode';
+  return { latitude: hit.latitude, longitude: hit.longitude, source, postcode: digits(hit.postcode) || pin || null };
 }
 
 export interface PlaceSuggestion {
   label: string;
   /** Street + locality on its own, ready to drop straight into the Area field. */
   street: string;
+  /** City / state / pincode line, shown greyed under the name so two same-named roads in different
+   *  towns can be told apart — which is the entire job of a suggestion list in India. */
+  detail?: string;
   postcode: string | null;
   latitude: number;
   longitude: number;
@@ -123,53 +119,22 @@ export interface PlaceSuggestion {
  * coverage of. Scoping to the PIN area does the rest: "green fields" alone matches half the
  * country, "green fields" inside 560011 does not.
  */
-export async function searchNearby(query: string, within: { pincode?: string; city?: string }): Promise<PlaceSuggestion[]> {
+export async function searchNearby(query: string, within: { pincode?: string; city?: string; lat?: number; lng?: number }): Promise<PlaceSuggestion[]> {
   const q = query.trim();
   if (q.length < 3) return [];
-  const p = new URLSearchParams({ format: 'jsonv2', limit: '8', addressdetails: '1', countrycodes: 'in' });
-  const area = [within.pincode, within.city].filter(Boolean).join(' ');
-  p.set('q', area ? `${q}, ${area}` : q);
-  const arr = await getJson(`${NOMINATIM}/search?${p}`) as Array<{
-    lat: string; lon: string; display_name?: string; name?: string; address?: Record<string, string>;
-  }> | null;
-  if (!Array.isArray(arr)) return [];
-
-  const seen = new Set<string>();
-  return arr
-    .filter(r => r.lat && r.lon)
-    .map(r => {
-      const a = r.address ?? {};
-      /* Build the label out of the street and the locality rather than slicing the display_name.
-         Nominatim's chain runs house → road → suburb → city → district → state → postcode, and the
-         first three parts of it are often "Shop 4, , Bengaluru" — the useful pair is always the
-         road and whatever locality contains it. */
-      const street = r.name || a.road || a.pedestrian || a.residential || '';
-      const locality = a.neighbourhood || a.suburb || a.quarter || a.village || a.town || '';
-      const label = [street, locality].filter(Boolean).join(', ')
-        || (r.display_name || '').split(',').slice(0, 2).join(',').trim();
-      return {
-        label,
-        street: [street, locality].filter(Boolean).join(', '),
-        postcode: digits(a.postcode) || null,
-        latitude: parseFloat(r.lat),
-        longitude: parseFloat(r.lon),
-      };
-    })
-    .filter(r => {
-      if (!r.label || seen.has(r.label)) return false;   // the same road comes back once per segment
-      seen.add(r.label);
-      return true;
-    });
+  const p = new URLSearchParams({ q: [q, within.pincode, within.city].filter(Boolean).join(' ') });
+  if (within.lat != null && within.lng != null) { p.set('lat', String(within.lat)); p.set('lng', String(within.lng)); }
+  const j = await getJson(`${API}/geo/suggest?${p}`) as { results?: Array<{ label: string; detail: string; latitude: number; longitude: number }> } | null;
+  return (j?.results ?? []).map(r => ({
+    label: r.label, street: r.label, detail: r.detail,
+    postcode: null, latitude: r.latitude, longitude: r.longitude,
+  }));
 }
 
 /** The street a point sits on — so dragging the pin can fill the address in, not just consume it. */
 export async function streetAt(lat: number, lng: number): Promise<{ street: string; postcode: string | null; city: string | null }> {
-  const j = await getJson(`${NOMINATIM}/reverse?format=jsonv2&addressdetails=1&zoom=17&lat=${lat}&lon=${lng}`) as
-    { address?: Record<string, string> } | null;
-  const a = j?.address ?? {};
-  const street = [a.road || a.pedestrian || a.residential, a.neighbourhood || a.suburb || a.quarter]
-    .filter(Boolean).join(', ');
-  return { street, postcode: digits(a.postcode) || null, city: a.city || a.town || a.village || null };
+  const p = await reverseGeocode(lat, lng);
+  return { street: p?.street || p?.area || '', postcode: p?.postcode || null, city: p?.city || null };
 }
 
 /** Straight-line kilometres — used to sanity-check a point against the PIN area it claims to be in. */
