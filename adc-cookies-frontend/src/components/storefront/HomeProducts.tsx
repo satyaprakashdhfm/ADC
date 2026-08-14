@@ -2,11 +2,28 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Plus, Minus, ArrowRight, Cookie, Gift, Briefcase } from 'lucide-react';
+import { Plus, Minus, ArrowRight, Cookie, Briefcase, IceCreamBowl, IceCreamCone, Flame, Milk, Coffee, CupSoda, CakeSlice, Boxes, Cylinder } from 'lucide-react';
 import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
-import { useLocation } from '@/context/LocationContext';
-import { productAvailableFor } from '@/lib/stores';
+import { MENU_SECTIONS, menuRank, type ProductCategory } from '@/lib/categories';
+import MenuRail from './MenuRail';
+
+/* The registry says what the sections ARE and what order they come in; this says what each one
+   looks like. Icons live here rather than in lib/categories.ts so that file stays free of React
+   and can be imported by plain logic — the admin dropdown and the checkout ladder both need the
+   category list and neither of them wants an icon. */
+const CATEGORY_ICONS: Record<ProductCategory, React.ComponentType<{ size?: number }>> = {
+  COOKIES: Cookie,
+  HUG_IN_A_DIP: IceCreamBowl,
+  SKILLET: Flame,
+  TINS: Cylinder,
+  SUNDAE: IceCreamCone,
+  SHAKES: Milk,
+  HOT_DRINKS: Coffee,
+  COLD_COFFEE: CupSoda,
+  CAKES: CakeSlice,
+  COMBOS: Boxes,
+};
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' };
 const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'clamp(14px,1.8vw,22px)' };
@@ -40,7 +57,11 @@ function ProductCard({ p }: { p: Product }) {
         <h3 style={{ font: 'var(--weight-extra) var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>{p.name}</h3>
         {p.description && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.45, margin: 0, overflowWrap: 'anywhere' }}>{p.description}</p>}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 'auto', paddingTop: 8 }}>
-          <span style={{ fontWeight: 900, color: 'var(--text-strong)', fontSize: 'var(--text-base)' }}>₹{price}</span>
+          {/* "Rs" rather than the ₹ glyph, and sized to stand level with the Add button beside it.
+              At --text-base the price was the quietest thing in a row whose other half is a filled
+              orange pill, which is the wrong way round: the price is the decision, the button is
+              only how you act on it. */}
+          <span style={{ fontWeight: 900, color: 'var(--text-strong)', font: '900 var(--text-lg)/1 var(--font-display)', letterSpacing: '-.01em' }}>Rs {price}</span>
           {qty === 0 ? (
             <button onClick={() => change(1)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}>
               <Plus size={15} /> Add
@@ -58,18 +79,39 @@ function ProductCard({ p }: { p: Product }) {
   );
 }
 
+/* Centred, with a short rule either side.
+   Left-aligned, a heading is just the first line of the block under it — which is why ten of them
+   down one cream page read as one long list. Centred and flanked, it reads as a divider between
+   groups instead of a label on top of one.
+   The rules are deliberately short and fade outward rather than running to the page edges: a
+   full-width line would cut the page into slabs, which is louder than the separation needs to be. */
 function SubHead({ icon, title }: { icon: React.ReactNode; title: string }) {
+  const rule = (dir: 'left' | 'right'): React.CSSProperties => ({
+    height: 2,
+    width: 'clamp(28px,7vw,90px)',
+    flex: 'none',
+    borderRadius: 2,
+    background: `linear-gradient(to ${dir}, var(--amber-300), transparent)`,
+  });
+  // The icon is repeated on both sides so the heading is symmetrical about its title. The right-hand
+  // one is decorative only — a screen reader announcing the same category icon twice adds nothing.
+  const badge = (hidden?: boolean) => (
+    <span aria-hidden={hidden} style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--amber-50)', color: 'var(--brand-secondary)', display: 'grid', placeItems: 'center', flex: 'none' }}>{icon}</span>
+  );
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: 'clamp(26px,3.5vw,44px) 0 16px' }}>
-      <span style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--amber-50)', color: 'var(--brand-secondary)', display: 'grid', placeItems: 'center', flex: 'none' }}>{icon}</span>
-      <h3 style={{ font: '900 clamp(1.4rem,1.1rem + 1.2vw,2rem)/1 var(--font-display)', color: 'var(--text-strong)', margin: 0, letterSpacing: '-.02em' }}>{title}</h3>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(10px,1.4vw,18px)', margin: 'clamp(34px,4.5vw,60px) 0 20px' }}>
+      <span aria-hidden style={rule('left')} />
+      {badge()}
+      <h3 style={{ font: '900 clamp(1.4rem,1.1rem + 1.2vw,2rem)/1 var(--font-display)', color: 'var(--text-strong)', margin: 0, letterSpacing: '-.02em', textAlign: 'center' }}>{title}</h3>
+      {badge(true)}
+      <span aria-hidden style={rule('right')} />
     </div>
   );
 }
 
 export default function HomeProducts() {
   const router = useRouter();
-  const { store } = useLocation();
+  // No LocationContext here any more — the menu no longer varies by where the shopper is.
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState('');
   const deepLinkScrolled = useRef(false); // scroll a ?q= deep-link to its section only once, after products load
@@ -96,9 +138,11 @@ export default function HomeProducts() {
   useEffect(() => {
     if (!q || deepLinkScrolled.current || products.length === 0) return;
     deepLinkScrolled.current = true;
+    // Scroll to whichever section actually holds the match, rather than the old two-way "is it a
+    // tin, else cookies" guess that could only ever land on one of two places.
     const term = q.trim().toLowerCase();
-    const isTin = /tin/.test(term) || products.some(p => p.category === 'TINS' && p.name.toLowerCase().includes(term));
-    const id = isTin ? 'tins-section' : 'products';
+    const hit = products.find(p => p.name.toLowerCase().includes(term));
+    const id = MENU_SECTIONS.find(sec => hit && sec.codes.includes(hit.category))?.anchor || 'products';
     const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
     return () => clearTimeout(t);
   }, [q, products]);
@@ -107,7 +151,9 @@ export default function HomeProducts() {
   useEffect(() => {
     const cat = new URLSearchParams(window.location.search).get('cat');
     if (!cat) return;
-    const id = cat === 'tins' ? 'tins-section' : cat === 'corporate' ? 'corporate-section' : 'products';
+    const slug = cat.trim().toLowerCase();
+    const hit = MENU_SECTIONS.find(sec => sec.codes.some(c => c.toLowerCase() === slug) || sec.anchor === `${slug}-section`);
+    const id = slug === 'corporate' ? 'corporate-section' : hit?.anchor || 'products';
     const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
     try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignore */ }
     return () => clearTimeout(t);
@@ -115,13 +161,39 @@ export default function HomeProducts() {
 
   // Selecting/searching a product floats it to the top but KEEPS every other cookie visible.
   const ql = q.trim().toLowerCase();
-  const cookies = products
-    .filter(p => p.category === 'COOKIES' && p.isAvailable && !/sundae/i.test(p.name) && productAvailableFor(store, p))
-    .sort((a, b) => (ql ? (a.name.toLowerCase().includes(ql) ? 0 : 1) - (b.name.toLowerCase().includes(ql) ? 0 : 1) : 0));
-  const tins = products.filter(p => p.category === 'TINS' && p.isAvailable && productAvailableFor(store, p));
+  /* One section per registry category, in menu order, carrying whatever products exist in it —
+     an empty category draws nothing at all.
+
+     Note what is deliberately NOT filtered here any more. Products used to be dropped from the
+     menu when the shopper's coarse location made them ineligible, so a visitor outside Bengaluru
+     was never shown Red Velvet at all. The whole menu is now shown to everyone, and the "not to
+     THIS address" conversation happens once, at checkout, against a real address — where the line
+     is blacked out with the reason written on it. Hiding an item early meant a shopper couldn't
+     even learn it exists, which is a worse answer than being told where it can go.
+
+     The old `!/sundae/i` exclusion is gone with it: sundaes were being kept out of the cookies
+     grid by name because there was no category to put them in. Now there is one. */
+  const sections = MENU_SECTIONS
+    .map(c => ({
+      ...c,
+      items: products
+        .filter(p => c.codes.includes(p.category) && p.isAvailable)
+        // Menu order first; a search then floats whatever matched to the top of it, so typing a
+        // name still finds it without permanently reshuffling the shelf underneath.
+        .sort((a, b) => menuRank(a.name) - menuRank(b.name))
+        .sort((a, b) => (ql ? (a.name.toLowerCase().includes(ql) ? 0 : 1) - (b.name.toLowerCase().includes(ql) ? 0 : 1) : 0)),
+    }))
+    .filter(s => s.items.length > 0);
 
   return (
-    <section id="products" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
+    <>
+      {/* Left-margin section marker — see MenuRail. Rendered as a sibling so it can be
+          position:fixed without the section's own stacking context trapping it. */}
+      <MenuRail sections={sections.map(s => ({ label: s.label, anchor: s.anchor }))} />
+    {/* menu-rail-inset reserves the strip the rail sits in. On the section rather than the inner
+        container so the background still runs edge to edge, and so the centred headings stay
+        centred — within a column that has simply moved over by the width of the rail. */}
+    <section id="products" className="menu-rail-inset" style={{ background: 'var(--gold)', padding: 'clamp(40px,6vw,80px) 0', borderTop: '1px solid var(--border-default)' }}>
       <div style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter)' }}>
         <div style={{ textAlign: 'center', marginBottom: 'clamp(6px,1.5vw,14px)' }}>
           <p style={eyebrow}>Order online</p>
@@ -129,31 +201,39 @@ export default function HomeProducts() {
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-body)', maxWidth: 520, margin: '0 auto' }}>Pick your favourites and add them to the cart — checkout in a tap.</p>
         </div>
 
-        {/* Cookies */}
-        <SubHead icon={<Cookie size={19} />} title="Cookies" />
-        {cookies.length === 0 ? (
+        {sections.length === 0 ? (
           <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0' }}>Loading fresh cookies…</p>
-        ) : (
-          <div className="home-products-grid" style={gridStyle}>
-            {cookies.map(p => <ProductCard key={p.id} p={p} />)}
-          </div>
-        )}
-
-        {/* Cookie Tins */}
-        {tins.length > 0 && (
-          <div id="tins-section" style={{ scrollMarginTop: 90 }}>
-            <SubHead icon={<Gift size={19} />} title="Cookie Tins" />
-            <div className="home-products-grid" style={gridStyle}>
-              {tins.map(p => <ProductCard key={p.id} p={p} />)}
+        ) : sections.map(s => {
+          // A section can span several categories (Hug in a Dip + Cookie Sundae), so the icon comes
+          // from the first of them rather than from the section itself.
+          const Icon = CATEGORY_ICONS[s.codes[0]];
+          return (
+            // Cookies anchors to the <section> wrapper's own id, so it must not re-declare it —
+            // two elements with id="products" and the deep-link scroll lands on whichever the
+            // browser finds first.
+            <div key={s.anchor} id={s.anchor === 'products' ? undefined : s.anchor} data-menu-section={s.anchor} style={{ scrollMarginTop: 90 }}>
+              <SubHead icon={<Icon size={19} />} title={s.label} />
+              <div className="home-products-grid" style={gridStyle}>
+                {s.items.map(p => <ProductCard key={p.id} p={p} />)}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })}
 
         {/* Corporate & bulk gifting — last, as a wide card */}
+        {/* The gift boxes themselves, behind the words. This was a flat dark-brown panel — the one
+            block on the page selling a product with nothing to look at, on a page that is otherwise
+            all photographs. The scrim is in the class (globals.css) rather than here, because it has
+            to change direction once the card wraps on a phone, and an inline style cannot. */}
         <button
           id="corporate-section"
+          className="corp-cta"
           onClick={() => router.push('/corporate')}
-          style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: 'var(--surface-inverse)', color: 'var(--cream-100)', padding: 'clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
+          /* Vertical padding only — the width is set by the grid above it. Taller also means more of
+             the photograph survives: `cover` on a 6.6:1 band in a short card crops most of its
+             height away, so the extra room is the difference between a strip of boxes and the
+             spread they were shot as. */
+          style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', color: 'var(--cream-100)', padding: 'clamp(40px,5.2vw,72px) clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 260, flex: '1 1 320px' }}>
             <span style={{ width: 46, height: 46, borderRadius: 13, background: 'var(--white-16)', color: 'var(--white)', display: 'grid', placeItems: 'center', flex: 'none' }}><Briefcase size={22} /></span>
@@ -168,5 +248,6 @@ export default function HomeProducts() {
 
 
     </section>
+    </>
   );
 }

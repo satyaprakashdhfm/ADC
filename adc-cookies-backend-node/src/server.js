@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 
 import { initSchema, getOne } from './db.js';
 import { seedIfEmpty } from './seed.js';
+import { startStatusPoller } from './statusPoller.js';
 import { parseAuth } from './middleware.js';
 
 import authRoutes from './routes/auth.js';
@@ -143,6 +144,10 @@ if (!process.env.VERCEL) {
     // Give any store that has no staff login one. Idempotent — an existing account is never
     // touched, so a password someone changed cannot be reset by a redeploy.
     await ensureStoreAccounts().catch((e) => console.error('[STORE] account seed failed:', e?.message || e));
+    /* Carrier status refresh. The store tablet polls and so stays current, but the admin list and
+       the customer's account render the stored value — which went stale the moment nobody was
+       looking at a portal. The webhook was meant to cover this and has not fired once. */
+    startStatusPoller();
     app.listen(PORT, () => {
       console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
       console.log(`[CONFIG] DB=${process.env.DATABASE_URL ? 'supabase-pooler' : 'local-pg'}`);

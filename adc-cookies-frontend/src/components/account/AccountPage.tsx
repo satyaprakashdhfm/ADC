@@ -3,11 +3,20 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { getOrders, getAddresses, addAddress, trackOrderShipment, getSpinStatus, type DelhiveryTrackResult, type Address, type Order, type SpinClaim } from '@/lib/api';
+import { getOrders, getAddresses, addAddress, updateAddress, deleteAddress as apiDeleteAddress, trackOrderShipment, getSpinStatus, type DelhiveryTrackResult, type Address, type Order, type SpinClaim } from '@/lib/api';
+import dynamic from 'next/dynamic';
+import { useAddressPoint } from '@/hooks/useAddressPoint';
+
+const PIN_RE = /^[1-9][0-9]{5}$/;
+// Leaflet needs a window, and this only renders inside an open address form.
+const AddressPinMap = dynamic(() => import('@/components/ordering/ui/AddressPinMap'), {
+  ssr: false,
+  loading: () => <div style={{ height: 220, borderRadius: 'var(--radius-card)', background: 'var(--surface-sunken)' }} />,
+});
 import { OrderNextStep } from '@/lib/orderNextStep';
 import {
   parseOptions, optionList, hasGift, giftMessage, statusColor, formatMoney, formatDate,
-  friendlyDate, formatPhone, national10, SHIP_STAGES, shipStage, isCancelledStatus, whenLabel,
+  friendlyDate, formatPhone, national10, SHIP_STAGES, shipStage, isCancelledStatus, isDeadShipment, whenLabel,
 } from '@/lib/orderFormat';
 import LoginModal from '@/components/ordering/LoginModal';
 import SiteHeader from '@/components/storefront/SiteHeader';
@@ -31,13 +40,24 @@ const sectionTitle: React.CSSProperties = {
 };
 
 
-function AddressForm({ initial, onSave, onCancel }: { initial?: Address; onSave: (a: Omit<Address, 'id'>) => void; onCancel: () => void }) {
+/* The same editor as checkout's, and it has to stay that way.
+   This one had no latitude or longitude in its state at all, so opening an address here and saving
+   it silently threw away its delivery point — which is how you can fix an address and be told all
+   over again that we need its location. The point rules now come from the shared hook, and the same
+   pin map is rendered, so an address edited from the account is as routable as one edited at
+   checkout. */
+function AddressForm({ initial, onSave, onCancel, saving, error }: {
+  initial?: Address; onSave: (a: Omit<Address, 'id'>) => void; onCancel: () => void;
+  saving?: boolean; error?: string;
+}) {
   const [f, setF] = useState<Omit<Address, 'id'>>({
     fullName: initial?.fullName ?? '', phone: initial?.phone ?? '',
     addressLine1: initial?.addressLine1 ?? '', addressLine2: initial?.addressLine2 ?? '',
     city: initial?.city ?? '', state: initial?.state ?? '', pincode: initial?.pincode ?? '',
+    latitude: initial?.latitude ?? null, longitude: initial?.longitude ?? null,
     isDefault: initial?.isDefault ?? false,
   });
+  const { pointNote, setPin, resolveForSave } = useAddressPoint(f, setF, true);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   const inp: React.CSSProperties = { width: '100%', padding: '11px 13px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
   const valid = f.fullName && f.phone && f.addressLine1 && f.city && f.pincode;
@@ -53,11 +73,24 @@ function AddressForm({ initial, onSave, onCancel }: { initial?: Address; onSave:
         <input style={inp} placeholder="State" value={f.state} onChange={set('state')} />
         <input style={inp} placeholder="Pincode" value={f.pincode} onChange={set('pincode')} />
       </div>
+      {PIN_RE.test((f.pincode || '').trim()) && f.latitude != null && f.longitude != null && (
+        <AddressPinMap
+          lat={f.latitude} lng={f.longitude}
+          onMove={setPin}
+          onStreet={(street) => setF(prev => ({ ...prev, addressLine2: street }))}
+          pincode={f.pincode} city={f.city}
+          hint={pointNote}
+        />
+      )}
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer' }}>
         <input type="checkbox" checked={f.isDefault} onChange={e => setF({ ...f, isDefault: e.target.checked })} /> Set as default
       </label>
+      {error && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, lineHeight: 1.4 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-        <button disabled={!valid} onClick={() => onSave(f)} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: valid ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: valid ? 'pointer' : 'not-allowed' }}>Save address</button>
+        <button disabled={!valid || saving} onClick={async () => {
+          const point = await resolveForSave();
+          onSave({ ...f, latitude: point?.latitude ?? null, longitude: point?.longitude ?? null });
+        }} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: (valid && !saving) ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: saving ? 'wait' : valid ? 'pointer' : 'not-allowed' }}>{saving ? 'Saving…' : 'Save address'}</button>
         <button onClick={onCancel} style={{ padding: '10px 16px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
       </div>
     </div>
@@ -107,7 +140,7 @@ function ShipmentTracker({ order }: { order: Order }) {
 
   return (
     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
-      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ marginBottom: 12 }} />
+      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} bookingStatus={order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ marginBottom: 12 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {order.delhiveryWaybill && (
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
@@ -159,14 +192,16 @@ function ShipmentTracker({ order }: { order: Order }) {
         </div>
       )}
       {trackResult && trackResult.tracked && (() => {
-        const cancelled = isCancelledStatus(latestStatus) || order.orderStatus === 'CANCELLED';
+        // Our own cancel counts here too. Delhivery answers for a cancelled waybill indefinitely,
+        // and its answer ("Not Picked") drew a live four-step ladder over a dead booking.
+        const cancelled = isCancelledStatus(latestStatus) || order.orderStatus === 'CANCELLED' || isCancelledStatus(order.shipmentStatus);
         const reached = cancelled ? -1 : Math.max(shipStage(latestStatus), shipStage(order.orderStatus), 0);
         const latestScan = timelineScans[0] || null; // newest first
         const expectedDate = order.estimatedDelivery ? friendlyDate(order.estimatedDelivery) : null;
         return (
           <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 14, padding: '16px 16px 14px' }}>
             {cancelled ? (
-              <span style={{ padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-xs)', fontWeight: 900 }}>{latestStatus || 'Cancelled'}</span>
+              <span style={{ padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-xs)', fontWeight: 900 }}>{isCancelledStatus(order.shipmentStatus) ? 'Shipment cancelled' : (latestStatus || 'Cancelled')}</span>
             ) : (
               <>
                 {SHIP_STAGES.map((label, i) => {
@@ -224,7 +259,10 @@ function ShipmentTracker({ order }: { order: Order }) {
 function OrderCard({ order, onReorder }: { order: Order; onReorder: () => void }) {
   // Cancellation is terminal — if either the order OR the shipment is cancelled/RTO/returned,
   // show CANCELLED, never a stale "Delivered". Keeps the badge, meta line and refund note in sync.
-  const cancelled = isCancelledStatus(order.orderStatus) || isCancelledStatus(order.shipmentStatus);
+  const cancelled = isCancelledStatus(order.orderStatus) || isDeadShipment(order.shipmentStatus);
+  // The courier booking was pulled while the order itself is still live — being rebooked, not
+  // cancelled. Saying "Cancelled" to someone whose cookies are still coming is the worse error.
+  const rebooking = !cancelled && isCancelledStatus(order.shipmentStatus);
   const displayStatus = cancelled ? 'Cancelled' : order.orderStatus;
   const colors = statusColor(cancelled ? 'cancelled' : order.orderStatus);
   const items = order.items ?? [];
@@ -246,7 +284,7 @@ function OrderCard({ order, onReorder }: { order: Order; onReorder: () => void }
             {giftCount > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 900 }}><Gift size={12} /> Gift packed</span>}
           </div>
           <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 5 }}>Order {order.orderNumber}</h2>
-          <p style={{ color: 'var(--text-muted)', lineHeight: 1.45, fontSize: 'var(--text-sm)' }}>{formatDate(order.createdAt)} · {itemCount || items.length} item{(itemCount || items.length) === 1 ? '' : 's'} · {cancelled ? 'Cancelled' : (order.shipmentStatus || 'Preparing shipment')}</p>
+          <p style={{ color: 'var(--text-muted)', lineHeight: 1.45, fontSize: 'var(--text-sm)' }}>{formatDate(order.createdAt)} · {itemCount || items.length} item{(itemCount || items.length) === 1 ? '' : 's'} · {cancelled ? 'Cancelled' : rebooking ? 'Arranging a new courier' : (order.shipmentStatus || 'Preparing shipment')}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>{formatMoney(order.totalAmount)}</div>
@@ -357,6 +395,8 @@ export default function AccountPage() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addingAddr, setAddingAddr] = useState(false);
   const [editingAddr, setEditingAddr] = useState<number | null>(null);
+  const [addrBusy, setAddrBusy] = useState(false);
+  const [addrErr, setAddrErr] = useState('');
   const [spinClaim, setSpinClaim] = useState<SpinClaim | null | undefined>(undefined); // undefined = loading
   const [copiedSpin, setCopiedSpin] = useState(false);
 
@@ -425,23 +465,48 @@ export default function AccountPage() {
   };
   const doLogout = () => { logout(); router.push('/'); };
 
+  /* These four used to change React state and nothing else — no request left the browser. Editing
+     an address in the account looked exactly like it had saved, until a reload put the old one
+     back, or until checkout read the row and found the point still missing. An add that failed
+     invented an id from the clock and carried on. */
   const handleAddAddress = async (data: Omit<Address, 'id'>) => {
+    setAddrBusy(true); setAddrErr('');
     try {
       const created = await addAddress(data);
       setAddresses(prev => normalizeDefault([...prev, created], data.isDefault ? created.id : undefined));
-    } catch {
-      const local: Address = { ...data, id: Date.now() };
-      setAddresses(prev => normalizeDefault([...prev, local], data.isDefault ? local.id : undefined));
-    }
-    setAddingAddr(false);
+      setAddingAddr(false);
+    } catch (e) {
+      setAddrErr(e instanceof Error ? e.message : 'Could not save this address. Please try again.');
+    } finally { setAddrBusy(false); }
   };
 
-  const handleEditAddress = (id: number, data: Omit<Address, 'id'>) => {
-    setAddresses(prev => normalizeDefault(prev.map(a => a.id === id ? { ...data, id } : a), data.isDefault ? id : undefined));
-    setEditingAddr(null);
+  const handleEditAddress = async (id: number, data: Omit<Address, 'id'>) => {
+    setAddrBusy(true); setAddrErr('');
+    try {
+      const saved = await updateAddress(id, data);
+      setAddresses(prev => normalizeDefault(prev.map(a => (a.id === id ? saved : a)), data.isDefault ? id : undefined));
+      setEditingAddr(null);
+    } catch (e) {
+      setAddrErr(e instanceof Error ? e.message : 'Could not save this address. Please try again.');
+    } finally { setAddrBusy(false); }
   };
-  const deleteAddress = (id: number) => setAddresses(prev => prev.filter(a => a.id !== id));
-  const makeDefault = (id: number) => setAddresses(prev => normalizeDefault(prev, id));
+
+  const deleteAddress = async (id: number) => {
+    const before = addresses;
+    setAddresses(prev => prev.filter(a => a.id !== id));
+    try { await apiDeleteAddress(id); } catch { setAddresses(before); setAddrErr('Could not delete that address.'); }
+  };
+
+  const makeDefault = async (id: number) => {
+    const target = addresses.find(a => a.id === id);
+    if (!target) return;
+    setAddresses(prev => normalizeDefault(prev, id));
+    try {
+      const { id: _drop, ...rest } = target;
+      void _drop;
+      await updateAddress(id, { ...rest, isDefault: true });
+    } catch { setAddrErr('Could not set that as your default address.'); }
+  };
 
   return (
     <main className="adc-pattern-page order-cards" style={{ minHeight: '100vh' }}>
@@ -560,7 +625,7 @@ export default function AccountPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }} className="account-address-list">
                 {addresses.map(a => editingAddr === a.id ? (
-                  <AddressForm key={a.id} initial={a} onSave={d => handleEditAddress(a.id, d)} onCancel={() => setEditingAddr(null)} />
+                  <AddressForm key={a.id} initial={a} saving={addrBusy} error={addrErr} onSave={d => handleEditAddress(a.id, d)} onCancel={() => { setAddrErr(''); setEditingAddr(null); }} />
                 ) : (
                   <div key={a.id} style={{ ...card, padding: 15, display: 'flex', alignItems: 'flex-start', gap: 11 }}>
                     <span style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{a.isDefault ? <Home size={17} color="var(--brand-secondary)" /> : <Briefcase size={17} color="var(--brand-secondary)" />}</span>
@@ -581,7 +646,7 @@ export default function AccountPage() {
                   </div>
                 ))}
               </div>
-              {addingAddr && <div style={{ marginTop: 12 }}><AddressForm onSave={handleAddAddress} onCancel={() => setAddingAddr(false)} /></div>}
+              {addingAddr && <div style={{ marginTop: 12 }}><AddressForm saving={addrBusy} error={addrErr} onSave={handleAddAddress} onCancel={() => { setAddrErr(''); setAddingAddr(false); }} /></div>}
             </section>
           </div>
         </section>

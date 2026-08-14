@@ -1,6 +1,7 @@
 // Same-origin by default: the browser calls /api/... on whatever host served the page
 // (localhost or your LAN IP on a phone), and Next.js rewrites it to the backend server-side.
 import { supabase } from './supabase';
+import type { ProductCategory } from './categories';
 
 // Where the browser sends API calls. In the browser we ALWAYS use the same-origin `/api` path so
 // Next.js rewrites it to the backend (see next.config.ts). This keeps `next dev` hitting your LOCAL
@@ -73,7 +74,7 @@ export async function logLoginLocation(): Promise<{ ok: boolean }> {
 
 /* ---- Products ---- */
 export interface Product {
-  id: number; name: string; category: 'COOKIES' | 'TINS';
+  id: number; name: string; category: ProductCategory;
   description: string; price: number; stockQuantity: number;
   images: string; options: string; isAvailable: boolean;
   menuGroup: string; tag: string; featured: boolean;
@@ -152,6 +153,10 @@ export async function addAddress(data: Omit<Address, 'id'>): Promise<Address> {
 
 export async function updateAddress(id: number, data: Omit<Address, 'id'>): Promise<Address> {
   return request(`/addresses/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function deleteAddress(id: number): Promise<void> {
+  await request(`/addresses/${id}`, { method: 'DELETE' });
 }
 
 /* ---- Contact ---- */
@@ -311,6 +316,18 @@ export async function verifyPayment(orderId: number, confirmation?: PaymentConfi
   return request(`/orders/${orderId}/payment/verify`, { method: 'POST', body: JSON.stringify(confirmation || {}) });
 }
 
+/**
+ * Tell the backend the shopper closed or failed the payment, so the unpaid order it created to open
+ * Razorpay with is cancelled rather than left sitting as PENDING.
+ *
+ * Never throws. It runs on the way out of a payment the shopper has already given up on, and an
+ * error here must not become a second thing going wrong in front of them — the order stays
+ * invisible to them either way, since the account list excludes PENDING.
+ */
+export async function abandonOrder(orderId: number): Promise<void> {
+  try { await request(`/orders/${orderId}/abandon`, { method: 'POST' }); } catch { /* best effort */ }
+}
+
 export async function getOrders(): Promise<Order[]> { return request('/orders'); }
 
 export async function getOrder(id: number): Promise<Order> { return request(`/orders/${id}`); }
@@ -331,6 +348,9 @@ export interface DeliveryCheck {
   serviceable: boolean;
   embargo?: boolean;
   reason?: string;
+  /** The backend's own sentence for why. It always sent one; the UI just never read it, and
+   *  substituted "please use a different address" for every refusal including the recoverable ones. */
+  message?: string;
   cod?: boolean;
   pincode?: string;
   tat?: number | null;
@@ -342,6 +362,12 @@ export interface DeliveryCheck {
   sameDay?: boolean;
   deliveryFee?: number;         // the REAL charge: Shiprocket's live quote (intracity) or the admin-set flat outstation fee
   etaHours?: number;            // intracity only — real ETA from the carrier quote
+  /** How far the order has to travel. Intracity: the carrier's real routing distance from the
+   *  dispatching store, which is what the fee is priced on. Outstation: straight-line from the
+   *  warehouse, because Delhivery prices by weight and zone and never reports a distance. */
+  distanceKm?: number | null;
+  distanceApprox?: boolean;     // true when distanceKm is as-the-crow-flies, so the copy says "about"
+  originStore?: string | null;  // outstation only — the warehouse the parcel is posted from
   etaLabel?: string;            // e.g. "within ~1 hour" — same-day intracity promise
   maintenanceMessage?: string;  // shown when same-day is unavailable and checkout is blocked
   /** Per-product delivery eligibility for THIS pincode — independent of `serviceable`, which is
@@ -378,7 +404,7 @@ export interface AdminCoupon { id: number; code: string; discountType: string; d
 export interface CouponInput { code: string; discountType: 'PERCENTAGE' | 'FIXED'; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive?: boolean; spinWeight?: number | null; spinLabel?: string | null; terms?: string | null; }
 export interface AdminMessage { id: number; name: string; email: string; phone?: string | null; message: string; handled: boolean; createdAt: string; }
 export interface ProductInput {
-  name: string; category: 'COOKIES' | 'TINS'; description?: string; price: number;
+  name: string; category: ProductCategory; description?: string; price: number;
   stockQuantity?: number; images?: string; options?: string; isAvailable?: boolean;
   menuGroup?: string; tag?: string; featured?: boolean;
   intracityAvailable?: boolean; intracityUnavailableReason?: string;
@@ -451,13 +477,10 @@ export async function adminUpdateOrderStatus(id: number, status: string, remarks
 
 /** Everything that took money but did not complete downstream. Empty lists = nothing to chase. */
 export interface AttentionReport {
-  paidNoShipment: { id: number; order_number: string; total_amount: number; created_at: string; shipment_error: string | null; carrier: string | null; has_address: boolean }[];
+  paidNoShipment: { id: number; order_number: string; total_amount: number; created_at: string; shipment_error: string | null; carrier: string | null; has_address: boolean; carrier_order_id: string | null; shipment_id: string | null; shipment_status: string | null }[];
   paidNoPosTicket: { id: number; order_number: string; total_amount: number; created_at: string; last_error: string | null; attempts: number }[];
   cancelStuckDownstream: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
   moneyReversed: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
-  /** Paid, made at a store that bills on its OWN Petpooja terminal, and no bill number typed back —
-   *  so there is nothing to reconcile the Razorpay settlement against. */
-  posManualUnbilled: { id: number; order_number: string; total_amount: number; created_at: string; store_code: string; store_accepted_at: string | null; store_ready_at: string | null }[];
   total: number;
 }
 export async function adminAttention(): Promise<AttentionReport> { return request('/admin/attention'); }
@@ -521,6 +544,11 @@ export interface StoreReadinessReport {
   unmappedPickups?: { id: number; nickname: string; city: string; pincode: string; verified: boolean }[];
 }
 export async function adminGetStoreReadiness(): Promise<StoreReadinessReport> { return request('/admin/delivery/stores'); }
+
+/** Shiprocket wallet — the balance a same-day rider is actually dispatched against. */
+export interface ShiprocketWallet { ok: boolean; reason?: string; balance?: number; low?: boolean; lowWatermark?: number }
+export async function adminGetShiprocketWallet(): Promise<ShiprocketWallet> { return request('/admin/delivery/wallet'); }
+
 
 /* ---- Admin: Petpooja (POS) ---- */
 

@@ -68,7 +68,8 @@ router.post('/webhook', async (req, res) => {
     // Keep the carrier's own wording on the shipment, and the AWB, so the admin sees what they see.
     await query(
       `UPDATE orders SET shipment_status=$1, delhivery_waybill=COALESCE(NULLIF($2,''), delhivery_waybill),
-              carrier='SHIPROCKET', updated_at=$3 WHERE id=$4`,
+              carrier='SHIPROCKET', updated_at=$3
+        WHERE id=$4 AND (shipment_status IS NULL OR shipment_status !~* 'cancel')`,
       [status || 'IN_TRANSIT', awb, ts, order.id]
     );
 

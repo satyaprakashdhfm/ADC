@@ -80,13 +80,27 @@ router.put('/:id', async (req, res) => {
     await query('UPDATE addresses SET is_default = FALSE WHERE user_id = $1', [user.id]);
   }
 
+  /*
+   * Coordinates are part of the address, and this route used to drop them on the floor.
+   *
+   * Only POST wrote latitude/longitude, so editing an address could never fix its location: the
+   * form resolved a point, sent it, and the update quietly ignored it. An address saved without a
+   * usable point — or with a wrong one — therefore kept telling the customer to "edit and re-save
+   * to confirm same-day pricing", and editing and re-saving changed nothing at all. Forever.
+   *
+   * Written exactly as sent, nulls included. When the resolver cannot place an address it returns
+   * no point on purpose, and clearing the stored one is the correct outcome: no coordinates means
+   * no same-day offer, where stale wrong ones mean a rider at the wrong door.
+   */
   const row = await getOne(
     `UPDATE addresses SET
        full_name=$1, phone=$2, address_line1=$3, address_line2=$4,
-       city=$5, state=$6, pincode=$7, is_default=$8, label=$9
-     WHERE id=$10 AND user_id=$11 RETURNING *`,
+       city=$5, state=$6, pincode=$7, is_default=$8, label=$9,
+       latitude=$10, longitude=$11
+     WHERE id=$12 AND user_id=$13 RETURNING *`,
     [v.fullName, v.phone, v.addressLine1, b.addressLine2 ?? null,
      canonicalCity(b.city), titleCase(b.state), v.pincode, !!b.isDefault, b.label || 'Home',
+     b.latitude ?? null, b.longitude ?? null,
      req.params.id, user.id]
   );
   res.json(serializeAddress(row));

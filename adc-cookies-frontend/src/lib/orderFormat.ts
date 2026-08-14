@@ -105,6 +105,12 @@ export function shipStage(s?: string | null): number {
 
 export const isCancelledStatus = (s?: string | null) => /cancel|\brto\b|returned|lost/i.test(s || '');
 
+/* Terminal FROM THE SHIPMENT'S SIDE: the parcel came back or went missing, so no amount of
+   rebooking saves this order. A plain cancelled booking is deliberately not in here — that one is
+   routine (wrong carrier, missed pickup, rebook on another) and must not brand a live order the
+   customer has paid for as cancelled. */
+export const isDeadShipment = (s?: string | null) => /\brto\b|returned|lost/i.test(s || '');
+
 export function whenLabel(iso?: string): string {
   if (!iso) return '';
   const d = new Date(iso);
