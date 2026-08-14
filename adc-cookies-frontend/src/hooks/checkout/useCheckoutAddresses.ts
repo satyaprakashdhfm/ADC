@@ -107,6 +107,29 @@ export function useCheckoutAddresses() {
   const [pointSource, setPointSource] = useState<PointSource | null>(null);
   const [pointNote, setPointNote] = useState('');
 
+  /* Seed the map the moment a pincode is valid.
+     The map used to render only when coordinates already existed, which made it useless in the one
+     case it was built for: an address with no point yet, or one whose bad point had been cleared.
+     There was nothing to draw, so there was nothing to drag. Dropping the PIN-area centre in gives
+     the pin somewhere to start; it is marked 'postcode', so it still ranks below anything better
+     and the save path re-resolves it against the typed street either way. */
+  useEffect(() => {
+    if (!adding) return;
+    const pin = aform.pincode.replace(/\D/g, '');
+    if (pin.length !== 6) return;
+    if (aform.latitude != null && aform.longitude != null) return;
+    let live = true;
+    const t = setTimeout(async () => {
+      const { point } = await resolveAddressPoint({ pincode: pin }, null);
+      if (!live || !point) return;
+      setAform(f => (f.latitude != null && f.longitude != null ? f
+        : { ...f, latitude: point.latitude, longitude: point.longitude }));
+      setPointSource('postcode');
+      setPointNote('Centre of PIN ' + pin + ' — drag the pin to your door.');
+    }, 500);
+    return () => { live = false; clearTimeout(t); };
+  }, [adding, aform.pincode, aform.latitude, aform.longitude]);
+
   /** Dragging the pin is the customer telling us exactly where they are. Nothing outranks it. */
   const setPin = (latitude: number, longitude: number) => {
     setAform(f => ({ ...f, latitude, longitude }));

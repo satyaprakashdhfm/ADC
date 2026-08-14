@@ -513,7 +513,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                           and it is the one part of the address the customer could not previously
                           see or correct. An order typed as Jayanagar once shipped from a pin twelve
                           kilometres away in Varthur, and nothing on any screen said so. */}
-                      {aform.latitude != null && aform.longitude != null && (
+                      {pinOk && aform.latitude != null && aform.longitude != null && (
                         <AddressPinMap
                           lat={aform.latitude}
                           lng={aform.longitude}
