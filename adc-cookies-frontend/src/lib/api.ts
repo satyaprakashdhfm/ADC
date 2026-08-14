@@ -463,6 +463,13 @@ export async function adminSetStoreProductOverride(code: string, productId: numb
 // Public: the current header-banner offer text (or null if the admin hasn't set one).
 export async function getAnnouncement(): Promise<{ text: string | null }> { return request('/products/announcement'); }
 // Public: today's stall/store-visit note (or null if the admin hasn't set one).
+/** Our own record of what happened to an order — placed, paid, accepted, packed, shipped. Separate
+ *  from the carrier's scans, and the half of the story a carrier's tracking page never has. */
+export interface OrderEvent { id: number; status: string; remarks: string | null; createdAt: string }
+export async function getOrderTracking(orderId: number): Promise<OrderEvent[]> {
+  return request(`/orders/${orderId}/tracking`);
+}
+
 export async function getStallInfo(): Promise<{ text: string | null }> { return request('/products/stall-info'); }
 /** Is online ordering paused, and what do we tell the customer? Public — checkout reads it too. */
 export async function getOrderingStatus(): Promise<{ paused: boolean; message: string | null }> { return request('/products/ordering-status'); }
