@@ -7,7 +7,7 @@ import { getOrders, getAddresses, addAddress, trackOrderShipment, getSpinStatus,
 import { OrderNextStep } from '@/lib/orderNextStep';
 import {
   parseOptions, optionList, hasGift, giftMessage, statusColor, formatMoney, formatDate,
-  friendlyDate, formatPhone, national10, SHIP_STAGES, shipStage, isCancelledStatus, whenLabel,
+  friendlyDate, formatPhone, national10, SHIP_STAGES, shipStage, isCancelledStatus, isDeadShipment, whenLabel,
 } from '@/lib/orderFormat';
 import LoginModal from '@/components/ordering/LoginModal';
 import SiteHeader from '@/components/storefront/SiteHeader';
@@ -107,7 +107,7 @@ function ShipmentTracker({ order }: { order: Order }) {
 
   return (
     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
-      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ marginBottom: 12 }} />
+      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} bookingStatus={order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ marginBottom: 12 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {order.delhiveryWaybill && (
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
@@ -159,14 +159,16 @@ function ShipmentTracker({ order }: { order: Order }) {
         </div>
       )}
       {trackResult && trackResult.tracked && (() => {
-        const cancelled = isCancelledStatus(latestStatus) || order.orderStatus === 'CANCELLED';
+        // Our own cancel counts here too. Delhivery answers for a cancelled waybill indefinitely,
+        // and its answer ("Not Picked") drew a live four-step ladder over a dead booking.
+        const cancelled = isCancelledStatus(latestStatus) || order.orderStatus === 'CANCELLED' || isCancelledStatus(order.shipmentStatus);
         const reached = cancelled ? -1 : Math.max(shipStage(latestStatus), shipStage(order.orderStatus), 0);
         const latestScan = timelineScans[0] || null; // newest first
         const expectedDate = order.estimatedDelivery ? friendlyDate(order.estimatedDelivery) : null;
         return (
           <div style={{ marginTop: 12, background: 'var(--surface-sunken)', borderRadius: 14, padding: '16px 16px 14px' }}>
             {cancelled ? (
-              <span style={{ padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-xs)', fontWeight: 900 }}>{latestStatus || 'Cancelled'}</span>
+              <span style={{ padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-xs)', fontWeight: 900 }}>{isCancelledStatus(order.shipmentStatus) ? 'Shipment cancelled' : (latestStatus || 'Cancelled')}</span>
             ) : (
               <>
                 {SHIP_STAGES.map((label, i) => {
@@ -224,7 +226,10 @@ function ShipmentTracker({ order }: { order: Order }) {
 function OrderCard({ order, onReorder }: { order: Order; onReorder: () => void }) {
   // Cancellation is terminal — if either the order OR the shipment is cancelled/RTO/returned,
   // show CANCELLED, never a stale "Delivered". Keeps the badge, meta line and refund note in sync.
-  const cancelled = isCancelledStatus(order.orderStatus) || isCancelledStatus(order.shipmentStatus);
+  const cancelled = isCancelledStatus(order.orderStatus) || isDeadShipment(order.shipmentStatus);
+  // The courier booking was pulled while the order itself is still live — being rebooked, not
+  // cancelled. Saying "Cancelled" to someone whose cookies are still coming is the worse error.
+  const rebooking = !cancelled && isCancelledStatus(order.shipmentStatus);
   const displayStatus = cancelled ? 'Cancelled' : order.orderStatus;
   const colors = statusColor(cancelled ? 'cancelled' : order.orderStatus);
   const items = order.items ?? [];
@@ -246,7 +251,7 @@ function OrderCard({ order, onReorder }: { order: Order; onReorder: () => void }
             {giftCount > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 900 }}><Gift size={12} /> Gift packed</span>}
           </div>
           <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 5 }}>Order {order.orderNumber}</h2>
-          <p style={{ color: 'var(--text-muted)', lineHeight: 1.45, fontSize: 'var(--text-sm)' }}>{formatDate(order.createdAt)} · {itemCount || items.length} item{(itemCount || items.length) === 1 ? '' : 's'} · {cancelled ? 'Cancelled' : (order.shipmentStatus || 'Preparing shipment')}</p>
+          <p style={{ color: 'var(--text-muted)', lineHeight: 1.45, fontSize: 'var(--text-sm)' }}>{formatDate(order.createdAt)} · {itemCount || items.length} item{(itemCount || items.length) === 1 ? '' : 's'} · {cancelled ? 'Cancelled' : rebooking ? 'Arranging a new courier' : (order.shipmentStatus || 'Preparing shipment')}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>{formatMoney(order.totalAmount)}</div>
