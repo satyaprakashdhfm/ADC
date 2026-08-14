@@ -25,6 +25,7 @@ export function useCheckoutAddresses() {
   const [detecting, setDetecting] = useState(false);
   const [detectErr, setDetectErr] = useState('');
   const [savingAddr, setSavingAddr] = useState(false);
+  const [saveErr, setSaveErr] = useState('');
 
   // Addresses are private to the signed-in user — fetch on login, clear on logout.
   useEffect(() => {
@@ -168,6 +169,7 @@ export function useCheckoutAddresses() {
 
   const saveAddr = async () => {
     setSavingAddr(true);
+    setSaveErr('');
     // Guarantee coordinates for intracity/same-day routing. The typed address is the source of
     // truth: geocode it on save and use that; only fall back to any GPS-detected coordinates if the
     // lookup fails — so a manually-typed address never ships without a location and quietly drops to
@@ -186,18 +188,25 @@ export function useCheckoutAddresses() {
       ? `[address] saving at ${latitude},${longitude} (${point.source})${rejected ? ` — dropped ${rejected.source}: ${rejected.reason}` : ''}`
       : '[address] saving WITHOUT coordinates — same-day cannot be quoted, which is the intended outcome when we cannot place it');
     const data: Omit<Address, 'id'> = { ...aform, latitude, longitude, isDefault: makeDefault };
-    if (editId != null) {
-      // Editing an existing address.
-      const updated: Address = { ...data, id: editId };
-      try { await updateAddress(editId, data); } catch {} // keep the local edit even if the backend lacks the route
-      setAddresses(p => p.map(a => (a.id === editId ? updated : (makeDefault ? { ...a, isDefault: false } : a))));
-      setAddr(editId);
-    } else {
-      // Adding a new address.
-      let created: Address;
-      try { created = await addAddress(data); } catch { created = { ...data, id: Date.now() }; }
-      setAddresses(p => [...(makeDefault ? p.map(a => ({ ...a, isDefault: false })) : p), created]);
-      setAddr(created.id);
+    /* Trust what came back, and say so when nothing did.
+       Both branches used to swallow the error and pretend locally: an edit kept the typed values on
+       screen, an add invented an id from the clock. A save that failed therefore looked exactly like
+       one that worked, right up until the page was reloaded and the change was gone — which is the
+       shape "it is not saving" always takes. */
+    try {
+      if (editId != null) {
+        const saved = await updateAddress(editId, data);
+        setAddresses(p => p.map(a => (a.id === editId ? saved : (makeDefault ? { ...a, isDefault: false } : a))));
+        setAddr(editId);
+      } else {
+        const created = await addAddress(data);
+        setAddresses(p => [...(makeDefault ? p.map(a => ({ ...a, isDefault: false })) : p), created]);
+        setAddr(created.id);
+      }
+    } catch (e) {
+      setSavingAddr(false);
+      setSaveErr(e instanceof Error ? e.message : 'Could not save this address. Please try again.');
+      return;   // stay on the form, with what they typed still in it
     }
     setSavingAddr(false);
     closeAddrForm();
@@ -260,7 +269,7 @@ export function useCheckoutAddresses() {
 
   return {
     addresses, chosen, adding, aform, setAform, editId, makeDefault, setMakeDefault,
-    detecting, detectErr, savingAddr,
+    detecting, detectErr, savingAddr, saveErr,
     pointSource, pointNote, setPin,
     openAddForm, editAddr, closeAddrForm, saveAddr, detectLocation,
   };

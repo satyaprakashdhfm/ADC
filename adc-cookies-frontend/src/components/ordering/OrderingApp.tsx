@@ -78,7 +78,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const { store: locationStore } = useLocation();
   const {
     addresses, chosen, adding, aform, setAform, editId, makeDefault, setMakeDefault,
-    detecting, detectErr, savingAddr, pointSource, pointNote, setPin,
+    detecting, detectErr, savingAddr, saveErr, pointSource, pointNote, setPin,
     openAddForm, editAddr, closeAddrForm, saveAddr, detectLocation,
   } = useCheckoutAddresses();
   const catalog = useUpsellCatalog();
@@ -506,6 +506,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                         </select>
                       </div>
                       {aform.pincode.length > 0 && !pinOk && <div style={hintStyle}>Enter a valid 6-digit PIN code.</div>}
+                      {saveErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, lineHeight: 1.4 }}>{saveErr}</div>}
 
                       {/* The delivery point, shown rather than assumed.
                           Everything downstream is decided from this pin — which store bakes it,
