@@ -348,6 +348,9 @@ export interface DeliveryCheck {
   serviceable: boolean;
   embargo?: boolean;
   reason?: string;
+  /** The backend's own sentence for why. It always sent one; the UI just never read it, and
+   *  substituted "please use a different address" for every refusal including the recoverable ones. */
+  message?: string;
   cod?: boolean;
   pincode?: string;
   tat?: number | null;

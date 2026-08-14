@@ -607,12 +607,28 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.maintenanceMessage || 'Same-day delivery to this area is temporarily paused.'}</div>
                       </div>
                     </div>
+                  ) : delivCheck.reason === 'location_required' ? (
+                    /* Recoverable, and it used to read as terminal. The backend is saying it has no
+                       coordinates for this address — a thing the customer can fix in ten seconds by
+                       opening it and dropping the pin — and we answered "delivery not available,
+                       use a different address", which tells them to abandon an address we deliver
+                       to perfectly well. Jayanagar 560011 is 2.4 km from our own Jayanagar shop. */
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--amber-300)', background: 'var(--amber-50)' }}>
+                      <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><MapPin size={16} style={{ color: 'var(--white)' }} /></span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>We need this address pinned on the map</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>Same-day delivery is priced from your exact location. Open the address and drop the pin — it takes a moment.</div>
+                      </div>
+                      {chosen && (
+                        <button onClick={() => editAddr(chosen)} style={{ flex: 'none', padding: '8px 14px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>Pin it</button>
+                      )}
+                    </div>
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--status-error)', background: 'var(--red-wash)' }}>
                       <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--status-error)', display: 'grid', placeItems: 'center', flex: 'none' }}><Truck size={16} style={{ color: 'var(--white)' }} /></span>
                       <div>
                         <div style={{ fontWeight: 800, color: 'var(--status-error)', fontSize: 'var(--text-sm)' }}>Delivery not available to {chosen?.pincode}</div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>Please use a different address</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{delivCheck.message || 'Please use a different address'}</div>
                       </div>
                     </div>
                   )
