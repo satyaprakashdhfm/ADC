@@ -20,9 +20,10 @@ import { useUpsellCatalog } from '@/hooks/checkout/useUpsellCatalog';
 import { useColumnFill } from '@/hooks/checkout/useColumnFill';
 import { UPSELL_LADDER } from '@/lib/categories';
 // Leaflet needs a window, and this is only ever rendered inside an open address form.
-const AddressPinMap = dynamic(() => import('./ui/AddressPinMap'), {
+// Leaflet needs a window, and this only renders inside an open address form.
+const AddressWizard = dynamic(() => import('./ui/AddressWizard'), {
   ssr: false,
-  loading: () => <div style={{ height: 190, borderRadius: 'var(--radius-button)', background: 'var(--surface-sunken)' }} />,
+  loading: () => <div style={{ height: 260, borderRadius: 'var(--radius-card)', background: 'var(--surface-sunken)' }} />,
 });
 import { useDeliveryCheck } from '@/hooks/checkout/useDeliveryCheck';
 import { useCheckoutCoupons } from '@/hooks/checkout/useCheckoutCoupons';
@@ -80,9 +81,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const { user } = useAuth();
   const { store: locationStore } = useLocation();
   const {
-    addresses, chosen, adding, aform, setAform, editId, makeDefault, setMakeDefault,
-    detecting, detectErr, savingAddr, saveErr, pointSource, pointNote, setPin,
-    openAddForm, editAddr, closeAddrForm, saveAddr, detectLocation,
+    addresses, chosen, adding, editId, savingAddr, saveErr,
+    openAddForm, editAddr, closeAddrForm, saveAddr,
   } = useCheckoutAddresses();
   const catalog = useUpsellCatalog();
   // Lets the upsell grid grow until the left column matches the right one. Desktop only — below
@@ -136,13 +136,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
     return need > total ? Math.ceil(need - total) : 0;
   };
 
-  const aset = (k: keyof typeof aform) => (e: React.ChangeEvent<HTMLInputElement>) => setAform({ ...aform, [k]: e.target.value });
-  const pinOk = PIN_RE.test(aform.pincode.trim());
-  const phoneOk = PHONE_RE.test(aform.phone.replace(/\D/g, ''));
-  const stateOk = INDIAN_STATES.some(s => s.toLowerCase() === aform.state.trim().toLowerCase());
   // A phone number is required — Delhivery/Shiprocket can't create a shipment without one, so an
   // address saved without a valid one would silently never ship.
-  const aValid = !!(aform.fullName.trim() && phoneOk && aform.addressLine1.trim() && aform.city.trim() && pinOk && stateOk);
   // Can't head to payment without a selected, PIN-valid, serviceable address with a real phone
   // number (older saved addresses may predate that requirement — block those too, not just new ones).
   const chosenPinOk = PIN_RE.test((chosen?.pincode || '').trim());
@@ -486,81 +481,16 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     );
                   })}
                   {adding ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', borderRadius: 'var(--radius-card)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)' }}>
-                      {/* Detect my location — runs automatically when the form opens, and again on tap;
-                          fills the columns we can read. Coordinates are re-derived from the typed
-                          address on save, so editing the fields moves the delivery point with them. */}
-                      <button onClick={detectLocation} disabled={detecting} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--brand-secondary)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: detecting ? 'wait' : 'pointer' }}>
-                        <Navigation size={16} /> {detecting ? 'Detecting…' : 'Detect my location'}
-                      </button>
-                      {detectErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 600, lineHeight: 1.4 }}>{detectErr}</div>}
-
-                      {/* Text fields only — latitude/longitude live on the same form object but are
-                          captured from GPS, never typed, so they are deliberately not listed here. */}
-                      {([['fullName', 'Full name'], ['phone', 'Phone'], ['addressLine1', 'Flat / House / Building'], ['addressLine2', 'Area / Landmark']] as const).map(([k, ph]) => (
-                        <input key={k} value={aform[k]} onChange={aset(k)} placeholder={ph} inputMode={k === 'phone' ? 'tel' : undefined} style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
-                      ))}
-                      {aform.phone.trim().length > 0 && !phoneOk && <div style={hintStyle}>Enter a valid 10-digit mobile number — needed to deliver this order.</div>}
-                      {/* PIN code leads, because it fills the two after it. Typing six digits looks
-                          up the city and state (see useCheckoutAddresses) — so the order on screen
-                          now matches the order of work, instead of asking for a city we are about
-                          to overwrite. Both stay editable; the lookup is a head start, not a lock. */}
-                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        <input value={aform.pincode} onChange={e => setAform(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))} placeholder="Pincode" inputMode="numeric" maxLength={6} style={fieldStyle} />
-                        <input value={aform.city} onChange={aset('city')} placeholder="City" style={fieldStyle} />
-                        <select value={aform.state} onChange={e => setAform(f => ({ ...f, state: e.target.value }))} style={{ ...fieldStyle, cursor: 'pointer', color: aform.state ? 'var(--text-strong)' : 'var(--text-subtle)', appearance: 'none' }}>
-                          <option value="">State</option>
-                          {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-                      {aform.pincode.length > 0 && !pinOk && <div style={hintStyle}>Enter a valid 6-digit PIN code.</div>}
-                      {saveErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, lineHeight: 1.4 }}>{saveErr}</div>}
-
-                      {/* The delivery point, shown rather than assumed.
-                          Everything downstream is decided from this pin — which store bakes it,
-                          what delivery costs, and the address the rider is actually navigated to —
-                          and it is the one part of the address the customer could not previously
-                          see or correct. An order typed as Jayanagar once shipped from a pin twelve
-                          kilometres away in Varthur, and nothing on any screen said so. */}
-                      {pinOk && aform.latitude != null && aform.longitude != null && (
-                        <AddressPinMap
-                          lat={aform.latitude}
-                          lng={aform.longitude}
-                          onMove={setPin}
-                          pincode={aform.pincode}
-                          city={aform.city}
-                          onStreet={(street) => setAform(f => ({ ...f, addressLine2: street }))}
-                          hint={pointSource === 'pin'
-                            ? 'Pinned by you — this exact spot is where the rider is sent.'
-                            : `${pointNote || 'Our best guess from the address above.'} Drag the pin to your exact door.`}
-                        />
-                      )}
-                      {!aform.state && <div style={{ ...hintStyle, color: 'var(--text-muted)', fontWeight: 500 }}>Select your state to continue.</div>}
-
-                      {/* Save this address as … */}
-                      <div>
-                        <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>Save address as</div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          {(['Home', 'Office', 'Other'] as const).map(lb => {
-                            const on = aform.label === lb;
-                            return (
-                              <button key={lb} onClick={() => setAform(f => ({ ...f, label: lb }))} style={{ flex: 1, padding: '9px 0', borderRadius: 'var(--radius-pill)', cursor: 'pointer', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-card)', color: on ? 'var(--orange-800)' : 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>{lb}</button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Mark as default */}
-                      <button onClick={() => setMakeDefault(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '3px 2px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
-                        <span style={{ width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center', border: makeDefault ? 'none' : '2px solid var(--border-strong)', background: makeDefault ? 'var(--gradient-warm)' : 'transparent', color: 'var(--white)', flex: 'none' }}>{makeDefault && <Check size={13} strokeWidth={3} />}</span>
-                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>Mark as default address</span>
-                      </button>
-
-                      <div style={{ display: 'flex', gap: 10 }}>
-                        <button disabled={!aValid || savingAddr} onClick={saveAddr} style={{ flex: 1, padding: '11px', borderRadius: 'var(--radius-button)', border: 'none', background: (aValid && !savingAddr) ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: savingAddr ? 'wait' : aValid ? 'pointer' : 'not-allowed' }}>{savingAddr ? 'Saving…' : editId != null ? 'Save changes' : 'Save & use'}</button>
-                        <button onClick={closeAddrForm} style={{ padding: '11px 18px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
-                      </div>
-                    </div>
+                    /* Location first, then the form — see AddressWizard. The old block asked for a
+                       pincode and then hunted for a point that agreed with it; this asks the map
+                       where you are and reads the pincode off the answer. */
+                    <AddressWizard
+                      initial={editId != null ? addresses.find(a => a.id === editId) : undefined}
+                      saving={savingAddr}
+                      error={saveErr}
+                      onSave={saveAddr}
+                      onCancel={closeAddrForm}
+                    />
                   ) : (
                     <button onClick={openAddForm} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderRadius: 'var(--radius-card)', border: '1.5px dashed var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
                       <Plus size={16} color="var(--brand-secondary)" />

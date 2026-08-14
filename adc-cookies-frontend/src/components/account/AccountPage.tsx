@@ -5,13 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { getOrders, getAddresses, addAddress, updateAddress, deleteAddress as apiDeleteAddress, trackOrderShipment, getSpinStatus, type DelhiveryTrackResult, type Address, type Order, type SpinClaim } from '@/lib/api';
 import dynamic from 'next/dynamic';
-import { useAddressPoint } from '@/hooks/useAddressPoint';
 
 const PIN_RE = /^[1-9][0-9]{5}$/;
 // Leaflet needs a window, and this only renders inside an open address form.
-const AddressPinMap = dynamic(() => import('@/components/ordering/ui/AddressPinMap'), {
+const AddressWizard = dynamic(() => import('@/components/ordering/ui/AddressWizard'), {
   ssr: false,
-  loading: () => <div style={{ height: 220, borderRadius: 'var(--radius-card)', background: 'var(--surface-sunken)' }} />,
+  loading: () => <div style={{ height: 260, borderRadius: 'var(--radius-card)', background: 'var(--surface-sunken)' }} />,
 });
 import { OrderNextStep } from '@/lib/orderNextStep';
 import {
@@ -40,62 +39,10 @@ const sectionTitle: React.CSSProperties = {
 };
 
 
-/* The same editor as checkout's, and it has to stay that way.
-   This one had no latitude or longitude in its state at all, so opening an address here and saving
-   it silently threw away its delivery point — which is how you can fix an address and be told all
-   over again that we need its location. The point rules now come from the shared hook, and the same
-   pin map is rendered, so an address edited from the account is as routable as one edited at
-   checkout. */
-function AddressForm({ initial, onSave, onCancel, saving, error }: {
-  initial?: Address; onSave: (a: Omit<Address, 'id'>) => void; onCancel: () => void;
-  saving?: boolean; error?: string;
-}) {
-  const [f, setF] = useState<Omit<Address, 'id'>>({
-    fullName: initial?.fullName ?? '', phone: initial?.phone ?? '',
-    addressLine1: initial?.addressLine1 ?? '', addressLine2: initial?.addressLine2 ?? '',
-    city: initial?.city ?? '', state: initial?.state ?? '', pincode: initial?.pincode ?? '',
-    latitude: initial?.latitude ?? null, longitude: initial?.longitude ?? null,
-    isDefault: initial?.isDefault ?? false,
-  });
-  const { pointNote, setPin, resolveForSave } = useAddressPoint(f, setF, true);
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
-  const inp: React.CSSProperties = { width: '100%', padding: '11px 13px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' };
-  const valid = f.fullName && f.phone && f.addressLine1 && f.city && f.pincode;
-
-  return (
-    <div style={{ ...card, padding: 16, display: 'grid', gap: 10 }}>
-      <input style={inp} placeholder="Full name" value={f.fullName} onChange={set('fullName')} />
-      <input style={inp} placeholder="Phone" value={f.phone} onChange={set('phone')} />
-      <input style={inp} placeholder="Flat / House / Building" value={f.addressLine1} onChange={set('addressLine1')} />
-      <input style={inp} placeholder="Area / Landmark" value={f.addressLine2} onChange={set('addressLine2')} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px', gap: 10 }} className="account-address-grid">
-        <input style={inp} placeholder="City" value={f.city} onChange={set('city')} />
-        <input style={inp} placeholder="State" value={f.state} onChange={set('state')} />
-        <input style={inp} placeholder="Pincode" value={f.pincode} onChange={set('pincode')} />
-      </div>
-      {PIN_RE.test((f.pincode || '').trim()) && f.latitude != null && f.longitude != null && (
-        <AddressPinMap
-          lat={f.latitude} lng={f.longitude}
-          onMove={setPin}
-          onStreet={(street) => setF(prev => ({ ...prev, addressLine2: street }))}
-          pincode={f.pincode} city={f.city}
-          hint={pointNote}
-        />
-      )}
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', cursor: 'pointer' }}>
-        <input type="checkbox" checked={f.isDefault} onChange={e => setF({ ...f, isDefault: e.target.checked })} /> Set as default
-      </label>
-      {error && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, lineHeight: 1.4 }}>{error}</div>}
-      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-        <button disabled={!valid || saving} onClick={async () => {
-          const point = await resolveForSave();
-          onSave({ ...f, latitude: point?.latitude ?? null, longitude: point?.longitude ?? null });
-        }} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: (valid && !saving) ? 'var(--gradient-warm)' : 'var(--border-default)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: saving ? 'wait' : valid ? 'pointer' : 'not-allowed' }}>{saving ? 'Saving…' : 'Save address'}</button>
-        <button onClick={onCancel} style={{ padding: '10px 16px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer' }}>Cancel</button>
-      </div>
-    </div>
-  );
-}
+/* The account page used to carry its own copy of the address form. That second copy is exactly
+   what caused the coordinate bug: it had no latitude or longitude in its state, so opening an
+   address here and saving it threw the delivery point away, and fixing an address was the way to
+   break it. One editor now, shared with checkout — see AddressWizard. */
 
 function ShipmentTracker({ order }: { order: Order }) {
   const [trackResult, setTrackResult] = useState<DelhiveryTrackResult | null>(null);
@@ -625,7 +572,7 @@ export default function AccountPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }} className="account-address-list">
                 {addresses.map(a => editingAddr === a.id ? (
-                  <AddressForm key={a.id} initial={a} saving={addrBusy} error={addrErr} onSave={d => handleEditAddress(a.id, d)} onCancel={() => { setAddrErr(''); setEditingAddr(null); }} />
+                  <AddressWizard key={a.id} initial={a} saving={addrBusy} error={addrErr} onSave={d => handleEditAddress(a.id, d)} onCancel={() => { setAddrErr(''); setEditingAddr(null); }} />
                 ) : (
                   <div key={a.id} style={{ ...card, padding: 15, display: 'flex', alignItems: 'flex-start', gap: 11 }}>
                     <span style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{a.isDefault ? <Home size={17} color="var(--brand-secondary)" /> : <Briefcase size={17} color="var(--brand-secondary)" />}</span>
@@ -646,7 +593,7 @@ export default function AccountPage() {
                   </div>
                 ))}
               </div>
-              {addingAddr && <div style={{ marginTop: 12 }}><AddressForm saving={addrBusy} error={addrErr} onSave={handleAddAddress} onCancel={() => { setAddrErr(''); setAddingAddr(false); }} /></div>}
+              {addingAddr && <div style={{ marginTop: 12 }}><AddressWizard saving={addrBusy} error={addrErr} onSave={handleAddAddress} onCancel={() => { setAddrErr(''); setAddingAddr(false); }} /></div>}
             </section>
           </div>
         </section>
