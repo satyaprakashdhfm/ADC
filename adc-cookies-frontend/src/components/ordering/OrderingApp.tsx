@@ -1,4 +1,5 @@
 'use client';
+import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
@@ -18,6 +19,11 @@ import { INDIAN_STATES, PIN_RE, PHONE_RE } from '@/lib/indiaAddress';
 import { useUpsellCatalog } from '@/hooks/checkout/useUpsellCatalog';
 import { useColumnFill } from '@/hooks/checkout/useColumnFill';
 import { UPSELL_LADDER } from '@/lib/categories';
+// Leaflet needs a window, and this is only ever rendered inside an open address form.
+const AddressPinMap = dynamic(() => import('./ui/AddressPinMap'), {
+  ssr: false,
+  loading: () => <div style={{ height: 190, borderRadius: 'var(--radius-button)', background: 'var(--surface-sunken)' }} />,
+});
 import { useDeliveryCheck } from '@/hooks/checkout/useDeliveryCheck';
 import { useCheckoutCoupons } from '@/hooks/checkout/useCheckoutCoupons';
 import { useCheckoutAddresses } from '@/hooks/checkout/useCheckoutAddresses';
@@ -72,7 +78,8 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const { store: locationStore } = useLocation();
   const {
     addresses, chosen, adding, aform, setAform, editId, makeDefault, setMakeDefault,
-    detecting, detectErr, savingAddr, openAddForm, editAddr, closeAddrForm, saveAddr, detectLocation,
+    detecting, detectErr, savingAddr, pointSource, pointNote, setPin,
+    openAddForm, editAddr, closeAddrForm, saveAddr, detectLocation,
   } = useCheckoutAddresses();
   const catalog = useUpsellCatalog();
   // Lets the upsell grid grow until the left column matches the right one. Desktop only — below
@@ -499,6 +506,23 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                         </select>
                       </div>
                       {aform.pincode.length > 0 && !pinOk && <div style={hintStyle}>Enter a valid 6-digit PIN code.</div>}
+
+                      {/* The delivery point, shown rather than assumed.
+                          Everything downstream is decided from this pin — which store bakes it,
+                          what delivery costs, and the address the rider is actually navigated to —
+                          and it is the one part of the address the customer could not previously
+                          see or correct. An order typed as Jayanagar once shipped from a pin twelve
+                          kilometres away in Varthur, and nothing on any screen said so. */}
+                      {aform.latitude != null && aform.longitude != null && (
+                        <AddressPinMap
+                          lat={aform.latitude}
+                          lng={aform.longitude}
+                          onMove={setPin}
+                          hint={pointSource === 'pin'
+                            ? 'Pinned by you — this exact spot is where the rider is sent.'
+                            : `${pointNote || 'Our best guess from the address above.'} Drag the pin to your exact door.`}
+                        />
+                      )}
                       {!aform.state && <div style={{ ...hintStyle, color: 'var(--text-muted)', fontWeight: 500 }}>Select your state to continue.</div>}
 
                       {/* Save this address as … */}
