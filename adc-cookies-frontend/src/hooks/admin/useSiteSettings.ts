@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo, adminSetDeliveryFeeOutstation } from '@/lib/api';
+import { adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo, adminSetOrderingPaused, adminSetDeliveryFeeOutstation } from '@/lib/api';
 
 /**
  * The site-wide switches an admin edits from the Products tab: which product the homepage popup
@@ -13,6 +13,8 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
   const [headerOfferSaved, setHeaderOfferSaved] = useState(false);
   const [stallInfo, setStallInfo] = useState('');
   const [stallInfoSaved, setStallInfoSaved] = useState(false);
+  const [orderingPaused, setOrderingPaused] = useState('');
+  const [orderingPausedSaved, setOrderingPausedSaved] = useState(false);
   const [deliveryFeeOutstation, setDeliveryFeeOutstation] = useState('100');
   const [deliveryFeeSaved, setDeliveryFeeSaved] = useState(false);
 
@@ -21,6 +23,7 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
       setPromoProductId(s.promoProductId);
       setHeaderOffer(s.headerOffer || '');
       setStallInfo(s.stallInfo || '');
+      setOrderingPaused(s.orderingPaused || '');
       setDeliveryFeeOutstation(String(s.deliveryFeeOutstation ?? 100));
     }).catch(() => {});
   }, [enabled]);
@@ -42,6 +45,12 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
     setStallInfoSaved(true);
   };
 
+  const changeOrderingPaused = (v: string) => { setOrderingPaused(v); setOrderingPausedSaved(false); };
+  const saveOrderingPaused = async () => {
+    await adminSetOrderingPaused(orderingPaused.trim() || null).catch(err => onError(String(err.message || err)));
+    setOrderingPausedSaved(true);
+  };
+
   const changeDeliveryFeeOutstation = (v: string) => { setDeliveryFeeOutstation(v); setDeliveryFeeSaved(false); };
   const saveDeliveryFeeOutstation = async () => {
     const n = Number(deliveryFeeOutstation);
@@ -54,6 +63,7 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
     promoProductId, savePromoProduct,
     headerOffer, headerOfferSaved, changeHeaderOffer, saveHeaderOffer,
     stallInfo, stallInfoSaved, changeStallInfo, saveStallInfo,
+    orderingPaused, orderingPausedSaved, changeOrderingPaused, saveOrderingPaused,
     deliveryFeeOutstation, deliveryFeeSaved, changeDeliveryFeeOutstation, saveDeliveryFeeOutstation,
   };
 }
