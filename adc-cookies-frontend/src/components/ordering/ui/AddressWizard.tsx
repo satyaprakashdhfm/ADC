@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { Search, MapPin, Navigation, ChevronLeft, Loader2, X } from 'lucide-react';
 import { searchNearby, reverseGeocode, type PlaceSuggestion, type Place } from '@/lib/geocode';
 import type { Address } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 /**
  * Adding an address, in the order that makes it correct.
@@ -66,8 +67,15 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
   const [place, setPlace] = useState<Place | null>(null);
   const [resolving, setResolving] = useState(false);
 
+  /* A signed-in customer has already told us their name and number once. Making them type both
+     again for every address is asking a question we know the answer to — and the answer we would
+     get is worse, because a hurried retype is where a wrong digit enters a delivery phone number.
+     Prefilled, not locked: an address can be for somebody else, which is what the Receiver's name
+     field is for. Only ever seeds a new address; an existing one keeps whoever it was saved for. */
+  const { user } = useAuth();
   const [form, setForm] = useState({
-    fullName: initial?.fullName ?? '', phone: initial?.phone ?? '',
+    fullName: initial?.fullName ?? user?.name ?? '',
+    phone: initial?.phone ?? (user?.phone ? user.phone.replace(/\D/g, '').slice(-10) : ''),
     addressLine1: initial?.addressLine1 ?? '', addressLine2: initial?.addressLine2 ?? '',
     city: initial?.city ?? '', state: initial?.state ?? '', pincode: initial?.pincode ?? '',
     label: initial?.label ?? 'Home', isDefault: initial?.isDefault ?? false,

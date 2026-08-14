@@ -24,7 +24,9 @@ const num = (v) => (v === undefined || v === null || v === '' ? null : Number(v)
 router.get('/suggest', async (req, res) => {
   const near = num(req.query.lat) != null && num(req.query.lng) != null
     ? { lat: num(req.query.lat), lng: num(req.query.lng) } : null;
-  res.json({ provider: geoProvider(), results: await geoSuggest(req.query.q, near) });
+  const results = await geoSuggest(req.query.q, near);
+  console.log(`[GEO] suggest | q="${String(req.query.q || '').slice(0, 60)}" | ${geoProvider()} | ${results.length} result(s)`);
+  res.json({ provider: geoProvider(), results });
 });
 
 router.get('/reverse', async (req, res) => {
@@ -32,14 +34,18 @@ router.get('/reverse', async (req, res) => {
   if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
     return res.status(400).json({ error: 'lat and lng are required' });
   }
-  res.json({ provider: geoProvider(), place: await geoReverse(lat, lng) });
+  const place = await geoReverse(lat, lng);
+  console.log(`[GEO] reverse | ${lat},${lng} | ${geoProvider()} | ${place ? `${place.postcode || '-'} ${place.city || ''}`.trim() : 'no match'}`);
+  res.json({ provider: geoProvider(), place });
 });
 
 router.get('/forward', async (req, res) => {
   const address = String(req.query.address || '').trim();
   const pincode = String(req.query.pincode || '').replace(/\D/g, '');
   if (!address && !pincode) return res.status(400).json({ error: 'address or pincode is required' });
-  res.json({ provider: geoProvider(), point: await geoForward(address, pincode) });
+  const point = await geoForward(address, pincode);
+  console.log(`[GEO] forward | "${address || pincode}" | ${geoProvider()} | ${point ? `${point.latitude},${point.longitude}` : 'no match'}`);
+  res.json({ provider: geoProvider(), point });
 });
 
 export default router;
