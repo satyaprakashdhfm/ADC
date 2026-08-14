@@ -388,6 +388,37 @@ body::before {
    is hovered (Dohful-style). Hover-only, so touch devices just keep the primary image. */
 /* The hover shots are portrait with the cookie low in the frame — bias the crop downward so the
    cookie sits a little higher in the card (and its bottom isn't clipped), rather than centre. */
+/* Address delivery pin (see AddressPinMap.tsx).
+   The carrier navigates to this point, so the pin has to read as something you pick up and place —
+   a flat dot reads as a label and gets left wherever it lands, which is the whole failure the map
+   exists to prevent. It sits above a target ring marking the exact coordinate, lifts on hover, and
+   presses down while dragging. */
+.adc-pin { cursor: grab; }
+.adc-pin:active { cursor: grabbing; }
+.adc-pin__body {
+  width: 34px; height: 34px; border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg) translateY(0);
+  background: linear-gradient(140deg, var(--amber-400, #FF9D42), var(--orange-600, #F0641E));
+  border: 3px solid #fff;
+  box-shadow: 0 5px 12px rgba(120, 50, 0, .45);
+  transition: transform .16s var(--ease-out), box-shadow .16s var(--ease-out);
+}
+.adc-pin:hover .adc-pin__body { transform: rotate(-45deg) translateY(-3px); box-shadow: 0 9px 16px rgba(120,50,0,.4); }
+.adc-pin:active .adc-pin__body { transform: rotate(-45deg) translateY(1px); box-shadow: 0 3px 7px rgba(120,50,0,.5); }
+.adc-pin__eye { position: absolute; left: 9px; top: 9px; width: 10px; height: 10px; border-radius: 50%; background: #fff; }
+/* The ring marks the coordinate itself — the pin's tip is the point, not its middle. */
+.adc-pin__ring {
+  position: absolute; left: 50%; bottom: -5px; width: 20px; height: 10px; margin-left: -10px;
+  border-radius: 50%; border: 2px solid var(--orange-600, #F0641E); opacity: .55;
+}
+/* Leaflet's own chrome, brought into the theme. */
+.adc-map .leaflet-control-zoom a {
+  border-radius: 9px !important; color: var(--text-strong, #3B2415) !important;
+  border: 1px solid var(--border-default, #EADFCE) !important; font-weight: 800;
+}
+.adc-map .leaflet-control-zoom { border: none !important; box-shadow: var(--shadow-sm); }
+.adc-map .leaflet-container { font-family: var(--font-body); background: var(--surface-sunken); }
+
 /* Menu section rail (see MenuRail.tsx).
    The dots do not live in the page gutter — the product grid already owns that, which is why they
    ended up sitting on top of the cards at every width below the grid's 1680px cap. #products

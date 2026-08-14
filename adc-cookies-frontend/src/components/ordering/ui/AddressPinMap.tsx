@@ -69,12 +69,12 @@ export default function AddressPinMap({
        the lift, the shadow it casts on the map, and the grab cursor. */
     const icon = L.divIcon({
       className: 'adc-pin',
+      // Styling lives in globals.css so hover and drag states can be expressed as CSS rather than
+      // rebuilt as inline strings on every render.
       html: `
-        <div style="position:relative;width:34px;height:44px;cursor:grab">
-          <div style="position:absolute;left:11px;top:37px;width:12px;height:5px;border-radius:50%;background:rgba(0,0,0,.34);filter:blur(1px)"></div>
-          <div style="position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:linear-gradient(140deg,#FF9D42,#F0641E);border:3px solid #fff;box-shadow:0 4px 10px rgba(120,50,0,.4)">
-            <div style="position:absolute;left:9px;top:9px;width:10px;height:10px;border-radius:50%;background:#fff"></div>
-          </div>
+        <div style="position:relative;width:34px;height:44px">
+          <div class="adc-pin__body"><div class="adc-pin__eye"></div></div>
+          <div class="adc-pin__ring"></div>
         </div>`,
       iconSize: [34, 44],
       iconAnchor: [17, 42],
@@ -140,7 +140,7 @@ export default function AddressPinMap({
         )}
       </div>
 
-      <div ref={box} style={{ width: '100%', height: 220, borderRadius: 'var(--radius-card)', overflow: 'hidden', border: '1.5px solid var(--border-strong)', background: 'var(--surface-sunken)', boxShadow: 'var(--shadow-sm)' }} />
+      <div ref={box} className="adc-map" style={{ width: '100%', height: 220, borderRadius: 'var(--radius-card)', overflow: 'hidden', border: '1.5px solid var(--border-strong)', background: 'var(--surface-sunken)', boxShadow: 'var(--shadow-sm)' }} />
 
       <p style={{ margin: 0, fontSize: 'var(--text-2xs)', lineHeight: 1.5, fontWeight: 700, color: dragged ? 'var(--status-success)' : 'var(--brand-secondary)' }}>
         {dragged

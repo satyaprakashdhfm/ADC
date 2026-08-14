@@ -122,19 +122,25 @@ export function useCheckoutAddresses() {
   const addressKey = [aform.pincode, aform.city, aform.addressLine1, aform.addressLine2].join('|');
   const settledKey = useRef<string | null>(null);
 
+  // Read through a ref, not the dependency array: aform gets a new identity on every keystroke, so
+  // depending on it tore down and rebuilt the debounce timer on each one — it would never fire.
+  const formRef = useRef(aform);
+  formRef.current = aform;
+
   useEffect(() => {
     if (!adding) return;
-    if (aform.pincode.replace(/\D/g, '').length !== 6) return;
+    if (formRef.current.pincode.replace(/\D/g, '').length !== 6) return;
     if (settledKey.current === addressKey) return;      // nothing changed since we last resolved it
     let live = true;
     const t = setTimeout(async () => {
-      const { point } = await resolveAddressPoint(aform, null);   // typed address only, never GPS
+      const f = formRef.current;
+      const { point } = await resolveAddressPoint(f, null);   // typed address only, never GPS
       if (!live) return;
       settledKey.current = addressKey;
       if (!point) return;
 
-      const have = aform.latitude != null && aform.longitude != null;
-      const away = have ? kmBetween(aform.latitude!, aform.longitude!, point.latitude, point.longitude) : Infinity;
+      const have = f.latitude != null && f.longitude != null;
+      const away = have ? kmBetween(f.latitude!, f.longitude!, point.latitude, point.longitude) : Infinity;
       // A street match is house-level and genuinely new; an area centroid is only worth taking when
       // we are not already somewhere better inside that same area.
       if (point.source === 'postcode' && have && away <= PIN_RADIUS_KM) return;
@@ -143,12 +149,12 @@ export function useCheckoutAddresses() {
       setPointSource(point.source);
       setPointNote(
         point.source === 'street' ? 'Found from the address you typed — check the pin.'
-          : have ? `Moved to PIN ${aform.pincode} — the pin was ${Math.round(away)} km away.`
-            : `Centre of PIN ${aform.pincode} — drag the pin to your door.`,
+          : have ? `Moved to PIN ${f.pincode} — the pin was ${Math.round(away)} km away.`
+            : `Centre of PIN ${f.pincode} — drag the pin to your door.`,
       );
     }, 700);
     return () => { live = false; clearTimeout(t); };
-  }, [adding, addressKey, aform, aform.latitude, aform.longitude]);
+  }, [adding, addressKey]);
 
   /** Dragging the pin is the customer telling us exactly where they are. Nothing outranks it. */
   const setPin = (latitude: number, longitude: number) => {
