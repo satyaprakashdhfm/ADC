@@ -3,7 +3,7 @@ import { getOne, getAll, query, nowIso } from '../../db.js';
 import { ApiError } from '../../middleware.js';
 import { serializeOrder } from '../../serializers.js';
 import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../delhivery.js';
-import { cancelShiprocketOrder, trackShiprocket } from '../../shiprocket.js';
+import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, shiprocketConfigured } from '../../shiprocket.js';
 import { autoCreateShipment } from '../orders.js';
 
 const router = Router();
@@ -210,6 +210,27 @@ router.post('/orders/:id/rebook', async (req, res) => {
 });
 
 // GET /api/admin/orders/:id/track — pull fresh tracking from whichever carrier created the shipment.
+/*
+ * GET /api/admin/delivery/wallet — the Shiprocket balance, and whether it is low.
+ *
+ * Same-day is sold on the promise of a rider within the hour, and that rider is only dispatched if
+ * the wallet can pay for him. An empty wallet does not fail at checkout, or at payment, or at store
+ * accept — it fails silently at dispatch, after the money is taken and the cookies are baked. The
+ * balance is the one number that predicts it, and until now it existed only inside Shiprocket's
+ * panel.
+ *
+ * LOW_WATERMARK is a couple of typical intracity fees, not a precise figure: the point is to be
+ * told while there is still time to top up, rather than after an order has stranded.
+ */
+const WALLET_LOW_WATERMARK = 300;
+
+router.get('/delivery/wallet', async (_req, res) => {
+  if (!shiprocketConfigured()) return res.json({ ok: false, reason: 'not_configured' });
+  const balance = await getWalletBalance();
+  if (balance == null) return res.json({ ok: false, reason: 'lookup_failed' });
+  res.json({ ok: true, balance, low: balance < WALLET_LOW_WATERMARK, lowWatermark: WALLET_LOW_WATERMARK });
+});
+
 router.get('/orders/:id/track', async (req, res) => {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
   if (!order) throw new ApiError('Order not found', 404);
