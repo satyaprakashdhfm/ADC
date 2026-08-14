@@ -106,6 +106,35 @@ async function geocodeTyped(a: AddressLike): Promise<ResolvedPoint | null> {
   return null;
 }
 
+export interface PlaceSuggestion { label: string; latitude: number; longitude: number }
+
+/**
+ * Landmark search, scoped to the pincode the customer already typed.
+ *
+ * Typing a full Indian address into a geocoder rarely works — but typing a landmark usually does,
+ * because apartment complexes, tech parks, temples and hospitals are exactly what OSM has good
+ * coverage of. Scoping to the PIN area does the rest: "green fields" alone matches half the
+ * country, "green fields" inside 560011 does not.
+ */
+export async function searchNearby(query: string, within: { pincode?: string; city?: string }): Promise<PlaceSuggestion[]> {
+  const q = query.trim();
+  if (q.length < 3) return [];
+  const p = new URLSearchParams({ format: 'jsonv2', limit: '6', addressdetails: '1', countrycodes: 'in', q });
+  const area = [within.pincode, within.city].filter(Boolean).join(' ');
+  if (area) p.set('q', `${q}, ${area}`);
+  const arr = await getJson(`${NOMINATIM}/search?${p}`) as Array<{ lat: string; lon: string; display_name?: string; name?: string }> | null;
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .filter(r => r.lat && r.lon)
+    .map(r => ({
+      // Their display_name is the full postal chain; the first three parts are the useful bit.
+      label: (r.display_name || r.name || '').split(',').slice(0, 3).join(',').trim(),
+      latitude: parseFloat(r.lat),
+      longitude: parseFloat(r.lon),
+    }))
+    .filter(r => r.label);
+}
+
 /** Straight-line kilometres — used to sanity-check a point against the PIN area it claims to be in. */
 export function kmBetween(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const R = 6371;
@@ -119,7 +148,7 @@ export function kmBetween(aLat: number, aLng: number, bLat: number, bLng: number
 /** How far a point may sit from its PIN centroid before we stop believing it belongs there. Indian
  *  PIN areas are big and irregular, especially at city edges, so this is generous on purpose —
  *  it is here to catch a point in the wrong part of the city, not to police a few streets. */
-const PIN_RADIUS_KM = 12;
+export const PIN_RADIUS_KM = 12;
 
 export interface ResolveResult {
   point: ResolvedPoint | null;
