@@ -2,9 +2,13 @@
 import { useState, useEffect } from 'react';
 import { getAnnouncement } from '@/lib/api';
 
-// Slim top ribbon — rotates between the veg promise and the login/track-order nudge. The offer
-// line is admin-controlled (see AdminDashboard "Header banner offer") so it only ever advertises
-// a real, currently-active discount — never a hardcoded code that doesn't work at checkout.
+// Slim top ribbon. Every line is admin-controlled (Admin → Products → "Top banner messages"), so
+// an offer here only ever advertises a real, currently-active code — never a hardcoded one that
+// fails at checkout.
+//
+// These two are the fallback for the moment before the fetch lands, and for a visitor whose
+// request fails. They are also what the server seeds a brand-new list with, so what shows here
+// and what the admin first sees in the panel are the same two lines.
 const MESSAGES = [
   '100% Pure Veg · All our cookies are eggless',
   'Log in to save favourites & track your orders',
@@ -19,14 +23,18 @@ const VegMark = () => (
 
 export default function AnnouncementBar() {
   const [i, setI] = useState(0);
-  // The admin's current offer text prepends onto the base rotation.
   const [messages, setMessages] = useState<string[]>(MESSAGES);
 
   useEffect(() => {
     getAnnouncement()
-      .then(a => { if (a?.text) setMessages(m => [a.text as string, ...m]); })
+      // The admin's list REPLACES the fallback rather than prepending to it — otherwise a line
+      // they had deleted would keep rotating underneath the ones they kept.
+      .then(a => { if (a?.messages?.length) setMessages(a.messages); })
       .catch(() => {});
   }, []);
+
+  // A shorter list must not leave the index pointing past its end.
+  useEffect(() => { setI(0); }, [messages]);
 
   useEffect(() => {
     const t = setInterval(() => setI(p => (p + 1) % messages.length), 4000);
