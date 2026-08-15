@@ -62,7 +62,11 @@ export default function DeliveryTab({
       </div>
 
       {(delivSub === 'main' || delivSub === 'delhivery') && (<>
-      {delivSub === 'main' && (<>
+      {/* Warehouses and pickup scheduling are Delhivery's, so they live on Delhivery's tab.
+          They used to sit under "All shipments", which put outstation-only setup in front of
+          someone looking for the order list and left the Delhivery tab with no way to reach it.
+          "All" is the list of every shipment and nothing else. */}
+      {delivSub === 'delhivery' && (<>
       {/* Warehouses */}
       <Panel title="Warehouses" loading={warehouses === null}
         action={<button onClick={() => setWhForm({ data: { ...EMPTY_WH } })} style={addBtn}><Plus size={16} /> Add warehouse</button>}>
