@@ -217,6 +217,12 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
             <span
               aria-hidden
               style={{
+                /* display:block, and it matters. This was a flex item until the button became
+                   display:block to shrink its hit area — at which point the span fell back to
+                   inline, where width and height simply do not apply, and the dots collapsed to
+                   nothing. The rail was still there and still clickable; there was just almost
+                   nothing to see. */
+                display: 'block',
                 width: on ? (compact ? 9 : 11) : (compact ? 5 : 7),
                 height: on ? (compact ? 9 : 11) : (compact ? 5 : 7),
                 borderRadius: '50%',
