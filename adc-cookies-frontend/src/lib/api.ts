@@ -108,7 +108,6 @@ export async function getProducts(params?: { category?: string; search?: string 
 }
 
 /** The product the admin chose for the homepage promo popup (or null if none set). */
-export async function getPromoProduct(): Promise<Product | null> { return request('/products/promo'); }
 
 /* ---- Cart ---- */
 export interface CartItem {
@@ -422,12 +421,9 @@ export interface AdminAnalytics {
   topProducts: { name: string; qty: number; revenue: number }[];
 }
 
-interface SiteSettings { promoProductId: number | null; headerOffer: string | null; stallInfo: string | null; deliveryFeeOutstation: number; orderingPaused: string | null; }
+interface SiteSettings { headerOffer: string | null; stallInfo: string | null; deliveryFeeOutstation: number; orderingPaused: string | null; }
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
 export async function adminGetSettings(): Promise<SiteSettings> { return request('/admin/settings'); }
-export async function adminSetPromoProduct(promoProductId: number | null): Promise<SiteSettings> {
-  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ promoProductId }) });
-}
 // Free-text offer shown in the site header banner — e.g. "Get 5% off with code XYZ". null/empty clears it.
 export async function adminSetHeaderOffer(headerOffer: string | null): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ headerOffer }) });

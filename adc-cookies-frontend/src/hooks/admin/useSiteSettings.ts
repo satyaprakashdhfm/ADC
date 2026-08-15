@@ -1,14 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { adminGetSettings, adminSetPromoProduct, adminSetHeaderOffer, adminSetStallInfo, adminSetOrderingPaused, adminSetDeliveryFeeOutstation } from '@/lib/api';
+import { adminGetSettings, adminSetHeaderOffer, adminSetStallInfo, adminSetOrderingPaused, adminSetDeliveryFeeOutstation } from '@/lib/api';
 
 /**
- * The site-wide switches an admin edits from the Products tab: which product the homepage popup
- * features, the header banner line and the "today's stall" card. Each saves independently and
- * keeps its own "Saved ✓" flag.
+ * The site-wide switches an admin edits from the Products tab: the header banner line, the
+ * "today's stall" card, whether ordering is open, and the outstation delivery fee. Each saves
+ * independently and keeps its own "Saved ✓" flag.
  */
 export function useSiteSettings(enabled: boolean, onError: (s: string) => void) {
-  const [promoProductId, setPromoProductId] = useState<number | null>(null);
   const [headerOffer, setHeaderOffer] = useState('');
   const [headerOfferSaved, setHeaderOfferSaved] = useState(false);
   const [stallInfo, setStallInfo] = useState('');
@@ -20,18 +19,12 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
 
   useEffect(() => {
     if (enabled) adminGetSettings().then(s => {
-      setPromoProductId(s.promoProductId);
       setHeaderOffer(s.headerOffer || '');
       setStallInfo(s.stallInfo || '');
       setOrderingPaused(s.orderingPaused || '');
       setDeliveryFeeOutstation(String(s.deliveryFeeOutstation ?? 100));
     }).catch(() => {});
   }, [enabled]);
-
-  const savePromoProduct = async (val: number | null) => {
-    setPromoProductId(val);
-    await adminSetPromoProduct(val).catch(err => onError(String(err.message || err)));
-  };
 
   const changeHeaderOffer = (v: string) => { setHeaderOffer(v); setHeaderOfferSaved(false); };
   const saveHeaderOffer = async () => {
@@ -60,7 +53,6 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
   };
 
   return {
-    promoProductId, savePromoProduct,
     headerOffer, headerOfferSaved, changeHeaderOffer, saveHeaderOffer,
     stallInfo, stallInfoSaved, changeStallInfo, saveStallInfo,
     orderingPaused, orderingPausedSaved, changeOrderingPaused, saveOrderingPaused,

@@ -194,7 +194,7 @@ export default function AdminDashboard() {
             onRemove={removeProduct}
             page={pageOf('products')}
             onPage={n => setPageOf('products', n)}
-            settings={{ products, ...siteSettings }}
+            settings={siteSettings}
           />
         )}
 
