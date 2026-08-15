@@ -4,6 +4,7 @@ import { type AdminStats, type AdminAnalytics } from '@/lib/api';
 import { money, todayStr, daysAgoStr } from '../shared/format';
 import { card, inp, StatCard, Empty } from '../shared/ui';
 import { PIE, fillDays, SalesChart, BarRows, Donut } from './OverviewCharts';
+import OrderingStatusPanel from './OrderingStatusPanel';
 
 interface Props {
   stats: AdminStats | null;
@@ -11,11 +12,17 @@ interface Props {
   range: { from: string; to: string };
   setRange: React.Dispatch<React.SetStateAction<{ from: string; to: string }>>;
   onOpenUsers: () => void;
+  ordering: React.ComponentProps<typeof OrderingStatusPanel>;
 }
 
-export default function OverviewTab({ stats, analytics, range, setRange, onOpenUsers }: Props) {
+export default function OverviewTab({ stats, analytics, range, setRange, onOpenUsers, ordering }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Whether the shop can take money, above everything else. It used to live among the product
+          settings, two tabs away, which is the wrong place for the one control that decides
+          whether the site is trading. */}
+      <OrderingStatusPanel {...ordering} />
+
       {/* Date-range filter — scopes the analytics charts below */}
       <div style={{ ...card, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}><CalendarRange size={16} /> Period</span>
