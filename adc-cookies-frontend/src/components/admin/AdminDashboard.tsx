@@ -66,7 +66,7 @@ export default function AdminDashboard() {
 
   const { attention, refreshAttention } = useAdminAttention(isAdmin);
 
-  const { users, search: userSearch, setSearch: setUserSearch } = useAdminUsers(isAdmin && tab === 'users');
+  const { users, search: userSearch, setSearch: setUserSearch, saveUser, savingUser } = useAdminUsers(isAdmin && tab === 'users', setErr);
   const { stats, refreshStats } = useAdminStats(isAdmin, setErr);
   const { analytics, range, setRange } = useAdminAnalytics(isAdmin);
   const { products, search: productSearch, setSearch: setProductSearch, category: productCat, setCategory: setProductCat, availability: productAvail, setAvailability: setProductAvail, editing, setEditing, saveProduct, removeProduct, refreshProducts } = useAdminProducts(isAdmin && tab === 'products', setErr, refreshStats);
@@ -271,6 +271,8 @@ export default function AdminDashboard() {
             onSearch={setUserSearch}
             page={pageOf('users')}
             onPage={n => setPageOf('users', n)}
+            saveUser={saveUser}
+            savingUser={savingUser}
           />
         )}
 
