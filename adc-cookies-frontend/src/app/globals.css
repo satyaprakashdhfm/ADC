@@ -85,7 +85,10 @@
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
-  overscroll-behavior-y: none;
+  /* NOT overscroll-behavior-y: none. That was here to stop the white band when you drag past the
+     end of the page — and it also disables pull-to-refresh, so the site could not be reloaded on a
+     phone at all. The band was never the overscroll itself, it was the unpainted area behind the
+     page showing through; painting it below fixes that on its own and leaves the gesture alone. */
   background: var(--orange-light);
 }
 body {

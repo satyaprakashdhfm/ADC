@@ -45,6 +45,19 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
     return () => mq.removeEventListener('change', sync);
   }, []);
 
+  /* Whether this device has a pointer that can hover at all.
+     A touchscreen fires mouseenter on tap and then never fires mouseleave, so the open state
+     latched on: the labels stayed spread across the product grid, and because each button was as
+     wide as its label, they went on swallowing taps aimed at Add long after they had faded out. */
+  const [canHover, setCanHover] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const sync = () => setCanHover(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
   const railRef = useRef<HTMLElement>(null);
   const settleTimer = useRef<number | null>(null);
   const pickedRef = useRef<number | null>(null);
@@ -153,8 +166,8 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
       ref={railRef}
       className="menu-rail"
       aria-label="Menu sections"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={close}
+      onMouseEnter={canHover ? () => setOpen(true) : undefined}
+      onMouseLeave={canHover ? close : undefined}
       style={{
         position: 'fixed',
         // Centred in the strip #products reserves, so the dots sit in space nothing else wants.
@@ -190,12 +203,14 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
                Pointing alone never navigates — only a click, or a wheel-scrub that settles. A rail
                that jumped the page whenever the mouse crossed it would be a trap on the way to
                anything else on that edge of the screen. */
-            onMouseEnter={() => setPicked(i)}
+            onMouseEnter={canHover ? () => setPicked(i) : undefined}
             onFocus={() => { setOpen(true); setPicked(i); }}
             aria-label={`Go to ${s.label}`}
             aria-current={i === active ? 'true' : undefined}
             style={{
-              display: 'flex', alignItems: 'center', gap: compact ? 7 : 10,
+              /* position:relative + an absolutely positioned label = the hit area is the dot and
+                 nothing else. This is the fix for taps landing on the rail instead of on Add. */
+              position: 'relative', display: 'block', lineHeight: 0,
               border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
             }}
           >
@@ -217,6 +232,9 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
                 has an edge instead of just stopping. */}
             <span
               style={{
+                position: 'absolute',
+                left: compact ? 13 : 18,
+                top: '50%',
                 padding: compact ? '3px 8px' : '5px 12px',
                 borderRadius: 'var(--radius-pill)',
                 background: on ? 'var(--gradient-warm)' : 'var(--ink-950)',
@@ -227,7 +245,8 @@ export default function MenuRail({ sections }: { sections: readonly { label: str
                 fontWeight: 800,
                 whiteSpace: 'nowrap',
                 opacity: near ? (on ? 1 : d === 1 ? 0.8 : 0.45) : 0,
-                transform: near ? 'translateX(0)' : 'translateX(-8px)',
+                transform: near ? 'translateY(-50%)' : 'translate(-8px, -50%)',
+                visibility: near ? 'visible' : 'hidden',
                 transition: 'opacity .18s ease, transform .18s var(--ease-out), background .2s ease',
                 pointerEvents: 'none',
               }}
