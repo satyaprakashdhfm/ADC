@@ -421,16 +421,12 @@ export interface AdminAnalytics {
   topProducts: { name: string; qty: number; revenue: number }[];
 }
 
-interface SiteSettings { headerOffer: string | null; stallInfo: string | null; deliveryFeeOutstation: number; orderingPaused: string | null; }
+interface SiteSettings { headerOffer: string | null; deliveryFeeOutstation: number; orderingPaused: string | null; }
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
 export async function adminGetSettings(): Promise<SiteSettings> { return request('/admin/settings'); }
 // Free-text offer shown in the site header banner — e.g. "Get 5% off with code XYZ". null/empty clears it.
 export async function adminSetHeaderOffer(headerOffer: string | null): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ headerOffer }) });
-}
-// Free-text "today's stall / visit us" note shown as a homepage card. null/empty hides the card.
-export async function adminSetStallInfo(stallInfo: string | null): Promise<SiteSettings> {
-  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ stallInfo }) });
 }
 /** Pause or resume online ordering. The message IS the switch — clearing it goes live. */
 export async function adminSetOrderingPaused(orderingPaused: string | null): Promise<SiteSettings> {
@@ -466,7 +462,6 @@ export async function getOrderTracking(orderId: number): Promise<OrderEvent[]> {
   return request(`/orders/${orderId}/tracking`);
 }
 
-export async function getStallInfo(): Promise<{ text: string | null }> { return request('/products/stall-info'); }
 /** Is online ordering paused, and what do we tell the customer? Public — checkout reads it too. */
 export async function getOrderingStatus(): Promise<{ paused: boolean; message: string | null }> { return request('/products/ordering-status'); }
 export async function adminAnalytics(from?: string, to?: string): Promise<AdminAnalytics> {

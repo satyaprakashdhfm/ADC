@@ -6,14 +6,10 @@ interface Props {
   headerOfferSaved: boolean;
   changeHeaderOffer: (v: string) => void;
   saveHeaderOffer: () => void;
-  stallInfo: string;
-  stallInfoSaved: boolean;
   orderingPaused: string;
   orderingPausedSaved: boolean;
   changeOrderingPaused: (v: string) => void;
   saveOrderingPaused: () => void;
-  changeStallInfo: (v: string) => void;
-  saveStallInfo: () => void;
   deliveryFeeOutstation: string;
   deliveryFeeSaved: boolean;
   changeDeliveryFeeOutstation: (v: string) => void;
@@ -22,7 +18,6 @@ interface Props {
 
 export default function SiteSettingsPanels({
   headerOffer, headerOfferSaved, changeHeaderOffer, saveHeaderOffer,
-  stallInfo, stallInfoSaved, changeStallInfo, saveStallInfo,
   orderingPaused, orderingPausedSaved, changeOrderingPaused, saveOrderingPaused,
   deliveryFeeOutstation, deliveryFeeSaved, changeDeliveryFeeOutstation, saveDeliveryFeeOutstation,
 }: Props) {
@@ -63,18 +58,6 @@ export default function SiteSettingsPanels({
         </div>
       </Panel>
 
-      <Panel title="Today's stall — visit us">
-        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>Shown as a card on the homepage (right under the hero). Use it for a pop-up stall&apos;s location and timing — leave blank to hide the card entirely.</p>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <input
-            value={stallInfo}
-            onChange={e => changeStallInfo(e.target.value)}
-            placeholder="e.g. Phoenix Mall, Whitefield — 11am to 8pm today"
-            style={{ ...inp, flex: '1 1 320px' }}
-          />
-          <button onClick={saveStallInfo} style={addBtn}>{stallInfoSaved ? 'Saved ✓' : 'Save'}</button>
-        </div>
-      </Panel>
       <Panel title="Delivery fee — outstation">
         <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>
           What a customer pays for outstation (Delhivery) delivery. Same-day intracity is never set here —

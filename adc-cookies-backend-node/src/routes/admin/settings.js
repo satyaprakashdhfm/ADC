@@ -4,14 +4,13 @@ import { ApiError } from '../../middleware.js';
 
 const router = Router();
 
-/* ---------- Site settings (header banner offer, stall card, ordering pause, delivery fee) ---------- */
+/* ---------- Site settings (header banner offer, ordering pause, delivery fee) ---------- */
 router.get('/settings', async (_req, res) => {
   const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
-  const stall = await getOne("SELECT value FROM site_settings WHERE key = 'stall_info'");
   const outstationFee = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
   const paused = await getOne("SELECT value FROM site_settings WHERE key = 'ordering_paused'");
   res.json({
-    headerOffer: offer?.value || null, stallInfo: stall?.value || null,
+    headerOffer: offer?.value || null,
     orderingPaused: paused?.value || null,
     // Intracity is never a flat setting — it's Shiprocket's own live per-order quote (see
     // orders.js/delivery.js). Only outstation is a single admin-set number.
@@ -48,19 +47,6 @@ router.put('/settings', async (req, res) => {
     }
   }
 
-  // Today's stall/store-visit note shown as a homepage card — same free-text pattern.
-  if (req.body?.stallInfo !== undefined) {
-    const text = String(req.body.stallInfo || '').trim();
-    if (!text) {
-      await query("DELETE FROM site_settings WHERE key = 'stall_info'");
-    } else {
-      await query(
-        `INSERT INTO site_settings (key, value) VALUES ('stall_info', $1)
-         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-        [text]
-      );
-    }
-  }
   // A flat, admin-set number the customer actually gets charged for outstation (Delhivery) delivery
   // — see the matching read in orders.js's order-creation charge and delivery.js's checkout quote,
   // so a change here takes effect on the very next quote/order with no redeploy.
@@ -74,10 +60,9 @@ router.put('/settings', async (req, res) => {
     );
   }
   const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
-  const stall = await getOne("SELECT value FROM site_settings WHERE key = 'stall_info'");
   const outstationFee = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
   res.json({
-    headerOffer: offer?.value || null, stallInfo: stall?.value || null,
+    headerOffer: offer?.value || null,
     deliveryFeeOutstation: outstationFee?.value != null ? Number(outstationFee.value) : 100,
   });
 });
