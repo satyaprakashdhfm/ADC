@@ -121,13 +121,11 @@ function orderRows(items) {
     </tr>`).join('');
 }
 
-function orderBody(o, forBusiness) {
+function orderBody(o) {
   const a = o.address;
   const addr = a ? [a.full_name, a.address_line1, a.address_line2, a.city, a.state, a.pincode].filter(Boolean).join(', ') : '';
   const phone = a?.phone ? `<div style="color:#7A6353;font-size:13px;margin-top:4px">Phone: ${esc(a.phone)}</div>` : '';
-  const intro = forBusiness
-    ? `<p style="color:#5C4636">New order received from <b>${esc(o.customerName)}</b> (${esc(o.customerEmail)}).</p>`
-    : `<p style="color:#5C4636">Thanks for your order, ${esc(o.customerName)}! We're baking it fresh. 🍪</p>`;
+  const intro = `<p style="color:#5C4636">Thanks for your order, ${esc(o.customerName)}! We&rsquo;re baking it fresh. 🍪</p>`;
   return `
     ${intro}
     <div style="margin:10px 0;color:#7A6353;font-size:13px">Order <b style="color:#2B1D12">${esc(o.orderNumber)}</b></div>
@@ -141,14 +139,19 @@ function orderBody(o, forBusiness) {
     ${addr ? `<p style="margin:16px 0 4px;color:#7A6353;font-size:13px">Delivery address</p><p style="margin:0;color:#2B1D12;line-height:1.6">${esc(addr)}</p>${phone}` : ''}`;
 }
 
+/*
+ * One email per order, to the customer.
+ *
+ * There used to be a second copy to the business on every order. It doubled the send volume for
+ * something nobody reads: an order reaches the shop through the admin dashboard, the store portal
+ * the counter actually watches, and Petpooja where that store is on AUTO. The mailbox was the one
+ * channel that told no one anything they were not already looking at.
+ *
+ * Halving the sends matters because the mail plan is counted per message, and the customer's
+ * confirmation is the one that must never be the send that hits the cap.
+ */
 export async function sendOrderEmails(o) {
-  // To the customer
-  await send({ to: o.customerEmail, subject: `Your order ${o.orderNumber} is placed 🍪`, html: shell('Order confirmed', orderBody(o, false)) });
-  // Copy to the business (skip if it's the same address)
-  const business = cfg().business;
-  if (business && business !== o.customerEmail) {
-    await send({ to: business, subject: `New order ${o.orderNumber} — ${rupee(o.total)}`, html: shell('New order received', orderBody(o, true)) });
-  }
+  await send({ to: o.customerEmail, subject: `Your order ${o.orderNumber} is placed 🍪`, html: shell('Order confirmed', orderBody(o)) });
 }
 
 /* ---- Previous SMTP/nodemailer implementation (kept for reference/fallback) ----
