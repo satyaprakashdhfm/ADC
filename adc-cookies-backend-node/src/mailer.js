@@ -32,6 +32,16 @@ async function send({ to, subject, html, replyTo }) {
   if (!to) return;
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) { console.warn('[mailer] disabled (set RESEND_API_KEY). Skipped:', subject); return; }
+  /* Check the sender before spending a round trip on it.
+     Without this, an unset MAIL_USER built `from: "a dough cookie <>"` and every send came back
+     "Invalid `from` field" — an error that describes the symptom and names neither the variable
+     nor the fact that one was missing. Both environments ran that way for weeks: order
+     confirmations, spin rewards and contact replies all failed, each logging a line that read like
+     a formatting bug in the code rather than a blank in the config. */
+  if (!cfg().user) {
+    console.error(`[mailer] ✗ MAIL_USER is not set — no sender address, so nothing can be sent. Skipped: ${subject}`);
+    return;
+  }
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
