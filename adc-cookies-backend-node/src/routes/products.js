@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getAll, getOne } from '../db.js';
 import { ApiError } from '../middleware.js';
 import { serializeProduct } from '../serializers.js';
+import { readBannerMessages } from '../bannerMessages.js';
 
 const router = Router();
 
@@ -18,12 +19,15 @@ router.get('/', async (req, res) => {
   res.json(rows.map(serializeProduct));
 });
 
-// Public: the admin's current header-banner offer text (or null) — free text, so the admin
-// only ever advertises a real, currently-active offer, never a hardcoded placeholder.
-// Declared before '/:id' so "announcement" isn't captured as an id.
+/* Public: the rotating lines for the top ribbon, in the order the admin arranged them.
+   Declared before '/:id' so "announcement" isn't captured as an id.
+
+   `text` is the old single-offer shape, kept because the frontend and backend deploy to different
+   hosts and so never cut over at the same instant — during that window an older bundle is still
+   asking for it. */
 router.get('/announcement', async (_req, res) => {
-  const setting = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
-  res.json({ text: setting?.value || null });
+  const messages = await readBannerMessages();
+  res.json({ messages, text: messages[0] || null });
 });
 
 /* Public: is online ordering paused, and what should we say?

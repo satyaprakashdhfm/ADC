@@ -421,12 +421,13 @@ export interface AdminAnalytics {
   topProducts: { name: string; qty: number; revenue: number }[];
 }
 
-interface SiteSettings { headerOffer: string | null; deliveryFeeOutstation: number; orderingPaused: string | null; }
+interface SiteSettings { bannerMessages: string[]; deliveryFeeOutstation: number; orderingPaused: string | null; }
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
 export async function adminGetSettings(): Promise<SiteSettings> { return request('/admin/settings'); }
-// Free-text offer shown in the site header banner — e.g. "Get 5% off with code XYZ". null/empty clears it.
-export async function adminSetHeaderOffer(headerOffer: string | null): Promise<SiteSettings> {
-  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ headerOffer }) });
+/** The rotating lines in the top ribbon, in order. At least one is required — the ribbon's height
+ *  is part of the page layout, so it can never be empty. */
+export async function adminSetBannerMessages(bannerMessages: string[]): Promise<SiteSettings> {
+  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ bannerMessages }) });
 }
 /** Pause or resume online ordering. The message IS the switch — clearing it goes live. */
 export async function adminSetOrderingPaused(orderingPaused: string | null): Promise<SiteSettings> {
@@ -452,8 +453,8 @@ export async function adminGetStoreProducts(code: string): Promise<{ products: A
 export async function adminSetStoreProductOverride(code: string, productId: number, available: boolean | null): Promise<{ ok: boolean }> {
   return request(`/admin/store-products/${code}/${productId}`, { method: 'PUT', body: JSON.stringify({ available }) });
 }
-// Public: the current header-banner offer text (or null if the admin hasn't set one).
-export async function getAnnouncement(): Promise<{ text: string | null }> { return request('/products/announcement'); }
+// Public: the rotating top-ribbon lines, in the order the admin arranged them.
+export async function getAnnouncement(): Promise<{ messages: string[]; text: string | null }> { return request('/products/announcement'); }
 // Public: today's stall/store-visit note (or null if the admin hasn't set one).
 /** Our own record of what happened to an order — placed, paid, accepted, packed, shipped. Separate
  *  from the carrier's scans, and the half of the story a carrier's tracking page never has. */

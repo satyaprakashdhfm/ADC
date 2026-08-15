@@ -1,15 +1,15 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { adminGetSettings, adminSetHeaderOffer, adminSetOrderingPaused, adminSetDeliveryFeeOutstation } from '@/lib/api';
+import { adminGetSettings, adminSetBannerMessages, adminSetOrderingPaused, adminSetDeliveryFeeOutstation } from '@/lib/api';
 
 /**
- * The site-wide switches an admin edits from the Products tab: the header banner line, whether
- * ordering is open, and the outstation delivery fee. Each saves independently and keeps its own
- * "Saved ✓" flag.
+ * The site-wide switches an admin edits from the Products tab: the top banner's rotating lines,
+ * whether ordering is open, and the outstation delivery fee. Each saves independently and keeps
+ * its own "Saved ✓" flag.
  */
 export function useSiteSettings(enabled: boolean, onError: (s: string) => void) {
-  const [headerOffer, setHeaderOffer] = useState('');
-  const [headerOfferSaved, setHeaderOfferSaved] = useState(false);
+  const [bannerMessages, setBannerMessages] = useState<string[]>([]);
+  const [bannerMessagesSaved, setBannerMessagesSaved] = useState(false);
   const [orderingPaused, setOrderingPaused] = useState('');
   const [orderingPausedSaved, setOrderingPausedSaved] = useState(false);
   const [deliveryFeeOutstation, setDeliveryFeeOutstation] = useState('100');
@@ -17,16 +17,32 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
 
   useEffect(() => {
     if (enabled) adminGetSettings().then(s => {
-      setHeaderOffer(s.headerOffer || '');
+      setBannerMessages(s.bannerMessages?.length ? s.bannerMessages : ['']);
       setOrderingPaused(s.orderingPaused || '');
       setDeliveryFeeOutstation(String(s.deliveryFeeOutstation ?? 100));
     }).catch(() => {});
   }, [enabled]);
 
-  const changeHeaderOffer = (v: string) => { setHeaderOffer(v); setHeaderOfferSaved(false); };
-  const saveHeaderOffer = async () => {
-    await adminSetHeaderOffer(headerOffer.trim() || null).catch(err => onError(String(err.message || err)));
-    setHeaderOfferSaved(true);
+  const changeBannerMessage = (i: number, v: string) => {
+    setBannerMessages(p => p.map((m, idx) => (idx === i ? v : m)));
+    setBannerMessagesSaved(false);
+  };
+  const addBannerMessage = () => { setBannerMessages(p => [...p, '']); setBannerMessagesSaved(false); };
+  const removeBannerMessage = (i: number) => {
+    // Never leave the list empty: the ribbon's height is part of the page layout, and the server
+    // refuses an empty list for the same reason.
+    setBannerMessages(p => (p.length <= 1 ? p : p.filter((_, idx) => idx !== i)));
+    setBannerMessagesSaved(false);
+  };
+  const saveBannerMessages = async () => {
+    const clean = bannerMessages.map(m => m.trim()).filter(Boolean);
+    if (!clean.length) { onError('Write at least one banner message before saving.'); return; }
+    const saved = await adminSetBannerMessages(clean).catch(err => { onError(String(err.message || err)); return null; });
+    if (!saved) return;
+    // Show what was actually stored, so a blank row the server dropped disappears here too rather
+    // than sitting in the form looking saved.
+    setBannerMessages(saved.bannerMessages?.length ? saved.bannerMessages : clean);
+    setBannerMessagesSaved(true);
   };
 
   const changeOrderingPaused = (v: string) => { setOrderingPaused(v); setOrderingPausedSaved(false); };
@@ -44,7 +60,7 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
   };
 
   return {
-    headerOffer, headerOfferSaved, changeHeaderOffer, saveHeaderOffer,
+    bannerMessages, bannerMessagesSaved, changeBannerMessage, addBannerMessage, removeBannerMessage, saveBannerMessages,
     orderingPaused, orderingPausedSaved, changeOrderingPaused, saveOrderingPaused,
     deliveryFeeOutstation, deliveryFeeSaved, changeDeliveryFeeOutstation, saveDeliveryFeeOutstation,
   };

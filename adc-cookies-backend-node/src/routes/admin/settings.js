@@ -1,16 +1,16 @@
 import { Router } from 'express';
 import { getOne, query } from '../../db.js';
 import { ApiError } from '../../middleware.js';
+import { readBannerMessages, writeBannerMessages } from '../../bannerMessages.js';
 
 const router = Router();
 
-/* ---------- Site settings (header banner offer, ordering pause, delivery fee) ---------- */
+/* ---------- Site settings (banner messages, ordering pause, delivery fee) ---------- */
 router.get('/settings', async (_req, res) => {
-  const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
   const outstationFee = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
   const paused = await getOne("SELECT value FROM site_settings WHERE key = 'ordering_paused'");
   res.json({
-    headerOffer: offer?.value || null,
+    bannerMessages: await readBannerMessages(),
     orderingPaused: paused?.value || null,
     // Intracity is never a flat setting — it's Shiprocket's own live per-order quote (see
     // orders.js/delivery.js). Only outstation is a single admin-set number.
@@ -18,19 +18,10 @@ router.get('/settings', async (_req, res) => {
   });
 });
 router.put('/settings', async (req, res) => {
-  // Free text the admin controls directly — e.g. "Get 5% off with code XYZ" — so the header
-  // banner never advertises a discount that isn't a real, currently-active coupon.
-  if (req.body?.headerOffer !== undefined) {
-    const text = String(req.body.headerOffer || '').trim();
-    if (!text) {
-      await query("DELETE FROM site_settings WHERE key = 'header_offer'");
-    } else {
-      await query(
-        `INSERT INTO site_settings (key, value) VALUES ('header_offer', $1)
-         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-        [text]
-      );
-    }
+  // The ribbon's rotating lines, in order. Free text the admin controls directly, so an offer
+  // line never advertises a discount that isn't a real, currently-active coupon.
+  if (req.body?.bannerMessages !== undefined) {
+    await writeBannerMessages(req.body.bannerMessages);
   }
   /* Ordering paused.
      Stored as the message rather than a boolean: the row existing IS the pause, and its text is
@@ -59,10 +50,11 @@ router.put('/settings', async (req, res) => {
       [String(n)]
     );
   }
-  const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
   const outstationFee = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
+  const paused = await getOne("SELECT value FROM site_settings WHERE key = 'ordering_paused'");
   res.json({
-    headerOffer: offer?.value || null,
+    bannerMessages: await readBannerMessages(),
+    orderingPaused: paused?.value || null,
     deliveryFeeOutstation: outstationFee?.value != null ? Number(outstationFee.value) : 100,
   });
 });
