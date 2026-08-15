@@ -638,6 +638,11 @@ export async function adminResetAllSpins(): Promise<{ ok: boolean; cleared: numb
 }
 
 export async function adminGetUsers(): Promise<AdminUser[]> { return request('/admin/users'); }
+/** Correct a customer's name or phone by hand. Email is not editable — it is the key that ties
+ *  their Supabase login to their orders, so changing it here would strand them on a new account. */
+export async function adminUpdateUser(id: number, data: { name?: string; phone?: string }): Promise<AdminUser> {
+  return request(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
 export async function adminGetMessages(): Promise<AdminMessage[]> { return request('/admin/contact'); }
 export async function adminMarkMessageHandled(id: number): Promise<{ id: number; handled: boolean }> {
   return request(`/admin/contact/${id}/handled`, { method: 'PATCH' });
