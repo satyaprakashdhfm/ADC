@@ -5,7 +5,6 @@ import { PAGE_SIZE } from '@/hooks/admin/usePagination';
 import { EMPTY_PRODUCT } from '@/hooks/admin/useAdminProducts';
 import { money } from '../shared/format';
 import { td, inp, addBtn, iconBtn, Panel, Table, Empty, Field, FilterBar, Pager } from '../shared/ui';
-import SiteSettingsPanels from './SiteSettingsPanels';
 
 type Editing = { id?: number; data: ProductInput };
 
@@ -21,10 +20,9 @@ interface Props {
   onRemove: (id: number) => void;
   page: number;
   onPage: (n: number) => void;
-  settings: React.ComponentProps<typeof SiteSettingsPanels>;
 }
 
-export default function ProductsTab({ products, search, onSearch, category, onCategory, availability, onAvailability, setEditing, onRemove, page, onPage, settings }: Props) {
+export default function ProductsTab({ products, search, onSearch, category, onCategory, availability, onAvailability, setEditing, onRemove, page, onPage }: Props) {
   const cats = Array.from(new Set((products || []).map(p => p.category))).sort();
   const pq = search.trim().toLowerCase();
   const list = (products || []).filter(p => {
@@ -40,8 +38,6 @@ export default function ProductsTab({ products, search, onSearch, category, onCa
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <SiteSettingsPanels {...settings} />
-
       <Panel title={`Products${products ? ` (${list.length})` : ''}`} loading={products === null} action={<button onClick={() => setEditing({ data: { ...EMPTY_PRODUCT } })} style={addBtn}><Plus size={16} /> Add product</button>}>
         <FilterBar search={search} onSearch={v => { onSearch(v); onPage(1); }} placeholder="Search product or tag…" active={active} onClear={clear}>
           <Field label="Category"><select value={category} onChange={e => { onCategory(e.target.value); onPage(1); }} style={selStyle}><option value="">All categories</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>

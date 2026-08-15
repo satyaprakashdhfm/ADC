@@ -12,6 +12,9 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
   const [bannerMessagesSaved, setBannerMessagesSaved] = useState(false);
   const [orderingPaused, setOrderingPaused] = useState('');
   const [orderingPausedSaved, setOrderingPausedSaved] = useState(false);
+  const [orderingPausedBusy, setOrderingPausedBusy] = useState(false);
+  // Null until the first load lands. The ordering switch must not paint "LIVE" before it knows.
+  const [orderingLoaded, setOrderingLoaded] = useState(false);
   const [deliveryFeeOutstation, setDeliveryFeeOutstation] = useState('100');
   const [deliveryFeeSaved, setDeliveryFeeSaved] = useState(false);
 
@@ -20,6 +23,7 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
       setBannerMessages(s.bannerMessages?.length ? s.bannerMessages : ['']);
       setOrderingPaused(s.orderingPaused || '');
       setDeliveryFeeOutstation(String(s.deliveryFeeOutstation ?? 100));
+      setOrderingLoaded(true);
     }).catch(() => {});
   }, [enabled]);
 
@@ -46,9 +50,21 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
   };
 
   const changeOrderingPaused = (v: string) => { setOrderingPaused(v); setOrderingPausedSaved(false); };
-  const saveOrderingPaused = async () => {
-    await adminSetOrderingPaused(orderingPaused.trim() || null).catch(err => onError(String(err.message || err)));
+  /* Takes the value to save rather than only reading state, so "go live" can send an empty string
+     in one call. Going live off the state alone meant clearing the box first and saving second —
+     two steps for the switch that decides whether the shop can take money, with a render in
+     between where the box looked live but the server had not been told. */
+  const saveOrderingPaused = async (override?: string) => {
+    const value = override !== undefined ? override : orderingPaused;
+    setOrderingPausedBusy(true);
+    const ok = await adminSetOrderingPaused(value.trim() || null)
+      .then(() => true)
+      .catch(err => { onError(String(err.message || err)); return false; });
+    setOrderingPausedBusy(false);
+    if (!ok) return false;
+    setOrderingPaused(value);
     setOrderingPausedSaved(true);
+    return true;
   };
 
   const changeDeliveryFeeOutstation = (v: string) => { setDeliveryFeeOutstation(v); setDeliveryFeeSaved(false); };
@@ -61,7 +77,7 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
 
   return {
     bannerMessages, bannerMessagesSaved, changeBannerMessage, addBannerMessage, removeBannerMessage, saveBannerMessages,
-    orderingPaused, orderingPausedSaved, changeOrderingPaused, saveOrderingPaused,
+    orderingPaused, orderingPausedSaved, orderingPausedBusy, orderingLoaded, changeOrderingPaused, saveOrderingPaused,
     deliveryFeeOutstation, deliveryFeeSaved, changeDeliveryFeeOutstation, saveDeliveryFeeOutstation,
   };
 }

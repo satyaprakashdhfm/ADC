@@ -35,6 +35,10 @@ interface Props {
   sfxStatesOpen: boolean; setSfxStatesOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setErr: (s: string) => void;
   setCancelInfo: (v: { orderNumber: string; ok: boolean; message: string } | null) => void;
+  deliveryFeeOutstation: string;
+  deliveryFeeSaved: boolean;
+  changeDeliveryFeeOutstation: (v: string) => void;
+  saveDeliveryFeeOutstation: () => void;
 }
 
 export default function DeliveryTab({
@@ -43,6 +47,7 @@ export default function DeliveryTab({
   shipmentBusy, setShipmentBusy, shipmentWeights, setShipmentWeights,
   trackResult, setTrackResult, storeReadiness, setStoreReadiness,
   sfxStatesOpen, setSfxStatesOpen, setErr, setCancelInfo,
+  deliveryFeeOutstation, deliveryFeeSaved, changeDeliveryFeeOutstation, saveDeliveryFeeOutstation,
 }: Props) {
   /* Kept local rather than lifted into useAdminDelivery: nothing else needs it, it is read-only,
      and it must not join the props chain every other field here already travels through. */
@@ -67,6 +72,26 @@ export default function DeliveryTab({
           someone looking for the order list and left the Delhivery tab with no way to reach it.
           "All" is the list of every shipment and nothing else. */}
       {delivSub === 'delhivery' && (<>
+      {/* What the customer is charged for an outstation parcel. It used to sit under Products,
+          nowhere near the carrier it prices — and it is the only delivery fee anyone sets by hand,
+          since intracity is whatever Shiprocket quotes live for that address. */}
+      <Panel title="Delivery fee — outstation">
+        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 12px' }}>
+          What a customer pays for outstation (Delhivery) delivery. Same-day intracity is never set here —
+          that&apos;s charged exactly what Shiprocket quotes for each address, live at checkout.
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>₹</span>
+          <input
+            type="number" min="0" step="1"
+            value={deliveryFeeOutstation}
+            onChange={e => changeDeliveryFeeOutstation(e.target.value)}
+            style={{ ...inp, width: 120 }}
+          />
+          <button onClick={saveDeliveryFeeOutstation} style={addBtn}>{deliveryFeeSaved ? 'Saved ✓' : 'Save'}</button>
+        </div>
+      </Panel>
+
       {/* Warehouses */}
       <Panel title="Warehouses" loading={warehouses === null}
         action={<button onClick={() => setWhForm({ data: { ...EMPTY_WH } })} style={addBtn}><Plus size={16} /> Add warehouse</button>}>

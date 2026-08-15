@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import LoginModal from '@/components/ordering/LoginModal';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
-  LogOut, Truck, FileText, Store as StoreIcon,
+  LogOut, Truck, FileText, Store as StoreIcon, Paintbrush,
 } from 'lucide-react';
 import { usePagination } from '@/hooks/admin/usePagination';
 import { useAdminUsers } from '@/hooks/admin/useAdminUsers';
@@ -35,12 +35,14 @@ import AttentionPanel from './attention/AttentionPanel';
 import DeliveryTab from './delivery/DeliveryTab';
 import WarehouseEditorModal from './delivery/WarehouseEditorModal';
 import PetpoojaTab from './petpooja/PetpoojaTab';
+import CustomizeTab from './customize/CustomizeTab';
 import { card, addBtn } from './shared/ui';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
   { id: 'products', label: 'Products', icon: Package },
+  { id: 'customize', label: 'Customize UI', icon: Paintbrush },
   { id: 'delivery', label: 'Delivery', icon: Truck },
   { id: 'stores', label: 'Stores', icon: StoreIcon },
   { id: 'petpooja', label: 'Petpooja', icon: FileText },
@@ -157,6 +159,13 @@ export default function AdminDashboard() {
             range={range}
             setRange={setRange}
             onOpenUsers={() => setTab('users')}
+            ordering={{
+              orderingPaused: siteSettings.orderingPaused,
+              orderingPausedBusy: siteSettings.orderingPausedBusy,
+              orderingLoaded: siteSettings.orderingLoaded,
+              changeOrderingPaused: siteSettings.changeOrderingPaused,
+              saveOrderingPaused: siteSettings.saveOrderingPaused,
+            }}
           />
         )}
 
@@ -194,7 +203,18 @@ export default function AdminDashboard() {
             onRemove={removeProduct}
             page={pageOf('products')}
             onPage={n => setPageOf('products', n)}
-            settings={siteSettings}
+          />
+        )}
+
+        {/* ===== Customize UI ===== */}
+        {tab === 'customize' && (
+          <CustomizeTab
+            bannerMessages={siteSettings.bannerMessages}
+            bannerMessagesSaved={siteSettings.bannerMessagesSaved}
+            changeBannerMessage={siteSettings.changeBannerMessage}
+            addBannerMessage={siteSettings.addBannerMessage}
+            removeBannerMessage={siteSettings.removeBannerMessage}
+            saveBannerMessages={siteSettings.saveBannerMessages}
           />
         )}
 
@@ -214,6 +234,10 @@ export default function AdminDashboard() {
             storeReadiness={storeReadiness} setStoreReadiness={setStoreReadiness}
             sfxStatesOpen={sfxStatesOpen} setSfxStatesOpen={setSfxStatesOpen}
             setErr={setErr} setCancelInfo={setCancelInfo}
+            deliveryFeeOutstation={siteSettings.deliveryFeeOutstation}
+            deliveryFeeSaved={siteSettings.deliveryFeeSaved}
+            changeDeliveryFeeOutstation={siteSettings.changeDeliveryFeeOutstation}
+            saveDeliveryFeeOutstation={siteSettings.saveDeliveryFeeOutstation}
           />
         )}
 
