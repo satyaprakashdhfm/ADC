@@ -83,13 +83,20 @@ export async function resolveGiftProduct(coupon, userId) {
   return null;
 }
 
-// giftValue (the gift product's price, when this is a gift-type coupon) is subtracted from
-// orderAmount before the minimum-order check — the freebie itself shouldn't help a cart
-// qualify for its own reward; the rest of the cart has to clear the minimum on its own.
+// The minimum-order check is measured against the order amount as it stands, with nothing netted
+// off it.
+//
+// It used to subtract a gift coupon's freebie first, so that the reward could not help a cart
+// qualify for itself. The intent was right but it could not work from a single scalar: at
+// /validate the amount is the cart BEFORE the frontend auto-adds the gift, and at order-create it
+// is the cart AFTER. Subtracting unconditionally therefore charged the gift twice on the first
+// call — a ₹500 cart against a ₹500 minimum was told it was ₹200 short, and only passed once the
+// gift it was being refused had been added to it.
+//
 // userId is required to redeem a SPIN-WHEEL coupon: those are personal rewards, only valid for
 // the exact account that won them (has an unexpired spin_claims row). Regular admin coupons
 // ignore userId and work for anyone, as before.
-export async function validateCoupon(code, orderAmount, giftValue = 0, userId = null) {
+export async function validateCoupon(code, orderAmount, userId = null) {
   const coupon = await getCouponByCode(code);
   if (!coupon) throw new ApiError('Invalid or inactive coupon');
 
@@ -121,8 +128,7 @@ export async function validateCoupon(code, orderAmount, giftValue = 0, userId = 
     const row = await getOne('SELECT COUNT(*) AS c FROM coupon_usage WHERE coupon_id = $1', [coupon.id]);
     if (Number(row.c) >= coupon.usage_limit) throw new ApiError('Coupon usage limit reached');
   }
-  const qualifyingAmount = Number(orderAmount) - Number(giftValue || 0);
-  if (coupon.minimum_order_amount != null && qualifyingAmount < coupon.minimum_order_amount) {
+  if (coupon.minimum_order_amount != null && Number(orderAmount) < coupon.minimum_order_amount) {
     throw new ApiError('Order amount below minimum for this coupon');
   }
   return coupon;
@@ -151,7 +157,7 @@ router.get('/validate', requireAuth, couponLimiter, async (req, res) => {
   const { code, orderAmount } = req.query;
   const raw = await getCouponByCode(String(code || ''));
   const giftProduct = raw ? await resolveGiftProduct(raw, req.user.id) : null;
-  const coupon = await validateCoupon(String(code || ''), orderAmount ?? 0, giftProduct ? Number(giftProduct.price) : 0, req.user.id);
+  const coupon = await validateCoupon(String(code || ''), orderAmount ?? 0, req.user.id);
   res.json({
     ...serializeCoupon(coupon),
     valid: true,
