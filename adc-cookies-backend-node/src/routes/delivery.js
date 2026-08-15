@@ -7,7 +7,7 @@ import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhiv
 // shopper is shown are the ones the order will actually be dispatched from. Quoting against a single
 // fixed origin is what let checkout advertise a store we then could not collect from.
 import { pickServiceableStore, shiprocketConfigured } from '../shiprocket.js';
-import { nearestStore, zoneStores, activeZoneStores, orderStoresByProximity, deliveryEligible, storeByPincode, straightLineKm } from '../stores.js';
+import { nearestStore, zoneStores, activeZoneStores, orderStoresByProximity, deliveryEligible, storeByPincode, straightLineKm, isStoreActive, WAREHOUSE_CODE } from '../stores.js';
 
 const router = Router();
 
@@ -183,6 +183,28 @@ router.get('/check', async (req, res) => {
       console.log(`[DELIVERY] check | pin=${pin} | hyperlocal quote errored (${e?.message || e})`);
       return unavailable('same_day_unavailable', 'We could not confirm same-day delivery just now. Please try again in a moment.');
     }
+  }
+
+  /*
+   * Outstation, and the warehouse has to be open for it.
+   *
+   * Every out-of-town parcel is dispatched from the warehouse — storeForAddress() hands a
+   * non-store-zone address straight to WAREHOUSE_CODE. Order creation already knows this: with the
+   * warehouse shut it finds no open store in the zone (there are none outside a store city) and
+   * refuses with a 503.
+   *
+   * This check did not, so the two disagreed. With only the Bengaluru store trading, someone in
+   * Hyderabad was quoted a real fee and a real delivery date, carried that promise the whole way
+   * through checkout, and was turned away at the final step. Refusing here costs them one screen
+   * instead of the entire basket.
+   */
+  if (!(await isStoreActive(WAREHOUSE_CODE))) {
+    console.log(`[DELIVERY] check | pin=${pin} | outstation UNAVAILABLE (warehouse closed)`);
+    return res.json({
+      serviceable: false, intracity: false, sameDay: false, reason: 'outstation_unavailable',
+      message: 'We are not shipping outside our delivery cities at the moment. Please check back soon.',
+      pincode: pin,
+    });
   }
 
   console.log(`[DELIVERY] check | pin=${pin} | carrier=DELHIVERY | out-of-town`);
