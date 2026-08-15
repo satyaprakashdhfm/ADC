@@ -4,15 +4,14 @@ import { ApiError } from '../../middleware.js';
 
 const router = Router();
 
-/* ---------- Site settings (homepage promo popup target + header banner offer) ---------- */
+/* ---------- Site settings (header banner offer, stall card, ordering pause, delivery fee) ---------- */
 router.get('/settings', async (_req, res) => {
-  const row = await getOne("SELECT value FROM site_settings WHERE key = 'promo_product_id'");
   const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
   const stall = await getOne("SELECT value FROM site_settings WHERE key = 'stall_info'");
   const outstationFee = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
   const paused = await getOne("SELECT value FROM site_settings WHERE key = 'ordering_paused'");
   res.json({
-    promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null, stallInfo: stall?.value || null,
+    headerOffer: offer?.value || null, stallInfo: stall?.value || null,
     orderingPaused: paused?.value || null,
     // Intracity is never a flat setting — it's Shiprocket's own live per-order quote (see
     // orders.js/delivery.js). Only outstation is a single admin-set number.
@@ -20,19 +19,6 @@ router.get('/settings', async (_req, res) => {
   });
 });
 router.put('/settings', async (req, res) => {
-  if (req.body?.promoProductId !== undefined) {
-    const raw = req.body.promoProductId;
-    const val = raw == null || raw === '' ? null : String(Number(raw));
-    if (val === null || Number.isNaN(Number(val))) {
-      await query("DELETE FROM site_settings WHERE key = 'promo_product_id'");
-    } else {
-      await query(
-        `INSERT INTO site_settings (key, value) VALUES ('promo_product_id', $1)
-         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-        [val]
-      );
-    }
-  }
   // Free text the admin controls directly — e.g. "Get 5% off with code XYZ" — so the header
   // banner never advertises a discount that isn't a real, currently-active coupon.
   if (req.body?.headerOffer !== undefined) {
@@ -87,12 +73,11 @@ router.put('/settings', async (req, res) => {
       [String(n)]
     );
   }
-  const row = await getOne("SELECT value FROM site_settings WHERE key = 'promo_product_id'");
   const offer = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
   const stall = await getOne("SELECT value FROM site_settings WHERE key = 'stall_info'");
   const outstationFee = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
   res.json({
-    promoProductId: row?.value ? Number(row.value) : null, headerOffer: offer?.value || null, stallInfo: stall?.value || null,
+    headerOffer: offer?.value || null, stallInfo: stall?.value || null,
     deliveryFeeOutstation: outstationFee?.value != null ? Number(outstationFee.value) : 100,
   });
 });
