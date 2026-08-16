@@ -23,7 +23,7 @@ import Footer from '@/components/storefront/Footer';
 import {
   Pencil, Check, X, RotateCcw, Home, Briefcase, Plus, Trash2,
   Info, LifeBuoy, ChevronRight, LogOut, ShoppingBag, MapPin, Gift,
-  MessageSquare, ReceiptText, PackageCheck, Truck, CreditCard, Copy, Clock, Bike, Phone,
+  MessageSquare, ReceiptText, PackageCheck, Truck, CreditCard, Copy, Clock,
 } from 'lucide-react';
 
 const card: React.CSSProperties = {
@@ -52,7 +52,6 @@ function ShipmentTracker({ order }: { order: Order }) {
      baked, packed. Half the timeline happens before a courier has ever heard of it. */
   const [ourEvents, setOurEvents] = useState<ProgressEvent[]>([]);
   useEffect(() => { getOrderTracking(order.id).then(setOurEvents).catch(() => {}); }, [order.id]);
-  const [liveOpen, setLiveOpen] = useState(false);
 
   const doTrack = async () => {
     setTracking(true); setErr('');
@@ -65,36 +64,11 @@ function ShipmentTracker({ order }: { order: Order }) {
     setTracking(false);
   };
 
-  const openLiveTracking = async () => {
-    setLiveOpen(true);
-    await doTrack();
-  };
-
   // Backend normalizes BOTH carriers (Delhivery + Shiprocket) into { status, scans:[{time,event}] }.
   const latestStatus = trackResult?.status || trackResult?.data?.ShipmentData?.[0]?.Shipment?.Status?.Status || null;
   const rawScans = trackResult?.scans ?? [];
-  const isIntracity = order.carrier === 'SHIPROCKET';
   const delivered = order.orderStatus === 'DELIVERED' || shipStage(latestStatus || order.shipmentStatus) >= 3;
   const address = order.address;
-  const rider = trackResult?.rider ?? null;
-  /*
-   * Coordinates first, address text only as a last resort.
-   *
-   * This was always the address as free text, handed to Google as a SEARCH — so Google matched
-   * whatever it thought the words meant. On a real order whose first line read "A dough cookie sg
-   * palya" it helpfully pinned the shop, on the other side of the city from the customer, while
-   * the exact coordinates we captured for that address sat unused one field away.
-   *
-   * Once a rider exists their position wins, because that is what someone watching this map came
-   * to see; before that it is the address's own pin.
-   */
-  const mapPoint = rider?.lat != null && rider?.lng != null
-    ? `${rider.lat},${rider.lng}`
-    : address?.latitude != null && address?.longitude != null
-      ? `${address.latitude},${address.longitude}`
-      : address
-        ? [address.addressLine1, address.addressLine2, address.city, address.state, address.pincode].filter(Boolean).join(', ')
-        : 'Bengaluru';
   // Drop scans equal to the current status and collapse duplicates so the timeline shows real progress only.
   /* Two sources, one list. Ours covers everything before a courier existed — paid, accepted at the
      store, packed — and the carrier's covers everything after. Neither alone is the order. */
@@ -131,11 +105,7 @@ function ShipmentTracker({ order }: { order: Order }) {
             Waybill: <span style={{ fontFamily: 'monospace', color: 'var(--text-strong)' }}>{order.delhiveryWaybill}</span>
           </span>
         )}
-        {order.delhiveryWaybill && isIntracity && !delivered ? (
-          <button onClick={openLiveTracking} disabled={tracking} style={{ padding: '7px 13px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'var(--brand-secondary)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: tracking ? 'default' : 'pointer' }}>
-            <MapPin size={14} /> {tracking ? 'Loading live…' : 'Live tracking'}
-          </button>
-        ) : order.delhiveryWaybill ? (
+        {order.delhiveryWaybill ? (
           <button onClick={doTrack} disabled={tracking} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: tracking ? 'default' : 'pointer', fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <Truck size={14} /> {tracking ? 'Tracking…' : 'Track shipment'}
           </button>
@@ -147,57 +117,6 @@ function ShipmentTracker({ order }: { order: Order }) {
         </a>
       </div>
       {err && <p style={{ color: 'var(--status-error)', fontSize: 'var(--text-sm)', marginTop: 8, fontWeight: 700 }}>{err}</p>}
-      {isIntracity && liveOpen && !delivered && (
-        <div style={{ marginTop: 12, borderRadius: 14, overflow: 'hidden', background: 'var(--surface-card)', border: '1px solid var(--border-soft)' }}>
-          <iframe
-            title={rider?.lat != null ? `Live rider position for ${order.orderNumber}` : `Delivery area for ${order.orderNumber}`}
-            src={`https://www.google.com/maps?q=${encodeURIComponent(mapPoint)}&z=15&output=embed`}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            style={{ width: '100%', height: 220, border: 0, display: 'block', background: 'var(--surface-sunken)' }}
-          />
-          <div style={{ padding: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--status-success)', boxShadow: '0 0 0 4px var(--green-veg-14)' }} />
-              <strong style={{ color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{latestStatus || order.shipmentStatus || 'Tracking order'}</strong>
-              <button onClick={doTrack} disabled={tracking} style={{ marginLeft: 'auto', border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 900, fontSize: 'var(--text-xs)', cursor: tracking ? 'default' : 'pointer', fontFamily: 'var(--font-body)' }}>
-                {tracking ? 'Refreshing…' : 'Refresh'}
-              </button>
-            </div>
-
-            {/* Who is actually bringing it. "Quick-Rapido is on the way" is a courier company;
-                "Theepan is on the way" is a person the customer can ring. */}
-            {rider?.name && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, padding: '9px 11px', borderRadius: 10, background: 'var(--surface-sunken)' }}>
-                <Bike size={17} style={{ color: 'var(--brand-secondary)', flex: 'none' }} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)' }}>{rider.name}</div>
-                  <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)' }}>
-                    {trackResult?.courierName || 'Your rider'}
-                    {rider.distanceToPickupKm != null ? ` · ${rider.distanceToPickupKm} km from the store` : ''}
-                  </div>
-                </div>
-                {rider.contact && (
-                  <a href={`tel:${rider.contact}`} style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontSize: 'var(--text-xs)', fontWeight: 800, textDecoration: 'none' }}>
-                    <Phone size={13} /> Call
-                  </a>
-                )}
-              </div>
-            )}
-
-            {timelineScans[0] && (
-              <p style={{ margin: '8px 0 0', color: 'var(--text-muted)', fontSize: 'var(--text-xs)', lineHeight: 1.45 }}>
-                Latest update: <strong style={{ color: 'var(--text-body)' }}>{timelineScans[0].event}</strong>{timelineScans[0].time ? ` · ${whenLabel(timelineScans[0].time)}` : ''}
-              </p>
-            )}
-            <p style={{ margin: '7px 0 0', color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', lineHeight: 1.45 }}>
-              {rider?.lat != null
-                ? 'Showing your rider’s last reported position. Tap Refresh for an update.'
-                : 'Showing your delivery address. Your rider will appear here once one is assigned.'}
-            </p>
-          </div>
-        </div>
-      )}
       {/* The four-stage ladder and the flat scan list that used to live here are gone: they said
           the same thing OrderProgress says above, twice, one of them behind a "See all updates"
           toggle. Two timelines on one screen is how they drift apart. */}
