@@ -3,6 +3,7 @@ import { X, Gift, Package, Truck, RefreshCw, ExternalLink } from 'lucide-react';
 import { adminTrackOrder, type Order } from '@/lib/api';
 import { money, fmtDate } from '../shared/format';
 import { card, addBtn, iconBtn, Badge } from '../shared/ui';
+import CancelRefundPanel from './CancelRefundPanel';
 
 interface Props {
   order: Order;
@@ -12,9 +13,11 @@ interface Props {
   fixing: number | null;
   onRebook: (id: number) => void;
   onRetryPos: (id: number) => void;
+  setErr: (s: string) => void;
+  onCancelled: () => void;
 }
 
-export default function OrderDetailModal({ order: o, onClose, trackResult, setTrackResult, fixing, onRebook, onRetryPos }: Props) {
+export default function OrderDetailModal({ order: o, onClose, trackResult, setTrackResult, fixing, onRebook, onRetryPos, setErr, onCancelled }: Props) {
   const items = o.items || [];
   const parse = (s?: string | null) => { try { return s ? JSON.parse(s) : {}; } catch { return {}; } };
   const giftItem = items.find(it => { const p = parse(it.selectedOptions); return p.giftWrap || p.giftPackaging; });
@@ -183,6 +186,11 @@ export default function OrderDetailModal({ order: o, onClose, trackResult, setTr
           </div>
           )
         )}
+
+        {/* Last, and below the money it is about — a refund is read in the context of the total,
+            and putting the one irreversible control on this screen above the order's own details
+            invites pressing it before reading them. */}
+        <CancelRefundPanel order={o} setErr={setErr} onDone={onCancelled} />
 
         <div style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {row('Item total', money(o.subtotal ?? o.totalAmount))}

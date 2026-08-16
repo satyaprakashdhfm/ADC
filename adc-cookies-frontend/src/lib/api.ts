@@ -443,6 +443,15 @@ export async function adminSetDeliveryFeeOutstation(deliveryFeeOutstation: numbe
 
 /* ---- Store online/offline, and per-store product availability ---- */
 export interface AdminStoreStatus { code: string; name: string; city: string; posMode: 'AUTO' | 'MANUAL'; isActive: boolean; }
+/* Cancel + refund, in two calls on purpose: the code is sent to the number on the admin's own user
+   row (never one this client supplies), and only the digits come back here. */
+export async function adminRequestCancelCode(orderId: number): Promise<{ sent: boolean; phoneHint: string; expiresInSeconds: number }> {
+  return request(`/admin/orders/${orderId}/cancel/request-code`, { method: 'POST' });
+}
+export async function adminCancelAndRefund(orderId: number, reason: string, code: string): Promise<{ ok: boolean; cancelled: boolean; refunded: boolean; refundId: string | null; notes: string[] }> {
+  return request(`/admin/orders/${orderId}/cancel`, { method: 'POST', body: JSON.stringify({ reason, code }) });
+}
+
 export async function adminGetStoreStatus(): Promise<{ stores: AdminStoreStatus[] }> { return request('/admin/store-status'); }
 export async function adminToggleStoreStatus(code: string): Promise<{ ok: boolean; code: string; isActive: boolean }> {
   return request(`/admin/store-status/${code}/toggle`, { method: 'PATCH' });
