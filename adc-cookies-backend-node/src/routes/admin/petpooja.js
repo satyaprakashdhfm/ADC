@@ -210,9 +210,15 @@ router.get('/attention', async (_req, res) => {
     // Cancelled on our side but a downstream leg refused — POS ticket or rider still live. Drops
     // off once a later cancel succeeds, so the list can actually reach empty; before this it could
     // only ever grow, and a counter that never returns to zero stops meaning anything.
+    /* Only orders that are actually cancelled on our side, which is what the heading claims.
+       A failed cancel on an order that then went on to be DELIVERED is not a loose end — the
+       parcel arrived, nothing is live, and there is nobody to phone. Worse, it could never clear:
+       the escape below waits for a later SHIPMENT_CANCELLED that a delivered order will never get,
+       so one press of Cancel on a delivered shipment pinned a permanent row here. */
     getAll(`SELECT DISTINCT o.id, o.order_number, t.status, t.remarks, t.created_at
               FROM orders o JOIN order_tracking t ON t.order_id = o.id
              WHERE t.status IN ('POS_CANCEL_FAILED','SHIPMENT_CANCEL_FAILED')
+               AND o.order_status = 'CANCELLED'
                AND NOT EXISTS (
                  SELECT 1 FROM order_tracking d
                   WHERE d.order_id = o.id AND d.created_at > t.created_at

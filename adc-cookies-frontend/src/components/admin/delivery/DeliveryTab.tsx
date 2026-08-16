@@ -212,6 +212,48 @@ export default function DeliveryTab({
           <Table head={['Order', 'Customer', 'Service', 'Waybill', 'Status', 'Actions']}>
             {(delivSub === 'delhivery' ? (orders || []).filter(o => o.carrier === 'DELHIVERY') : (orders || [])).map(o => {
               const w = shipmentWeights[o.id] ?? '0.5';
+              /* What is still true of this shipment, decided once per row.
+                 Separators flattened because our statuses are SCREAMING_SNAKE and the carriers'
+                 are spaced words. A shipment that has arrived, been called off, or come back has
+                 nothing left to cancel -- offering it anyway is how a delivered order ends up with
+                 a "carrier refused to cancel" note on it and a permanent entry in Needs attention. */
+              const sFlat = (o.shipmentStatus || '').toLowerCase().replace(/[_-]+/g, ' ');
+              const shipTerminal = (/deliver/.test(sFlat) && !sFlat.includes('out for'))
+                || /cancel|rto|returned|lost/.test(sFlat);
+              // Booked with Shiprocket and still hunting: no waybill yet, but very much cancellable.
+              const srSearching = o.carrier === 'SHIPROCKET' && !o.delhiveryWaybill && !shipTerminal;
+
+              /* One Cancel, rendered by whichever branch applies. A booking still searching and one
+                 with a rider already on the road are the same action against the same carrier --
+                 only the warning differs -- so they must not drift into two implementations. Null
+                 when there is nothing left to cancel, which is what keeps it off a delivered row. */
+              const cancelBtn = shipTerminal ? null : (
+                <button disabled={shipmentBusy === o.id} onClick={async () => {
+                  // For Shiprocket the AWB only exists once a real rider has been found — so its
+                  // presence means someone is already on their way AND the delivery charge has been
+                  // taken. That is a different decision from cancelling a booking still searching
+                  // for a rider, and must not sit behind the same casual confirm.
+                  const riderOut = o.carrier === 'SHIPROCKET' && !!o.delhiveryWaybill;
+                  const ref = o.delhiveryWaybill || o.carrierOrderId || o.orderNumber;
+                  const q = riderOut
+                    ? `A RIDER HAS ALREADY BEEN DISPATCHED for ${o.orderNumber}.\n\nThey may be at the store or on the way to the customer, and the delivery charge has already been taken. The carrier may refuse to call them off this late.\n\nStill try to cancel?`
+                    : `Cancel booking ${ref}?\n\nNo rider has been assigned, so nothing has been charged for the delivery. This does NOT refund the customer's payment.`;
+                  if (!confirm(q)) return;
+                  setShipmentBusy(o.id); setErr('');
+                  try {
+                    const r = await adminCancelShipment(o.id);
+                    // Only NOW is it actually cancelled. This used to mark the row CANCELLED even
+                    // when the carrier refused, so a failed cancel looked identical to a successful
+                    // one — while a rider was still on the way.
+                    setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
+                    setCancelInfo({ orderNumber: o.orderNumber, ok: true, message: r?.message || `Booking ${ref} cancelled with ${o.carrier || 'the carrier'}. The customer's payment is not refunded by this.` });
+                  } catch (e: unknown) {
+                    setCancelInfo({ orderNumber: o.orderNumber, ok: false, message: e instanceof Error ? e.message : 'The carrier refused to cancel this booking.' });
+                  } finally { setShipmentBusy(null); }
+                }} style={actionBtn(true)} title="Cancel this booking with the carrier">
+                  {shipmentBusy === o.id ? '…' : <><X size={13} /> Cancel</>}
+                </button>
+              );
               const trackData = trackResult[o.id] as { status?: string; note?: string; scans?: { time: string; event: string }[] } | undefined;
               const service = o.carrier === 'SHIPROCKET' ? { kind: 'Intracity', name: 'Shiprocket' }
                 : o.carrier === 'DELHIVERY' ? { kind: 'Intercity', name: 'Delhivery' } : null;
@@ -236,10 +278,16 @@ export default function DeliveryTab({
                         live Shiprocket booking still searching for a rider was offered a DELHIVERY
                         shipment, and pressing it would have booked the same cookies twice with two
                         carriers. Being booked is what disqualifies it, not having a waybill. */}
-                    {o.carrier === 'SHIPROCKET' && !o.delhiveryWaybill && !/cancel/i.test(o.shipmentStatus || '') ? (
-                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
-                        Booked — waiting for a rider
-                      </span>
+                    {srSearching ? (
+                      /* Booked, no rider yet. This is exactly when calling it off is cheapest --
+                         no AWB means no rider was ever allocated and the wallet was never charged --
+                         so the label alone, with no way to act on it, was the wrong half. */
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
+                          Booked — waiting for a rider
+                        </span>
+                        {cancelBtn}
+                      </div>
                     ) : !o.delhiveryWaybill ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <input type="number" value={w} min="0.1" step="0.1" title="Weight (kg)"
@@ -281,36 +329,7 @@ export default function DeliveryTab({
                             setTrackResult(p => ({ ...p, [o.id]: { status: shipment?.Status?.Status || 'No status', note: shipment?.Status?.Instructions || '', scans } }));
                           }
                         }} style={actionBtn()}><ExternalLink size={13} /> Status</button>
-                        {o.shipmentStatus !== 'CANCELLED' && (
-                          <button disabled={shipmentBusy === o.id} onClick={async () => {
-                            // For Shiprocket the AWB only exists once a real rider has been
-                            // found — so its presence means someone is already on their way
-                            // AND the delivery charge has been taken. That is a different
-                            // decision from cancelling a booking still searching for a rider,
-                            // and must not sit behind the same casual confirm.
-                            const riderOut = o.carrier === 'SHIPROCKET' && !!o.delhiveryWaybill;
-                            const q = riderOut
-                              ? `A RIDER HAS ALREADY BEEN DISPATCHED for ${o.orderNumber}.\n\nThey may be at the store or on the way to the customer, and the delivery charge has already been taken. The carrier may refuse to call them off this late.\n\nStill try to cancel?`
-                              : `Cancel shipment ${o.delhiveryWaybill}?\n\nThis cancels the parcel with the carrier. It does NOT refund the customer's payment.`;
-                            if (!confirm(q)) return;
-                            setShipmentBusy(o.id); setErr('');
-                            try {
-                              const r = await adminCancelShipment(o.id);
-                              // Only NOW is it actually cancelled. This used to mark the row
-                              // CANCELLED even when the carrier refused, so a failed cancel
-                              // looked identical to a successful one — while a rider was still
-                              // on the way.
-                              setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, shipmentStatus: 'CANCELLED' } : x));
-                              // Prefer the backend's sentence: it knows whether a rider was
-                              // out, and therefore whether anything was actually charged.
-                              setCancelInfo({ orderNumber: o.orderNumber, ok: true, message: r?.message || `Booking ${o.delhiveryWaybill} cancelled with ${o.carrier || 'the carrier'}. The customer's payment is not refunded by this.` });
-                            } catch (e: unknown) {
-                              setCancelInfo({ orderNumber: o.orderNumber, ok: false, message: e instanceof Error ? e.message : 'The carrier refused to cancel this booking.' });
-                            } finally { setShipmentBusy(null); }
-                          }} style={actionBtn(true)} title="Cancel this shipment with the carrier">
-                            {shipmentBusy === o.id ? '…' : <><X size={13} /> Cancel</>}
-                          </button>
-                        )}
+                        {cancelBtn}
                       </div>
                     )}
                     {trackData && (
