@@ -609,6 +609,33 @@ router.get('/:id/delhivery-track', async (req, res) => {
   if (!order) throw new ApiError('Order not found');
   if (!order.delhivery_waybill) return res.json({ tracked: false, reason: 'no_waybill' });
 
+  /* Same-day intracity is Shiprocket's, and this route used to send its waybills to DELHIVERY —
+     the branch simply did not exist here, though the admin's copy of it has had one for a while.
+     So a customer opening tracking on an intracity order asked one carrier about another carrier's
+     parcel, got nothing back, and fell through to whatever status was last written to the row.
+     This is also the only path that can carry the rider, so without the branch the live position
+     could not reach the customer at all. */
+  if (order.carrier === 'SHIPROCKET') {
+    const t = await trackShiprocket(order.delhivery_shipment_id, order.carrier_order_id, order.delhivery_waybill);
+    if (!t.ok) return res.json({ tracked: false, reason: t.reason });
+    if (t.status) {
+      await query(
+        `UPDATE orders SET shipment_status=$1, updated_at=$2
+          WHERE id=$3 AND (shipment_status IS NULL OR shipment_status !~* 'cancel')`,
+        [t.status, nowIso(), order.id]);
+      await applyCarrierTerminalStatus(order, t.status, 'SHIPROCKET');
+    }
+    const scans = (t.activities || [])
+      .map(s => ({ time: s.date || '', event: s['sr-status-label'] || s.activity || s.status || '' }))
+      .filter(s => s.event)
+      .reverse();
+    return res.json({
+      tracked: true, carrier: 'SHIPROCKET', waybill: order.delhivery_waybill,
+      status: t.status, courierName: t.courierName || null, trackUrl: t.trackUrl || null,
+      rider: t.rider || null, scans,
+    });
+  }
+
   // Pan-India orders ship via Delhivery.
   const result = await trackShipment(order.delhivery_waybill);
   if (!result.ok) return res.json({ tracked: false, reason: result.reason });

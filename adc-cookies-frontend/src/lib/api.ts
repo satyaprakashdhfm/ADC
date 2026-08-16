@@ -334,7 +334,9 @@ export async function getOrder(id: number): Promise<Order> { return request(`/or
 export interface DelhiveryTrackResult {
   tracked: boolean; waybill?: string; reason?: string;
   // Normalized fields returned for BOTH carriers (Delhivery + Shiprocket).
-  carrier?: string; status?: string | null; trackUrl?: string | null;
+  carrier?: string; status?: string | null; trackUrl?: string | null; courierName?: string | null;
+  /** Shiprocket only, and only once a rider is assigned — their live position, name and number. */
+  rider?: { name: string | null; contact: string | null; lat: number | null; lng: number | null; distanceToPickupKm: number | null } | null;
   scans?: { time: string; event: string }[];
   data?: { ShipmentData?: { Shipment?: { Status?: { Status?: string; Instructions?: string }; Scans?: { ScanDetail?: { ScanDateTime?: string; Instructions?: string; Scan?: string } }[] } }[] };
 }
