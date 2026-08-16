@@ -337,6 +337,8 @@ export default function AdminDashboard() {
           fixing={fixing}
           onRebook={rebookShipment}
           onRetryPos={retryPosRelay}
+          setErr={setErr}
+          onCancelled={() => { refreshOrders(); refreshAttention(); }}
         />
       )}
 

@@ -150,6 +150,32 @@ function orderBody(o) {
  * Halving the sends matters because the mail plan is counted per message, and the customer's
  * confirmation is the one that must never be the send that hits the cap.
  */
+/*
+ * We cancelled an order the customer had already paid for. They are owed the reason in writing and
+ * the money back, in that order — this is the only message where the refund line matters more than
+ * anything else on the page, so it is stated plainly and near the top rather than buried in terms.
+ *
+ * `refunded` is what actually happened, not what was intended: if the refund call failed the mail
+ * must not promise one, or the customer waits a week for money that was never sent.
+ */
+export async function sendOrderCancelledEmail({ order, reason, refunded }) {
+  const to = order?.customerEmail || order?.customer_email;
+  if (!to) return;
+  const number = order.orderNumber || order.order_number || '';
+  const amount = order.totalAmount ?? order.total_amount;
+  const body = `
+    <p style="color:#5C4636">We are sorry — we have had to cancel your order <b>${esc(number)}</b>.</p>
+    <div style="margin:16px 0;padding:16px;border-radius:12px;background:#FFF6E9;border:1px solid #F3D9B5">
+      <div style="font-size:13px;color:#7A6353;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Why</div>
+      <div style="margin-top:4px;color:#2B1D12;line-height:1.6">${esc(reason)}</div>
+    </div>
+    ${refunded
+      ? `<p style="color:#2B1D12;line-height:1.6"><b>${amount != null ? rupee(amount) : 'Your payment'} has been refunded in full</b> to the card or account you paid from. Banks usually take 5&ndash;7 working days to show it.</p>`
+      : `<p style="color:#2B1D12;line-height:1.6">If you were charged, your refund is being arranged and will come back to the account you paid from. Reply to this email if you do not see it within a week.</p>`}
+    <p style="color:#7A6353;font-size:13px;line-height:1.6">We know this is disappointing, and we would rather tell you now than leave you waiting. Do order again — we will make it right.</p>`;
+  await send({ to, subject: `Your order ${number} has been cancelled`, html: shell('Order cancelled', body) });
+}
+
 export async function sendOrderEmails(o) {
   await send({ to: o.customerEmail, subject: `Your order ${o.orderNumber} is placed 🍪`, html: shell('Order confirmed', orderBody(o)) });
 }
