@@ -65,9 +65,16 @@ export function useAdminOrders(enabled: boolean, { onError, onNotice, refreshSta
       /* A hyperlocal booking succeeds before it has an AWB — the rider search runs after — so
          printing r.waybill unconditionally produced "Courier booked — SHIPROCKET null". Report what
          actually exists: the waybill if there is one, otherwise that we are waiting for a rider. */
-      onNotice(r.waybill
-        ? `Courier booked — ${r.carrier} ${r.waybill}`
-        : `Courier booked — ${r.carrier}. Waiting for a rider to be assigned.`);
+      /* Re-running the rider search on a booking that already exists is not the same event as
+         booking a courier, and saying "Courier booked" about it would suggest a second booking had
+         been made — which is precisely what this stopped doing. */
+      onNotice(r.reassigned
+        ? (r.waybill
+            ? `Rider found — ${r.carrier} ${r.waybill}`
+            : 'Looking for a rider again on the existing booking. No second booking was made.')
+        : r.waybill
+          ? `Courier booked — ${r.carrier} ${r.waybill}`
+          : `Courier booked — ${r.carrier}. Waiting for a rider to be assigned.`);
       reloadOrdersAndModal();
       refreshAttention();
     } catch (e: unknown) {
