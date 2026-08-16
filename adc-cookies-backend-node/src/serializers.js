@@ -1,3 +1,5 @@
+import { storeByCode } from './stores.js';
+
 export function serializeUser(u) {
   if (!u) return null;
   return { id: u.id, name: u.name, email: u.email, phone: u.phone, role: u.role,
@@ -110,6 +112,10 @@ export function serializeOrder(order, items = [], address = null, payment = null
           acceptedAt: order.store_accepted_at ?? null,
           readyAt: order.store_ready_at ?? null,
           posBillNo: order.store_pos_bill_no ?? null,
+          /* Whether this store bills by hand. Without it every screen has to know that Begur is the
+             only AUTO outlet, and admin was reading "no Petpooja ticket" as a failure on the four
+             stores that are never meant to have one. */
+          posManual: (storeByCode(order.store_code)?.posMode ?? 'MANUAL') !== 'AUTO',
         }
       : null,
     labelGenerated: !!order.label_generated,

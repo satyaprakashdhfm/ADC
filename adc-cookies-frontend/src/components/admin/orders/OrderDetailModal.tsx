@@ -144,6 +144,25 @@ export default function OrderDetailModal({ order: o, onClose, trackResult, setTr
         {/* Kitchen / POS — the leg that decides whether the bill and KOT actually print.
             Shown only for paid orders: an unpaid one is never relayed, by design. */}
         {o.paymentStatus === 'PAID' && (
+          /* Two completely different situations wearing one panel.
+             Begur is the only AUTO outlet — we relay its tickets ourselves, and a missing one is a
+             real failure worth a retry button. Every other store bills on its own terminal by hand,
+             so there is no ticket to send and never was: "Not sent" read as something broken on the
+             four stores where it is the correct and expected state, and the number that actually
+             reconciles the order — the bill the staff typed in — was not shown at all. */
+          o.store?.posManual ? (
+            <div style={{ ...card, padding: 14, marginBottom: 14 }}>
+              <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Kitchen (billed at the store)</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <Badge text={o.store.posBillNo ? `Billed — bill ${o.store.posBillNo}` : 'Not billed yet'} ok={!!o.store.posBillNo} />
+              </div>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+                {o.store.posBillNo
+                  ? 'This store rings orders up on its own Petpooja terminal. The bill number above is the link between this order and their POS.'
+                  : 'This store rings orders up on its own Petpooja terminal. Staff enter the bill number when they accept — nothing is sent from here.'}
+              </p>
+            </div>
+          ) : (
           <div style={{ ...card, padding: 14, marginBottom: 14 }}>
             <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Kitchen (Petpooja POS)</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -162,6 +181,7 @@ export default function OrderDetailModal({ order: o, onClose, trackResult, setTr
               </div>
             )}
           </div>
+          )
         )}
 
         <div style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>

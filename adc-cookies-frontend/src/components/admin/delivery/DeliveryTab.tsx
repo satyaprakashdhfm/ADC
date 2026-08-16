@@ -231,7 +231,16 @@ export default function DeliveryTab({
                   </td>
                   <td style={td}><Badge text={shipStatusLabel(o.shipmentStatus)} ok={o.shipmentStatus === 'DELIVERED'} /></td>
                   <td style={{ ...td, whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
-                    {!o.delhiveryWaybill ? (
+                    {/* An intracity order that is already booked has no waybill until a rider
+                        accepts, and this row keyed the Create button off the waybill alone — so a
+                        live Shiprocket booking still searching for a rider was offered a DELHIVERY
+                        shipment, and pressing it would have booked the same cookies twice with two
+                        carriers. Being booked is what disqualifies it, not having a waybill. */}
+                    {o.carrier === 'SHIPROCKET' && !o.delhiveryWaybill && !/cancel/i.test(o.shipmentStatus || '') ? (
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
+                        Booked — waiting for a rider
+                      </span>
+                    ) : !o.delhiveryWaybill ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <input type="number" value={w} min="0.1" step="0.1" title="Weight (kg)"
                           onChange={e => setShipmentWeights(p => ({ ...p, [o.id]: e.target.value }))}
