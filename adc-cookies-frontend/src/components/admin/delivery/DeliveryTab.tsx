@@ -223,6 +223,22 @@ export default function DeliveryTab({
               // Booked with Shiprocket and still hunting: no waybill yet, but very much cancellable.
               const srSearching = o.carrier === 'SHIPROCKET' && !o.delhiveryWaybill && !shipTerminal;
 
+              /*
+               * Create books a DELHIVERY parcel, and nothing else. It therefore appears only on
+               * Delhivery's own tab, and never on an order that was routed intracity.
+               *
+               * It used to sit on any row without a waybill, including "All shipments" — so a
+               * same-day order whose Shiprocket booking had just been cancelled showed a weight box
+               * and a Create button, one click from a multi-day courier. That is not a hypothetical:
+               * it happened, and it put a real waybill on a 17 km cookie order.
+               *
+               * `carrierOrderId` is the tell that survives. Once Create runs it rewrites `carrier`
+               * to DELHIVERY, so carrier alone would forget the order was ever intracity and offer
+               * the button again on the next render.
+               */
+              const wasIntracity = o.carrier === 'SHIPROCKET' || !!o.carrierOrderId;
+              const canCreateDelhivery = delivSub === 'delhivery' && !o.delhiveryWaybill && !wasIntracity;
+
               /* One Cancel, rendered by whichever branch applies. A booking still searching and one
                  with a rider already on the road are the same action against the same carrier --
                  only the warning differs -- so they must not drift into two implementations. Null
@@ -288,7 +304,7 @@ export default function DeliveryTab({
                         </span>
                         {cancelBtn}
                       </div>
-                    ) : !o.delhiveryWaybill ? (
+                    ) : canCreateDelhivery ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <input type="number" value={w} min="0.1" step="0.1" title="Weight (kg)"
                           onChange={e => setShipmentWeights(p => ({ ...p, [o.id]: e.target.value }))}
@@ -302,6 +318,10 @@ export default function DeliveryTab({
                           {shipmentBusy === o.id ? '…' : <><Truck size={13} /> Create</>}
                         </button>
                       </div>
+                    ) : !o.delhiveryWaybill ? (
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
+                        {shipTerminal ? 'Booking cancelled' : 'No shipment'}
+                      </span>
                     ) : (
                       /* Labelled pills rather than bare icons — four unlabelled glyphs in a row
                          gave no clue which one cancelled a shipment. */

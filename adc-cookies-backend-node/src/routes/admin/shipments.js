@@ -31,6 +31,22 @@ router.post('/orders/:id/shipment', async (req, res) => {
   if (order.order_status === 'CANCELLED' && String(req.body?.force) !== 'true') {
     throw new ApiError('Order is cancelled — send force:true to book a courier anyway.', 409);
   }
+  /*
+   * Never hand a same-day order to a multi-day courier.
+   *
+   * This endpoint books DELHIVERY. An order routed intracity was sold as "in about an hour, from
+   * the nearest store", and Delhivery cannot do that at any price — booking one silently replaces
+   * the thing the customer paid for with something else entirely, and spends from the wallet to do
+   * it. `carrier_order_id` is the durable tell: a successful create rewrites `carrier` to DELHIVERY,
+   * so carrier alone forgets the order was ever intracity.
+   *
+   * Guarded here and not only in the admin UI because it costs money and cannot be undone: the
+   * button was hidden after exactly this happened by a misclick, and a hidden button is not a rule.
+   */
+  const wasIntracity = order.carrier === 'SHIPROCKET' || !!order.carrier_order_id;
+  if (wasIntracity && String(req.body?.force) !== 'true') {
+    throw new ApiError('This is a same-day intracity order — Delhivery would take days. Re-book it with the same-day carrier instead, or send force:true if you really mean to post it.', 409);
+  }
 
   const address = order.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null;
   if (!address) throw new ApiError('Order has no delivery address', 400);
