@@ -404,12 +404,54 @@ export async function walletStatus() {
 }
 
 /** Rider name/phone once assigned, for the order page. */
-export async function getRiderData(awb) {
-  const r = await srRequest('GET', '/courier/hyperlocal/get_rider_data', { query: { awb: String(awb) } });
+/*
+ * Track by AWB — and the only call that carries the rider.
+ *
+ * /courier/track/shipment/{id} answers about the booking; this one answers about the parcel, and
+ * only this one returns `courier_agent_details`: the rider's name, their number, their live
+ * latitude and longitude, and how far they are from the pickup. Same account, same auth, one
+ * different path.
+ *
+ * We were asking /courier/hyperlocal/get_rider_data for exactly that and getting a flat 404 —
+ * verified live on 2026-08-16 against a real in-flight AWB, while this call returned the rider's
+ * coordinates in the same second. Because that lookup is best-effort and swallows its own errors
+ * so it can never break a webhook, the 404 never surfaced: the rider simply never had a name.
+ */
+export async function trackByAwb(awb) {
+  const r = await srRequest('GET', `/courier/track/awb/${encodeURIComponent(awb)}`);
   if (!r.ok) return r;
-  const d = r.data?.data ?? r.data;
-  log('rider-data', `awb=${awb} | rider=${d?.rider_name || d?.name || 'unassigned'}`);
-  return { ok: true, rider: d };
+  const td = r.data?.tracking_data ?? r.data;
+  const t = td?.shipment_track?.[0] ?? {};
+  const a = t.courier_agent_details || {};
+  const num = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
+  const rider = (a.rider_name || a.rider_contact || a.rider_lat)
+    ? {
+        name: a.rider_name || null,
+        contact: a.rider_contact || null,
+        lat: num(a.rider_lat),
+        lng: num(a.rider_long),
+        distanceToPickupKm: num(a.distance_between_rider_and_pickup),
+      }
+    : null;
+  if (rider) log('rider', `awb=${awb} | ${rider.name || 'unnamed'} | ${rider.lat ?? '?'},${rider.lng ?? '?'}`);
+  return {
+    ok: true,
+    awb: t.awb_code || String(awb),
+    status: t.current_status || null,
+    courierName: t.courier_name || null,
+    trackUrl: td?.track_url || `https://shiprocket.co/tracking/${awb}`,
+    activities: td?.shipment_track_activities || [],
+    rider,
+    data: td,
+  };
+}
+
+// Kept for the webhook's rider->POS relay. Now sourced from the call that actually answers.
+export async function getRiderData(awb) {
+  const r = await trackByAwb(awb);
+  if (!r.ok) return r;
+  if (!r.rider) return { ok: false, reason: 'no rider assigned yet' };
+  return { ok: true, rider: { rider_name: r.rider.name, rider_contact: r.rider.contact, ...r.rider } };
 }
 
 /**
@@ -422,7 +464,14 @@ export async function getRiderData(awb) {
  *
  * The awb is NOT available at assignment time (that call is async), so this is also how we learn it.
  */
-export async function trackShiprocket(shipmentId, srOrderId) {
+export async function trackShiprocket(shipmentId, srOrderId, awb = null) {
+  /* Once an AWB exists, ask about the parcel rather than the booking: same status, plus the rider
+     and their position. Before one exists there is nothing to ask about, so the booking and then
+     the order answer instead — see the fallbacks below. */
+  if (awb) {
+    const byAwb = await trackByAwb(awb);
+    if (byAwb.ok && byAwb.status) return { ...byAwb, statusFrom: 'awb' };
+  }
   const r = await srRequest('GET', `/courier/track/shipment/${encodeURIComponent(shipmentId)}`);
   if (!r.ok) return r;
   const td = r.data?.tracking_data ?? r.data;
