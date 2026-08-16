@@ -3,7 +3,7 @@ import { getOne, getAll, query, nowIso } from '../../db.js';
 import { ApiError } from '../../middleware.js';
 import { serializeOrder } from '../../serializers.js';
 import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../delhivery.js';
-import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, walletStatus } from '../../shiprocket.js';
+import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, walletStatus, assignAwb, shiprocketConfigured } from '../../shiprocket.js';
 import { autoCreateShipment } from '../orders.js';
 import { applyCarrierTerminalStatus, bookingNote } from '../../orderProgress.js';
 
@@ -217,6 +217,45 @@ router.post('/orders/:id/rebook', async (req, res) => {
   if (order.delhivery_waybill) throw new ApiError('This order already has a shipment — cancel it first.', 409);
   if (order.payment_status !== 'PAID') throw new ApiError(`Order is not paid (payment_status=${order.payment_status}).`, 409);
   if (order.order_status === 'CANCELLED') throw new ApiError('Order is cancelled.', 409);
+
+  /*
+   * An intracity order that is already booked needs a RIDER, not another booking.
+   *
+   * When nobody accepts, Shiprocket abandons the hunt and puts the order back to NEW — their own
+   * panel then offers "Ship Now" again. The order is still there; only the assignment is gone. Ours
+   * has no waybill in that state (an AWB only exists once a rider is found), and the retry below
+   * skips solely on the waybill — so it would have created a SECOND Shiprocket order for the same
+   * cookies, leaving the first live. Two bookings, and if both eventually find riders, two riders at
+   * the store.
+   *
+   * So: re-run the assignment against the shipment we already have, which is exactly what their
+   * "Ship Now" does. Only a booking that never existed falls through to creating one.
+   */
+  const wasIntracity = order.carrier === 'SHIPROCKET' || !!order.carrier_order_id;
+  if (wasIntracity && order.delhivery_shipment_id) {
+    if (!shiprocketConfigured()) throw new ApiError('Shiprocket is not configured on this environment.', 503);
+    console.log(`[ADMIN-SHIPMENT] rebook | order=${order.order_number} | re-assigning rider on shipment=${order.delhivery_shipment_id}`);
+    const assigned = await assignAwb(order.delhivery_shipment_id, { vehicleType: 2 });
+    if (!assigned.ok) {
+      const reason = String(typeof assigned.reason === 'string' ? assigned.reason : JSON.stringify(assigned.reason ?? 'Carrier refused'));
+      const balance = await getWalletBalance().catch(() => null);
+      const detail = balance == null ? reason : `${reason} (Shiprocket wallet: ₹${balance})`;
+      await query('UPDATE orders SET shipment_error = $1, updated_at = $2 WHERE id = $3',
+        [detail.slice(0, 500), nowIso(), order.id]).catch(() => {});
+      return res.status(502).json({ ok: false, reason: detail, error: `Shiprocket would not assign a rider: ${detail}`, message: `Shiprocket would not assign a rider: ${detail}` });
+    }
+    // Assignment is asynchronous — a pending search is a success, so read back whatever exists now.
+    const track = await trackShiprocket(order.delhivery_shipment_id, order.carrier_order_id).catch(() => null);
+    const awb = assigned.awb || track?.awb || null;
+    await query(
+      `UPDATE orders SET delhivery_waybill = COALESCE($1, delhivery_waybill), shipment_status = $2,
+              shipment_error = NULL, updated_at = $3 WHERE id = $4`,
+      [awb, track?.status || 'SEARCHING FOR RIDER', nowIso(), order.id]
+    );
+    await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+      [order.id, 'SHIPMENT_CREATED', bookingNote('SHIPROCKET', awb, ' (rider search restarted)'), nowIso()]).catch(() => {});
+    return res.json({ ok: true, carrier: 'SHIPROCKET', waybill: awb, reassigned: true });
+  }
 
   const r = await autoCreateShipment(order.id);
   if (!r.ok) {

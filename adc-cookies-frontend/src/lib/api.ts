@@ -609,7 +609,9 @@ export interface PetpoojaRelay {
 export async function adminGetPetpoojaRelays(): Promise<PetpoojaRelay[]> { return request('/admin/petpooja/orders'); }
 
 /** Re-run the AUTOMATIC carrier routing (intracity → Shiprocket, else Delhivery) for a paid order. */
-export async function adminRebookShipment(orderId: number): Promise<{ ok: boolean; reason?: string; waybill?: string; carrier?: string }> {
+/** `reassigned` means the existing intracity booking was told to look for a rider again — their
+ *  own "Ship Now" — rather than a second booking being created. */
+export async function adminRebookShipment(orderId: number): Promise<{ ok: boolean; reason?: string; waybill?: string; carrier?: string; reassigned?: boolean }> {
   return request(`/admin/orders/${orderId}/rebook`, { method: 'POST' });
 }
 
