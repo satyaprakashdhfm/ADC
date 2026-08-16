@@ -76,6 +76,14 @@ export default function OrdersTab({
                 never relayed by design, so a dash there is correct rather than a failure. */}
             <td style={td}>
               {o.paymentStatus !== 'PAID' ? <span style={{ color: 'var(--text-subtle)' }}>—</span>
+                /* A store that bills by hand has no ticket to send and never will, so "NOT SENT"
+                   was reporting a failure that cannot happen. The bill its staff typed is the
+                   POS link for these orders — the same thing the detail view shows, which is why
+                   the two disagreed until now. */
+                : o.store?.posManual
+                  ? (o.store.posBillNo
+                      ? <span title={`Billed at the store — bill ${o.store.posBillNo}`}><Badge text={`Bill ${o.store.posBillNo}`} ok /></span>
+                      : <span title="This store bills on its own Petpooja terminal — staff enter the bill number when they accept."><Badge text="Not billed" /></span>)
                 : o.pos?.relayed ? <Badge text="On POS" ok />
                 : <span title={o.pos?.lastError || 'Not sent to the POS yet.'}><Badge text={o.pos ? 'FAILED' : 'NOT SENT'} /></span>}
             </td>
