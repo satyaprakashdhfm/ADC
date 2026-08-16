@@ -94,8 +94,15 @@ export const SHIP_STAGES = ['Order placed', 'Shipped', 'Out for delivery', 'Deli
 export function shipStage(s?: string | null): number {
   const t = (s || '').toLowerCase();
   if (!t) return -1;
-  if ((t.includes('deliver') && !t.includes('out for') && !t.includes('attempt') && !t.includes('undeliver')) || t.includes('rts_d')) return 3;
-  if (t.includes('out for') || t === 'ofd' || t.includes('out_for') || t.includes('dispatch')) return 2;
+  /* Separators normalised before matching, because the two sources spell the same event
+     differently: carriers send "OUT FOR DELIVERY", we store "OUT_FOR_DELIVERY". The delivered test
+     excluded only the spaced spelling, so our own status skipped the exclusion, matched "deliver",
+     and returned 3 — every order that was out for delivery reported itself delivered, and the
+     customer was told "we hope you love it" while the rider was still riding. */
+  const flat = t.replace(/[_-]+/g, ' ');
+  const outForDelivery = flat.includes('out for') || flat === 'ofd' || flat.includes('dispatch');
+  if (!outForDelivery && ((flat.includes('deliver') && !flat.includes('attempt') && !flat.includes('undeliver')) || flat.includes('rts d'))) return 3;
+  if (outForDelivery) return 2;
   // "Not picked" / "pickup not attempted" contain "picked" but mean the opposite — exclude them
   // before the pickup check, or a failed pickup would read as Shipped.
   const notPickedUp = /not\s*picked|pickup\s*(not|failed|cancel)|awaiting/.test(t);

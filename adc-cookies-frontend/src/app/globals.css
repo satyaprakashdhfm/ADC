@@ -402,6 +402,9 @@ body::before {
 }
 .track-sheet {
   width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto;
+  /* Keep a scroll that reaches the end of this list from continuing into the page behind it.
+     Paired with the body lock in TrackSheet — this one stops the chain, that one stops the page. */
+  overscroll-behavior: contain;
   background: var(--surface-card);
   border-radius: 20px 20px 0 0;
   padding: 18px 18px 26px;

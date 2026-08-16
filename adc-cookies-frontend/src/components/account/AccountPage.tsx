@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { getOrders, getAddresses, addAddress, updateAddress, deleteAddress as apiDeleteAddress, trackOrderShipment, getSpinStatus, getOrderTracking, type DelhiveryTrackResult, type Address, type Order, type SpinClaim } from '@/lib/api';
+import { getOrders, getAddresses, addAddress, updateAddress, deleteAddress as apiDeleteAddress, getSpinStatus, getOrderTracking, type Address, type Order, type SpinClaim } from '@/lib/api';
 import dynamic from 'next/dynamic';
 
 // Leaflet needs a window, and this only renders inside an open address form.
@@ -15,7 +15,7 @@ import { OrderNextStep } from '@/lib/orderNextStep';
 import OrderProgress, { type ProgressEvent } from './OrderProgress';
 import {
   parseOptions, optionList, hasGift, giftMessage, statusColor, formatMoney, formatDate,
-  friendlyDate, formatPhone, national10, shipStage, isCancelledStatus, isDeadShipment, whenLabel,
+  friendlyDate, formatPhone, national10, isCancelledStatus, isDeadShipment, whenLabel,
 } from '@/lib/orderFormat';
 import LoginModal from '@/components/ordering/LoginModal';
 import SiteHeader from '@/components/storefront/SiteHeader';
@@ -45,48 +45,19 @@ const sectionTitle: React.CSSProperties = {
    break it. One editor now, shared with checkout — see AddressWizard. */
 
 function ShipmentTracker({ order }: { order: Order }) {
-  const [trackResult, setTrackResult] = useState<DelhiveryTrackResult | null>(null);
-  const [tracking, setTracking] = useState(false);
-  const [err, setErr] = useState('');
-  /* Our own record of the order, which the carrier does not have: paid, accepted by the store,
-     baked, packed. Half the timeline happens before a courier has ever heard of it. */
+  /*
+   * One source of truth: the order's own timeline.
+   *
+   * There used to be a second, fetched live from the carrier when the customer pressed a button.
+   * It was the same information arriving by a slower and more fragile route — the webhook and the
+   * background poll already write every carrier scan onto this order as it happens — and it was the
+   * half that could fail, leaving a page that had a status sitting next to a control that said it
+   * could not get one.
+   */
   const [ourEvents, setOurEvents] = useState<ProgressEvent[]>([]);
   useEffect(() => { getOrderTracking(order.id).then(setOurEvents).catch(() => {}); }, [order.id]);
 
-  const doTrack = async () => {
-    setTracking(true); setErr('');
-    try {
-      const r = await trackOrderShipment(order.id);
-      setTrackResult(r);
-    } catch {
-      setErr('Could not fetch tracking. Please try again.');
-    }
-    setTracking(false);
-  };
-
-  // Backend normalizes BOTH carriers (Delhivery + Shiprocket) into { status, scans:[{time,event}] }.
-  const latestStatus = trackResult?.status || trackResult?.data?.ShipmentData?.[0]?.Shipment?.Status?.Status || null;
-  const rawScans = trackResult?.scans ?? [];
-  const delivered = order.orderStatus === 'DELIVERED' || shipStage(latestStatus || order.shipmentStatus) >= 3;
-  const address = order.address;
-  // Drop scans equal to the current status and collapse duplicates so the timeline shows real progress only.
-  /* Two sources, one list. Ours covers everything before a courier existed — paid, accepted at the
-     store, packed — and the carrier's covers everything after. Neither alone is the order. */
   const cancelled = isCancelledStatus(order.orderStatus) || isDeadShipment(order.shipmentStatus);
-  const allEvents: ProgressEvent[] = [
-    ...ourEvents,
-    ...rawScans
-      .filter(s => s?.event && s?.time)
-      .map(s => ({ status: s.event as string, remarks: s.event as string, createdAt: s.time as string })),
-  ];
-
-  const seenScan = new Set<string>();
-  const timelineScans = rawScans.filter(s => {
-    const t = s?.event || '';
-    if (!t || t === latestStatus || seenScan.has(t)) return false;
-    seenScan.add(t);
-    return true;
-  });
 
   return (
     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
@@ -94,35 +65,31 @@ function ShipmentTracker({ order }: { order: Order }) {
           sentence answers it less quickly than four marks with the line filled in. The sentence is
           still here, under it, because it says the thing a stepper cannot: what happens next. */}
       <OrderProgress
-        events={allEvents}
+        events={ourEvents}
         cancelled={cancelled}
         eta={order.estimatedDelivery ? `Arriving by ${friendlyDate(order.estimatedDelivery)}` : null}
       />
-      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={latestStatus || order.shipmentStatus} bookingStatus={order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ margin: '12px 0' }} />
+      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={order.shipmentStatus} bookingStatus={order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ margin: '12px 0' }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {order.delhiveryWaybill && (
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
             Waybill: <span style={{ fontFamily: 'monospace', color: 'var(--text-strong)' }}>{order.delhiveryWaybill}</span>
           </span>
         )}
-        {order.delhiveryWaybill ? (
-          <button onClick={doTrack} disabled={tracking} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'transparent', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: tracking ? 'default' : 'pointer', fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Truck size={14} /> {tracking ? 'Tracking…' : 'Track shipment'}
-          </button>
-        ) : (
+        {/* No Track button. The stepper and the Track status sheet above already answer "where is
+            it", and both are filled from the order's own timeline — which the webhook and the
+            background poll keep current without anyone pressing anything. A button that fetches the
+            same answer is a second way to ask the same question, and the one that can fail. */}
+        {!order.delhiveryWaybill && (
           <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Shipment being prepared…</span>
         )}
         <a href="/contact" style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-link)', fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <LifeBuoy size={13} /> Need help or want to cancel? Contact us
         </a>
       </div>
-      {err && <p style={{ color: 'var(--status-error)', fontSize: 'var(--text-sm)', marginTop: 8, fontWeight: 700 }}>{err}</p>}
       {/* The four-stage ladder and the flat scan list that used to live here are gone: they said
           the same thing OrderProgress says above, twice, one of them behind a "See all updates"
           toggle. Two timelines on one screen is how they drift apart. */}
-      {trackResult && !trackResult.tracked && (
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 8 }}>Tracking not available yet. Try again in a few minutes.</p>
-      )}
     </div>
   );
 }
@@ -214,17 +181,27 @@ function OrderCard({ order, onReorder }: { order: Order; onReorder: () => void }
           </div>
           <div style={{ padding: 14, borderRadius: 18, background: 'var(--surface-sunken)' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-base)', marginBottom: 9 }}><ReceiptText size={17} /> Bill summary</h3>
-            {[
-              ['Subtotal', order.subtotal],
-              ['Discount', order.discountAmount ? -Number(order.discountAmount) : 0],
-              ['Delivery', order.deliveryFee],
-              ['Tax', order.taxAmount],
-              ['Total paid', order.totalAmount],
-            ].map(([label, value]) => (
-              <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', color: label === 'Total paid' ? 'var(--text-strong)' : 'var(--text-muted)', fontWeight: label === 'Total paid' ? 900 : 700, marginTop: 6, fontSize: 'var(--text-sm)' }}>
-                <span>{label}</span><span>{formatMoney(value as number)}</span>
-              </div>
-            ))}
+            {/* The same rows, in the same order, with the same words as the checkout bill — this is
+                the receipt for that screen and reading differently from it invites the question of
+                which one is right. The old version carried a "Tax" line straight from the column,
+                which is always ₹0 because GST is inside the prices and never added on top: the one
+                line on the page about tax said there wasn't any. */}
+            {(() => {
+              const sub = Number(order.subtotal) || 0;
+              const gstIncl = sub > 0 ? Math.round(sub - sub / 1.05) : 0;
+              const disc = Number(order.discountAmount) || 0;
+              const rows: { label: React.ReactNode; value: number; strong?: boolean }[] = [
+                { label: <>Price <span style={{ fontWeight: 600, fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)' }}>(incl. 5% GST · {formatMoney(gstIncl)})</span></>, value: sub },
+                ...(disc ? [{ label: order.couponCode ? `Coupon (${order.couponCode})` : 'Discount', value: -disc }] : []),
+                { label: 'Delivery fee', value: Number(order.deliveryFee) || 0 },
+                { label: 'Total paid', value: Number(order.totalAmount) || 0, strong: true },
+              ];
+              return rows.map((r, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, color: r.strong ? 'var(--text-strong)' : 'var(--text-muted)', fontWeight: r.strong ? 900 : 700, marginTop: 6, fontSize: 'var(--text-sm)' }}>
+                  <span>{r.label}</span><span>{formatMoney(r.value)}</span>
+                </div>
+              ));
+            })()}
             {order.couponCode && <p style={{ color: 'var(--status-success)', fontWeight: 800, marginTop: 8 }}>Coupon applied: {order.couponCode}</p>}
             {order.payment && (
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-soft)' }}>

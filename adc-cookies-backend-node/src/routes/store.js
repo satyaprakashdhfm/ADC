@@ -341,13 +341,16 @@ router.get('/orders/:id/track', async (req, res) => {
 
   if (order.carrier === 'SHIPROCKET') {
     if (!shiprocketConfigured()) return res.json({ ok: false, reason: 'not_configured' });
-    const t = await trackShiprocket(order.delhivery_shipment_id, order.carrier_order_id);
+    /* Pass the waybill: with one, tracking goes to the AWB endpoint, which returns the rider in the
+       same response as the status. Without it the shipment endpoint answers, which has no rider at
+       all — and before an AWB exists there is no rider to have. */
+    const t = await trackShiprocket(order.delhivery_shipment_id, order.carrier_order_id, order.delhivery_waybill);
     if (!t.ok) return res.json({ ok: false, reason: t.reason });
     // The rider only exists once an AWB does — assignment is asynchronous, so "no rider yet" is a
     // normal state on a fresh order, not a fault.
-    let rider = null;
     const awb = t.awb || order.delhivery_waybill;
-    if (awb) {
+    let rider = t.rider ? { name: t.rider.name, phone: t.rider.contact } : null;
+    if (!rider && awb) {
       const r = await getRiderData(awb).catch(() => null);
       if (r?.ok && r.rider) {
         rider = { name: r.rider.rider_name || r.rider.name || null, phone: r.rider.rider_contact || r.rider.contact || null };

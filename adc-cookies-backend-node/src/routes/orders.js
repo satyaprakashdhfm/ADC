@@ -269,6 +269,28 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
   const vpa = p.vpa ?? null;
   const bank = p.bank ?? null;
 
+  /*
+   * Claim the order atomically — the row decides who won, not the read above.
+   *
+   * The `payment_status === 'PAID'` check at the top of this function is a cheap short-circuit, not
+   * a lock: it READS the status and this UPDATE WRITES it, and Razorpay sends `payment.captured`
+   * and `order.paid` milliseconds apart. Both read "not paid", both proceeded, and the order got
+   * two of everything — two CONFIRMED rows, two AWAITING_STORE_ACCEPT rows, two shipment attempts.
+   * Seen on a real order: the webhook logged "marked PAID + shipment" twice, one second apart.
+   *
+   * Making the TRANSITION the contended thing rather than the read before it means exactly one
+   * caller gets a row back; everyone else stops here having changed nothing.
+   */
+  const claim = await query(
+    `UPDATE orders SET payment_status='PAID', order_status='CONFIRMED', updated_at=$1
+      WHERE id=$2 AND payment_status IS DISTINCT FROM 'PAID' RETURNING id`,
+    [ts, orderId]
+  );
+  if (claim.rowCount === 0) {
+    console.log(`[PAYMENT] finalize | order=${order.order_number} | already_paid (lost the race, nothing written)`);
+    return { ok: true, alreadyPaid: true };
+  }
+
   /* A payment can land on an order we had already given up on — a shopper who closed the window and
      paid on a second device, a webhook arriving after an abandon, a retry that raced us. Money
      arriving outranks our assumption that none would, so the order comes back. Said out loud in the
@@ -279,8 +301,6 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
       [orderId, 'PAYMENT_RECEIVED_AFTER_CANCEL', 'Payment arrived after this order was closed as unpaid — reinstating it.', ts]).catch(() => {});
     console.log(`[PAYMENT] finalize | order=${order.order_number} | ⚠ was CANCELLED, reinstating on a real payment`);
   }
-
-  await query(`UPDATE orders SET payment_status='PAID', order_status='CONFIRMED', updated_at=$1 WHERE id=$2`, [ts, orderId]);
   await query(
     `INSERT INTO payments (order_id, provider, transaction_id, amount, status, paid_at, created_at, razorpay_fee, razorpay_tax, method, card_network, card_last4, vpa, bank)
      VALUES ($1,'RAZORPAY',$2,$3,'PAID',$4,$5,$6,$7,$8,$9,$10,$11,$12)`,

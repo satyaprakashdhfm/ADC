@@ -58,6 +58,27 @@ const input: React.CSSProperties = {
   color: 'var(--text-strong, #2b2118)',
 };
 
+/*
+ * The stored shipment status, said in words a counter can act on.
+ *
+ * Carrier statuses are written for a logistics dashboard ("NEW", "PICKED UP"), and the only thing
+ * the person holding the bag needs from them is whether to keep holding it. Anything unrecognised
+ * is passed through rather than swallowed — a status we have not seen before is still information,
+ * and hiding it would be how a new state becomes invisible.
+ */
+function riderLabel(status?: string | null): string {
+  const s = (status || '').toLowerCase().replace(/[_-]+/g, ' ');
+  if (!s || s === 'new') return 'Booked — waiting for a rider to accept.';
+  if (/deliver(ed)?\b/.test(s) && !/out for/.test(s)) return 'Delivered — nothing left to do.';
+  if (/out for|in transit|picked ?up/.test(s)) return 'Picked up — the rider has it.';
+  if (/reached drop/.test(s)) return 'Rider has reached the customer.';
+  if (/reached pickup|arrived/.test(s)) return 'Rider is at the store — hand the order over.';
+  if (/assigned|scheduled/.test(s)) return 'Rider assigned — keep the order packed and ready.';
+  if (/cancel/.test(s)) return 'Booking cancelled — do not wait on a rider.';
+  if (/search/.test(s)) return 'Searching for a rider — keep the order packed and ready.';
+  return status as string;
+}
+
 function Chip({ text, tone = 'neutral' }: { text: string; tone?: 'neutral' | 'ok' | 'warn' | 'bad' }) {
   const c = { neutral: ['#eef1f4', '#41566b'], ok: ['#e7f6ec', '#1c7a3d'], warn: ['#fff3e0', '#9a5a00'], bad: ['#fdecec', '#a4231d'] }[tone];
   return <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 999, background: c[0], color: c[1], fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{text}</span>;
@@ -177,8 +198,17 @@ function OrderCard({
           or unreachable (courier API hiccup — the stored waybill/shipment id above still stands). */}
       {order.delivery.carrier && (
         <div style={{ background: track?.rider?.name ? '#eef8f0' : 'var(--surface-sunken, #f7f2e9)', border: track?.rider?.name ? '1px solid #bfe3c8' : 'none', borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 14 }}>
+          {/* Before the live call answers — and if it never answers — say what the ORDER says.
+              This branch used to read "Checking for a rider…", which is a loading state wearing a
+              status label: when the call failed it stayed there permanently, so a delivered order
+              sat on the counter's screen claiming nobody had been found yet. The order row already
+              knows — the webhook and the background poll keep shipment_status current — so the
+              stored answer is shown immediately and the live call only ever adds the rider to it. */}
           {!track ? (
-            <span style={{ color: 'var(--text-muted, #7b6a58)' }}>Checking for a rider…</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', color: 'var(--text-muted, #7b6a58)' }}>
+              <Bike size={16} />
+              <span>{riderLabel(order.delivery.shipmentStatus)}</span>
+            </div>
           ) : track.ok ? (
             track.rider?.name ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
@@ -205,7 +235,13 @@ function OrderCard({
               </div>
             )
           ) : (
-            <span style={{ color: 'var(--text-muted, #7b6a58)' }}>Could not reach the courier just now ({track.reason}). The booking above still stands — try the refresh button.</span>
+            /* The live call failed. That is a fact about the courier's API, not about the order —
+               so fall back to what the order itself says rather than leaving the counter with only
+               an error to read. */
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', color: 'var(--text-muted, #7b6a58)' }}>
+              <Bike size={16} />
+              <span>{riderLabel(order.delivery.shipmentStatus)}</span>
+            </div>
           )}
         </div>
       )}

@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Package, RefreshCw, Truck, CheckCircle2, X, ChevronRight } from 'lucide-react';
 import { whenLabel } from '@/lib/orderFormat';
 
@@ -35,7 +36,11 @@ const STAGES = [
 /** Which stage does a raw status line belong under? Matched on words rather than an exact list,
  *  because carrier statuses are free text and a new one must land somewhere sensible, not vanish. */
 export function stageOfEvent(status: string, remarks?: string | null): number {
-  const t = `${status} ${remarks || ''}`.toLowerCase();
+  /* Separators flattened first. Our own statuses are SCREAMING_SNAKE and the carriers' are spaced
+     words, and every test below was written for the spaced spelling — so "OUT_FOR_DELIVERY" matched
+     none of them and fell all the way through to the default, filing the moment the rider left
+     under the moment the basket was submitted. */
+  const t = `${status} ${remarks || ''}`.toLowerCase().replace(/[_-]+/g, ' ');
   /* Cancellations and refusals first, and they belong to Processing, not to Placed. Without this
      "DELHIVERY booking 57064410000173 cancelled" matched none of the tests below and fell through
      to the default — filing an event about a courier under the moment the basket was submitted, an
@@ -43,7 +48,7 @@ export function stageOfEvent(status: string, remarks?: string | null): number {
      one belongs. */
   if (/cancel|refus|failed|reject|not picked/.test(t)) return 1;
   if (/deliver(ed)?\b/.test(t) && !/out for|undeliver|attempt/.test(t)) return 3;
-  if (/out for delivery|in transit|picked ?up|dispatch|shipped|rider|on the way/.test(t)) return 2;
+  if (/out for deliver|in transit|picked ?up|dispatch|shipped|rider|on the way/.test(t)) return 2;
   /* "waybill", "booking" and "ready for pickup" are in here because they were the other three that
      fell to the default. Anything naming a courier or a collection is the order being got ready,
      never the moment it was placed. */
@@ -53,6 +58,36 @@ export function stageOfEvent(status: string, remarks?: string | null): number {
 
 const niceStatus = (s: string) =>
   s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+/*
+ * What a customer is told, as opposed to what we recorded.
+ *
+ * The timeline is our own operational log, and some of it is addressed to us: which till rang the
+ * order up, which terminal it was billed on, which of our stores bills by hand. "Billed on the A
+ * Dough Cookie — Jayanagar Petpooja terminal — bill 5084 (entered by jayanagar)" is a true and
+ * useful sentence for the shop and means nothing to the person waiting for cookies.
+ *
+ * Returning null drops the event from the customer's view entirely; the admin and store portals
+ * read the same rows unfiltered, so nothing is lost where it is wanted.
+ */
+function customerLine(e: ProgressEvent): string | null {
+  const s = (e.status || '').toUpperCase();
+  const raw = e.remarks || '';
+
+  // Pure routing bookkeeping — which POS a store uses is not the customer's business.
+  if (s === 'POS_MANUAL' || s === 'POS_SKIPPED') return null;
+  if (s === 'POS_BILLED_MANUALLY' || s === 'POS_RELAYED') return 'Your order has been rung up at the store';
+  // Internal courier bookkeeping the customer cannot act on.
+  if (s === 'FULFILLED_THEN_REFUNDED') return null;
+
+  // Strip the courier's shouty prefix and our own bill/waybill references from anything remaining.
+  const cleaned = raw
+    .replace(/^Shiprocket:\s*/i, '')
+    .replace(/^Delhivery:\s*/i, '')
+    .replace(/\s*\(entered by [^)]+\)/i, '')
+    .trim();
+  return cleaned || niceStatus(e.status);
+}
 
 export default function OrderProgress({ events, cancelled, eta }: {
   events: ProgressEvent[];
@@ -114,14 +149,50 @@ export default function OrderProgress({ events, cancelled, eta }: {
 
 /** The detail, grouped by stage — the second screen, not a second copy of the first. */
 function TrackSheet({ events, reached, onClose }: { events: ProgressEvent[]; reached: number; onClose: () => void }) {
+  /*
+   * Rendered into <body>, and the page behind it is frozen while it is open.
+   *
+   * As a child of the order card it was subject to whatever the account page did around it, and the
+   * page kept scrolling underneath: scrolling the sheet chained to the body once its own list hit
+   * the end, so the footer slid up behind a half-transparent scrim and read as the sheet overlapping
+   * it. A portal takes it out of that tree entirely, and locking the body makes the sheet the only
+   * thing that moves.
+   */
+  const [host, setHost] = useState<HTMLElement | null>(null);
+
+  /* Body lock with NO dependencies, so it runs once per open and unwinds once on close. Keying it
+     on onClose as well would re-run it on every parent render — onClose is an inline arrow, a new
+     reference each time — releasing and re-taking the lock underneath the open sheet. */
+  useEffect(() => {
+    setHost(document.body);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      // Restore rather than clear: something else may have set it, and this is the one style whose
+      // loss leaves the whole site unscrollable.
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  // Separate, because this one genuinely does depend on the current onClose.
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [onClose]);
+
   const byStage = STAGES.map((_, i) =>
     events
       .filter(e => stageOfEvent(e.status, e.remarks) === i)
+      .map(e => ({ ...e, line: customerLine(e) }))
+      .filter(e => e.line)
       .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)));
 
-  return (
+  if (!host) return null;
+
+  return createPortal(
     <div onClick={onClose} className="track-scrim">
-      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Track status" className="track-sheet">
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Track status" className="track-sheet">
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
           <strong style={{ font: 'var(--weight-extra) var(--text-lg)/1 var(--font-display)', color: 'var(--text-strong)' }}>Track status</strong>
           <button onClick={onClose} aria-label="Close" style={{ marginLeft: 'auto', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-link)', display: 'grid', placeItems: 'center' }}>
@@ -147,19 +218,33 @@ function TrackSheet({ events, reached, onClose }: { events: ProgressEvent[]; rea
                   <p style={{ margin: '3px 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
                     {done ? '—' : 'Not yet'}
                   </p>
-                ) : rows.map((e, j) => (
-                  <div key={j} style={{ marginTop: j ? 9 : 4 }}>
-                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.4 }}>
-                      {e.remarks || niceStatus(e.status)}
-                    </div>
-                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', marginTop: 1 }}>{whenLabel(e.createdAt)}</div>
+                ) : (
+                  /* Each event is its own tick on a rail of its own, so a stage reads as a checklist
+                     rather than a paragraph of timestamps: within "Order Processing" you can see
+                     that payment landed, the store accepted, and it was packed, in that order and
+                     each one visibly done. Every event listed here HAS happened — it exists because
+                     it was recorded — so they are all filled; the rail's job is sequence, not doubt. */
+                  <div style={{ marginTop: 6 }}>
+                    {rows.map((e, j) => (
+                      <div key={j} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none', alignSelf: 'stretch' }}>
+                          <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 5, background: 'var(--brand-secondary)', flex: 'none' }} />
+                          {j < rows.length - 1 && <span aria-hidden style={{ width: 2, flex: 1, minHeight: 12, background: 'var(--brand-secondary)', opacity: 0.35 }} />}
+                        </div>
+                        <div style={{ minWidth: 0, paddingBottom: j < rows.length - 1 ? 9 : 0 }}>
+                          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.4 }}>{e.line}</div>
+                          <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', marginTop: 1 }}>{whenLabel(e.createdAt)}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             </div>
           );
         })}
       </div>
-    </div>
+    </div>,
+    host
   );
 }
