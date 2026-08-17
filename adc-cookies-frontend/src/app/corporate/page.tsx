@@ -14,6 +14,13 @@ export const metadata = {
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 };
 const h2: React.CSSProperties = { font: '900 clamp(1.6rem,1.2rem + 1.8vw,2.4rem)/1.08 var(--font-display)', letterSpacing: '-.02em', marginBottom: 16, color: 'var(--text-strong)' };
 const para: React.CSSProperties = { fontSize: 'var(--text-base)', lineHeight: 1.8, color: 'var(--text-body)', marginBottom: 18 };
+/* On the peach band the standard orange eyebrow drops to ~2.2:1 against #FFCD90. Same label, a
+   darker orange, so small uppercase type stays readable where the background is not cream. */
+const eyebrowOnBand: React.CSSProperties = { ...eyebrow, color: 'var(--orange-800)' };
+/* Cards on the peach band cannot use --surface-card: on .adc-pattern-page that token IS #FFCD90,
+   the very colour of the band, so card and background rendered identically. Cream inverts the
+   pairing — peach cards on cream above, cream cards on peach here. */
+const onBandCard: React.CSSProperties = { background: 'var(--peach-100)', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-md)' };
 
 const PERKS = [
   { icon: Building2, title: 'Custom branding', text: 'Your logo on sleeves, tins and gift notes — so the box looks like it came from you, not from us.' },
@@ -88,19 +95,24 @@ export default function CorporatePage() {
       <section style={{ padding: 'clamp(30px,5vw,72px) 0', background: 'var(--band-ivory)' }}>
         <div style={{ maxWidth: 1120, margin: '0 auto', padding: '0 var(--gutter)' }}>
           <div style={{ maxWidth: 640, marginBottom: 'clamp(18px,2.5vw,30px)' }}>
-            <p style={eyebrow}>Popular for</p>
+            <p style={eyebrowOnBand}>Popular for</p>
             <h2 style={h2}>Whatever the occasion.</h2>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 'clamp(28px,4vw,52px)' }}>
             {OCCASIONS.map(o => (
-              <span key={o} style={{ padding: '9px 16px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-card)', border: '1px solid var(--border-default)', color: 'var(--text-strong)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>{o}</span>
+              <span key={o} style={{ padding: '9px 16px', borderRadius: 'var(--radius-pill)', background: 'var(--peach-100)', border: '1px solid var(--border-strong)', color: 'var(--text-strong)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>{o}</span>
             ))}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 'clamp(14px,1.8vw,22px)' }}>
             {STEPS.map(s => (
-              <article key={s.n} style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', padding: 'clamp(18px,2vw,26px)', boxShadow: 'var(--shadow-sm)' }}>
-                <div style={{ font: '900 clamp(1.5rem,1.1rem + 1vw,2.1rem)/1 var(--font-display)', color: 'var(--brand-secondary)', marginBottom: 10, letterSpacing: '-.02em' }}>{s.n}</div>
+              <article key={s.n} style={{ ...onBandCard, padding: 'clamp(18px,2vw,26px)' }}>
+                {/* Numeral paired with a rule that runs to the card edge — reads as an ordered
+                    sequence rather than three unrelated boxes that happen to start with a digit. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <span style={{ font: '900 clamp(1.5rem,1.1rem + 1vw,2.1rem)/1 var(--font-display)', color: 'var(--orange-600)', letterSpacing: '-.02em' }}>{s.n}</span>
+                  <span aria-hidden style={{ flex: 1, height: 2, borderRadius: 2, background: 'var(--border-default)' }} />
+                </div>
                 <h3 style={{ font: 'var(--weight-extra) var(--text-lg)/1.25 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 8px' }}>{s.title}</h3>
                 <p style={{ fontSize: 'var(--text-sm)', lineHeight: 1.65, color: 'var(--text-body)', margin: 0 }}>{s.text}</p>
               </article>
