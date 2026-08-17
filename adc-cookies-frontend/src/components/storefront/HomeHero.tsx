@@ -60,7 +60,7 @@ export default function HomeHero() {
           {/* White copy with a soft dark shadow, rather than dark-brown text haloed in white: over
               busy cookie photography the halo read as a smudge, while plain white stays crisp. */}
           <h1 style={{ font: '900 clamp(1.35rem,1.05rem + 1.7vw,2.2rem)/1.08 var(--font-display)', letterSpacing: '-.02em', color: 'var(--white)', textShadow: '0 2px 12px rgba(90,40,0,.45)', margin: '0 0 12px', textWrap: 'balance' }}>
-            Chunky, gooey, eggless cookies — baked fresh, delivered warm.
+            Indulge in chunky, gooey, eggless cookies, freshly baked and delivered warm to your door.
           </h1>
           {/* The supporting paragraph is gone. The headline already says the whole thing, and three
               more lines of ingredient copy over a photograph is a paragraph nobody reads on the way
