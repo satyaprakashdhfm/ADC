@@ -217,7 +217,9 @@ body::before {
 .home-hero-gap { height: calc(var(--nav-h) - 10px); background: var(--navbar-bg); }
 .home-hero { min-height: 78svh; }
 @media (max-width:900px) { .home-hero { min-height: 68svh; } }
-@media (max-width:680px) { .home-hero { min-height: 62svh; padding: clamp(40px,7vw,64px) 0 !important; } }
+/* Bottom-heavy like the desktop padding set on the section itself — the copy has to clear the
+   cookies along the lower edge of the photo, and this !important would otherwise flatten it. */
+@media (max-width:680px) { .home-hero { min-height: 62svh; padding: clamp(26px,4.5vw,42px) 0 clamp(58px,10vw,88px) !important; } }
 
 /* Footer (brand band) */
 .footer-link:hover { color: var(--white) !important; }

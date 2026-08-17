@@ -32,7 +32,10 @@ export default function HomeHero() {
       {/* Sits under the fixed navbar and is painted its colour — see .home-hero-gap. */}
       <div aria-hidden className="home-hero-gap" />
 
-      <section className="home-hero" style={{ position: 'relative', overflow: 'hidden', display: 'grid', placeItems: 'center', padding: 'clamp(56px,8vw,96px) 0' }}>
+      {/* Padding is deliberately bottom-heavy. The block is centred in the grid, so the extra
+          bottom padding lifts the whole thing off the cookies along the lower edge of the photo,
+          which the button row was sitting on top of. */}
+      <section className="home-hero" style={{ position: 'relative', overflow: 'hidden', display: 'grid', placeItems: 'center', padding: 'clamp(36px,5vw,64px) 0 clamp(76px,11vw,132px)' }}>
         {/* Background photo — starts zoomed in, then eases out so the edge cookies drift into frame.
             Plain <picture>/<img> rather than next/image: art direction needs two sources behind a
             media query, which next/image's single-src API can't express. */}
@@ -55,8 +58,12 @@ export default function HomeHero() {
           {/* White wordmark, as in the navbar and footer. The asset is amber, which only read
               against the old cream wash — on the orange art it would sink into the background.
               Same crush-to-black-then-invert trick those two already use. */}
+          {/* The asset bakes in ~22% transparent space below "Aroma of Freshness", so a 10px margin
+              rendered as a ~55px hole between the wordmark and the headline. The negative bottom
+              margin crops that dead space back; it is expressed in vw so it tracks the image's own
+              clamp() sizing instead of drifting apart from it at other widths. */}
           <Image src="/assets/adc-logo.png" width={480} height={347} alt="a dough cookie" priority
-            style={{ width: 'clamp(230px,36vw,400px)', height: 'auto', margin: '0 auto 10px', filter: 'brightness(0) invert(1)' }} />
+            style={{ width: 'clamp(230px,36vw,400px)', height: 'auto', margin: '0 auto clamp(-38px,-3.4vw,-20px)', filter: 'brightness(0) invert(1)' }} />
           {/* White copy with a soft dark shadow, rather than dark-brown text haloed in white: over
               busy cookie photography the halo read as a smudge, while plain white stays crisp. */}
           <h1 style={{ font: '900 clamp(1.35rem,1.05rem + 1.7vw,2.2rem)/1.08 var(--font-display)', letterSpacing: '-.02em', color: 'var(--white)', textShadow: '0 2px 12px rgba(90,40,0,.45)', margin: '0 0 12px', textWrap: 'balance' }}>
