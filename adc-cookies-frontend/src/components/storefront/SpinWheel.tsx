@@ -83,6 +83,11 @@ interface SpinWheelProps {
   refreshReward?: () => void | Promise<void>;
 }
 
+// "18 Aug, 9:40 pm". The countdown says how long is left; this says when that lands, which is
+// the half someone actually plans around — "2d 4h" alone does not tell you if that is a weekday.
+const expiryStamp = (ms: number) =>
+  new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
 export default function SpinWheel({ open, onClose, activeReward, setActiveReward, checkingReward, now, refreshReward }: SpinWheelProps) {
   const router = useRouter();
   const { user, setAuthModalOpen } = useAuth();
@@ -323,7 +328,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           </h2>
           <p style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-muted)', margin: `0 auto ${desktop ? 18 : 10}px`, maxWidth: desktop ? 320 : 290, lineHeight: 1.45 }}>
             {activeReward
-              ? (activeReward.claimed ? `Here’s your exclusive discount — use it before it expires in ${formatRemaining(activeReward.expiresAtMs - nowMs)}.` : 'Sign in to lock it in — it saves straight to your account.')
+              ? (activeReward.claimed ? 'Here’s your exclusive discount — apply it at checkout.' : 'Sign in to lock it in — it saves straight to your account.')
               : result
                   ? (result.win
                     ? (guestWinNeedsLogin ? 'Sign in to lock it in — it saves straight to your account.' : 'Here’s your exclusive discount — use it at checkout.')
@@ -355,6 +360,22 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
             </div>
           </div>
 
+          {/* Expiry, stated once and stated always — for a reward that is claimed AND for one
+              still waiting on a sign-in. It used to appear only after claiming, so a guest whose
+              win holds for a full week had no way of knowing that. Sits above the action area so
+              it is on screen whatever the shopper is being asked to do next. */}
+          {activeReward && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, flexWrap: 'wrap', margin: `0 auto ${desktop ? 16 : 11}px`, padding: desktop ? '9px 15px' : '7px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-50)', border: '1px solid var(--border-brand)', maxWidth: '100%' }}>
+              <Clock size={desktop ? 15 : 13} color="var(--orange-600)" style={{ flex: 'none' }} />
+              <span style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-strong)', fontWeight: 700 }}>
+                Expires in <strong style={{ color: 'var(--orange-600)', fontWeight: 900 }}>{formatRemaining(activeReward.expiresAtMs - nowMs)}</strong>
+              </span>
+              <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
+                &middot; {expiryStamp(activeReward.expiresAtMs)}
+              </span>
+            </div>
+          )}
+
           {/* Action area */}
           {activeReward?.claimed ? (
             <div>
@@ -363,9 +384,6 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
                 <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{activeReward.code}</span>
                 {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
               </button>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 4 }}>
-                <Clock size={13} /> Expires in {formatRemaining(activeReward.expiresAtMs - nowMs)}
-              </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 8 }}>
                 <Mail size={13} /> Also emailed to you
               </div>
