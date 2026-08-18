@@ -2,13 +2,13 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { X, Gift, Copy, Check, Mail, ArrowRight, Clock } from 'lucide-react';
+import { X, Gift, Copy, Check, ArrowRight, Clock } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/icons/SocialIcons';
 import { useAuth } from '@/context/AuthContext';
-import LoginModal from '@/components/ordering/LoginModal';
-import { getActiveCoupons, claimSpin, claimEmailSpin, spinDraw, getSpinCooldown, type ActiveCoupon, type EmailSpinClaim } from '@/lib/api';
+import AuthPanel from '@/components/auth/AuthPanel';
+import { getActiveCoupons, claimSpin, spinDraw, getSpinCooldown, type ActiveCoupon } from '@/lib/api';
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, whatsappLink } from '@/lib/site';
-import { type ActiveReward, CLAIM_WINDOW_HOURS, savePending, formatRemaining } from '@/lib/spinReward';
+import { type ActiveReward, CLAIM_WINDOW_HOURS, savePending, clearPending, formatRemaining } from '@/lib/spinReward';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 
 // lucide in this build has no Instagram/YouTube glyphs — use inline brand SVGs (as the footer does).
@@ -85,10 +85,9 @@ interface SpinWheelProps {
 
 export default function SpinWheel({ open, onClose, activeReward, setActiveReward, checkingReward, now, refreshReward }: SpinWheelProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, setAuthModalOpen } = useAuth();
   // Compact sizing is for mobile only — desktop gets the roomier layout back.
   const desktop = useIsDesktop();
-  const [loginOpen, setLoginOpen] = useState(false);
   const [rot, setRot] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<Prize | null>(null);
@@ -97,13 +96,13 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
   const [spinError, setSpinError] = useState('');
   const [drawExpiresAtMs, setDrawExpiresAtMs] = useState<number | null>(null); // when a MISS result stops being "locked in" (wins are governed by activeReward instead)
   const [showTerms, setShowTerms] = useState(false);
-  // Subscribe-to-claim (email instead of login): capture name + email, email the coupon, and it
-  // attaches to their account the moment they sign in with that same email.
-  const [subName, setSubName] = useState('');
-  const [subEmail, setSubEmail] = useState('');
-  const [subBusy, setSubBusy] = useState(false);
-  const [subErr, setSubErr] = useState('');
-  const [emailClaimed, setEmailClaimed] = useState<EmailSpinClaim | null>(null);
+  // Claiming happens by signing in, right here in this popup. The old flow asked for a name and
+  // an email instead, which created a second half-identity for anyone who already had an account
+  // and meant the coupon only reached them if they later signed in with that exact address.
+  const [claimBusy, setClaimBusy] = useState(false);
+  const [claimErr, setClaimErr] = useState('');
+  // Raised by AuthPanel while its mandatory name/email step shows — the wheel must not close over it.
+  const [authLocked, setAuthLocked] = useState(false);
   // One spin per device/account per day: once null (no active reward/result), check whether
   // they're still waiting out yesterday's cooldown before letting the idle spin button show.
   const [cooldown, setCooldown] = useState<{ completed: boolean } | null>(null);
@@ -192,6 +191,17 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
       }
     : result?.win ? result : null;
   const guestWinNeedsLogin = !!result?.win && !user;
+  const pendingCode = activeReward?.code || (result?.win ? result.code : '') || '';
+  const needsClaim = (!!activeReward && !activeReward.claimed) || guestWinNeedsLogin;
+
+  // ProfileGate is mounted globally and reacts to the same user/profileLoaded change that
+  // AuthPanel's own name+email step does — without this it pops up over the wheel the instant an
+  // OTP verifies, so two popups end up asking for the same thing.
+  useEffect(() => {
+    if (!open || !needsClaim || user) return;
+    setAuthModalOpen(true);
+    return () => setAuthModalOpen(false);
+  }, [open, needsClaim, user, setAuthModalOpen]);
 
   const spin = async () => {
     if (spinning || result || activeReward || cooldown?.completed || !prizes) return;
@@ -249,24 +259,38 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* ignore */ }
   };
 
-  const submitEmailClaim = async (code: string) => {
-    if (subBusy) return;
-    const em = subEmail.trim();
-    const nm = subName.trim();
-    if (nm.length < 2) { setSubErr('Please enter your name.'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { setSubErr('Please enter a valid email.'); return; }
-    setSubBusy(true); setSubErr('');
+  // Attach the win to the signed-in account. Safe to call more than once: /claim-spin is
+  // idempotent under a per-user advisory lock and replays the original claim rather than issuing
+  // a second one, which is what lets the useActiveSpinReward resolver act as a backstop here.
+  const claimForUser = async (code: string) => {
+    if (claimBusy || !code) return;
+    setClaimBusy(true); setClaimErr('');
     try {
-      const claimed = await claimEmailSpin(code, em, nm);
-      setEmailClaimed(claimed);
+      const claimed = await claimSpin(code);
+      clearPending();
+      setActiveReward({
+        code: claimed.code, label: claimed.label, discountType: claimed.discountType, discountValue: claimed.discountValue,
+        minimumOrderAmount: claimed.minimumOrderAmount, maximumDiscount: claimed.maximumDiscount, terms: claimed.terms,
+        isGift: claimed.isGift, expiresAtMs: new Date(claimed.expiresAt).getTime(), claimed: true,
+      });
     } catch (e) {
-      setSubErr(e instanceof Error ? e.message : 'Could not claim right now — please try again.');
-    } finally { setSubBusy(false); }
+      setClaimErr(e instanceof Error ? e.message : 'Signed in, but the coupon could not be attached — reopen the wheel to retry.');
+      void refreshReward?.();
+    } finally { setClaimBusy(false); }
+  };
+
+  // Signed in from inside the wheel. Staff go to the admin instead of collecting a coupon.
+  const handleAuthSuccess = (role: string) => {
+    setAuthLocked(false);
+    if (role === 'ADMIN') { close(); router.push('/admin'); return; }
+    void claimForUser(activeReward?.code || (result?.win ? result.code : '') || '');
   };
 
   // A MISS used to reset here so reopening let them spin again — now both outcomes are locked
   // in server-side for the same window (see spin_draws), so closing just closes.
-  const handleClose = () => close();
+  // Blocked while AuthPanel is on its mandatory name/email step — closing there would leave a
+  // signed-in account with no name or email on it.
+  const handleClose = () => { if (!authLocked) close(); };
 
   if (!open) return null;
 
@@ -285,24 +309,24 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           style={{ position: 'relative', width: desktop ? '460px' : 'min(380px,92vw)', maxHeight: desktop ? '90vh' : '88vh', overflowY: 'auto', background: 'var(--surface-page)', borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-xl)', padding: desktop ? '32px 32px 26px' : '18px 20px 14px', textAlign: 'center', animation: 'riseIn .4s var(--ease-spring) both' }}
           className="hide-sb">
 
+          {!authLocked && (
           <button onClick={handleClose} aria-label="Close" style={{ position: 'absolute', top: desktop ? 16 : 10, right: desktop ? 16 : 10, width: desktop ? 36 : 30, height: desktop ? 36 : 30, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', cursor: 'pointer', display: 'grid', placeItems: 'center', zIndex: 2 }}>
             <X size={desktop ? 18 : 15} />
           </button>
+          )}
 
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: desktop ? '5px 13px' : '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: desktop ? 10 : 6 }}>
             <Gift size={desktop ? 14 : 13} /> Spin &amp; win
           </div>
           <h2 style={{ font: `900 var(${desktop ? '--text-h3' : '--text-h4'})/1.05 var(--font-display)`, color: 'var(--text-strong)', margin: '0 0 5px', letterSpacing: '-.02em' }}>
-            {emailClaimed ? 'Coupon sent! 📧' : (activeReward || result?.win) ? 'You won! 🎉' : result ? 'So close!' : cooldown?.completed ? 'Already spun' : 'Spin & win a treat!'}
+            {(activeReward || result?.win) ? 'You won! 🎉' : result ? 'So close!' : cooldown?.completed ? 'Already spun' : 'Spin & win a treat!'}
           </h2>
           <p style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-muted)', margin: `0 auto ${desktop ? 18 : 10}px`, maxWidth: desktop ? 320 : 290, lineHeight: 1.45 }}>
-            {emailClaimed
-              ? `We’ve emailed your coupon to ${subEmail.trim()}. Sign in with that email to use it at checkout.`
-              : activeReward
-                ? (activeReward.claimed ? `Here’s your exclusive discount — use it before it expires in ${formatRemaining(activeReward.expiresAtMs - nowMs)}.` : 'Enter your email to claim it — we’ll send the coupon over and save it to your account.')
-                : result
+            {activeReward
+              ? (activeReward.claimed ? `Here’s your exclusive discount — use it before it expires in ${formatRemaining(activeReward.expiresAtMs - nowMs)}.` : 'Sign in to lock it in — it saves straight to your account.')
+              : result
                   ? (result.win
-                    ? (guestWinNeedsLogin ? 'Enter your email to claim it — we’ll send the coupon straight to your inbox.' : 'Here’s your exclusive discount — use it at checkout.')
+                    ? (guestWinNeedsLogin ? 'Sign in to lock it in — it saves straight to your account.' : 'Here’s your exclusive discount — use it at checkout.')
                     : 'No prize this time — thanks for playing! It’s one spin per customer, so this wheel is done for now.')
                   : cooldown?.completed
                     ? "It's one spin per customer — you've already had yours. Keep an eye out for our next round!"
@@ -332,22 +356,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           </div>
 
           {/* Action area */}
-          {emailClaimed ? (
-            <div>
-              <button onClick={() => copyCode(emailClaimed.code)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 8px', padding: '9px 16px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
-                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{emailClaimed.code}</span>
-                {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
-              </button>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 8 }}>
-                <Mail size={13} /> Also emailed to you
-              </div>
-              <button onClick={() => { close(); router.push('/'); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>
-                Order now <ArrowRight size={18} />
-              </button>
-            </div>
-          ) : activeReward?.claimed ? (
+          {activeReward?.claimed ? (
             <div>
               <button onClick={() => copyCode(activeReward.code)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 10, margin: '0 auto 6px', padding: '9px 16px', borderRadius: 'var(--radius-button)', border: '2px dashed var(--brand-secondary)', background: 'var(--amber-50)', cursor: 'pointer' }}>
@@ -362,22 +371,27 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
                 Order now <ArrowRight size={18} />
               </button>
             </div>
-          ) : ((activeReward && !activeReward.claimed) || guestWinNeedsLogin) ? (
-            // Subscribe-to-claim: no login needed — capture email + name, we email the coupon and
-            // attach it to their account the moment they sign in with that same email.
+          ) : needsClaim ? (
+            /* Sign in right here — the same phone-then-Google order as the site's login popup, via
+               the shared AuthPanel, so this is not a second sign-in design. No password field:
+               a shopper mid-celebration will not go and remember one. */
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input value={subName} onChange={e => setSubName(e.target.value)} placeholder="Your name" aria-label="Your name"
-                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
-              <input value={subEmail} onChange={e => setSubEmail(e.target.value)} type="email" inputMode="email" placeholder="Your email" aria-label="Your email"
-                style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
-              {subErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, textAlign: 'left' }}>{subErr}</div>}
-              <button onClick={() => submitEmailClaim(activeReward?.code || (result?.win ? result.code : '') || '')} disabled={subBusy}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: subBusy ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: subBusy ? 'wait' : 'pointer', boxShadow: subBusy ? 'none' : 'var(--shadow-brand)' }}>
-                <Mail size={18} /> {subBusy ? 'Sending…' : 'Subscribe & claim'}
-              </button>
-              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', textAlign: 'center', lineHeight: 1.4 }}>
-                We’ll email your coupon and save it to your account when you sign in with this email.
-              </div>
+              {user ? (
+                /* Signed in, but the win is not attached yet — the claim call failed, or they
+                   signed in in another tab. One button, not a sign-in form they don't need. */
+                <button onClick={() => claimForUser(pendingCode)} disabled={claimBusy}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: claimBusy ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: claimBusy ? 'wait' : 'pointer', boxShadow: claimBusy ? 'none' : 'var(--shadow-brand)' }}>
+                  <Gift size={18} /> {claimBusy ? 'Claiming…' : 'Claim my coupon'}
+                </button>
+              ) : (
+                <>
+                  <AuthPanel compact resetKey={open} onSuccess={handleAuthSuccess} onLockChange={setAuthLocked} />
+                  {claimBusy && (
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700, textAlign: 'center' }}>Saving your coupon…</div>
+                  )}
+                </>
+              )}
+              {claimErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, textAlign: 'left' }}>{claimErr}</div>}
             </div>
           ) : result ? (
             <button onClick={() => { close(); router.push('/'); }}
@@ -397,9 +411,11 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           {spinError && <div style={{ marginTop: 8, fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, textAlign: 'center' }}>{spinError}</div>}
 
           {/* Cancel */}
+          {!authLocked && (
           <button onClick={handleClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', marginTop: desktop ? 12 : 8, padding: 4 }}>
             No thanks, maybe later
           </button>
+          )}
 
           {/* Just a link — the full terms are a wall of text in a modal that's already busy, so
               they open on demand as a plain list instead of being dumped inline. */}
@@ -455,8 +471,6 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           </div>
         </div>
       )}
-
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onSuccess={() => { setLoginOpen(false); void refreshReward?.(); }} />
     </>
   );
 }
