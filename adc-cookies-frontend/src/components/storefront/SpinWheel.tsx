@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { X, Gift, Copy, Check, ArrowRight, Clock } from 'lucide-react';
+import { X, Gift, Copy, Check, Mail, ArrowRight, Clock } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/icons/SocialIcons';
 import { useAuth } from '@/context/AuthContext';
 import AuthPanel from '@/components/auth/AuthPanel';
@@ -363,8 +363,11 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
                 <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--text-lg)', letterSpacing: '.08em', color: 'var(--brand-secondary)' }}>{activeReward.code}</span>
                 {copied ? <Check size={16} color="var(--status-success)" /> : <Copy size={16} color="var(--text-muted)" />}
               </button>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 4 }}>
                 <Clock size={13} /> Expires in {formatRemaining(activeReward.expiresAtMs - nowMs)}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginBottom: 8 }}>
+                <Mail size={13} /> Also emailed to you
               </div>
               <button onClick={() => { close(); router.push('/'); }}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', boxShadow: 'var(--shadow-brand)' }}>

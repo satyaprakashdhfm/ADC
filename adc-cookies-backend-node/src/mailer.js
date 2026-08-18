@@ -98,7 +98,7 @@ export async function sendContactEmail({ name, email, phone, message }) {
 
 // Spin & Win — emails the won coupon to a guest who subscribed with their email to claim it.
 // The code becomes usable once they sign in with this same email (it's attached to their account).
-export async function sendCouponEmail({ email, name, code, label, offerText, terms, expiresAt }) {
+export async function sendCouponEmail({ email, name, code, label, offerText, terms, expiresAt, alreadyInAccount = false }) {
   const expiry = expiresAt ? new Date(expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const body = `
     <p style="color:#5C4636">Hi ${esc(name || 'there')}, you won a treat on the a dough cookie spin wheel! 🎉</p>
@@ -107,7 +107,9 @@ export async function sendCouponEmail({ email, name, code, label, offerText, ter
       <div style="font-size:28px;font-weight:900;color:#EF7507;letter-spacing:.12em;margin:6px 0">${esc(code)}</div>
       ${offerText ? `<div style="font-size:14px;color:#2B1D12;font-weight:700">${esc(offerText)}</div>` : ''}
     </div>
-    <p style="color:#2B1D12;line-height:1.6">Sign in at a dough cookie with <b>this email (${esc(email)})</b> and the coupon will be waiting in your account — just apply it at checkout.</p>
+    ${alreadyInAccount
+      ? `<p style="color:#2B1D12;line-height:1.6">It is already saved to your account — just apply it at checkout.</p>`
+      : `<p style="color:#2B1D12;line-height:1.6">Sign in at a dough cookie with <b>this email (${esc(email)})</b> and the coupon will be waiting in your account — just apply it at checkout.</p>`}
     ${expiry ? `<p style="color:#7A6353;font-size:13px">Valid until <b>${esc(expiry)}</b>.</p>` : ''}
     ${terms ? `<p style="color:#7A6353;font-size:12px;line-height:1.5;margin-top:12px"><b>Terms:</b> ${esc(terms)}</p>` : ''}`;
   await send({ to: email, subject: `🍪 Your a dough cookie reward: ${code}`, html: shell('You won a treat!', body) });
