@@ -394,6 +394,15 @@ router.get('/spin-status', requireAuth, async (req, res) => {
   res.json({ active: claim ? serializeClaim(claim, claim) : null });
 });
 
+// The one-line "what you actually won" for the coupon email. Shared by both claim routes so the
+// two cannot describe the same reward differently.
+function offerTextFor(coupon) {
+  if (coupon.discount_type === 'PERCENTAGE') {
+    return `${Math.round(coupon.discount_value)}% off${coupon.maximum_discount ? `, up to ₹${coupon.maximum_discount}` : ''}`;
+  }
+  return Number(coupon.discount_value) > 0 ? `₹${Math.round(coupon.discount_value)} off` : 'A free treat';
+}
+
 // Claim a spin result — called right after spinning (if already logged in) or right after
 // logging in (if the spin happened as a guest). Idempotent + anti-abuse: if the user already
 // holds an unexpired claim, THAT original reward is returned regardless of what `code` is
@@ -447,6 +456,20 @@ router.post('/claim-spin', requireAuth, couponLimiter, async (req, res) => {
     );
     return { row: inserted[0], coupon, isNew: true };
   });
+
+  // Email the code. Signing in is now the only way to claim a win (the wheel used to take a name
+  // and an email instead), so without this nobody receives their coupon at all.
+  //
+  // Only on a genuinely new claim: the frontend calls this more than once per win on purpose — the
+  // post-login resolver is a deliberate backstop for the in-popup claim — and the replay path
+  // returns the original row, so mailing there would send a duplicate on every retry.
+  if (result.isNew && req.user.email) {
+    sendCouponEmail({
+      email: req.user.email, name: req.user.name, code: result.row.code, label: result.row.label,
+      offerText: offerTextFor(result.coupon), terms: result.coupon.terms || '',
+      expiresAt: result.row.expires_at, alreadyInAccount: true,
+    }).catch(() => {});
+  }
 
   res.status(result.isNew ? 201 : 200).json(serializeClaim(result.row, result.coupon));
 });
@@ -514,10 +537,7 @@ router.post('/claim-email', couponLimiter, async (req, res) => {
   if (user) { try { await linkEmailClaimsToUser(user.id, email); } catch { /* best effort */ } }
 
   // Email the coupon (never blocks the response — the mailer swallows its own errors).
-  const offerText = coupon.discount_type === 'PERCENTAGE'
-    ? `${Math.round(coupon.discount_value)}% off${coupon.maximum_discount ? `, up to ₹${coupon.maximum_discount}` : ''}`
-    : (Number(coupon.discount_value) > 0 ? `₹${Math.round(coupon.discount_value)} off` : 'A free treat');
-  sendCouponEmail({ email, name, code: coupon.code, label, offerText, terms: coupon.terms || '', expiresAt }).catch(() => {});
+  sendCouponEmail({ email, name, code: coupon.code, label, offerText: offerTextFor(coupon), terms: coupon.terms || '', expiresAt }).catch(() => {});
 
   res.status(201).json(serialize(row, coupon, false));
 });
