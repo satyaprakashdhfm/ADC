@@ -1,5 +1,5 @@
 import { storeByCode } from './stores.js';
-import { parseMediaList, signMediaRefs } from './storage.js';
+import { parseMediaList, signMediaRefs, isMediaRef } from './storage.js';
 
 export function serializeUser(u) {
   if (!u) return null;
@@ -80,10 +80,21 @@ export async function withImageUrls(input) {
 
   const signed = await signMediaRefs(products.flatMap((pr) => pr.imageRefs || []));
   for (const pr of products) {
-    const urls = (pr.imageRefs || []).map((r) => signed.get(r) || r);
-    pr.images = urls.length ? JSON.stringify(urls) : null;
+    pr.images = displayable((pr.imageRefs || []), signed);
   }
   return input;
+}
+
+/*
+ * Refs to a JSON array of loadable URLs, dropping any that could not be signed.
+ *
+ * signMediaRefs returns the reference unchanged when signing failed, and putting 'supabase://…' in
+ * an <img src> is a visibly broken image. Dropping it instead lets the caller's own fallback take
+ * over — firstImage() on the frontend already has one.
+ */
+function displayable(refs, signed) {
+  const urls = refs.map((r) => signed.get(r) || r).filter((u) => u && !isMediaRef(u));
+  return urls.length ? JSON.stringify(urls) : null;
 }
 
 /**
@@ -96,8 +107,7 @@ export async function withImageUrls(input) {
 export async function resolveImagesValue(stored) {
   const refs = parseMediaList(stored);
   if (!refs.length) return null;
-  const signed = await signMediaRefs(refs);
-  return JSON.stringify(refs.map((r) => signed.get(r) || r));
+  return displayable(refs, await signMediaRefs(refs));
 }
 
 export function serializeCoupon(c) {

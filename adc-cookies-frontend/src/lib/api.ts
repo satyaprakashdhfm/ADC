@@ -484,7 +484,37 @@ export interface AdminAnalytics {
   topProducts: { name: string; qty: number; revenue: number }[];
 }
 
-interface SiteSettings { bannerMessages: string[]; deliveryFeeOutstation: number; orderingPaused: string | null; }
+/**
+ * The home page's hero photograph.
+ *
+ * Two images because the hero is art-directed: a 2:1 landscape has its sides cropped away on a
+ * portrait phone, so desktop and mobile get their own crop. Either may be empty, in which case the
+ * storefront keeps the file it ships.
+ */
+export interface HeroBannerRefs {
+  /** Stored references. This is what a save sends back. */
+  desktopRef: string | null;
+  mobileRef: string | null;
+  href: string | null;
+  alt: string | null;
+}
+export interface HeroBannerUrls {
+  /** Resolved for display. Signed, and therefore expiring — never save these. */
+  desktop: string | null;
+  mobile: string | null;
+  href: string | null;
+  alt: string | null;
+}
+export interface HeroSizes { desktop: { width: number; height: number; note?: string }; mobile: { width: number; height: number; note?: string } }
+
+interface SiteSettings {
+  bannerMessages: string[];
+  heroBanner: HeroBannerRefs;
+  heroBannerUrls: HeroBannerUrls;
+  heroSizes: HeroSizes;
+  deliveryFeeOutstation: number;
+  orderingPaused: string | null;
+}
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
 export async function adminGetSettings(): Promise<SiteSettings> { return request('/admin/settings'); }
 /** The rotating lines in the top ribbon, in order. At least one is required — the ribbon's height
@@ -493,6 +523,10 @@ export async function adminSetBannerMessages(bannerMessages: string[]): Promise<
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ bannerMessages }) });
 }
 /** Pause or resume online ordering. The message IS the switch — clearing it goes live. */
+/** The hero photograph and where clicking it goes. Sends REFERENCES, never the signed URLs. */
+export async function adminSetHeroBanner(heroBanner: HeroBannerRefs): Promise<SiteSettings> {
+  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ heroBanner }) });
+}
 export async function adminSetOrderingPaused(orderingPaused: string | null): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ orderingPaused }) });
 }
@@ -533,6 +567,10 @@ export async function adminSetStoreProductOverride(code: string, productId: numb
 }
 // Public: the rotating top-ribbon lines, in the order the admin arranged them.
 export async function getAnnouncement(): Promise<{ messages: string[]; text: string | null }> { return request('/products/announcement'); }
+
+/** Public: the hero photograph, resolved. Fetched at run time because a signed URL expires — one
+ *  baked into the build would stop working a week after a deploy. */
+export async function getHeroBanner(): Promise<HeroBannerUrls> { return request('/products/hero-banner'); }
 // Public: today's stall/store-visit note (or null if the admin hasn't set one).
 /** Our own record of what happened to an order — placed, paid, accepted, packed, shipped. Separate
  *  from the carrier's scans, and the half of the story a carrier's tracking page never has. */

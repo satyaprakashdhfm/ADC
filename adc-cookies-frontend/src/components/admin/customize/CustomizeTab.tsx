@@ -1,6 +1,8 @@
 'use client';
 import { Plus, X } from 'lucide-react';
+import { type HeroBannerRefs, type HeroBannerUrls, type HeroSizes } from '@/lib/api';
 import { inp, addBtn, iconBtn, Panel } from '../shared/ui';
+import HeroBannerPanel from './HeroBannerPanel';
 
 /**
  * What the storefront says, as opposed to what it sells.
@@ -18,13 +20,28 @@ interface Props {
   addBannerMessage: () => void;
   removeBannerMessage: (i: number) => void;
   saveBannerMessages: () => void;
+  hero: HeroBannerRefs;
+  heroUrls: HeroBannerUrls;
+  heroSizes: HeroSizes;
+  heroSaved: boolean;
+  heroBusy: boolean;
+  changeHeroImage: (which: 'desktop' | 'mobile', ref: string, url: string) => void;
+  changeHeroField: (patch: Partial<Pick<HeroBannerRefs, 'href' | 'alt'>>) => void;
+  saveHeroBanner: () => void;
 }
 
 export default function CustomizeTab({
   bannerMessages, bannerMessagesSaved, changeBannerMessage, addBannerMessage, removeBannerMessage, saveBannerMessages,
+  hero, heroUrls, heroSizes, heroSaved, heroBusy, changeHeroImage, changeHeroField, saveHeroBanner,
 }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* The banner first: it is the biggest thing on the page it controls. */}
+      <HeroBannerPanel
+        hero={hero} urls={heroUrls} sizes={heroSizes} saved={heroSaved} busy={heroBusy}
+        onImage={changeHeroImage} onField={changeHeroField} onSave={saveHeroBanner}
+      />
+
       <Panel title="Top banner messages">
         <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 4px' }}>
           The lines that rotate in the thin strip across the top of the home page, one every four
