@@ -1,4 +1,5 @@
 import { storeByCode } from './stores.js';
+import { parseMediaList, signMediaRefs } from './storage.js';
 
 export function serializeUser(u) {
   if (!u) return null;
@@ -32,11 +33,28 @@ export function serializeWarehouse(w) {
   };
 }
 
+/*
+ * A product for the wire.
+ *
+ * Two image fields, and the difference matters:
+ *
+ *   imageRefs — what is actually stored ('supabase://products/…' or a legacy '/assets/…' path).
+ *               This is what the admin editor round-trips on save.
+ *   images    — the same list resolved to URLs a browser can load, which for a bucket object is a
+ *               signed URL that expires. NEVER write this back to the database.
+ *
+ * The signing is asynchronous and this function is not, so `images` starts out holding the raw refs
+ * and withImageUrls() (below) fills it in before the response goes out. Every route that returns a
+ * product must await it; a route that forgets will serve 'supabase://…' to an <img> tag, which fails
+ * visibly rather than silently.
+ */
 export function serializeProduct(p) {
   if (!p) return null;
+  const refs = parseMediaList(p.images);
   return {
     id: p.id, name: p.name, category: p.category, description: p.description,
-    price: p.price, stockQuantity: p.stock_quantity, images: p.images, options: p.options,
+    price: p.price,
+    imageRefs: refs, images: p.images, options: p.options,
     isAvailable: !!p.is_available, menuGroup: p.menu_group, tag: p.tag, featured: !!p.featured,
     // Per-delivery-mode availability, each with the reason to show the customer when off. See
     // deliveryEligible() / intracityEligible() / intercityEligible() in stores.js for enforcement —
@@ -46,6 +64,40 @@ export function serializeProduct(p) {
     restrictCities: p.restrict_cities || null,
     createdAt: p.created_at, updatedAt: p.updated_at,
   };
+}
+
+/**
+ * Replace every serialized product's `images` with URLs a browser can load.
+ *
+ * Takes one product, an array, or anything with a `.product` (a cart item) — the shapes the callers
+ * actually have — and signs all of their references in ONE round trip rather than one per photo.
+ * Returns its argument so it reads as `res.json(await withImageUrls(rows.map(serializeProduct)))`.
+ */
+export async function withImageUrls(input) {
+  const list = (Array.isArray(input) ? input : [input]).filter(Boolean);
+  const products = list.map((x) => (x && x.product !== undefined ? x.product : x)).filter(Boolean);
+  if (!products.length) return input;
+
+  const signed = await signMediaRefs(products.flatMap((pr) => pr.imageRefs || []));
+  for (const pr of products) {
+    const urls = (pr.imageRefs || []).map((r) => signed.get(r) || r);
+    pr.images = urls.length ? JSON.stringify(urls) : null;
+  }
+  return input;
+}
+
+/**
+ * One stored `images` column resolved to the same JSON-array-of-URLs shape a product carries.
+ *
+ * For the places that hand out an image without a whole product — the spin wheel's gift item, the
+ * hero banner — so they go through exactly the same signing path rather than a second one that
+ * could disagree with it.
+ */
+export async function resolveImagesValue(stored) {
+  const refs = parseMediaList(stored);
+  if (!refs.length) return null;
+  const signed = await signMediaRefs(refs);
+  return JSON.stringify(refs.map((r) => signed.get(r) || r));
 }
 
 export function serializeCoupon(c) {

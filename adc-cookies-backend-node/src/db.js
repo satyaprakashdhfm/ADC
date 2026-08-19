@@ -125,6 +125,12 @@ export async function initSchema() {
     ALTER TABLE products ADD COLUMN IF NOT EXISTS intercity_available BOOLEAN NOT NULL DEFAULT TRUE;
     ALTER TABLE products ADD COLUMN IF NOT EXISTS intercity_unavailable_reason TEXT;
     ALTER TABLE products ADD COLUMN IF NOT EXISTS restrict_cities TEXT;
+    /* Stock tracking is gone. A cookie shop bakes to order, and nothing ever decremented this
+       column — it sat at whatever the seed put there while driving a "low stock" warning off it.
+       The column stays (dropping it rewrites a live table for no gain) but it now has a default so
+       no INSERT has to mention it, and no code reads it. Availability is is_available, plus the
+       per-delivery-mode and per-store flags. */
+    ALTER TABLE products ALTER COLUMN stock_quantity SET DEFAULT 0;
 
     -- One-time: migrate the old same_day_only flag into the new shape, then drop it — superseded,
     -- not parallel. Guarded by the column's existence so this runs exactly once, ever.

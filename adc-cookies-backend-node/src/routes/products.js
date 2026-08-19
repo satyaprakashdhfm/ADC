@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getAll, getOne } from '../db.js';
 import { ApiError } from '../middleware.js';
-import { serializeProduct } from '../serializers.js';
+import { serializeProduct, withImageUrls } from '../serializers.js';
 import { readBannerMessages } from '../bannerMessages.js';
 
 const router = Router();
@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
   } else {
     rows = await getAll('SELECT * FROM products WHERE is_available = TRUE ORDER BY id');
   }
-  res.json(rows.map(serializeProduct));
+  res.json(await withImageUrls(rows.map(serializeProduct)));
 });
 
 /* Public: the rotating lines for the top ribbon, in the order the admin arranged them.
@@ -42,7 +42,7 @@ router.get('/ordering-status', async (_req, res) => {
 router.get('/:id', async (req, res) => {
   const row = await getOne('SELECT * FROM products WHERE id = $1', [req.params.id]);
   if (!row) throw new ApiError('Product not found');
-  res.json(serializeProduct(row));
+  res.json(await withImageUrls(serializeProduct(row)));
 });
 
 export default router;
