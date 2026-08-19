@@ -172,6 +172,12 @@ export async function initSchema() {
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       updated_at TIMESTAMPTZ NOT NULL
     );
+    -- Which kinds of delivery this store takes part in: 'BOTH' (default), 'INTRACITY' (same-day
+    -- only — never used as an outstation pickup) or 'INTERCITY' (parcels only — not picked for
+    -- same-day). Sits here rather than in ADC_STORES because it is an admin switch, not a fact
+    -- about the shop. See activeZoneStores: setting every store in a zone to INTERCITY can never
+    -- strand that zone, it falls back rather than refusing the city.
+    ALTER TABLE store_status ADD COLUMN IF NOT EXISTS service_mode TEXT NOT NULL DEFAULT 'BOTH';
 
     -- Manual per-store product availability — generalizes intracity_available/restrict_cities (which only
     -- ever understands "restricted to city X") to any product/store combination an admin wants to

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db.js';
 import { ApiError } from '../../middleware.js';
-import { ADC_STORES, storeProductAvailable, resolveProductAvailability } from '../../stores.js';
+import { ADC_STORES, storeProductAvailable, resolveProductAvailability, SERVICE_MODES } from '../../stores.js';
 import { hashPassword, defaultPasswordFor } from '../../storeAuth.js';
 
 const router = Router();
@@ -68,14 +68,40 @@ router.get('/stores', async (_req, res) => {
  * stores.js, which orders.js and delivery.js's checkout quote both already consult.
  */
 router.get('/store-status', async (_req, res) => {
-  const rows = await getAll('SELECT store_code, is_active FROM store_status');
-  const byCode = new Map(rows.map((r) => [r.store_code, !!r.is_active]));
+  const rows = await getAll('SELECT store_code, is_active, service_mode FROM store_status');
+  const byCode = new Map(rows.map((r) => [r.store_code, r]));
   res.json({
-    stores: ADC_STORES.map((s) => ({
-      code: s.code, name: s.name, city: s.city, posMode: s.posMode,
-      isActive: byCode.has(s.code) ? byCode.get(s.code) : true,
-    })),
+    stores: ADC_STORES.map((s) => {
+      const row = byCode.get(s.code);
+      const mode = String(row?.service_mode || 'BOTH').toUpperCase();
+      return {
+        code: s.code, name: s.name, city: s.city, posMode: s.posMode,
+        isActive: row ? !!row.is_active : true,
+        serviceMode: SERVICE_MODES.includes(mode) ? mode : 'BOTH',
+      };
+    }),
   });
+});
+
+/*
+ * Which delivery kinds this store takes part in. INTRACITY keeps it out of outstation pickups,
+ * INTERCITY keeps it out of same-day. Narrowing every store in one zone to INTERCITY does NOT
+ * close that zone — activeZoneStores falls back to the nearest open store rather than refusing the
+ * city, so this switch cannot be used to accidentally stop serving Bengaluru.
+ */
+router.patch('/store-status/:code/service-mode', async (req, res) => {
+  const code = String(req.params.code).trim().toLowerCase();
+  const store = ADC_STORES.find((s) => s.code === code);
+  if (!store) throw new ApiError('No such store');
+  const mode = String(req.body?.serviceMode || '').trim().toUpperCase();
+  if (!SERVICE_MODES.includes(mode)) throw new ApiError('Delivery mode must be BOTH, INTRACITY or INTERCITY.');
+  // The row may not exist yet — a store with no row is active, so preserve that when creating one.
+  await query(
+    `INSERT INTO store_status (store_code, is_active, service_mode, updated_at) VALUES ($1, TRUE, $2, $3)
+     ON CONFLICT (store_code) DO UPDATE SET service_mode = EXCLUDED.service_mode, updated_at = EXCLUDED.updated_at`,
+    [code, mode, nowIso()]
+  );
+  res.json({ ok: true, code, serviceMode: mode });
 });
 
 router.patch('/store-status/:code/toggle', async (req, res) => {

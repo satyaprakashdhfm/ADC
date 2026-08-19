@@ -66,6 +66,24 @@ export async function isStoreActive(code) {
   return row ? !!row.is_active : true;
 }
 
+/** Valid values of store_status.service_mode. */
+export const SERVICE_MODES = ['BOTH', 'INTRACITY', 'INTERCITY'];
+
+/**
+ * This store's delivery-mode switch — 'BOTH' unless an admin has narrowed it. No row, or a value
+ * we do not recognise, means BOTH: a store is never silently taken out of service by bad data.
+ */
+export async function storeServiceMode(code) {
+  const row = await getOne('SELECT service_mode FROM store_status WHERE store_code = $1', [String(code || '').trim().toLowerCase()]);
+  const mode = String(row?.service_mode || 'BOTH').toUpperCase();
+  return SERVICE_MODES.includes(mode) ? mode : 'BOTH';
+}
+
+/** Can this store be used as the pickup for an outstation parcel? INTRACITY-only stores cannot. */
+export async function storeDoesIntercity(code) {
+  return (await storeServiceMode(code)) !== 'INTRACITY';
+}
+
 /**
  * The stores in this pincode's zone that are actually switched on, nearest pincode first.
  *
@@ -78,7 +96,16 @@ export async function isStoreActive(code) {
 export async function activeZoneStores(destPincode) {
   const zone = zoneStores(destPincode);
   const flags = await Promise.all(zone.map((s) => isStoreActive(s.code)));
-  return zone.filter((_, i) => flags[i]);
+  const open = zone.filter((_, i) => flags[i]);
+
+  /* An INTERCITY-only store is not a candidate for same-day — but narrowing must never be able to
+     strand a whole city. If honouring the switch would leave the zone with nothing, the switch is
+     ignored and the nearest open store still serves the address: losing every Bengaluru order
+     because of an admin toggle is a worse failure than a parcels-only store taking one same-day
+     run. Deliberate, and the reason this filter is not simply applied unconditionally. */
+  const modes = await Promise.all(open.map((s) => storeServiceMode(s.code)));
+  const sameDay = open.filter((_, i) => modes[i] !== 'INTERCITY');
+  return sameDay.length ? sameDay : open;
 }
 
 const parseCities = (raw) => String(raw || '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
