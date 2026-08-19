@@ -1,8 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
-import LoginModal from '@/components/ordering/LoginModal';
+import AdminLogin from './AdminLogin';
+import { useAdminSession } from '@/hooks/admin/useAdminSession';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
   LogOut, Truck, FileText, Store as StoreIcon, Paintbrush,
@@ -36,7 +36,7 @@ import DeliveryTab from './delivery/DeliveryTab';
 import WarehouseEditorModal from './delivery/WarehouseEditorModal';
 import PetpoojaTab from './petpooja/PetpoojaTab';
 import CustomizeTab from './customize/CustomizeTab';
-import { card, addBtn } from './shared/ui';
+import { card } from './shared/ui';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -54,17 +54,18 @@ type TabId = typeof TABS[number]['id'];
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { user, loading, logout } = useAuth();
+  /* The dashboard runs on its own session, not the customer one. useAuth is gone from here
+     entirely: admin used to mean user.role === 'ADMIN', which put this behind the storefront login. */
+  const { admin, checking: adminChecking, signIn: adminSignIn, signOut: adminSignOut } = useAdminSession();
   const [tab, setTab] = useState<TabId>('overview');
 
   const [err, setErr] = useState('');
   const [notice, setNotice] = useState('');
-  const [loginOpen, setLoginOpen] = useState(false);
 
   // Page numbers stay here, not in each tab, so a page survives switching tabs and back.
   const { pageOf, setPageOf } = usePagination();
 
-  const isAdmin = !!user && user.role === 'ADMIN';
+  const isAdmin = !!admin;
 
   const { attention, refreshAttention } = useAdminAttention(isAdmin);
 
@@ -92,27 +93,10 @@ export default function AdminDashboard() {
   const { storeReport, staffBusy, setStaffBusy, refreshStores, storeChanged, deleteOrphanedStaff } = useAdminStores(isAdmin && tab === 'stores', refreshAttention);
   const { coupons, search: couponSearch, setSearch: setCouponSearch, statusFilter: couponStatusFilter, setStatusFilter: setCouponStatusFilter, couponForm, setCouponForm, toggleCoupon, editCoupon, saveCoupon, removeCoupon, resettingSpins, resetAllSpins } = useAdminCoupons(isAdmin && tab === 'coupons', setErr);
 
-  if (loading) return null;
+  if (adminChecking) return null;
 
-  // Not an admin (or signed out) → show a clear sign-in gate instead of silently bouncing home.
-  if (!isAdmin) {
-    return (
-      <main className="adc-pattern-page" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
-        <div style={{ ...card, padding: '36px 30px', maxWidth: 420, width: '100%', textAlign: 'center' }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: 'var(--white)', margin: '0 auto 18px' }}><LayoutDashboard size={26} /></div>
-          <h1 style={{ fontSize: 'var(--text-h3)', marginBottom: 8 }}>Admin access</h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 22 }}>
-            {user
-              ? <>You&apos;re signed in as <strong>{user.email || user.phone || 'a customer account'}</strong>, which isn&apos;t an admin account. Sign in with an authorised admin account to manage the store.</>
-              : <>Sign in with an authorised admin account — Google or your registered mobile (OTP) — to open the dashboard.</>}
-          </p>
-          <button onClick={() => setLoginOpen(true)} style={addBtn}>Log in as admin</button>
-          {user && <div style={{ marginTop: 12 }}><button onClick={() => { logout(); }} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>Switch account</button></div>}
-        </div>
-        <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
-      </main>
-    );
-  }
+  // No admin session → the admin sign-in. Phone OTP only; there is no other way in.
+  if (!isAdmin) return <AdminLogin onSignedIn={adminSignIn} />;
 
   return (
     <main className="adc-pattern-page" style={{ minHeight: '100vh' }}>
@@ -122,9 +106,12 @@ export default function AdminDashboard() {
           <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}><LayoutDashboard size={20} /></div>
           <div style={{ flex: 1 }}>
             <div style={{ font: 'var(--weight-bold) var(--text-h4)/1 var(--font-display)', color: 'var(--text-strong)' }}>A Dough Cookie Admin</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{user.name} · {user.email}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+              {admin.name || 'Admin'} · ••••{admin.phone.slice(-4)}
+              {' · '}signed in until {new Date(admin.expiresAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+            </div>
           </div>
-          <button onClick={() => { logout(); router.push('/'); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}><LogOut size={16} /> Log out</button>
+          <button onClick={() => { void adminSignOut().then(() => router.push('/')); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}><LogOut size={16} /> Log out</button>
         </div>
       </header>
 

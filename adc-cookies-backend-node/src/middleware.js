@@ -148,12 +148,10 @@ export function requireAuth(req, res, next) {
   next();
 }
 
-// Equivalent to .requestMatchers("/api/admin/**").hasRole("ADMIN")
-export function requireAdmin(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized', message: 'Authentication required' });
-  if (req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Forbidden', message: 'Admin access required' });
-  next();
-}
+/* requireAdmin used to live here and gated /api/admin on users.role === 'ADMIN'. It is gone on
+   purpose rather than left unused: it looks like the admin gate, and anything importing it would be
+   protecting the dashboard with a customer session again. The real gate is requireAdminSession in
+   adminAuth.js, which is keyed on an allowlisted phone and its own OTP session. */
 
 // Lets services throw new ApiError(msg) to produce a 400, like Spring's RuntimeException handler.
 export class ApiError extends Error {

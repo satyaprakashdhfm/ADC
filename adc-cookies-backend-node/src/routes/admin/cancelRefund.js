@@ -55,13 +55,25 @@ const otpLimiter = rateLimit({
   message: { error: 'Too many attempts', message: 'Too many verification codes requested. Try again in 15 minutes.' },
 });
 
-/** The admin's own phone, off their user row. Never off the request. */
+/*
+ * The admin's own phone, taken from their admin session. Never off the request body.
+ *
+ * This used to read the phone off a users row matched on the token's email. It now comes from the
+ * session, which is a stronger guarantee for exactly this purpose: it is the number that received
+ * the OTP to open the dashboard in the first place, so the refund code goes back to the same phone
+ * that authenticated.
+ *
+ * adminLabel is what goes in logs. The full number there is a privacy leak, not an audit trail.
+ */
 async function adminPhone(req) {
-  const row = await getOne("SELECT id, phone, name FROM users WHERE LOWER(email) = LOWER($1) AND role = 'ADMIN'", [req.user.email]);
-  if (!row) throw new ApiError('Admin account not found', 403);
-  const phone = normalizePhone(row.phone);
-  if (!phone) throw new ApiError('Your admin account has no valid mobile number saved, so a refund cannot be authorised. Add one first.', 409);
-  return { adminId: row.id, adminName: row.name, phone };
+  const phone = normalizePhone(req.admin?.phone);
+  if (!phone) throw new ApiError('Your admin session has no valid mobile number, so a refund cannot be authorised.', 409);
+  return {
+    adminId: phone.national,                 // stable per admin; the challenge key needs no more
+    adminName: req.admin.name,
+    adminLabel: '****' + phone.national.slice(-4),
+    phone,
+  };
 }
 
 /** Loads the order and refuses the ones a refund must never touch. */
@@ -81,7 +93,7 @@ async function loadCancellable(orderId) {
 router.post('/orders/:id/cancel/request-code', otpLimiter, async (req, res) => {
   if (!messageCentralConfigured()) throw new ApiError('SMS is not configured on this environment, so refunds cannot be authorised here.', 503);
   const order = await loadCancellable(req.params.id);
-  const { adminId, phone } = await adminPhone(req);
+  const { adminId, adminLabel, phone } = await adminPhone(req);
 
   const r = await sendOtp(phone.national);
   if (!r.ok) throw new ApiError(r.message || 'Could not send the verification code.', 502);
@@ -92,7 +104,7 @@ router.post('/orders/:id/cancel/request-code', otpLimiter, async (req, res) => {
     expiresAt: Date.now() + CHALLENGE_TTL_MS,
     attempts: 0,
   });
-  console.log(`[ADMIN-CANCEL] code sent | order=${order.order_number} | admin=${adminId}`);
+  console.log(`[ADMIN-CANCEL] code sent | order=${order.order_number} | admin=${adminLabel}`);
   res.json({ sent: true, phoneHint: `••••••${phone.national.slice(-4)}`, expiresInSeconds: CHALLENGE_TTL_MS / 1000 });
 });
 
@@ -106,7 +118,7 @@ router.post('/orders/:id/cancel/request-code', otpLimiter, async (req, res) => {
  */
 router.post('/orders/:id/cancel', async (req, res) => {
   const order = await loadCancellable(req.params.id);
-  const { adminId, phone } = await adminPhone(req);
+  const { adminId, adminLabel, phone } = await adminPhone(req);
   const reason = String(req.body?.reason || '').trim();
   const code = String(req.body?.code || '').trim();
   if (!reason) throw new ApiError('Give the customer a reason — it is shown to them and recorded on the order.');
@@ -134,7 +146,7 @@ router.post('/orders/:id/cancel', async (req, res) => {
     if (!v.ok) throw new ApiError(v.message || 'That code is not right.', 401);
     // Consumed. A correct code authorises exactly one cancellation of exactly this order.
     challenges.delete(key);
-    console.log(`[ADMIN-CANCEL] authorised | order=${order.order_number} | admin=${adminId} | phone=••••${phone.national.slice(-4)}`);
+    console.log(`[ADMIN-CANCEL] authorised | order=${order.order_number} | admin=${adminLabel}`);
     return await performCancellation({ res, order, reason });
   } finally {
     inFlight.delete(order.id);
