@@ -12,10 +12,13 @@ import { getAddresses } from '@/lib/api';
  */
 const LS_KEY = 'adc_location_pincode';
 
-/** Short area name for a store, e.g. "A Dough Cookie — Jayanagar" → "Jayanagar". */
+/** Short area name for a store, e.g. "A Dough Cookie, Jayanagar" → "Jayanagar".
+ *  Accepts a comma or a dash: the names carry a comma now, and one written the old way still
+ *  resolves. Takes the LAST segment rather than [1], so an extra comma cannot shift the answer and
+ *  quietly leave the "Deliver to" chip reading "Bengaluru, Bengaluru". */
 export const storeArea = (s: Store) => {
-  const parts = s.name.split('—');
-  return (parts[1] || s.city).trim();
+  const parts = s.name.split(/[,—]/).map(p => p.trim()).filter(Boolean);
+  return (parts.length > 1 ? parts[parts.length - 1] : s.city).trim();
 };
 export const storeLabel = (s: Store) => `${storeArea(s)}, ${s.city}`;
 

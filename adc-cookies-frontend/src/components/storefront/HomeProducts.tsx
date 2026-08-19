@@ -207,7 +207,7 @@ export default function HomeProducts() {
         <div style={{ textAlign: 'center', marginBottom: 'clamp(6px,1.5vw,14px)' }}>
           <p style={eyebrow}>Order online</p>
           <h2 style={{ font: '900 clamp(1.7rem,1.2rem + 2vw,2.6rem)/1 var(--font-display)', letterSpacing: '-.02em', color: 'var(--text-strong)', margin: '0 0 10px' }}>Fresh from the oven</h2>
-          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-body)', maxWidth: 520, margin: '0 auto' }}>Pick your favourites and add them to the cart — checkout in a tap.</p>
+          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-body)', maxWidth: 520, margin: '0 auto' }}>Pick your favourites and add them to the cart. Checkout in a tap.</p>
         </div>
 
         {sections.length === 0 ? (
@@ -250,7 +250,7 @@ export default function HomeProducts() {
               <h3 style={{ font: '900 clamp(1.3rem,1rem + 1.2vw,1.9rem)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px', letterSpacing: '-.02em' }}>Corporate &amp; Bulk Gifting</h3>
               {/* Dark body copy and no text shadow. Both existed to hold white type up against a
                   scrim; there is no scrim now, and the card reads light. */}
-              <p style={{ color: 'var(--text-body)', margin: 0, fontSize: 'var(--text-sm)', lineHeight: 1.5, maxWidth: 460 }}>Cookies for teams, clients &amp; celebrations — branded boxes, bulk pricing and coordinated delivery.</p>
+              <p style={{ color: 'var(--text-body)', margin: 0, fontSize: 'var(--text-sm)', lineHeight: 1.5, maxWidth: 460 }}>Cookies for teams, clients &amp; celebrations, with branded boxes, bulk pricing and coordinated delivery.</p>
             </div>
           </div>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '13px 22px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', flex: 'none', boxShadow: 'var(--shadow-brand)' }}>Enquire / Order in bulk <ArrowRight size={16} /></span>

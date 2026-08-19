@@ -133,7 +133,7 @@ export default function Footer() {
           <div className="footer-note" style={{ flex: '1 1 260px', maxWidth: 340 }}>
             <div style={footerHeadingStyle}>Hey there, let&apos;s treat you!</div>
             <p style={{ color: 'var(--white-72)', lineHeight: 1.65, fontSize: 'var(--text-sm)', margin: 0 }}>
-              Every cookie is handmade in small batches and baked through the day — never pulled from
+              Every cookie is handmade in small batches and baked through the day, never pulled from
               a freezer, never sitting around waiting for you.
             </p>
             {/* The same-day promise used to be stated flat, with no mention that it only holds where

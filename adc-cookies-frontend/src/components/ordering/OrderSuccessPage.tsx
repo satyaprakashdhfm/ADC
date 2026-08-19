@@ -26,7 +26,7 @@ export default function OrderSuccessPage({ show, total, orderId, eta, summary, p
         </div>
         <div style={{ display: 'inline-block', background: 'var(--green-wash)', color: 'var(--green-success)', fontWeight: 800, fontSize: 'var(--text-sm)', padding: '5px 14px', borderRadius: 'var(--radius-pill)', marginBottom: 16 }}>{pendingPayment ? 'Order Confirmed' : 'Payment Successful'}</div>
         <h1 style={{ font: 'var(--weight-extra) var(--text-h1)/1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 10px' }}>Order Placed!</h1>
-        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '0 0 6px' }}>{pendingPayment ? 'Pay when you collect at the stall — see you soon!' : 'Your cookies are being baked fresh.'}</p>
+        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '0 0 6px' }}>{pendingPayment ? 'Pay when you collect at the stall, see you soon!' : 'Your cookies are being baked fresh.'}</p>
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-subtle)', margin: '0 0 24px' }}>Order <strong style={{ color: 'var(--text-strong)' }}>{orderId}</strong> · ₹{total}</p>
         {summary && summary.items.length > 0 && (
           <div style={{ width: '100%', maxWidth: 340, background: 'var(--surface-card)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-sm)', padding: '16px 18px', marginBottom: 24, textAlign: 'left' }}>

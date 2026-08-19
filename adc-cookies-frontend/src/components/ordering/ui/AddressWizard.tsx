@@ -108,9 +108,9 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
       (pos) => { setLocating(false); setPin({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setStep('map'); },
       (err) => {
         setLocating(false);
-        setLocErr(err.code === 1 ? 'Location permission denied — allow it, or search for your area instead.'
-          : err.code === 3 ? 'Location timed out — try again, or search for your area.'
-            : 'Could not read your location — please search for your area.');
+        setLocErr(err.code === 1 ? 'Location permission denied. Allow it, or search for your area instead.'
+          : err.code === 3 ? 'Location timed out. Try again, or search for your area.'
+            : 'Could not read your location. Please search for your area.');
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
     );

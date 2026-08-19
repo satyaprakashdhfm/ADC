@@ -28,11 +28,11 @@ export const INSTAGRAM_URL = `https://www.instagram.com/${INSTAGRAM_HANDLE}/`;
 
 export const REELS: Reel[] = [
   { id: 'DY6saFpTLM9', caption: 'Tag the friend who owes you a cookie date' },
-  { id: 'DaXPVY3zjL4', caption: 'Cookie tins — freshly baked, 100% eggless' },
+  { id: 'DaXPVY3zjL4', caption: 'Cookie tins, freshly baked, 100% eggless' },
   { id: 'DY4ebmXTevu', caption: 'Dessert heaven in Jayanagar' },
   { id: 'DapIc_KTrj5', caption: 'There’s always room for one more cookie' },
   { id: 'DZO08rdTarD', caption: 'Your next addiction, from ₹45' },
-  { id: 'DZpmKfYztBR', caption: 'Cookie tin drop — open, bite, repeat' },
+  { id: 'DZpmKfYztBR', caption: 'Cookie tin drop. Open, bite, repeat' },
   { id: 'DZ6kLNtuSNb', caption: 'Unboxing happiness in a tin' },
   { id: 'Dahs72eT4oS', caption: 'Mini Cookie Box, baked fresh daily' },
   { id: 'DZzx1BWTXuw', caption: 'One Wish Willow never saw us coming' },

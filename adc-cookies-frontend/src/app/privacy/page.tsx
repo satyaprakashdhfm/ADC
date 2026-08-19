@@ -13,7 +13,7 @@ import { COMPANY_NAME, SITE_EMAIL } from '@/lib/site';
  */
 
 export const metadata: Metadata = {
-  title: `Privacy Policy — ${COMPANY_NAME} (a dough cookie)`,
+  title: `Privacy Policy | ${COMPANY_NAME} (a dough cookie)`,
   description: 'What information a dough cookie collects when you order, why we need it, and who we share it with.',
   alternates: { canonical: '/privacy' },
 };

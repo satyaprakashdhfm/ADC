@@ -7,8 +7,8 @@ import EnquiryForm from '@/components/storefront/EnquiryForm';
 import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 
 export const metadata = {
-  title: 'Corporate & Bulk Orders — a dough cookie',
-  description: 'Cookie hampers for teams, clients and celebrations — custom branding, volume pricing and pan-India delivery. Request a quote from A Dough Cookie.',
+  title: 'Corporate & Bulk Orders | a dough cookie',
+  description: 'Cookie hampers for teams, clients and celebrations, with custom branding, volume pricing and pan-India delivery. Request a quote from A Dough Cookie.',
 };
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 };
@@ -23,7 +23,7 @@ const eyebrowOnBand: React.CSSProperties = { ...eyebrow, color: 'var(--orange-80
 const onBandCard: React.CSSProperties = { background: 'var(--peach-100)', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-md)' };
 
 const PERKS = [
-  { icon: Building2, title: 'Custom branding', text: 'Your logo on sleeves, tins and gift notes — so the box looks like it came from you, not from us.' },
+  { icon: Building2, title: 'Custom branding', text: 'Your logo on sleeves, tins and gift notes, so the box looks like it came from you, not from us.' },
   { icon: Gift, title: 'Curated hampers', text: 'Mix flavours, tin sizes and add-ons to land on any budget, from a modest thank-you to a flagship client gift.' },
   { icon: Truck, title: 'Pan-India delivery', text: 'One bulk despatch to your office, or individual parcels to a list of addresses across the country.' },
   { icon: BadgeCheck, title: 'Volume pricing', text: 'Rates improve as quantities grow. Tell us the number and we will quote it properly.' },
@@ -34,7 +34,7 @@ const OCCASIONS = ['Diwali & festive gifting', 'Client thank-yous', 'Employee on
 const STEPS = [
   { n: '01', title: 'Tell us what you need', text: 'Company, rough quantity, the occasion and when you need it by. The form below covers it.' },
   { n: '02', title: 'We send a quote', text: 'Within one working day, with flavour and packaging options at your quantity.' },
-  { n: '03', title: 'We bake and deliver', text: 'Baked fresh close to your date — never pulled from a freezer — and despatched to wherever it needs to go.' },
+  { n: '03', title: 'We bake and deliver', text: 'Baked fresh close to your date, never pulled from a freezer, and despatched to wherever it needs to go.' },
 ];
 
 export default function CorporatePage() {
@@ -51,7 +51,7 @@ export default function CorporatePage() {
               Cookies by the hundred, done properly.
             </h1>
             <p style={{ ...para, fontSize: 'var(--text-lg)', maxWidth: 620 }}>
-              Client gifting, office celebrations, weddings and events — handmade in small batches,
+              Client gifting, office celebrations, weddings and events, handmade in small batches,
               packed to travel, and branded as yours. Tell us the number and we&apos;ll send a quote
               within one working day.
             </p>
@@ -128,7 +128,7 @@ export default function CorporatePage() {
             <p style={eyebrow}>Request a quote</p>
             <h2 style={h2}>Tell us the number, we&apos;ll do the rest.</h2>
             <p style={para}>
-              The more you can share — quantity, occasion, when you need it — the more precise the
+              The more you can share about quantity, occasion and when you need it, the more precise the
               quote. Prefer to talk it through? Reach us directly:
             </p>
             <div style={{ display: 'grid', gap: 12, fontWeight: 700, fontSize: 'var(--text-sm)' }}>

@@ -6,13 +6,13 @@ import EnquiryForm from '@/components/storefront/EnquiryForm';
 import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 
 export const metadata = {
-  title: 'Partner With Us — Franchise & Bulk Orders | a dough cookie',
-  description: 'Open an A Dough Cookie franchise or place a corporate / bulk order — start your enquiry with a dough cookie.',
+  title: 'Partner With Us | Franchise & Bulk Orders | a dough cookie',
+  description: 'Open an A Dough Cookie franchise or place a corporate or bulk order. Start your enquiry with a dough cookie.',
 };
 
 const WHY = [
   { icon: <Award size={20} />, title: 'A brand people love', body: 'Fresh-baked, soft-centre cookies and gift tins customers come back for, week after week.' },
-  { icon: <LifeBuoy size={20} />, title: 'Turnkey support', body: 'Recipes, supply, training and marketing — set up and run with our team beside you.' },
+  { icon: <LifeBuoy size={20} />, title: 'Turnkey support', body: 'Recipes, supply, training and marketing, so you set up and run with our team beside you.' },
   { icon: <MapPin size={20} />, title: 'Prime locations', body: 'We help you find and fit out high-footfall spots in your city.' },
   { icon: <TrendingUp size={20} />, title: 'Year-round demand', body: 'Everyday cravings, gift tins, festivals and corporate gifting keep it busy all year.' },
 ];

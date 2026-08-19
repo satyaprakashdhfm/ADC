@@ -7,8 +7,8 @@ import SiteHeader from '@/components/storefront/SiteHeader';
 import { STORES } from '@/lib/stores';
 
 export const metadata = {
-  title: 'Our Story — a dough cookie',
-  description: 'How A Dough Cookie began: a small handmade cookie kitchen built on real butter, couverture chocolate and small-batch baking — now four stores across Bengaluru and Chennai.',
+  title: 'Our Story | a dough cookie',
+  description: 'How A Dough Cookie began: a small handmade cookie kitchen built on real butter, couverture chocolate and small-batch baking, now four stores across Bengaluru and Chennai.',
 };
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 };
@@ -29,16 +29,16 @@ const onPeachBody = 'var(--ink-700)';
 const VALUES = [
   { icon: Hand, title: 'Made by hand, not by machine', text: 'Every ball of dough is portioned, filled and shaped by hand. It is slower and it does not scale neatly, but it is the only way to get a centre that stays molten and an edge that stays crisp.' },
   { icon: Wheat, title: 'Real ingredients, no substitutes', text: 'Président butter, couverture chocolate, and 100% real Nutella and Lotus Biscoff. No compounds, no vegetable-fat “chocolate”, no filling that is mostly sugar. If we cannot get the real thing, we do not make the cookie.' },
-  { icon: Croissant, title: 'Small batches, all day', text: 'We bake through the day in small trays rather than one big morning run. It means the cookie you get in the evening is as fresh as the one at opening — and nothing sits in a freezer waiting for you.' },
+  { icon: Croissant, title: 'Small batches, all day', text: 'We bake through the day in small trays rather than one big morning run. It means the cookie you get in the evening is as fresh as the one at opening, and nothing sits in a freezer waiting for you.' },
   { icon: Sparkles, title: 'Finished like a gift', text: 'Tins, sleeves, ribbons and hand-written notes. A box of cookies is usually going to somebody, so it should look like somebody meant it.' },
 ];
 
 // A short, honest arc — how a home kitchen became four stores.
 const STORY = [
-  { step: '01', title: 'It started in a home kitchen', text: 'One oven, a hand mixer, and far too many failed batches. The goal was simple and stubborn: a cookie with a genuinely gooey middle that still held its shape — the kind you could not buy anywhere nearby.' },
-  { step: '02', title: 'Friends became the first customers', text: 'Boxes went out to friends and family, then to their offices, then to people we had never met. The recipe kept getting tightened — more butter, better chocolate, a shorter bake — until the cookie stopped needing an apology.' },
+  { step: '01', title: 'It started in a home kitchen', text: 'One oven, a hand mixer, and far too many failed batches. The goal was simple and stubborn: a cookie with a genuinely gooey middle that still held its shape, the kind you could not buy anywhere nearby.' },
+  { step: '02', title: 'Friends became the first customers', text: 'Boxes went out to friends and family, then to their offices, then to people we had never met. The recipe kept getting tightened, with more butter, better chocolate and a shorter bake, until the cookie stopped needing an apology.' },
   { step: '03', title: 'The first counter opened', text: 'A small shop, an open oven, and the smell doing most of the marketing. Baking in front of people changed things: nothing could be hidden, so everything had to be right.' },
-  { step: '04', title: 'Four stores, same dough', text: `Today there are ${STORES.length} A Dough Cookie stores across Bengaluru and Chennai. The kitchen is bigger, the trays are more frequent — but the dough is still mixed to the same recipe and still shaped by hand.` },
+  { step: '04', title: 'Four stores, same dough', text: `Today there are ${STORES.length} A Dough Cookie stores across Bengaluru and Chennai. The kitchen is bigger, the trays are more frequent, but the dough is still mixed to the same recipe and still shaped by hand.` },
 ];
 
 export default function AboutPage() {
@@ -55,7 +55,7 @@ export default function AboutPage() {
               A small cookie kitchen that refused to cut corners.
             </h1>
             <p style={{ ...para, fontSize: 'var(--text-lg)', maxWidth: 660 }}>
-              A Dough Cookie began the way most good food does — with somebody being fussy at home. We wanted a cookie
+              A Dough Cookie began the way most good food does, with somebody being fussy at home. We wanted a cookie
               that was soft in the middle without being raw, rich without being sickly, and made with ingredients we
               would happily name out loud. It took a lot of batches to get there.
             </p>
@@ -77,7 +77,7 @@ export default function AboutPage() {
             <p style={eyebrow}>How we got here</p>
             <h2 style={h2}>From one oven to four stores.</h2>
             <p style={{ ...para, marginBottom: 0 }}>
-              No investors, no grand plan — just a recipe that kept getting better and word that kept getting round.
+              No investors, no grand plan, just a recipe that kept getting better and word that kept getting round.
             </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 'clamp(14px,1.8vw,22px)' }}>
@@ -156,7 +156,7 @@ export default function AboutPage() {
           </span>
           <h2 style={h2}>Thank you for eating our cookies.</h2>
           <p style={{ ...para, marginBottom: 0 }}>
-            Every order still gets noticed at this end. If something is not right, tell us — we would much rather fix
+            Every order still gets noticed at this end. If something is not right, tell us. We would much rather fix
             it than have you quietly not come back.
           </p>
         </div>
