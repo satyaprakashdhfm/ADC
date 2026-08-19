@@ -178,6 +178,16 @@ body::before {
    is only for the inner/checkout pages. (Home <main> also carries .adc-pattern-page.) */
 .home-page { --surface-card: var(--vanilla); }
 
+/* The homepage "Get in touch" card, on the peach band (--band-ivory, #FFCD90).
+   --vanilla is a desaturated tan, which next to warm orange reads as a different material rather
+   than a lighter shade of the same one, so this card takes the palette's lightest peach.
+   NOT --peach-300: that IS the band colour, and a card the exact colour of what it sits on is the
+   bug this is avoiding. The fields move up a step too — they default to --peach-100, which would
+   have become the card colour itself and left every input invisible but for its 10% border.
+   Scoped to .home-page because /contact also has a #get-in-touch, on a cream page where the
+   ordinary inner-page card colour is already correct. */
+.home-page #get-in-touch { --surface-card: var(--peach-100); --surface-field: var(--cream-50); }
+
 /* Animations */
 @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-18px)} }
 @keyframes riseIn { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:none} }
