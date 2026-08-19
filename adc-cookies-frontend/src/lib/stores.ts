@@ -78,6 +78,41 @@ export const STORES: Store[] = [
  * pincode) — the menu shows normally until we actually know where the shopper is; restricting
  * before that would be guessing.
  */
+/**
+ * Is this pincode inside one of our store zones, and therefore same-day territory?
+ *
+ * Mirrors the server's zoneStores(): a zone is the pincode's first THREE digits matching a store's.
+ * Bengaluru is 560, Chennai 600; Hyderabad 500 is not a zone, whatever the straight-line distance
+ * happens to be. Deliberately the same rule and not a radius, so the menu cannot disagree with what
+ * checkout will actually allow.
+ */
+export function isIntracityPincode(pincode: string | null | undefined): boolean {
+  const p = String(pincode || '').replace(/\D/g, '');
+  if (p.length < 3) return false;
+  return STORES.some(s => String(s.pincode).slice(0, 3) === p.slice(0, 3));
+}
+
+/**
+ * Can this product reach this pincode at all, by whichever carrier applies there?
+ *
+ * The server's deliveryEligible(), restated for the catalogue. NOT "intracity OR intercity": a
+ * pincode inside a store zone is judged only on same-day, and everywhere else only on courier. A
+ * null pincode means we do not know yet, and an unknown location shows the whole menu.
+ *
+ * This is what was missing. productAvailableFor() alone asks only about the nearest STORE's city,
+ * and nearestStore() has no distance limit — so a Hyderabad address resolved to the Bengaluru store
+ * and every same-day-only item passed as though it were a local order.
+ */
+export function deliveryEligibleFor(
+  pincode: string | null | undefined,
+  store: { city: string } | null,
+  product: { intracityAvailable: boolean; intercityAvailable: boolean; restrictCities: string | null },
+): boolean {
+  const p = String(pincode || '').replace(/\D/g, '');
+  if (p.length < 6) return true;                       // location not known well enough to narrow
+  return isIntracityPincode(p) ? productAvailableFor(store, product) : product.intercityAvailable;
+}
+
 export function productAvailableFor(store: { city: string } | null, product: { intracityAvailable: boolean; restrictCities: string | null }): boolean {
   if (!store) return true;
   if (!product.intracityAvailable) return false;

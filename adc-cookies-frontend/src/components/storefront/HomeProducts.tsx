@@ -8,7 +8,7 @@ import { useCart } from '@/context/CartContext';
 import { MENU_SECTIONS, menuRank, type ProductCategory } from '@/lib/categories';
 import MenuRail from './MenuRail';
 import { useLocation } from '@/context/LocationContext';
-import { productAvailableFor } from '@/lib/stores';
+import { deliveryEligibleFor } from '@/lib/stores';
 
 /* The registry says what the sections ARE and what order they come in; this says what each one
    looks like. Icons live here rather than in lib/categories.ts so that file stays free of React
@@ -118,8 +118,12 @@ export default function HomeProducts() {
      productAvailableFor(null, …) is true, so the default really is the whole menu. Gated on
      `ready` as well so the first paint (before localStorage is read) never flashes a filtered
      shelf and then widens it. */
-  const { store: locStore, ready: locReady } = useLocation();
+  const { store: locStore, custPin, ready: locReady } = useLocation();
   const forLocation = locReady ? locStore : null;
+  /* Their OWN pincode, not the nearest store's. This is the whole point: nearestStore() has no
+     distance limit, so a Lakdikapul address resolved to the Bengaluru store and every same-day-only
+     item passed as a local order. 560/600 are same-day zones; 500 is not. */
+  const forPin = locReady ? custPin : '';
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState('');
   const deepLinkScrolled = useRef(false); // scroll a ?q= deep-link to its section only once, after products load
@@ -173,8 +177,10 @@ export default function HomeProducts() {
      an empty category draws nothing at all.
 
      On location filtering: the default is the whole menu, and it narrows only once we genuinely
-     know where the shopper is — geolocation they granted, an address already on their account, or
-     a pincode they picked. It is NOT filtered on a guess, which is what an earlier version did:
+     know the shopper's own PINCODE — from geolocation they granted, an address on their account, or
+     a pincode they typed. Inside a store zone it narrows on same-day availability; outside one, only
+     courier-safe items survive, which is why an out-of-city address no longer sees skillets and
+     sundaes it could never be sent. It is NOT filtered on a guess, which is what an earlier version did:
      that dropped Red Velvet for anyone our coarse city guess placed outside Bengaluru, so they
      could not even learn it exists. Checkout still has the final word against the real delivery
      address, where the line is blacked out with the reason written on it — this only avoids
@@ -186,7 +192,7 @@ export default function HomeProducts() {
     .map(c => ({
       ...c,
       items: products
-        .filter(p => c.codes.includes(p.category) && p.isAvailable && productAvailableFor(forLocation, p))
+        .filter(p => c.codes.includes(p.category) && p.isAvailable && deliveryEligibleFor(forPin, forLocation, p))
         // Menu order first; a search then floats whatever matched to the top of it, so typing a
         // name still finds it without permanently reshuffling the shelf underneath.
         .sort((a, b) => menuRank(a.name) - menuRank(b.name))

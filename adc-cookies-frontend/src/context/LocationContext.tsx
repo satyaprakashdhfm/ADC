@@ -11,6 +11,10 @@ import { getAddresses } from '@/lib/api';
  * Persisted per browser so the choice sticks across pages and visits.
  */
 const LS_KEY = 'adc_location_pincode';
+/* The CUSTOMER's own pincode, which is a different thing from LS_KEY above — that one holds the
+   nearest STORE's pincode. Only this one can answer "is this address same-day territory", because
+   nearestStore() has no distance limit and happily returns Bengaluru for an address in Hyderabad. */
+const CUST_PIN_KEY = 'adc_customer_pincode';
 
 /** Short area name for a store, e.g. "A Dough Cookie, Jayanagar" → "Jayanagar".
  *  Accepts a comma or a dash: the names carry a comma now, and one written the old way still
@@ -46,6 +50,9 @@ interface LocationValue {
      just because that's the nearest branch we could match. */
   area: string;
   setArea: (a: string) => void;
+  /** The customer's own pincode when we know it. '' until something tells us. */
+  custPin: string;
+  setCustPin: (p: string) => void;
   detecting: boolean;
   error: string;
   ready: boolean;               // hydrated from localStorage (avoids SSR/first-paint flash)
@@ -62,6 +69,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [store, setStore] = useState<Store | null>(null);
   const [area, setAreaState] = useState('');
+  const [custPin, setCustPinState] = useState('');
   const [detecting, setDetecting] = useState(false);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
@@ -75,6 +83,8 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       }
       const savedArea = localStorage.getItem(AREA_KEY);
       if (savedArea) setAreaState(savedArea);
+      const savedPin = localStorage.getItem(CUST_PIN_KEY);
+      if (savedPin) setCustPinState(savedPin);
     } catch { /* ignore */ }
     setReady(true);
   }, []);
@@ -85,6 +95,12 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       else localStorage.removeItem(LS_KEY);
     } catch { /* ignore */ }
   };
+
+  const setCustPin = useCallback((raw: string) => {
+    const digits = String(raw || '').replace(/\D/g, '').slice(0, 6);
+    setCustPinState(digits);
+    try { if (digits) localStorage.setItem(CUST_PIN_KEY, digits); else localStorage.removeItem(CUST_PIN_KEY); } catch { /* ignore */ }
+  }, []);
 
   /*
    * Seed from the account's own saved address when this device has told us nothing.
@@ -107,10 +123,12 @@ export function LocationProvider({ children }: { children: ReactNode }) {
           ? nearestStore(Number(pick.latitude), Number(pick.longitude))
           : STORES.find(x => x.pincode === Number(pick.pincode)) ?? null;
         if (s) { setStore(s); persist(s); }
+        // Their own pincode, which is what decides same-day vs courier in the catalogue.
+        if (pick.pincode) setCustPin(String(pick.pincode));
       })
       .catch(() => { /* no addresses, or not reachable — the menu simply stays unnarrowed */ });
     return () => { cancelled = true; };
-  }, [ready, user, store]);
+  }, [ready, user, store, setCustPin]);
 
   const setArea = useCallback((a: string) => {
     setAreaState(a);
@@ -119,8 +137,8 @@ export function LocationProvider({ children }: { children: ReactNode }) {
 
   const chooseStore = useCallback((s: Store) => { setStore(s); setError(''); persist(s); }, []);
   const clear = useCallback(() => {
-    setStore(null); persist(null); setAreaState('');
-    try { localStorage.removeItem(AREA_KEY); } catch { /* ignore */ }
+    setStore(null); persist(null); setAreaState(''); setCustPinState('');
+    try { localStorage.removeItem(AREA_KEY); localStorage.removeItem(CUST_PIN_KEY); } catch { /* ignore */ }
   }, []);
 
   const detect = useCallback(() => new Promise<Store | null>((resolve) => {
@@ -153,7 +171,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   }), []);
 
   return (
-    <Ctx.Provider value={{ store, label: store ? storeLabel(store) : '', area, setArea, detecting, error, ready, detect, chooseStore, clear }}>
+    <Ctx.Provider value={{ store, label: store ? storeLabel(store) : '', area, setArea, custPin, setCustPin, detecting, error, ready, detect, chooseStore, clear }}>
       {children}
     </Ctx.Provider>
   );
