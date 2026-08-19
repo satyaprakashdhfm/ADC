@@ -7,6 +7,8 @@ import { getProducts, firstImage, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { MENU_SECTIONS, menuRank, type ProductCategory } from '@/lib/categories';
 import MenuRail from './MenuRail';
+import { useLocation } from '@/context/LocationContext';
+import { productAvailableFor } from '@/lib/stores';
 
 /* The registry says what the sections ARE and what order they come in; this says what each one
    looks like. Icons live here rather than in lib/categories.ts so that file stays free of React
@@ -111,7 +113,13 @@ function SubHead({ icon, title }: { icon: React.ReactNode; title: string }) {
 
 export default function HomeProducts() {
   const router = useRouter();
-  // No LocationContext here any more — the menu no longer varies by where the shopper is.
+  /* The menu narrows to where the shopper is, once we actually know. `store` is null until
+     something tells us — permission granted, a saved account address, or a manual pick — and
+     productAvailableFor(null, …) is true, so the default really is the whole menu. Gated on
+     `ready` as well so the first paint (before localStorage is read) never flashes a filtered
+     shelf and then widens it. */
+  const { store: locStore, ready: locReady } = useLocation();
+  const forLocation = locReady ? locStore : null;
   const [products, setProducts] = useState<Product[]>([]);
   const [q, setQ] = useState('');
   const deepLinkScrolled = useRef(false); // scroll a ?q= deep-link to its section only once, after products load
@@ -164,12 +172,13 @@ export default function HomeProducts() {
   /* One section per registry category, in menu order, carrying whatever products exist in it —
      an empty category draws nothing at all.
 
-     Note what is deliberately NOT filtered here any more. Products used to be dropped from the
-     menu when the shopper's coarse location made them ineligible, so a visitor outside Bengaluru
-     was never shown Red Velvet at all. The whole menu is now shown to everyone, and the "not to
-     THIS address" conversation happens once, at checkout, against a real address — where the line
-     is blacked out with the reason written on it. Hiding an item early meant a shopper couldn't
-     even learn it exists, which is a worse answer than being told where it can go.
+     On location filtering: the default is the whole menu, and it narrows only once we genuinely
+     know where the shopper is — geolocation they granted, an address already on their account, or
+     a pincode they picked. It is NOT filtered on a guess, which is what an earlier version did:
+     that dropped Red Velvet for anyone our coarse city guess placed outside Bengaluru, so they
+     could not even learn it exists. Checkout still has the final word against the real delivery
+     address, where the line is blacked out with the reason written on it — this only avoids
+     shelving cookies we already know we cannot send to them.
 
      The old `!/sundae/i` exclusion is gone with it: sundaes were being kept out of the cookies
      grid by name because there was no category to put them in. Now there is one. */
@@ -177,7 +186,7 @@ export default function HomeProducts() {
     .map(c => ({
       ...c,
       items: products
-        .filter(p => c.codes.includes(p.category) && p.isAvailable)
+        .filter(p => c.codes.includes(p.category) && p.isAvailable && productAvailableFor(forLocation, p))
         // Menu order first; a search then floats whatever matched to the top of it, so typing a
         // name still finds it without permanently reshuffling the shelf underneath.
         .sort((a, b) => menuRank(a.name) - menuRank(b.name))
