@@ -65,10 +65,13 @@ export default function CookiesSoldCounter() {
         boxSizing: 'border-box',
         padding: '22px 20px',
         borderRadius: 'var(--radius-card)',
-        /* Deep warm near-black, the token the theme already reserves for badge fills. A white tint
-           over an orange footer is barely a shade lighter than the orange, which is why the original
-           did not stand out at all — it needs to leave the background colour, not sit on it. */
-        background: 'var(--ink-950)',
+        /* Celebration flat-lay — baubles, ribbons and cookies, shot with an open middle, which is
+           where the figure sits. The warm scrim over it is not decoration: the open centre is a
+           mid-orange, and white at the label's size reads about 3.3:1 on it, which is under AA.
+           Roughly a third of espresso takes that past 6:1 while the baubles stay plainly visible —
+           this is a lit photograph, not the brown block it replaces. --ink-950 is the last layer, so
+           a failed image request degrades to the old solid card rather than to unreadable text. */
+        background: 'linear-gradient(180deg, var(--espresso-30), var(--espresso-45)), url("/assets/footer-celebrate.jpg") center/cover no-repeat, var(--ink-950)',
         border: '1px solid var(--white-16)',
         boxShadow: '0 6px 20px var(--black-18)',
         position: 'relative',
@@ -81,28 +84,25 @@ export default function CookiesSoldCounter() {
         textAlign: 'center',
       }}
     >
-      {/* Warm glows, opposite corners, for depth on a large flat panel. Decorative only and
-          pointer-events-free so they can never swallow a tap meant for something underneath. */}
-      <span aria-hidden style={{ position: 'absolute', top: -40, right: -40, width: 140, height: 140, borderRadius: '50%', background: 'radial-gradient(circle, var(--brand-scrim-16) 0%, transparent 70%)', pointerEvents: 'none' }} />
-      <span aria-hidden style={{ position: 'absolute', bottom: -46, left: -46, width: 150, height: 150, borderRadius: '50%', background: 'radial-gradient(circle, var(--brand-scrim-16) 0%, transparent 72%)', pointerEvents: 'none' }} />
-
-      <span aria-hidden style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none', boxShadow: '0 3px 12px var(--black-28)' }}>
+      {/* Ringed in white: amber on an amber-and-copper photograph has nothing to separate it. */}
+      <span aria-hidden style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', background: 'var(--gradient-warm)', border: '2px solid var(--white-72)', display: 'grid', placeItems: 'center', flex: 'none', boxShadow: '0 3px 12px var(--black-45)' }}>
         <Cookie size={24} color="var(--white)" />
       </span>
 
       <div style={{ position: 'relative' }}>
-        <b style={{ display: 'block', color: 'var(--amber-300)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em' }}>
+        <b style={{ display: 'block', color: 'var(--white)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em', textShadow: '0 2px 10px var(--black-55)' }}>
           {n.toLocaleString('en-IN')}+
         </b>
-        <span style={{ display: 'block', marginTop: 4, color: 'var(--cream-100-72)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.02em' }}>
+        <span style={{ display: 'block', marginTop: 4, color: 'var(--cream-100)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.02em', textShadow: '0 1px 6px var(--black-55)' }}>
           cookies baked &amp; sold
         </span>
       </div>
 
       {/* The number really is ticking, and this is what says so. */}
-      <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--white-16)' }}>
+      {/* Dark pill, not the white tint it was: a 16% white wash disappears on a photograph. */}
+      <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--espresso-55)' }}>
         <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
-        <span style={{ color: 'var(--cream-100-72)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+        <span style={{ color: 'var(--cream-100)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase' }}>
           counting live
         </span>
       </span>
