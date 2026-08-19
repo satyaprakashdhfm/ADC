@@ -83,11 +83,6 @@ interface SpinWheelProps {
   refreshReward?: () => void | Promise<void>;
 }
 
-// "18 Aug, 9:40 pm". The countdown says how long is left; this says when that lands, which is
-// the half someone actually plans around — "2d 4h" alone does not tell you if that is a weekday.
-const expiryStamp = (ms: number) =>
-  new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
-
 export default function SpinWheel({ open, onClose, activeReward, setActiveReward, checkingReward, now, refreshReward }: SpinWheelProps) {
   const router = useRouter();
   const { user, setAuthModalOpen } = useAuth();
@@ -365,15 +360,22 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
               win holds for a full week had no way of knowing that. Sits above the action area so
               it is on screen whatever the shopper is being asked to do next. */}
           {activeReward && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, flexWrap: 'wrap', margin: `0 auto ${desktop ? 16 : 11}px`, padding: desktop ? '9px 15px' : '7px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-50)', border: '1px solid var(--border-brand)', maxWidth: '100%' }}>
-              <Clock size={desktop ? 15 : 13} color="var(--orange-600)" style={{ flex: 'none' }} />
-              <span style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-strong)', fontWeight: 700 }}>
-                Expires in <strong style={{ color: 'var(--orange-600)', fontWeight: 900 }}>{formatRemaining(activeReward.expiresAtMs - nowMs)}</strong>
-              </span>
-              <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700 }}>
-                &middot; {expiryStamp(activeReward.expiresAtMs)}
-              </span>
-            </div>
+            <>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, flexWrap: 'wrap', margin: `0 auto ${desktop ? 16 : 11}px`, padding: desktop ? '9px 15px' : '7px 12px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-50)', border: '1px solid var(--border-brand)', maxWidth: '100%' }}>
+                <Clock size={desktop ? 15 : 13} color="var(--orange-600)" style={{ flex: 'none' }} />
+                <span style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-strong)', fontWeight: 700 }}>
+                  Expires in <strong style={{ color: 'var(--orange-600)', fontWeight: 900 }}>{formatRemaining(activeReward.expiresAtMs - nowMs)}</strong>
+                </span>
+              </div>
+              {/* Only while it is still unclaimed and nobody is signed in: the countdown alone does
+                  not say what has to happen before it runs out. Once claimed, the coupon is theirs
+                  and the deadline is just a deadline, so the ask would be noise. */}
+              {!activeReward.claimed && !user && (
+                <p style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-body)', fontWeight: 700, margin: `-${desktop ? 6 : 4}px auto ${desktop ? 14 : 10}px`, maxWidth: 300, lineHeight: 1.45 }}>
+                  Please sign in to claim it before it expires.
+                </p>
+              )}
+            </>
           )}
 
           {/* Action area */}
