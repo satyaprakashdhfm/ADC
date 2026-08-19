@@ -91,7 +91,11 @@ export default function Footer() {
                 of the footer. This column had the room, and the number is worth more than a gap.
                 marginTop:auto drops it to the column's bottom line; the padding is the floor on the
                 gap, since auto margin alone would let it hug the tagline in a short column. */}
-            <div style={{ marginTop: 'auto', paddingTop: 22 }}>
+            {/* flex:1 rather than margin-top:auto — auto only pushed the card down, this makes it
+                absorb the leftover height, so it runs from under the tagline to the foot of the
+                columns row, which is where the social line begins. minHeight:0 keeps a flex child
+                from refusing to shrink below its content on narrow desktop widths. */}
+            <div style={{ flex: 1, display: 'flex', paddingTop: 22, minHeight: 0 }}>
               <CookiesSoldCounter />
             </div>
           </div>
