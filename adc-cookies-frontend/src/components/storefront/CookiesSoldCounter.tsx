@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Cookie, Star } from 'lucide-react';
+import { Star } from 'lucide-react';
 
 /**
  * A little "cookies baked & sold today" vanity counter (Swish-style) for the footer. It's a
@@ -40,15 +40,15 @@ export default function CookiesSoldCounter() {
 
   if (n == null) return null;
 
-  /* Confetti — a handful of amber specks and stars, placed rather than random so the layout is the
-     same on every render (and on the server). Purely decorative and pointer-events-free. */
+  /* Confetti — a few white specks and stars, placed rather than random so the layout is identical
+     on the server and on every repaint. Purely decorative and pointer-events-free. */
   const specks: { top: string; left: string; size: number; kind: 'star' | 'dot'; o: number }[] = [
-    { top: '11%', left: '9%',  size: 13, kind: 'star', o: 0.55 },
-    { top: '20%', left: '84%', size: 10, kind: 'star', o: 0.42 },
-    { top: '68%', left: '7%',  size: 9,  kind: 'dot',  o: 0.40 },
-    { top: '78%', left: '89%', size: 12, kind: 'star', o: 0.48 },
-    { top: '44%', left: '93%', size: 7,  kind: 'dot',  o: 0.32 },
-    { top: '88%', left: '30%', size: 7,  kind: 'dot',  o: 0.30 },
+    { top: '13%', left: '8%',  size: 13, kind: 'star', o: 0.60 },
+    { top: '22%', left: '85%', size: 10, kind: 'star', o: 0.48 },
+    { top: '70%', left: '6%',  size: 9,  kind: 'dot',  o: 0.42 },
+    { top: '76%', left: '89%', size: 12, kind: 'star', o: 0.52 },
+    { top: '46%', left: '94%', size: 7,  kind: 'dot',  o: 0.34 },
+    { top: '88%', left: '32%', size: 7,  kind: 'dot',  o: 0.32 },
   ];
 
   return (
@@ -60,54 +60,52 @@ export default function CookiesSoldCounter() {
         boxSizing: 'border-box',
         padding: '20px',
         borderRadius: 'var(--radius-card)',
-        /* Warm smoked glass, not the near-black block this replaces and not milky glass either.
-           Espresso over the footer's own orange lands around #AD5506 at the top and #733707 at the
-           foot — plainly the same family as the footer, so the card reads as part of it, while white
-           type still measures 5:1 to 9:1 across the panel. Milky glass (a white tint) would have
-           looked closer to the reference and put white text at about 2.9:1, which fails outright. */
-        background: 'linear-gradient(165deg, var(--espresso-30), var(--espresso-50))',
-        /* Bright top edge + soft inner glow: this, the translucency and the drop shadow are what
-           read as glass. No backdrop-filter — the footer behind is a flat gradient, so blurring it
-           would cost a compositing layer and change nothing you can see. */
-        border: '1px solid var(--white-40)',
-        boxShadow: 'inset 0 1px 0 var(--white-40), inset 0 -18px 30px -18px var(--white-16), 0 10px 26px var(--black-28)',
+        /* Milky glass, not smoked. A white tint over the footer's own orange lands near #F5AC6A at
+           the top and #D97B31 at the foot — a lighter shade of the footer rather than a dark block
+           on it, which is what looked odd here.
+           Going lighter is why the type is dark: white on this measures about 2.5:1 and would fail
+           outright, whereas --text-strong on it runs 5.2:1 to 8.4:1. There is no readable way to
+           keep both a light panel and white text. */
+        background: 'linear-gradient(165deg, var(--white-40), var(--white-16))',
+        /* Bright edge, inner highlight and a soft drop are what read as glass. No backdrop-filter:
+           the footer behind is a flat gradient, so blurring it costs a compositing layer and changes
+           nothing visible. */
+        border: '1px solid var(--white-72)',
+        boxShadow: 'inset 0 1px 0 var(--white-72), 0 8px 22px var(--black-18)',
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 9,
+        gap: 11,
         textAlign: 'center',
       }}
     >
       {specks.map((sp, idx) => (
         <span key={idx} aria-hidden style={{ position: 'absolute', top: sp.top, left: sp.left, opacity: sp.o, pointerEvents: 'none', lineHeight: 0 }}>
           {sp.kind === 'star'
-            ? <Star size={sp.size} color="var(--amber-300)" fill="var(--amber-300)" strokeWidth={0} />
-            : <span style={{ display: 'block', width: sp.size, height: sp.size, borderRadius: '50%', background: 'var(--amber-200)' }} />}
+            ? <Star size={sp.size} color="var(--white)" fill="var(--white)" strokeWidth={0} />
+            : <span style={{ display: 'block', width: sp.size, height: sp.size, borderRadius: '50%', background: 'var(--white)' }} />}
         </span>
       ))}
 
-      {/* Ringed in white: amber on a burnt-orange panel has little to separate it. */}
-      <span aria-hidden style={{ position: 'relative', width: 42, height: 42, borderRadius: '50%', background: 'var(--gradient-warm)', border: '2px solid var(--white-72)', display: 'grid', placeItems: 'center', flex: 'none', boxShadow: '0 3px 12px var(--black-45)' }}>
-        <Cookie size={22} color="var(--white)" />
-      </span>
-
+      {/* The cookie badge that sat above the figure is gone — the number and its line carry this on
+          their own, and the footer already has the round bitten-cookie mark directly above. */}
       <div style={{ position: 'relative' }}>
-        <b style={{ display: 'block', color: 'var(--white)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em', textShadow: '0 2px 10px var(--black-45)' }}>
+        <b style={{ display: 'block', color: 'var(--text-strong)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em' }}>
           {n.toLocaleString('en-IN')}+
         </b>
-        <span style={{ display: 'block', marginTop: 5, color: 'var(--cream-100)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.01em', textShadow: '0 1px 6px var(--black-45)' }}>
+        <span style={{ display: 'block', marginTop: 5, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.01em' }}>
           Cookies Baked &amp; Sold
         </span>
       </div>
 
-      {/* One live indicator, not two. The reference had a corner chip AND a bottom pill, which say
-          the same thing twice; this is the legible one, so it is the one that stayed. */}
-      <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--espresso-50)', border: '1px solid var(--white-16)' }}>
+      {/* One live indicator, not two: the reference had a corner chip and a bottom pill saying the
+          same thing. White pill so it stays light like the panel it sits on. */}
+      <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--white-72)' }}>
         <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
-        <span style={{ color: 'var(--cream-100)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+        <span style={{ color: 'var(--text-strong)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
           Counting live
         </span>
       </span>
