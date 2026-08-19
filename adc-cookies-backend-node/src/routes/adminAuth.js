@@ -17,8 +17,14 @@ import {
  */
 const router = Router();
 
-// Tighter than the customer limiter. This endpoint exists for one number, so anything approaching a
-// normal rate is somebody probing it.
+/*
+ * Tighter than the customer limiter. This endpoint exists for a handful of numbers, so anything
+ * approaching a normal rate is somebody probing it.
+ *
+ * It carries more weight now than it used to. /otp/send says plainly when a number is not an admin
+ * (see below), so this limiter is the only thing left making it expensive to discover which numbers
+ * are — eight tries per ten minutes per IP against a ten-digit space.
+ */
 const otpLimiter = rateLimit({
   windowMs: 10 * 60_000,
   max: 8,
@@ -30,25 +36,35 @@ const otpLimiter = rateLimit({
 /*
  * Step 1 — send a code, but only to a number on the allowlist.
  *
- * Two things this deliberately does NOT do. It does not say whether the number is an admin: the
- * reply is identical either way, so this cannot be used to discover who the admins are. And it does
- * not send to anything else, so it cannot be used to spend our SMS credit texting strangers.
+ * A number that is not an admin is refused, and told so. This used to answer "if that number is an
+ * admin, a code has been sent to it" whatever was typed, so that the endpoint could not be used to
+ * work out who the admins are. That protection cost more than it bought: an admin who mistyped their
+ * own number was told a code was on its way and then waited for a text that was never sent, with
+ * nothing on screen to suggest they had got it wrong. Being told plainly is the whole point of a
+ * sign-in screen.
+ *
+ * What is given up, stated honestly: somebody probing this can now learn which numbers are admins.
+ * That alone grants nothing — the code still goes to the physical phone, and /otp/verify checks the
+ * allowlist again — but it does make an admin's number discoverable, which is worth knowing if this
+ * is ever revisited. The rate limiter above is what keeps that expensive.
+ *
+ * Still true, and the more important half: a code is only ever sent to a number ON the allowlist, so
+ * this cannot be used to spend our SMS credit texting strangers.
  */
 router.post('/otp/send', otpLimiter, async (req, res) => {
   if (!messageCentralConfigured()) throw new ApiError('Admin phone sign-in is not configured yet.', 503);
   const phone = normalizePhone(req.body?.phone);
-  const generic = { sent: true, message: 'If that number is an admin, a code has been sent to it.' };
   if (!phone) throw new ApiError('Enter a valid 10-digit mobile number.');
 
   const account = await findAdminAccount(phone.national);
   if (!account) {
-    console.warn(`[ADMIN-AUTH] OTP requested for a non-admin number (last 4: ${String(phone.national).slice(-4)})`);
-    return res.json(generic);
+    console.warn(`[ADMIN-AUTH] rejected a non-admin number (last 4: ${String(phone.national).slice(-4)})`);
+    throw new ApiError('That number is not an admin.', 403);
   }
 
   const r = await sendOtp(phone.national);
   if (!r.ok) throw new ApiError(r.message, 502);
-  res.json({ ...generic, verificationId: r.verificationId, timeout: r.timeout });
+  res.json({ sent: true, message: 'A code has been sent to that number.', verificationId: r.verificationId, timeout: r.timeout });
 });
 
 /*
