@@ -22,7 +22,6 @@ export default function AdminLogin({ onSignedIn, notice }: { onSignedIn: (s: Adm
   const [verificationId, setVerificationId] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [info, setInfo] = useState('');
   const [resendIn, setResendIn] = useState(0);
 
   useEffect(() => {
@@ -32,13 +31,15 @@ export default function AdminLogin({ onSignedIn, notice }: { onSignedIn: (s: Adm
   }, [resendIn]);
 
   const send = async () => {
-    setBusy(true); setErr(''); setInfo('');
+    setBusy(true); setErr('');
     try {
       const r = await adminOtpSend(phone);
-      /* No verificationId means the server did not text anything — the number is not on the
-         allowlist. It answers the same way either way so this cannot be used to discover who the
-         admins are, so all this can honestly do is repeat what it said. */
-      if (!r.verificationId) { setInfo(r.message); return; }
+      /* A number that is not an admin now comes back as an error, so it lands in the catch below and
+         is said plainly. This used to be a success with no verificationId and a message that would
+         not commit either way, which meant a mistyped number looked exactly like a sent code. Kept as
+         a guard rather than deleted: a success carrying nothing to verify is still nothing to verify,
+         and silently doing nothing would be the one outcome worse than an error. */
+      if (!r.verificationId) { setErr(r.message || 'No code was sent. Check the number and try again.'); return; }
       setVerificationId(r.verificationId);
       setStep('code');
       setCode('');
@@ -85,7 +86,7 @@ export default function AdminLogin({ onSignedIn, notice }: { onSignedIn: (s: Adm
               <span style={{ width: 1, height: 22, background: 'var(--border-default)' }} />
               <input
                 value={phone}
-                onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setInfo(''); }}
+                onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setErr(''); }}
                 onKeyDown={e => { if (e.key === 'Enter' && phone.length === 10 && !busy) send(); }}
                 placeholder="Mobile number" inputMode="numeric" autoComplete="tel" autoFocus
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', minWidth: 0, letterSpacing: '.04em' }}
@@ -121,7 +122,6 @@ export default function AdminLogin({ onSignedIn, notice }: { onSignedIn: (s: Adm
           </div>
         )}
 
-        {info && <div style={{ ...authErrorBox, background: 'var(--surface-raised)', color: 'var(--text-body)' }}>{info}</div>}
         {err && <div style={authErrorBox}>{err}</div>}
       </div>
     </main>
