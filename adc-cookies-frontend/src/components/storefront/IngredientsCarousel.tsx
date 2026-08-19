@@ -36,13 +36,20 @@ function IngredientImage({ n, src, title }: { n: string; src?: string; title: st
 /**
  * The Finest Ingredients — a gentle sideways auto-scroll through the FIVE unique cards (no doubling,
  * so nothing ever visibly repeats): it eases forward, then smoothly returns to the first card and
- * goes again. Pauses on hover; arrows nudge it. Each card is half image (top) / half text (below).
+ * goes again. Each card is half image (top) / half text (below).
+ *
+ * The auto-scroll hands over the moment the visitor moves the rail themselves, and never takes it
+ * back. Hover-pausing was the only yield before, which does not exist on a phone: a swipe there was
+ * fighting the animation frame-for-frame, and the return-to-start would yank someone off the last
+ * card mid-read. After a takeover the rail is an ordinary horizontal scroller.
  */
 export default function IngredientsCarousel({ items }: { items: Ingredient[] }) {
   const track = useRef<HTMLDivElement>(null);
   const paused = useRef(false);
   const returning = useRef(false);
   const pos = useRef(0);
+  // Latched, never cleared: once the visitor drives this rail it stays theirs for the visit.
+  const takenOver = useRef(false);
 
   useEffect(() => {
     const el = track.current;
@@ -51,6 +58,9 @@ export default function IngredientsCarousel({ items }: { items: Ingredient[] }) 
     const speed = 0.5; // px/frame — slow, premium glide
     pos.current = el.scrollLeft;
     const tick = () => {
+      // Stop rescheduling rather than idling: an abandoned loop still costs a frame every 16ms for
+      // the rest of the visit, and there is nothing left for it to do.
+      if (takenOver.current) return;
       if (el && !paused.current && !returning.current) {
         const max = el.scrollWidth - el.clientWidth;
         if (max > 4) {
@@ -70,18 +80,49 @@ export default function IngredientsCarousel({ items }: { items: Ingredient[] }) 
     raf = requestAnimationFrame(tick);
     const enter = () => { paused.current = true; };
     const leave = () => { pos.current = el.scrollLeft; paused.current = false; };
+
+    /* Hand the rail over for good. Not a pause: a pause resumes, and resuming is exactly what
+       fights someone still reading the card they scrolled to. Clearing `returning` as well, so a
+       return-to-start caught in flight cannot finish and drag them back to the first card. */
+    const takeOver = () => {
+      if (takenOver.current) return;
+      takenOver.current = true;
+      returning.current = false;
+      cancelAnimationFrame(raf);
+      el.removeEventListener('mouseenter', enter);
+      el.removeEventListener('mouseleave', leave);
+    };
+
     el.addEventListener('mouseenter', enter);
     el.addEventListener('mouseleave', leave);
-    return () => { cancelAnimationFrame(raf); el.removeEventListener('mouseenter', enter); el.removeEventListener('mouseleave', leave); };
+    /* pointerdown covers mouse, pen and touch. wheel and keydown are separate because trackpad and
+       keyboard scrolling produce no pointer event at all — on a phone `mouseenter` never fires,
+       which is why touch had no way to interrupt this before. All passive: nothing is cancelled. */
+    el.addEventListener('pointerdown', takeOver, { passive: true });
+    el.addEventListener('touchstart', takeOver, { passive: true });
+    el.addEventListener('wheel', takeOver, { passive: true });
+    el.addEventListener('keydown', takeOver);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener('mouseenter', enter);
+      el.removeEventListener('mouseleave', leave);
+      el.removeEventListener('pointerdown', takeOver);
+      el.removeEventListener('touchstart', takeOver);
+      el.removeEventListener('wheel', takeOver);
+      el.removeEventListener('keydown', takeOver);
+    };
   }, []);
 
+  /* Tapping an arrow is the visitor driving, so it takes the rail over on the same terms as a
+     swipe. The old pause-then-resume timer is gone with it: there is no auto-scroll left to resume,
+     which also means the arrows no longer have to out-run it. */
   const nudge = (dir: number) => {
     const el = track.current;
     if (!el) return;
-    paused.current = true;
-    returning.current = true;
+    takenOver.current = true;
+    returning.current = false;
     el.scrollBy({ left: dir * 340, behavior: 'smooth' });
-    window.setTimeout(() => { pos.current = el.scrollLeft; paused.current = false; returning.current = false; }, 1200);
   };
 
   return (
