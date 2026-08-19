@@ -476,26 +476,28 @@ body::before {
    are actually visible — a photo you cannot see is just an expensive background colour.
    The card wraps to stacked rows on a phone, where a left-to-right scrim would leave the CTA on
    bare photo, so below 760px it runs top-to-bottom instead and holds a floor of darkness. */
-/* The photograph, softened, and nothing over it. No colour wash and no dark scrim: the orange one
-   tinted the whole shot orange and the espresso one before it read as fog.
-   The fade has to live on a pseudo-element. `opacity` on the button itself would take the type down
-   with it, and a CSS background layer cannot carry its own alpha. What shows through is --cream-bg,
-   the page's own colour, so nothing is tinted.
-   0.5 is a legibility floor, not a taste call: the type on this card is dark, and over the darkest
-   part of the photo (the near-black gift boxes) half strength is what keeps the body copy above
-   4.5:1. Raising it starts failing there first. */
-.corp-cta { position: relative; background: var(--cream-bg); }
-.corp-cta::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: url('/assets/corporate-gifting.jpg') center/cover no-repeat;
-  opacity: .5;
-  pointer-events: none;
+/* Dark and neutral over the photograph, so the type on it is white.
+   Not the orange wash that tinted the whole shot, and not the near-black 95%-on-the-left original
+   that read as fog: this runs 62% to 50% across, which is even enough that the gift boxes stay
+   legible the whole way over while white body copy still measures above 6:1 on the left, where it
+   actually sits. --ink-950 is the last layer, so a failed image request degrades to a solid dark
+   card rather than to white text on cream. */
+.corp-cta {
+  background:
+    linear-gradient(90deg, var(--espresso-62) 0%, var(--espresso-50) 100%),
+    url('/assets/corporate-gifting.jpg') center/cover no-repeat,
+    var(--ink-950);
 }
-/* The button's own children have to sit above that image layer. */
-.corp-cta > * { position: relative; z-index: 1; }
+@media (max-width: 760px) {
+  /* Vertical once the card wraps: the copy stacks above the button rather than sitting to its left,
+     so the strong end of the gradient has to move with it. */
+  .corp-cta {
+    background:
+      linear-gradient(180deg, var(--espresso-62) 0%, var(--espresso-50) 100%),
+      url('/assets/corporate-gifting.jpg') center/cover no-repeat,
+      var(--ink-950);
+  }
+}
 
 /* The hover shots are portrait (1085x1450) shown in a 4:3 card, so `cover` fills the width and only
    ~56% of the image height survives — object-position picks WHICH 56%.
