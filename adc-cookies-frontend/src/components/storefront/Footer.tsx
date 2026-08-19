@@ -83,6 +83,10 @@ export default function Footer() {
             >
               Handcrafted cookies, baked fresh daily. Aroma of Freshness, delivered warm.
             </p>
+            {/* Under the secondary mark rather than squeezed between the payment marks and the
+                copyright, where it was competing with small print for attention in the busiest strip
+                of the footer. This column had the room, and the number is worth more than a gap. */}
+            <CookiesSoldCounter />
           </div>
 
           <FooterCookies />
@@ -97,7 +101,7 @@ export default function Footer() {
               ['Track Order', '/account'],
               ['FAQs', '/contact'],
               ['Contact', '/contact'],
-              ['Returns', '/contact'],
+              ['Returns', '/shipping-policy'],
             ]],
           ] as [string, [string, string][]][]).map(([h, items]) => (
             <div key={h}>
@@ -121,9 +125,17 @@ export default function Footer() {
               Every cookie is handmade in small batches and baked through the day — never pulled from
               a freezer, never sitting around waiting for you.
             </p>
+            {/* The same-day promise used to be stated flat, with no mention that it only holds where
+                we actually bake — which read as a broken promise to every outstation customer. Both
+                cases are named here, and neither is described as the lesser one. */}
             <p style={{ color: 'var(--white-72)', lineHeight: 1.65, fontSize: 'var(--text-sm)', margin: '14px 0 0' }}>
-              Order in the morning, and it reaches you the same day still warm. That&apos;s the whole
-              idea behind the Aroma of Freshness.
+              In the cities we bake in, order in the morning and it reaches you the same day, still
+              warm. Everywhere else in India the same fresh batch travels by courier, so allow it a
+              day or two.
+            </p>
+            <p style={{ color: 'var(--white-72)', lineHeight: 1.65, fontSize: 'var(--text-sm)', margin: '14px 0 0' }}>
+              Checkout tells you which applies to your address. That&apos;s the whole idea behind the
+              Aroma of Freshness.
             </p>
           </div>
         </div>
@@ -161,7 +173,6 @@ export default function Footer() {
         <div className="footer-baseline" style={{ marginTop: 34, paddingTop: 26, borderTop: '1px solid var(--white-16)' }}>
           <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' }}>
             <div style={{ display: 'flex', justifyContent: 'center' }}><PaymentMarks /></div>
-            <CookiesSoldCounter />
             {/* The policies belong at the very bottom, where people look for them, and they have to
                 be real pages rather than anchors on Contact — a payment provider checks that these
                 URLs exist, and a customer looking for the refund terms is usually already unhappy
@@ -173,7 +184,14 @@ export default function Footer() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px 16px', color: 'var(--white-60)', fontSize: 'var(--text-xs)', flexWrap: 'wrap' }}>
               <span>© 2026 {COMPANY_NAME}. All rights reserved.</span>
-              <span>{SITE_EMAIL} · {SITE_PHONE}</span>
+              {/* Real tel:/mailto: links, not text. On a phone the number was something you had to
+                  select and copy; now it dials. Spaces stripped from the href only — the visible
+                  number keeps them, since that is the readable form. */}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <a href={`mailto:${SITE_EMAIL}`} className="footer-link" style={{ ...footerLinkStyle, fontSize: 'var(--text-xs)' }}>{SITE_EMAIL}</a>
+                <span aria-hidden>·</span>
+                <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} className="footer-link" style={{ ...footerLinkStyle, fontSize: 'var(--text-xs)' }}>{SITE_PHONE}</a>
+              </span>
             </div>
           </div>
         </div>
