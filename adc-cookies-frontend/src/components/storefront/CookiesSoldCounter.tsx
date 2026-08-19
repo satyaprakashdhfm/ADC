@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Cookie } from 'lucide-react';
+import { Cookie, Star } from 'lucide-react';
 
 /**
  * A little "cookies baked & sold today" vanity counter (Swish-style) for the footer. It's a
@@ -39,23 +39,18 @@ export default function CookiesSoldCounter() {
   }, []);
 
   if (n == null) return null;
-  /*
-   * The footer's brand column, as a full-height celebration panel.
-   *
-   * It began as a line of text at the same size and weight as the copyright and policy links it sat
-   * between, so the one genuinely interesting number in the footer — and the only thing on the page
-   * that moves — read as small print. Then a pill in that same crowded centre strip. It now owns the
-   * bottom of the brand column and runs to the foot of the columns row, so it is sized and dressed
-   * for that: two warm glows, the cookie mark, the figure at h2, and a live line saying it is still
-   * counting.
-   *
-   * Content is centred and the box is height:100%, so it stays composed whatever height the column
-   * hands it — that depends on how long the neighbouring copy runs, which is not fixed.
-   *
-   * Not a button, though it borrows the shape: nothing happens when you press it, and a card that
-   * looks clickable and isn't is a worse outcome than one that goes unnoticed. No hover state and
-   * no pointer cursor, for the same reason.
-   */
+
+  /* Confetti — a handful of amber specks and stars, placed rather than random so the layout is the
+     same on every render (and on the server). Purely decorative and pointer-events-free. */
+  const specks: { top: string; left: string; size: number; kind: 'star' | 'dot'; o: number }[] = [
+    { top: '11%', left: '9%',  size: 13, kind: 'star', o: 0.55 },
+    { top: '20%', left: '84%', size: 10, kind: 'star', o: 0.42 },
+    { top: '68%', left: '7%',  size: 9,  kind: 'dot',  o: 0.40 },
+    { top: '78%', left: '89%', size: 12, kind: 'star', o: 0.48 },
+    { top: '44%', left: '93%', size: 7,  kind: 'dot',  o: 0.32 },
+    { top: '88%', left: '30%', size: 7,  kind: 'dot',  o: 0.30 },
+  ];
+
   return (
     <div
       style={{
@@ -63,47 +58,57 @@ export default function CookiesSoldCounter() {
         height: '100%',
         minHeight: 150,
         boxSizing: 'border-box',
-        padding: '22px 20px',
+        padding: '20px',
         borderRadius: 'var(--radius-card)',
-        /* Celebration flat-lay — baubles, ribbons and cookies, shot with an open middle, which is
-           where the figure sits. The warm scrim over it is not decoration: the open centre is a
-           mid-orange, and white at the label's size reads about 3.3:1 on it, which is under AA.
-           Roughly a third of espresso takes that past 6:1 while the baubles stay plainly visible —
-           this is a lit photograph, not the brown block it replaces. --ink-950 is the last layer, so
-           a failed image request degrades to the old solid card rather than to unreadable text. */
-        background: 'linear-gradient(180deg, var(--espresso-30), var(--espresso-45)), url("/assets/footer-celebrate.jpg") center/cover no-repeat, var(--ink-950)',
-        border: '1px solid var(--white-16)',
-        boxShadow: '0 6px 20px var(--black-18)',
+        /* Warm smoked glass, not the near-black block this replaces and not milky glass either.
+           Espresso over the footer's own orange lands around #AD5506 at the top and #733707 at the
+           foot — plainly the same family as the footer, so the card reads as part of it, while white
+           type still measures 5:1 to 9:1 across the panel. Milky glass (a white tint) would have
+           looked closer to the reference and put white text at about 2.9:1, which fails outright. */
+        background: 'linear-gradient(165deg, var(--espresso-30), var(--espresso-50))',
+        /* Bright top edge + soft inner glow: this, the translucency and the drop shadow are what
+           read as glass. No backdrop-filter — the footer behind is a flat gradient, so blurring it
+           would cost a compositing layer and change nothing you can see. */
+        border: '1px solid var(--white-40)',
+        boxShadow: 'inset 0 1px 0 var(--white-40), inset 0 -18px 30px -18px var(--white-16), 0 10px 26px var(--black-28)',
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
+        gap: 9,
         textAlign: 'center',
       }}
     >
-      {/* Ringed in white: amber on an amber-and-copper photograph has nothing to separate it. */}
-      <span aria-hidden style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', background: 'var(--gradient-warm)', border: '2px solid var(--white-72)', display: 'grid', placeItems: 'center', flex: 'none', boxShadow: '0 3px 12px var(--black-45)' }}>
-        <Cookie size={24} color="var(--white)" />
+      {specks.map((sp, idx) => (
+        <span key={idx} aria-hidden style={{ position: 'absolute', top: sp.top, left: sp.left, opacity: sp.o, pointerEvents: 'none', lineHeight: 0 }}>
+          {sp.kind === 'star'
+            ? <Star size={sp.size} color="var(--amber-300)" fill="var(--amber-300)" strokeWidth={0} />
+            : <span style={{ display: 'block', width: sp.size, height: sp.size, borderRadius: '50%', background: 'var(--amber-200)' }} />}
+        </span>
+      ))}
+
+      {/* Ringed in white: amber on a burnt-orange panel has little to separate it. */}
+      <span aria-hidden style={{ position: 'relative', width: 42, height: 42, borderRadius: '50%', background: 'var(--gradient-warm)', border: '2px solid var(--white-72)', display: 'grid', placeItems: 'center', flex: 'none', boxShadow: '0 3px 12px var(--black-45)' }}>
+        <Cookie size={22} color="var(--white)" />
       </span>
 
       <div style={{ position: 'relative' }}>
-        <b style={{ display: 'block', color: 'var(--white)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em', textShadow: '0 2px 10px var(--black-55)' }}>
+        <b style={{ display: 'block', color: 'var(--white)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em', textShadow: '0 2px 10px var(--black-45)' }}>
           {n.toLocaleString('en-IN')}+
         </b>
-        <span style={{ display: 'block', marginTop: 4, color: 'var(--cream-100)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.02em', textShadow: '0 1px 6px var(--black-55)' }}>
-          cookies baked &amp; sold
+        <span style={{ display: 'block', marginTop: 5, color: 'var(--cream-100)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.01em', textShadow: '0 1px 6px var(--black-45)' }}>
+          Cookies Baked &amp; Sold
         </span>
       </div>
 
-      {/* The number really is ticking, and this is what says so. */}
-      {/* Dark pill, not the white tint it was: a 16% white wash disappears on a photograph. */}
-      <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--espresso-55)' }}>
+      {/* One live indicator, not two. The reference had a corner chip AND a bottom pill, which say
+          the same thing twice; this is the legible one, so it is the one that stayed. */}
+      <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--espresso-50)', border: '1px solid var(--white-16)' }}>
         <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
-        <span style={{ color: 'var(--cream-100)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase' }}>
-          counting live
+        <span style={{ color: 'var(--cream-100)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+          Counting live
         </span>
       </span>
     </div>
