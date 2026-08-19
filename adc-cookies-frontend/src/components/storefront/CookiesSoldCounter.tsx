@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Star } from 'lucide-react';
+import { Star, Sparkles } from 'lucide-react';
 
 /**
  * A little "cookies baked & sold today" vanity counter (Swish-style) for the footer. It's a
@@ -40,15 +40,25 @@ export default function CookiesSoldCounter() {
 
   if (n == null) return null;
 
-  /* Confetti — a few white specks and stars, placed rather than random so the layout is identical
-     on the server and on every repaint. Purely decorative and pointer-events-free. */
-  const specks: { top: string; left: string; size: number; kind: 'star' | 'dot'; o: number }[] = [
-    { top: '13%', left: '8%',  size: 13, kind: 'star', o: 0.60 },
-    { top: '22%', left: '85%', size: 10, kind: 'star', o: 0.48 },
-    { top: '70%', left: '6%',  size: 9,  kind: 'dot',  o: 0.42 },
-    { top: '76%', left: '89%', size: 12, kind: 'star', o: 0.52 },
-    { top: '46%', left: '94%', size: 7,  kind: 'dot',  o: 0.34 },
-    { top: '88%', left: '32%', size: 7,  kind: 'dot',  o: 0.32 },
+  /* Confetti. Placed rather than random so the layout is identical on the server and on every
+     repaint — Math.random() here would also mean the stars jumped on each tick of the counter.
+     Kept to the edges: the middle belongs to the figure, and a star behind a numeral reads as a
+     smudge. Purely decorative and pointer-events-free. */
+  const specks: { top: string; left: string; size: number; kind: 'star' | 'sparkle' | 'dot'; o: number }[] = [
+    { top: '6%',  left: '5%',  size: 12, kind: 'star',    o: 0.62 },
+    { top: '16%', left: '15%', size: 7,  kind: 'dot',     o: 0.40 },
+    { top: '9%',  left: '88%', size: 13, kind: 'sparkle', o: 0.58 },
+    { top: '21%', left: '78%', size: 8,  kind: 'star',    o: 0.44 },
+    { top: '34%', left: '4%',  size: 9,  kind: 'sparkle', o: 0.48 },
+    { top: '44%', left: '93%', size: 7,  kind: 'dot',     o: 0.38 },
+    { top: '56%', left: '7%',  size: 11, kind: 'star',    o: 0.50 },
+    { top: '62%', left: '90%', size: 10, kind: 'star',    o: 0.46 },
+    { top: '74%', left: '3%',  size: 7,  kind: 'dot',     o: 0.36 },
+    { top: '80%', left: '84%', size: 12, kind: 'sparkle', o: 0.52 },
+    { top: '90%', left: '18%', size: 9,  kind: 'star',    o: 0.44 },
+    { top: '92%', left: '62%', size: 7,  kind: 'dot',     o: 0.34 },
+    { top: '86%', left: '44%', size: 8,  kind: 'star',    o: 0.30 },
+    { top: '30%', left: '86%', size: 6,  kind: 'dot',     o: 0.30 },
   ];
 
   return (
@@ -56,7 +66,7 @@ export default function CookiesSoldCounter() {
       style={{
         width: '100%',
         height: '100%',
-        minHeight: 150,
+        minHeight: 172,
         boxSizing: 'border-box',
         padding: '20px',
         borderRadius: 'var(--radius-card)',
@@ -86,12 +96,31 @@ export default function CookiesSoldCounter() {
         <span key={idx} aria-hidden style={{ position: 'absolute', top: sp.top, left: sp.left, opacity: sp.o, pointerEvents: 'none', lineHeight: 0 }}>
           {sp.kind === 'star'
             ? <Star size={sp.size} color="var(--white)" fill="var(--white)" strokeWidth={0} />
-            : <span style={{ display: 'block', width: sp.size, height: sp.size, borderRadius: '50%', background: 'var(--white)' }} />}
+            : sp.kind === 'sparkle'
+              ? <Sparkles size={sp.size} color="var(--white)" strokeWidth={2.4} />
+              : <span style={{ display: 'block', width: sp.size, height: sp.size, borderRadius: '50%', background: 'var(--white)' }} />}
         </span>
       ))}
 
-      {/* The cookie badge that sat above the figure is gone — the number and its line carry this on
-          their own, and the footer already has the round bitten-cookie mark directly above. */}
+      {/* Gold ribbon across the top, as in the reference. Notched ends via clip-path rather than an
+          image, so it costs nothing to load and scales with the type.
+          Dark lettering on the amber, not white: white on amber-500 measures about 2.2:1 and is
+          unreadable at this size, while the strong ink on it is roughly 7:1. */}
+      <span style={{
+        position: 'relative',
+        display: 'inline-block',
+        padding: '6px 24px',
+        background: 'linear-gradient(180deg, var(--amber-200), var(--amber-500))',
+        color: 'var(--text-strong)',
+        font: `900 var(--text-2xs)/1 var(--font-display)`,
+        letterSpacing: '.16em',
+        textTransform: 'uppercase',
+        clipPath: 'polygon(0 0, 100% 0, calc(100% - 10px) 50%, 100% 100%, 0 100%, 10px 50%)',
+        boxShadow: '0 2px 8px var(--black-18)',
+      }}>
+        Celebrating
+      </span>
+
       <div style={{ position: 'relative' }}>
         <b style={{ display: 'block', color: 'var(--text-strong)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em' }}>
           {n.toLocaleString('en-IN')}+
