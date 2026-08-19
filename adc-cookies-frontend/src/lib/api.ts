@@ -442,7 +442,10 @@ export async function adminSetDeliveryFeeOutstation(deliveryFeeOutstation: numbe
 }
 
 /* ---- Store online/offline, and per-store product availability ---- */
-export interface AdminStoreStatus { code: string; name: string; city: string; posMode: 'AUTO' | 'MANUAL'; isActive: boolean; }
+/** serviceMode is an admin switch, not a fact about the shop: which delivery kinds it takes part
+ *  in. Narrowing every store in a zone to INTERCITY cannot close that zone — see activeZoneStores. */
+export type StoreServiceMode = 'BOTH' | 'INTRACITY' | 'INTERCITY';
+export interface AdminStoreStatus { code: string; name: string; city: string; posMode: 'AUTO' | 'MANUAL'; isActive: boolean; serviceMode: StoreServiceMode; }
 /* Cancel + refund, in two calls on purpose: the code is sent to the number on the admin's own user
    row (never one this client supplies), and only the digits come back here. */
 export async function adminRequestCancelCode(orderId: number): Promise<{ sent: boolean; phoneHint: string; expiresInSeconds: number }> {
@@ -455,6 +458,9 @@ export async function adminCancelAndRefund(orderId: number, reason: string, code
 export async function adminGetStoreStatus(): Promise<{ stores: AdminStoreStatus[] }> { return request('/admin/store-status'); }
 export async function adminToggleStoreStatus(code: string): Promise<{ ok: boolean; code: string; isActive: boolean }> {
   return request(`/admin/store-status/${code}/toggle`, { method: 'PATCH' });
+}
+export async function adminSetStoreServiceMode(code: string, serviceMode: StoreServiceMode): Promise<{ ok: boolean; code: string; serviceMode: StoreServiceMode }> {
+  return request(`/admin/store-status/${code}/service-mode`, { method: 'PATCH', body: JSON.stringify({ serviceMode }) });
 }
 export interface AdminStoreProduct { id: number; name: string; available: boolean; isOverride: boolean; automaticallyAvailable: boolean; }
 export async function adminGetStoreProducts(code: string): Promise<{ products: AdminStoreProduct[] }> {

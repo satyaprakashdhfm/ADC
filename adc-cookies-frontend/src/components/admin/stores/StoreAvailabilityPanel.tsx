@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
 import {
   adminGetStoreStatus, adminToggleStoreStatus, adminGetStoreProducts, adminSetStoreProductOverride,
-  type AdminStoreStatus, type AdminStoreProduct,
+  adminSetStoreServiceMode,
+  type AdminStoreStatus, type AdminStoreProduct, type StoreServiceMode,
 } from '@/lib/api';
 import { card, iconBtn, actionBtn, Panel, Badge, Empty } from '../shared/ui';
 
@@ -37,6 +38,21 @@ export default function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: 
     catch { setProducts([]); }
   };
 
+  /* Which delivery kinds a store takes part in. Narrowing every store in one zone to Parcels only
+     does not close that zone — the server falls back to the nearest open store rather than refusing
+     the city — so this cannot accidentally stop same-day for a whole city. */
+  const setServiceMode = async (code: string, mode: StoreServiceMode) => {
+    setBusy(`${code}:mode`); setErr('');
+    try {
+      await adminSetStoreServiceMode(code, mode);
+      setNotice(mode === 'BOTH' ? 'Store takes both same-day and parcel orders.'
+        : mode === 'INTRACITY' ? 'Store is same-day only — it will not be used as an outstation pickup.'
+        : 'Store is parcels only — it will not be picked for same-day.');
+      load();
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'That did not work'); }
+    finally { setBusy(null); }
+  };
+
   const setOverride = async (code: string, productId: number, available: boolean | null) => {
     setBusy(`${code}:${productId}`); setErr('');
     try {
@@ -60,7 +76,22 @@ export default function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: 
               <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>{s.name}</strong>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{s.city}</span>
               <Badge text={s.isActive ? 'Online' : 'Offline'} ok={s.isActive} />
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* Three-way, not two toggles: the states are mutually exclusive, and a pair of
+                    checkboxes would let an admin turn both off and mean nothing by it. */}
+                <span style={{ display: 'inline-flex', borderRadius: 'var(--radius-pill)', border: '1px solid var(--border-strong)', overflow: 'hidden' }}>
+                  {([['BOTH', 'Both'], ['INTRACITY', 'Same-day'], ['INTERCITY', 'Parcels']] as [StoreServiceMode, string][]).map(([mode, label]) => (
+                    <button key={mode} disabled={busy === `${s.code}:mode` || s.serviceMode === mode}
+                      onClick={() => setServiceMode(s.code, mode)}
+                      title={mode === 'BOTH' ? 'Same-day and outstation parcels' : mode === 'INTRACITY' ? 'Same-day only — never an outstation pickup' : 'Outstation parcels only — not picked for same-day'}
+                      style={{
+                        border: 'none', padding: '5px 11px', fontFamily: 'var(--font-body)', fontSize: 'var(--text-2xs)', fontWeight: 800,
+                        cursor: s.serviceMode === mode ? 'default' : 'pointer',
+                        background: s.serviceMode === mode ? 'var(--gradient-warm)' : 'var(--surface-raised)',
+                        color: s.serviceMode === mode ? 'var(--white)' : 'var(--text-muted)',
+                      }}>{label}</button>
+                  ))}
+                </span>
                 <button onClick={() => toggleProducts(s.code)} style={actionBtn()}>
                   {openCode === s.code ? 'Hide products' : 'Products'}
                 </button>
