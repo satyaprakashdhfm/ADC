@@ -242,15 +242,15 @@ export default function HomeProducts() {
              the photograph survives: `cover` on a 6.6:1 band in a short card crops most of its
              height away, so the extra room is the difference between a strip of boxes and the
              spread they were shot as. */
-          style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', color: 'var(--text-body)', padding: 'clamp(40px,5.2vw,72px) clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
+          style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', marginTop: 'clamp(28px,4vw,52px)', borderRadius: 'var(--radius-card)', overflow: 'hidden', color: 'var(--cream-100)', padding: 'clamp(40px,5.2vw,72px) clamp(22px,3vw,36px)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 260, flex: '1 1 320px' }}>
-            <span style={{ width: 46, height: 46, borderRadius: 13, background: 'var(--white-72)', color: 'var(--text-strong)', display: 'grid', placeItems: 'center', flex: 'none' }}><Briefcase size={22} /></span>
+            <span style={{ width: 46, height: 46, borderRadius: 13, background: 'var(--white-16)', color: 'var(--white)', display: 'grid', placeItems: 'center', flex: 'none' }}><Briefcase size={22} /></span>
             <div>
-              <h3 style={{ font: '900 clamp(1.3rem,1rem + 1.2vw,1.9rem)/1.1 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px', letterSpacing: '-.02em' }}>Corporate &amp; Bulk Gifting</h3>
-              {/* Dark body copy and no text shadow. Both existed to hold white type up against a
-                  scrim; there is no scrim now, and the card reads light. */}
-              <p style={{ color: 'var(--text-body)', margin: 0, fontSize: 'var(--text-sm)', lineHeight: 1.5, maxWidth: 460 }}>Cookies for teams, clients &amp; celebrations, with branded boxes, bulk pricing and coordinated delivery.</p>
+              <h3 style={{ font: '900 clamp(1.3rem,1rem + 1.2vw,1.9rem)/1.1 var(--font-display)', color: 'var(--white)', margin: '0 0 4px', letterSpacing: '-.02em' }}>Corporate &amp; Bulk Gifting</h3>
+              {/* White again, on a dark scrim. Full cream rather than a translucent one: at 72% it
+                  went muddy against the mid-tones of the photograph. */}
+              <p style={{ color: 'var(--cream-100)', margin: 0, fontSize: 'var(--text-sm)', lineHeight: 1.5, maxWidth: 460 }}>Cookies for teams, clients &amp; celebrations, with branded boxes, bulk pricing and coordinated delivery.</p>
             </div>
           </div>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '13px 22px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', flex: 'none', boxShadow: 'var(--shadow-brand)' }}>Enquire / Order in bulk <ArrowRight size={16} /></span>
