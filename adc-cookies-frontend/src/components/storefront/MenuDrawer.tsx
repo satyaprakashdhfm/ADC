@@ -76,7 +76,7 @@ export default function MenuDrawer({ open, onClose, onLoginOpen }: MenuDrawerPro
               </div>
             </div>
             <button
-              onClick={() => { onClose(); router.push(user.role === 'ADMIN' ? '/admin' : '/account'); }}
+              onClick={() => { onClose(); router.push('/account'); }}
               style={{ width: '100%', padding: '9px 0', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 8 }}
             ><User size={15} /> My Account</button>
             <button

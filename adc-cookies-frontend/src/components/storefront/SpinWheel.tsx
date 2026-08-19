@@ -279,10 +279,10 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
     } finally { setClaimBusy(false); }
   };
 
-  // Signed in from inside the wheel. Staff go to the admin instead of collecting a coupon.
-  const handleAuthSuccess = (role: string) => {
+  // Signed in from inside the wheel. Everyone who signs in here is claiming a coupon; there is no
+  // longer any such thing as an admin arriving through the storefront login.
+  const handleAuthSuccess = () => {
     setAuthLocked(false);
-    if (role === 'ADMIN') { close(); router.push('/admin'); return; }
     void claimForUser(activeReward?.code || (result?.win ? result.code : '') || '');
   };
 

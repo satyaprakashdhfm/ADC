@@ -460,6 +460,18 @@ export async function initSchema() {
     VALUES ('9381502998', 'ADC Admin', TRUE, NOW())
     ON CONFLICT (phone) DO NOTHING;
 
+    -- Retire admin from the users table. The role grants nothing now (see admin_accounts above), and
+    -- leaving rows that still say ADMIN invites someone to wire a check back to it later.
+    UPDATE users SET role = 'CUSTOMER' WHERE role = 'ADMIN';
+
+    -- And drop the old seeded admin account outright. Guarded on having no orders and no coupon
+    -- usage because both reference users with ON DELETE RESTRICT: a real account that happens to
+    -- carry this address must not be deleted out from under its own order history.
+    DELETE FROM users u
+     WHERE LOWER(u.email) = 'admin@adccookies.com'
+       AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)
+       AND NOT EXISTS (SELECT 1 FROM coupon_usage c WHERE c.user_id = u.id);
+
     -- Spin & Win wheel — exactly 5 real rewards + one "better luck next time" slot.
     -- Odds: 50% 5% off, 10% free filled cookie, 10% ₹75 off on ₹599, 1% free tin,
     -- 10% free mini cookie bowl on ₹1500, and the remaining 19% no reward.

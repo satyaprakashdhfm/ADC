@@ -99,7 +99,11 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
       : key === 'locations' ? STORES.map(s => ({ label: s.name, href: `/locations#store-${s.pincode}` }))
           : undefined;
   // Account icon → login modal (or account/admin page if already signed in).
-  const accountClick = () => { if (user) router.push(user.role === 'ADMIN' ? '/admin' : '/account'); else setLoginOpen(true); };
+  /* Always /account. It used to send a user whose row said role='ADMIN' to the dashboard, which is
+     how tapping the account icon on the homepage opened the admin. The two are separate systems now:
+     the storefront has no business routing anyone into the admin, and the admin has its own
+     phone-OTP sign-in at /admin. */
+  const accountClick = () => { if (user) router.push('/account'); else setLoginOpen(true); };
 
   return (
     <>
