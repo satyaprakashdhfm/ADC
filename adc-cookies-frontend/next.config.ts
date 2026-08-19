@@ -15,8 +15,26 @@ const nextConfig: NextConfig = {
   // Add whatever IP `next dev` prints under "Network:" (it can change with DHCP).
   allowedDevOrigins: ['192.168.1.24', '192.168.1.35', '192.168.1.37','192.168.1.42'],
   images: {
-    // The About-Us video's own YouTube thumbnail is used as its pre-play poster (see AboutVideo.tsx).
-    remotePatterns: [{ protocol: 'https', hostname: 'i.ytimg.com' }],
+    remotePatterns: [
+      // The About-Us video's own YouTube thumbnail is used as its pre-play poster (see AboutVideo.tsx).
+      { protocol: 'https', hostname: 'i.ytimg.com' },
+      /*
+       * Uploaded product photos and hero banners, which live in a PRIVATE Supabase Storage bucket and
+       * therefore arrive as signed URLs on the project's own supabase.co subdomain. Without this
+       * every uploaded photo would throw "hostname is not configured under images" and the whole
+       * catalogue would render broken — the storefront reaches these through <Image>, not <img>.
+       *
+       * Wildcarded because staging and production are two different Supabase projects with two
+       * different subdomains, and pinning both would mean this file has to be edited to add an
+       * environment. The cost of the wildcard is that our image optimizer would resize an object
+       * from any Supabase project if it were ever handed such a URL; nothing does, and the
+       * alternative is a config that silently breaks on the next project rename.
+       *
+       * Signatures rotate weekly, so each rotation is a fresh optimizer cache key. That churn is
+       * accepted in exchange for keeping the bucket private.
+       */
+      { protocol: 'https', hostname: '*.supabase.co', pathname: '/storage/v1/object/**' },
+    ],
   },
   async rewrites() {
     return [

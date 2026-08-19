@@ -1,21 +1,54 @@
 'use client';
-import { Users, ShoppingBag, Package, MessageSquare, IndianRupee, CalendarRange } from 'lucide-react';
+import { Users, ShoppingBag, Package, MessageSquare, IndianRupee, CalendarRange, XCircle, RefreshCw, AlertTriangle } from 'lucide-react';
 import { type AdminStats, type AdminAnalytics } from '@/lib/api';
 import { money, todayStr, daysAgoStr } from '../shared/format';
-import { card, inp, StatCard, Empty } from '../shared/ui';
-import { PIE, fillDays, SalesChart, BarRows, Donut } from './OverviewCharts';
+import { card, inp, iconBtn, StatCard, Empty } from '../shared/ui';
+import { fillDays, SalesChart, BarRows, Donut, stateColor } from './OverviewCharts';
 import OrderingStatusPanel from './OrderingStatusPanel';
 
 interface Props {
   stats: AdminStats | null;
   analytics: AdminAnalytics | null;
+  analyticsError: string;
+  onReloadAnalytics: () => void;
   range: { from: string; to: string };
   setRange: React.Dispatch<React.SetStateAction<{ from: string; to: string }>>;
   onOpenUsers: () => void;
+  onOpenCancelled: () => void;
   ordering: React.ComponentProps<typeof OrderingStatusPanel>;
 }
 
-export default function OverviewTab({ stats, analytics, range, setRange, onOpenUsers, ordering }: Props) {
+/** A chart card that says what went wrong instead of claiming there is no data. */
+function ChartCard({ title, right, error, onRetry, empty, children }: {
+  title: string; right?: React.ReactNode; error?: string; onRetry?: () => void;
+  empty?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <div style={{ ...card, padding: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+        <h3 style={{ fontSize: 'var(--text-h4)' }}>{title}</h3>
+        {right}
+      </div>
+      {error ? (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '14px 16px', borderRadius: 'var(--radius-input)', background: 'var(--status-error-bg)', color: 'var(--status-error)' }}>
+          <AlertTriangle size={17} style={{ flex: 'none', marginTop: 1 }} />
+          <div style={{ flex: 1, fontSize: 'var(--text-sm)' }}>
+            <strong style={{ display: 'block', marginBottom: 2 }}>This chart could not load.</strong>
+            <span style={{ opacity: 0.85 }}>{error}</span>
+          </div>
+          {onRetry && <button onClick={onRetry} style={{ ...iconBtn, marginRight: 0, flex: 'none' }} title="Try again"><RefreshCw size={15} /></button>}
+        </div>
+      ) : empty ? <Empty text="No data for this period." /> : children}
+    </div>
+  );
+}
+
+export default function OverviewTab({ stats, analytics, analyticsError, onReloadAnalytics, range, setRange, onOpenUsers, onOpenCancelled, ordering }: Props) {
+  const loading = !analytics && !analyticsError;
+  const series = analytics
+    ? fillDays(analytics.salesByDay, analytics.from || range.from, analytics.to || range.to, analytics.cancelledByDay || [])
+    : [];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Whether the shop can take money, above everything else. It used to live among the product
@@ -42,11 +75,14 @@ export default function OverviewTab({ stats, analytics, range, setRange, onOpenU
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14 }}>
         <StatCard icon={<Users size={20} />} label="Customers" value={stats ? String(stats.totalUsers) : '—'} onClick={onOpenUsers} />
-        <StatCard icon={<ShoppingBag size={20} />} label="Total orders" value={stats ? String(stats.totalOrders) : '—'} />
+        <StatCard icon={<ShoppingBag size={20} />} label="Orders" value={stats ? String(stats.totalOrders) : '—'} sub="Cancelled excluded" />
         <StatCard icon={<IndianRupee size={20} />} label="Revenue" value={stats ? money(stats.totalRevenue) : '—'} sub={stats ? `${money(stats.paidRevenue)} paid` : ''} />
-        <StatCard icon={<Package size={20} />} label="Products" value={stats ? String(stats.totalProducts) : '—'} />
+        {/* Its own card rather than a bar among the live statuses: an abandoned checkout is not a
+            stage an order passes through, it is the order not happening. */}
+        <StatCard icon={<XCircle size={20} />} label="Cancelled / failed" value={stats ? String(stats.cancelledOrders) : '—'} onClick={onOpenCancelled} accent={!!stats?.cancelledOrders} />
+        <StatCard icon={<Package size={20} />} label="Products" value={stats ? String(stats.totalProducts) : '—'} sub={stats && stats.unavailableProducts ? `${stats.unavailableProducts} unavailable` : 'all available'} />
         <StatCard icon={<MessageSquare size={20} />} label="New messages" value={stats ? String(stats.newMessages) : '—'} accent={!!stats?.newMessages} />
       </div>
 
@@ -84,31 +120,51 @@ export default function OverviewTab({ stats, analytics, range, setRange, onOpenU
         </div>
       </div>
 
-      {/* Sales — last 30 days */}
-      <div style={{ ...card, padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, gap: 12, flexWrap: 'wrap' }}>
-          <h3 style={{ fontSize: 'var(--text-h4)' }}>Sales over time</h3>
-          {analytics && <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', fontWeight: 700 }}>{money(analytics.salesByDay.reduce((s, d) => s + d.revenue, 0))} · {analytics.salesByDay.reduce((s, d) => s + d.orders, 0)} orders</span>}
-        </div>
-        {analytics ? <SalesChart data={fillDays(analytics.salesByDay, analytics.from || range.from, analytics.to || range.to)} /> : <div style={{ height: 200, display: 'grid', placeItems: 'center', color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>Loading…</div>}
+      {/* Sales over the chosen period */}
+      <ChartCard
+        title="Sales over time"
+        error={analyticsError}
+        onRetry={onReloadAnalytics}
+        right={analytics && (
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', fontWeight: 700 }}>
+            {money(analytics.salesByDay.reduce((s, d) => s + d.revenue, 0))} · {analytics.salesByDay.reduce((s, d) => s + d.orders, 0)} orders
+          </span>
+        )}
+      >
+        {loading
+          ? <div style={{ height: 232, display: 'grid', placeItems: 'center', color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>Loading…</div>
+          : <SalesChart data={series} />}
+      </ChartCard>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 16 }}>
+        <ChartCard title="Orders by city" error={analyticsError} onRetry={onReloadAnalytics} empty={!!analytics && !analytics.ordersByArea.length}>
+          {analytics
+            ? <BarRows items={analytics.ordersByArea.map(a => ({ label: a.city, value: a.orders, sub: `${a.orders} order${a.orders === 1 ? '' : 's'} · ${money(a.revenue)}` }))} />
+            : <Empty text="Loading…" />}
+        </ChartCard>
+
+        <ChartCard title="Customers by city" error={analyticsError} onRetry={onReloadAnalytics} empty={!!analytics && !analytics.usersByCity.length}>
+          {analytics
+            ? <BarRows color="var(--google-blue)" items={analytics.usersByCity.map(u => ({ label: u.city, value: u.users, sub: `${u.users} customer${u.users === 1 ? '' : 's'}` }))} />
+            : <Empty text="Loading…" />}
+        </ChartCard>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
-        <div style={{ ...card, padding: 20 }}>
-          <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Orders by city</h3>
-          {analytics?.ordersByArea.length ? <BarRows items={analytics.ordersByArea.map(a => ({ label: a.city, value: a.orders, sub: `${a.orders} order${a.orders === 1 ? '' : 's'} · ${money(a.revenue)}` }))} /> : <Empty text="No orders yet." />}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
-        <div style={{ ...card, padding: 20 }}>
-          <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Payments</h3>
-          {analytics?.paymentBreakdown.length ? <Donut segments={analytics.paymentBreakdown.map((p, i) => ({ label: p.status, value: p.count, color: PIE[i % PIE.length] }))} center={`${analytics.paymentBreakdown.reduce((s, p) => s + p.count, 0)}`} centerSub="orders" /> : <Empty text="No payments yet." />}
-        </div>
-        <div style={{ ...card, padding: 20 }}>
-          <h3 style={{ fontSize: 'var(--text-h4)', marginBottom: 14 }}>Shipments</h3>
-          {analytics?.shipmentByStatus.length ? <Donut segments={analytics.shipmentByStatus.map((s, i) => ({ label: s.status, value: s.count, color: PIE[i % PIE.length] }))} center={`${analytics.shipmentByStatus.reduce((s, x) => s + x.count, 0)}`} centerSub="shipments" /> : <Empty text="No shipments yet." />}
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 16 }}>
+        <ChartCard title="Payments" error={analyticsError} onRetry={onReloadAnalytics} empty={!!analytics && !analytics.paymentBreakdown.length}>
+          {analytics
+            ? <Donut
+                segments={analytics.paymentBreakdown.map((p, i) => ({ label: p.status, value: p.count, color: stateColor(p.status, i) }))}
+                center={`${analytics.paymentBreakdown.reduce((s, p) => s + p.count, 0)}`} centerSub="orders" />
+            : <Empty text="Loading…" />}
+        </ChartCard>
+        <ChartCard title="Shipments" error={analyticsError} onRetry={onReloadAnalytics} empty={!!analytics && !analytics.shipmentByStatus.length}>
+          {analytics
+            ? <Donut
+                segments={analytics.shipmentByStatus.map((s, i) => ({ label: s.status, value: s.count, color: stateColor(s.status, i) }))}
+                center={`${analytics.shipmentByStatus.reduce((s, x) => s + x.count, 0)}`} centerSub="orders" />
+            : <Empty text="Loading…" />}
+        </ChartCard>
       </div>
     </div>
   );

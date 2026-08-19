@@ -5,7 +5,7 @@ import { ApiError } from '../middleware.js';
 import {
   requireStoreUser, signStoreToken, checkPassword, hashPassword, storeAuthConfigured,
 } from '../storeAuth.js';
-import { storeRelaysToPos, storeProductAvailable } from '../stores.js';
+import { storeRelaysToPos, storeProductAvailable, resolveProductAvailability } from '../stores.js';
 import { trackShiprocket, getRiderData, shiprocketConfigured, walletStatus } from '../shiprocket.js';
 import { trackShipment, delhiveryConfigured } from '../delhivery.js';
 import { bookShipmentAndRelay } from './orders.js';
@@ -392,16 +392,98 @@ router.get('/menu', async (req, res) => {
       ORDER BY p.menu_group NULLS LAST, p.name`,
     [restId]
   );
-  res.json(rows.map((r) => ({
-    id: r.id, name: r.name, category: r.category, menuGroup: r.menu_group,
-    price: r.price, available: !!r.is_available,
-    // Whether THIS store carries it at all — separate from is_available, which is storewide.
-    // A Bengaluru-restricted item (or one with intracity switched off entirely) is a flat "no"
-    // at Besant Nagar regardless.
-    availableHere: !!r.is_available && storeProductAvailable(req.storeUser.storeCode, r),
-    posItemId: r.pos_item_id, posVariation: r.pos_variation,
-    posPrice: r.pos_price, posInStock: r.pos_in_stock,
-  })));
+  const code = req.storeUser.storeCode;
+  const overrides = await getAll('SELECT product_id, is_available FROM store_product_overrides WHERE store_code = $1', [code]);
+  const overrideBy = new Map(overrides.map((o) => [o.product_id, o.is_available]));
+
+  res.json(rows.map((r) => {
+    const override = overrideBy.has(r.id) ? overrideBy.get(r.id) : null;
+    return {
+      id: r.id, name: r.name, category: r.category, menuGroup: r.menu_group,
+      price: r.price, available: !!r.is_available,
+      // Whether THIS store carries it at all — separate from is_available, which is storewide.
+      // A Bengaluru-restricted item (or one with intracity switched off entirely) is a flat "no"
+      // at Besant Nagar regardless.
+      /* is_available is checked HERE and not inside resolveProductAvailability, which only knows
+         about the intracity/city rule. Without it a store override of "on" would put a product the
+         shop has taken off the menu entirely back on sale at one outlet. Storewide off wins. */
+      availableHere: !!r.is_available && resolveProductAvailability(code, r, override),
+      /* The two halves of "why is it off", so the portal can tell the store which of them it is
+         allowed to change. `automaticallyAvailable` is the rule (storewide availability plus the
+         city restriction); `isOverride` is a decision somebody made for this store specifically. */
+      automaticallyAvailable: !!r.is_available && storeProductAvailable(code, r),
+      isOverride: override != null,
+      posItemId: r.pos_item_id, posVariation: r.pos_variation,
+      posPrice: r.pos_price, posInStock: r.pos_in_stock,
+    };
+  }));
+});
+
+/* ---------- What this store is currently able to sell ---------- */
+
+/*
+ * A store minding its own shop.
+ *
+ * Two things a counter genuinely needs to do without phoning head office: close for the day (the
+ * oven is down, the shutter is closed, nobody is in) and turn one item off (the cream cheese ran
+ * out). Both used to be admin-only, so the alternative was a store taking orders it could not bake.
+ *
+ * Everything here is scoped to req.storeUser.storeCode, which comes from the signed token and never
+ * from the request. There is deliberately no :code parameter to get wrong — a store cannot address
+ * another store's row even by trying, which is the same rule the orders endpoints above follow.
+ *
+ * What a store still CANNOT do: change which delivery kinds it serves (serviceMode), touch a product
+ * for anyone but itself, or cancel anything. Those move money or affect other shops.
+ */
+router.get('/availability', async (req, res) => {
+  const code = req.storeUser.storeCode;
+  const row = await getOne('SELECT is_active FROM store_status WHERE store_code = $1', [code]);
+  // No row at all means open — the same reading isStoreActive() in stores.js takes, which is what
+  // the checkout quote and order creation both consult.
+  res.json({ code, isActive: row ? !!row.is_active : true });
+});
+
+router.patch('/availability', async (req, res) => {
+  const code = req.storeUser.storeCode;
+  const isActive = req.body?.isActive;
+  if (typeof isActive !== 'boolean') throw new ApiError('Say whether the store is open: isActive must be true or false.');
+  await query(
+    `INSERT INTO store_status (store_code, is_active, updated_at) VALUES ($1, $2, $3)
+     ON CONFLICT (store_code) DO UPDATE SET is_active = EXCLUDED.is_active, updated_at = EXCLUDED.updated_at`,
+    [code, isActive, nowIso()]
+  );
+  console.log(`[STORE] ${code} | ${req.storeUser.username} turned the store ${isActive ? 'ON' : 'OFF'}`);
+  res.json({ ok: true, code, isActive });
+});
+
+/*
+ * Turn one product on or off at THIS store.
+ *
+ * `available: null` clears the store's decision and hands the item back to the automatic rule, which
+ * is the only way to undo an "off" without guessing what the rule would have said. Writing `true`
+ * for something the rule already refuses is allowed on purpose — an admin restriction is a default,
+ * and a store that has the ingredient today should be able to sell it.
+ */
+router.put('/menu/:productId/availability', async (req, res) => {
+  const code = req.storeUser.storeCode;
+  const productId = Number(req.params.productId);
+  const product = await getOne('SELECT id, name FROM products WHERE id = $1', [productId]);
+  if (!product) throw new ApiError('No such product');
+
+  const available = req.body?.available;
+  if (available === null) {
+    await query('DELETE FROM store_product_overrides WHERE store_code = $1 AND product_id = $2', [code, productId]);
+  } else if (typeof available === 'boolean') {
+    await query(
+      `INSERT INTO store_product_overrides (store_code, product_id, is_available, updated_at) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (store_code, product_id) DO UPDATE SET is_available = EXCLUDED.is_available, updated_at = EXCLUDED.updated_at`,
+      [code, productId, available, nowIso()]
+    );
+  } else {
+    throw new ApiError('available must be true, false, or null to go back to the default.');
+  }
+  console.log(`[STORE] ${code} | ${req.storeUser.username} set ${product.name} to ${available === null ? 'default' : available ? 'ON' : 'OFF'}`);
+  res.json({ ok: true });
 });
 
 export default router;

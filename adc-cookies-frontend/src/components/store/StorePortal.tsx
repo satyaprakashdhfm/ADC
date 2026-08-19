@@ -5,11 +5,12 @@ import {
   AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink, Volume2,
 } from 'lucide-react';
 import StoreSignIn from './StoreSignIn';
+import StoreMenuBoard from './StoreMenuBoard';
 import {
-  storeMe, storeOrders, storeTrack, storeMenu,
+  storeMe, storeOrders, storeTrack,
   storeAcceptOrder, storeMarkReady, storeSetPosBill, storeChangePassword,
   getStoreToken, clearStoreToken, StoreAuthError,
-  type StoreSession, type StoreOrder, type StoreTrack, type StoreMenuItem, type StoreOrdersResponse,
+  type StoreSession, type StoreOrder, type StoreTrack, type StoreOrdersResponse,
 } from '@/lib/storeApi';
 
 /*
@@ -298,7 +299,6 @@ export default function StorePortal({ code }: { code: string }) {
   const [session, setSession] = useState<StoreSession | null>(null);
   const [booting, setBooting] = useState(true);
   const [orders, setOrders] = useState<StoreOrder[] | null>(null);
-  const [menu, setMenu] = useState<StoreMenuItem[] | null>(null);
   const [view, setView] = useState<'orders' | 'menu'>('orders');
   const [tracks, setTracks] = useState<Record<number, StoreTrack>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -491,7 +491,6 @@ export default function StorePortal({ code }: { code: string }) {
     return () => { clearInterval(t); window.removeEventListener('focus', onFocus); };
   }, [session, refresh]);
 
-  useEffect(() => { if (view === 'menu' && menu === null) storeMenu(code).then(setMenu).catch(() => setMenu([])); }, [view, menu, code]);
 
   // Unaccepted orders in the tab title, so an alert is visible on a tablet parked on another app.
   const waitingCount = (orders || []).filter(o => !o.workflow.acceptedAt && o.status !== 'CANCELLED').length;
@@ -586,7 +585,7 @@ export default function StorePortal({ code }: { code: string }) {
             </div>
           </div>
           <button onClick={() => setView(view === 'orders' ? 'menu' : 'orders')} style={btn()}>
-            {view === 'orders' ? <><BookOpen size={15} /> Menu</> : <><ClipboardList size={15} /> Orders</>}
+            {view === 'orders' ? <><BookOpen size={15} /> Menu &amp; stock</> : <><ClipboardList size={15} /> Orders</>}
           </button>
           <button onClick={() => refresh(false)} style={btn()} title="Refresh"><RefreshCw size={15} /></button>
           {/* Lets staff confirm the alarm actually works, at the start of a shift, without waiting
@@ -634,29 +633,11 @@ export default function StorePortal({ code }: { code: string }) {
         )}
 
         {view === 'menu' ? (
-          <>
-            <h2 style={{ fontSize: 20, fontWeight: 900, margin: '0 0 6px' }}>Menu</h2>
-            <p style={{ fontSize: 14, color: 'var(--text-muted, #7b6a58)', margin: '0 0 18px' }}>
-              What the website sells and what each item costs there. {manual && 'The POS code is from the main outlet — use it to find the item, but check the name and price match on your own terminal.'}
-            </p>
-            {menu === null ? <p>Loading…</p> : (
-              <div style={{ ...wrap, overflow: 'hidden' }}>
-                {menu.map((m, i) => (
-                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderTop: i ? '1px solid var(--border-soft, #f0ebe1)' : 'none', opacity: m.availableHere ? 1 : 0.55 }}>
-                    <div style={{ flex: 1 }}>
-                      <strong style={{ fontSize: 15 }}>{m.name}</strong>
-                      {m.posItemId && <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-subtle, #a4988a)' }}>POS code {m.posItemId}</div>}
-                      {m.available && !m.availableHere && (
-                        <div style={{ fontSize: 11, color: '#9a5a00', fontWeight: 700, marginTop: 2 }}>Not carried at this store — same-day delivery is restricted elsewhere</div>
-                      )}
-                    </div>
-                    <span style={{ fontSize: 15, fontWeight: 800 }}>{money(m.price)}</span>
-                    {!m.available ? <Chip text="Off" tone="bad" /> : m.availableHere ? <Chip text="On sale" tone="ok" /> : <Chip text="Not here" tone="warn" />}
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+          /* Its own component now, because it stopped being a read-only list: it holds the shop's
+             open/closed switch and a per-item on/off, each with its own loading and error state.
+             Keeping that inside this file would have added a third set of them to a component that
+             already owns the order board and the new-order alarm. */
+          <StoreMenuBoard code={code} storeName={session.store.name} manual={manual} onAuthError={signOut} />
         ) : orders === null ? <p>Loading orders…</p> : (
           <>
             {section('New — accept these', waiting, 'Nothing waiting. New orders appear here the moment they are paid for.')}

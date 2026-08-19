@@ -38,16 +38,16 @@ export default function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: 
     catch { setProducts([]); }
   };
 
-  /* Which delivery kinds a store takes part in. Narrowing every store in one zone to Parcels only
+  /* Which delivery kinds a store takes part in. Narrowing every store in one zone to Intercity only
      does not close that zone — the server falls back to the nearest open store rather than refusing
-     the city — so this cannot accidentally stop same-day for a whole city. */
+     the city — so this cannot accidentally stop intracity for a whole city. */
   const setServiceMode = async (code: string, mode: StoreServiceMode) => {
     setBusy(`${code}:mode`); setErr('');
     try {
       await adminSetStoreServiceMode(code, mode);
-      setNotice(mode === 'BOTH' ? 'Store takes both same-day and parcel orders.'
-        : mode === 'INTRACITY' ? 'Store is same-day only — it will not be used as an outstation pickup.'
-        : 'Store is parcels only — it will not be picked for same-day.');
+      setNotice(mode === 'BOTH' ? 'Store takes both intracity and intercity orders.'
+        : mode === 'INTRACITY' ? 'Store is intracity only — it will not be used as an intercity pickup.'
+        : 'Store is intercity only — it will not be picked for intracity orders.');
       load();
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'That did not work'); }
     finally { setBusy(null); }
@@ -64,10 +64,14 @@ export default function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: 
 
   return (
     <Panel title="Store &amp; product availability" loading={stores === null} action={<button onClick={load} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.6 }}>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 8px', lineHeight: 1.6 }}>
         Take a whole store offline (it stops receiving new orders) or turn one product on/off for just one store —
         e.g. Red Velvet already hides outside Bengaluru automatically, but this also lets you turn it off at a
         single Bengaluru store specifically, for a one-off reason like running out of it for the day.
+      </p>
+      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '0 0 14px', lineHeight: 1.6 }}>
+        Each store can do these two things for itself from its own portal, so a shop that has run out does not
+        have to wait on anyone here. Which delivery kinds a store serves is set only here.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {stores?.map(s => (
@@ -78,12 +82,17 @@ export default function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: 
               <Badge text={s.isActive ? 'Online' : 'Offline'} ok={s.isActive} />
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {/* Three-way, not two toggles: the states are mutually exclusive, and a pair of
-                    checkboxes would let an admin turn both off and mean nothing by it. */}
+                    checkboxes would let an admin turn both off and mean nothing by it.
+
+                    Labelled Intracity/Intercity, the same two words the product list and the product
+                    editor use. These read "Same-day" and "Parcels" while the switches they mirror on
+                    a product said Intracity/Intercity, so the same distinction had two names
+                    depending on which panel you were looking at. */}
                 <span style={{ display: 'inline-flex', borderRadius: 'var(--radius-pill)', border: '1px solid var(--border-strong)', overflow: 'hidden' }}>
-                  {([['BOTH', 'Both'], ['INTRACITY', 'Same-day'], ['INTERCITY', 'Parcels']] as [StoreServiceMode, string][]).map(([mode, label]) => (
+                  {([['BOTH', 'Both'], ['INTRACITY', 'Intracity'], ['INTERCITY', 'Intercity']] as [StoreServiceMode, string][]).map(([mode, label]) => (
                     <button key={mode} disabled={busy === `${s.code}:mode` || s.serviceMode === mode}
                       onClick={() => setServiceMode(s.code, mode)}
-                      title={mode === 'BOTH' ? 'Same-day and outstation parcels' : mode === 'INTRACITY' ? 'Same-day only — never an outstation pickup' : 'Outstation parcels only — not picked for same-day'}
+                      title={mode === 'BOTH' ? 'Intracity same-day and intercity parcels' : mode === 'INTRACITY' ? 'Intracity only — never an intercity pickup' : 'Intercity parcels only — not picked for intracity'}
                       style={{
                         border: 'none', padding: '5px 11px', fontFamily: 'var(--font-body)', fontSize: 'var(--text-2xs)', fontWeight: 800,
                         cursor: s.serviceMode === mode ? 'default' : 'pointer',

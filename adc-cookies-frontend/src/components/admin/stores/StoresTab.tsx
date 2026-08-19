@@ -26,6 +26,13 @@ export default function StoresTab({ storeReport, staffBusy, setStaffBusy, onRefr
           their store&apos;s own page and work only their own orders: accept, bake, mark ready. They cannot
           cancel anything or see another store&apos;s work.
         </p>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', margin: '0 0 10px', lineHeight: 1.6 }}>
+          A store can also <strong>close itself for the day</strong> and <strong>turn an item off</strong> when
+          it runs out, from its own page — the same two switches as the panel below, scoped to that one shop.
+          It was worth giving them: the alternative was a counter with a broken oven taking orders it could not
+          bake until somebody here picked up the phone. Anything wider than their own shop still only happens
+          from here.
+        </p>
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', margin: 0, lineHeight: 1.6 }}>
           <strong>Petpooja has one outlet configured for us — Begur.</strong> Begur&apos;s orders are pushed
           there automatically. Every other store bills the order on its own Petpooja terminal and types the

@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, storeByCode, deliveryEligible, isStoreActive } from '../stores.js';
+import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, storeByCode, deliveryEligible, isStoreActive, storeBlockedProductIds } from '../stores.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore, getWalletBalance } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -492,6 +492,47 @@ router.post('/', async (req, res) => {
     }
     console.log(`[ORDER] create | ${fulfillingStore.code} is closed → ${open[0].code}`);
     fulfillingStore = open[0];
+  }
+
+  /*
+   * The store that will bake this has to actually have it.
+   *
+   * A per-store "we have run out of that" switch has existed for a while, and until now it changed
+   * what the admin panel and the store portal displayed and nothing else — no customer path read it.
+   * So an item a kitchen had turned off could still be ordered, paid for, and land on that kitchen's
+   * board. Now that a store can flip that switch itself, that gap is the difference between the
+   * feature working and the feature being decorative.
+   *
+   * Tried the same way a closed store is: hand the order to the nearest open store in the zone that
+   * DOES carry everything, before refusing it. Refusing outright would turn one shop running out of
+   * one cookie into a rejected order for a city with another shop a mile away that has it. Outstation
+   * has no zone stores to fall back to, so there the first answer is the only answer, which is right —
+   * the warehouse either has it or nobody does.
+   */
+  if (fulfillingStore) {
+    const productIds = lineItems.map((li) => li.product?.id).filter(Boolean);
+    let blocked = await storeBlockedProductIds(fulfillingStore.code, productIds);
+    if (blocked.size) {
+      const candidates = orderStoresByProximity(await activeZoneStores(destPin), address?.latitude, address?.longitude);
+      for (const candidate of candidates) {
+        if (candidate.code === fulfillingStore.code) continue;
+        const theirs = await storeBlockedProductIds(candidate.code, productIds);
+        if (!theirs.size) {
+          console.log(`[ORDER] create | ${fulfillingStore.code} is out of an item → ${candidate.code}`);
+          fulfillingStore = candidate;
+          blocked = theirs;
+          break;
+        }
+      }
+    }
+    if (blocked.size) {
+      const names = [...new Set(lineItems.filter((li) => blocked.has(li.product?.id)).map((li) => li.productName))];
+      console.log(`[ORDER] create | ✗ store_out_of_stock | store=${fulfillingStore.code} | ${names.join(', ')}`);
+      throw new ApiError(
+        `${names.join(' and ')} ${names.length === 1 ? 'has' : 'have'} sold out at the store that would make this order. `
+        + `Remove ${names.length === 1 ? 'it' : 'them'} to continue, or try again later.`
+      );
+    }
   }
 
   const intracity = zoneStores(destPin).length > 0;

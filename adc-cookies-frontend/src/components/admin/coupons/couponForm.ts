@@ -8,7 +8,9 @@ export type CouponDraft = {
   isSpin: boolean; spinWeight: string; spinLabel: string; terms: string;
 };
 export const EMPTY_COUPON: CouponDraft = { code: '', discountType: 'PERCENTAGE', discountValue: '', minimumOrderAmount: '', maximumDiscount: '', validDays: '', usageLimit: '', isSpin: false, spinWeight: '', spinLabel: '', terms: '' };
-export const EMPTY_SPIN_COUPON: CouponDraft = { ...EMPTY_COUPON, discountType: 'FIXED', isSpin: true };
+/* EMPTY_SPIN_COUPON is gone with the Spin Wheel panel's own "New offer" button. A wheel offer
+   starts life as a normal coupon draft and becomes one by ticking isSpin in the editor, which is
+   also the only way an existing one can be changed — one path in, one path out. */
 // Prefill the form from an existing coupon, for editing.
 export function couponToDraft(c: AdminCoupon): CouponDraft {
   const days = c.expiryDate ? Math.max(1, Math.ceil((new Date(c.expiryDate).getTime() - Date.now()) / 864e5)) : null;

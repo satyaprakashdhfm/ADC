@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db.js';
 import { ApiError } from '../../middleware.js';
-import { serializeProduct } from '../../serializers.js';
+import { serializeProduct, withImageUrls } from '../../serializers.js';
 import { ADC_STORES } from '../../stores.js';
 import { relayOrder, unmappedProducts } from '../../petpooja.js';
 
@@ -86,9 +86,9 @@ router.post('/petpooja/mapping/create-product', async (req, res) => {
     productId = existing.id;   // don't duplicate a product that is already there — just link it
   } else {
     const row = await getOne(
-      `INSERT INTO products (name, category, description, price, stock_quantity, images, options,
+      `INSERT INTO products (name, category, description, price, images, options,
                              is_available, menu_group, tag, featured, created_at, updated_at)
-       VALUES ($1,'COOKIES',$2,$3,0,NULL,NULL,$4,NULL,NULL,FALSE,$5,$5) RETURNING id`,
+       VALUES ($1,'COOKIES',$2,$3,NULL,NULL,$4,NULL,NULL,FALSE,$5,$5) RETURNING id`,
       [name, `Imported from Petpooja (item ${item.item_id})`, Number(item.price) || 0, !!item.in_stock, ts]);
     productId = row.id;
   }
@@ -99,7 +99,7 @@ router.post('/petpooja/mapping/create-product', async (req, res) => {
     [productId, ts, restId, String(itemId), String(variationId)]);
 
   const product = await getOne('SELECT * FROM products WHERE id = $1', [productId]);
-  res.json({ ok: true, created: !existing, product: serializeProduct(product) });
+  res.json({ ok: true, created: !existing, product: await withImageUrls(serializeProduct(product)) });
 });
 
 // Link or unlink one of their items to one of our products. product_id null clears the link.

@@ -125,7 +125,12 @@ export async function logLoginLocation(): Promise<{ ok: boolean }> {
 /* ---- Products ---- */
 export interface Product {
   id: number; name: string; category: ProductCategory;
-  description: string; price: number; stockQuantity: number;
+  description: string; price: number;
+  /** The stored image references — 'supabase://products/…' for an upload, or a legacy '/assets/…'
+   *  path. This is what an editor must send back on save. */
+  imageRefs: string[];
+  /** The same list resolved to loadable URLs, which for an uploaded file is a SIGNED url that
+   *  expires. Display only — writing it back would store a link that dies in a week. */
   images: string; options: string; isAvailable: boolean;
   menuGroup: string; tag: string; featured: boolean;
   /** Per-delivery-mode availability, each with the reason to show the customer when off (e.g. Red
@@ -444,9 +449,12 @@ export async function checkDeliveryPin(pincode: string, lat?: number | null, lng
 
 /* ---- Admin ---- */
 export interface AdminStats {
-  totalOrders: number; totalRevenue: number; paidRevenue: number;
-  totalProducts: number; totalUsers: number; totalAdmins: number;
-  lowStock: number; newMessages: number;
+  /** Cancelled orders are excluded from every figure here and counted separately, so these agree
+   *  with the Orders tab. An abandoned checkout is not revenue and not an order. */
+  totalOrders: number; cancelledOrders: number; totalRevenue: number; paidRevenue: number;
+  totalProducts: number; unavailableProducts: number;
+  totalUsers: number; totalAdmins: number;
+  newMessages: number;
   ordersByStatus: Record<string, number>;
   topProducts: { name: string; qty: number; revenue: number }[];
 }
@@ -456,7 +464,8 @@ export interface CouponInput { code: string; discountType: 'PERCENTAGE' | 'FIXED
 export interface AdminMessage { id: number; name: string; email: string; phone?: string | null; message: string; handled: boolean; createdAt: string; }
 export interface ProductInput {
   name: string; category: ProductCategory; description?: string; price: number;
-  stockQuantity?: number; images?: string; options?: string; isAvailable?: boolean;
+  /** Stored references, never the signed display URLs. See Product.imageRefs. */
+  imageRefs?: string[]; options?: string; isAvailable?: boolean;
   menuGroup?: string; tag?: string; featured?: boolean;
   intracityAvailable?: boolean; intracityUnavailableReason?: string;
   intercityAvailable?: boolean; intercityUnavailableReason?: string;
@@ -466,6 +475,8 @@ export interface ProductInput {
 export interface AdminAnalytics {
   from?: string; to?: string;
   salesByDay: { day: string; orders: number; revenue: number; paid: number }[];
+  /** Abandoned/cancelled orders per day, kept out of salesByDay so they cannot inflate revenue. */
+  cancelledByDay: { day: string; orders: number }[];
   ordersByArea: { city: string; orders: number; revenue: number }[];
   usersByCity: { city: string; users: number }[];
   paymentBreakdown: { status: string; count: number; amount: number }[];
@@ -473,7 +484,37 @@ export interface AdminAnalytics {
   topProducts: { name: string; qty: number; revenue: number }[];
 }
 
-interface SiteSettings { bannerMessages: string[]; deliveryFeeOutstation: number; orderingPaused: string | null; }
+/**
+ * The home page's hero photograph.
+ *
+ * Two images because the hero is art-directed: a 2:1 landscape has its sides cropped away on a
+ * portrait phone, so desktop and mobile get their own crop. Either may be empty, in which case the
+ * storefront keeps the file it ships.
+ */
+export interface HeroBannerRefs {
+  /** Stored references. This is what a save sends back. */
+  desktopRef: string | null;
+  mobileRef: string | null;
+  href: string | null;
+  alt: string | null;
+}
+export interface HeroBannerUrls {
+  /** Resolved for display. Signed, and therefore expiring — never save these. */
+  desktop: string | null;
+  mobile: string | null;
+  href: string | null;
+  alt: string | null;
+}
+export interface HeroSizes { desktop: { width: number; height: number; note?: string }; mobile: { width: number; height: number; note?: string } }
+
+interface SiteSettings {
+  bannerMessages: string[];
+  heroBanner: HeroBannerRefs;
+  heroBannerUrls: HeroBannerUrls;
+  heroSizes: HeroSizes;
+  deliveryFeeOutstation: number;
+  orderingPaused: string | null;
+}
 export async function adminDashboard(): Promise<AdminStats> { return request('/admin/dashboard'); }
 export async function adminGetSettings(): Promise<SiteSettings> { return request('/admin/settings'); }
 /** The rotating lines in the top ribbon, in order. At least one is required — the ribbon's height
@@ -482,6 +523,10 @@ export async function adminSetBannerMessages(bannerMessages: string[]): Promise<
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ bannerMessages }) });
 }
 /** Pause or resume online ordering. The message IS the switch — clearing it goes live. */
+/** The hero photograph and where clicking it goes. Sends REFERENCES, never the signed URLs. */
+export async function adminSetHeroBanner(heroBanner: HeroBannerRefs): Promise<SiteSettings> {
+  return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ heroBanner }) });
+}
 export async function adminSetOrderingPaused(orderingPaused: string | null): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ orderingPaused }) });
 }
@@ -522,6 +567,10 @@ export async function adminSetStoreProductOverride(code: string, productId: numb
 }
 // Public: the rotating top-ribbon lines, in the order the admin arranged them.
 export async function getAnnouncement(): Promise<{ messages: string[]; text: string | null }> { return request('/products/announcement'); }
+
+/** Public: the hero photograph, resolved. Fetched at run time because a signed URL expires — one
+ *  baked into the build would stop working a week after a deploy. */
+export async function getHeroBanner(): Promise<HeroBannerUrls> { return request('/products/hero-banner'); }
 // Public: today's stall/store-visit note (or null if the admin hasn't set one).
 /** Our own record of what happened to an order — placed, paid, accepted, packed, shipped. Separate
  *  from the carrier's scans, and the half of the story a carrier's tracking page never has. */
@@ -677,6 +726,46 @@ export async function adminRetryPosRelay(orderId: number): Promise<{ ok: boolean
 }
 
 export async function adminGetProducts(): Promise<Product[]> { return request('/admin/products'); }
+/* ---- Uploaded media (private bucket, signed reads) ---- */
+
+export interface UploadedMedia {
+  /** Store this. */
+  ref: string;
+  /** Show this. It expires — see the note on Product.images. */
+  url: string;
+  bytes: number;
+  contentType: string;
+}
+
+/**
+ * Send one image to the admin upload endpoint.
+ *
+ * The file's bytes ARE the request body, with the file's own content type — no multipart, no
+ * FormData. request() is bypassed because it hard-codes application/json and would stringify a
+ * Blob into "[object Object]"; the admin token has to be attached by hand here for the same reason.
+ */
+export async function adminUploadMedia(file: File, kind: 'product' | 'hero'): Promise<UploadedMedia> {
+  const headers: Record<string, string> = { 'Content-Type': file.type || 'application/octet-stream' };
+  const at = adminSessionToken.get();
+  if (at) headers['X-Admin-Token'] = at;
+
+  const qs = `?kind=${encodeURIComponent(kind)}&name=${encodeURIComponent(file.name || 'image')}`;
+  const res = await fetch(`${API_BASE}/admin/uploads${qs}`, { method: 'POST', headers, body: file });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const e: ApiRequestError = new Error(err.message || err.error || `Upload failed (HTTP ${res.status})`);
+    e.code = err.code; e.status = res.status;
+    if (e.code === 'ADMIN_AUTH_REQUIRED' || e.code === 'ADMIN_SESSION_EXPIRED' || e.code === 'ADMIN_REVOKED') adminSessionToken.clear();
+    throw e;
+  }
+  return res.json();
+}
+
+/** Delete an uploaded object. Only for a ref nothing points at any more. */
+export async function adminDeleteMedia(ref: string): Promise<{ ok: boolean }> {
+  return request('/admin/uploads', { method: 'DELETE', body: JSON.stringify({ ref }) });
+}
+
 export async function adminCreateProduct(data: ProductInput): Promise<Product> {
   return request('/admin/products', { method: 'POST', body: JSON.stringify(data) });
 }

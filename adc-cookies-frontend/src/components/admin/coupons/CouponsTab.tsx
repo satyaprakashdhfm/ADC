@@ -4,7 +4,7 @@ import { type AdminCoupon } from '@/lib/api';
 import { PAGE_SIZE } from '@/hooks/admin/usePagination';
 import { money, fmtDate } from '../shared/format';
 import { td, inp, addBtn, iconBtn, Panel, Table, Badge, Empty, Field, FilterBar, Pager } from '../shared/ui';
-import { couponStatus, EMPTY_COUPON, EMPTY_SPIN_COUPON, type CouponDraft } from './couponForm';
+import { couponStatus, EMPTY_COUPON, type CouponDraft } from './couponForm';
 
 interface Props {
   coupons: AdminCoupon[] | null;
@@ -76,13 +76,16 @@ export default function CouponsTab({ coupons, search, onSearch, statusFilter, on
           award, each with its own odds (weight %), usage limit, active window, and terms. ===== */}
       <div style={{ marginTop: 24 }}>
         <Panel title={`Spin Wheel Offers${coupons ? ` (${spinCoupons.length})` : ''}`} loading={coupons === null}
+          /* No "New offer" button here.
+             A wheel offer is not a different kind of thing from a coupon — it is a coupon with a
+             weight — and having its own Add button implied otherwise, and made it the one place a
+             coupon could be created without going past the fields that decide when it is valid.
+             Offers are still made the same way they are edited: "New coupon" above, then tick
+             "Show on the Spin & Win wheel". */
           action={
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button onClick={onResetAllSpins} disabled={resettingSpins} style={{ ...iconBtn, width: 'auto', padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 700, fontSize: 'var(--text-xs)', opacity: resettingSpins ? 0.6 : 1 }}>
-                <RefreshCw size={14} /> {resettingSpins ? 'Resetting…' : 'Reset all spins'}
-              </button>
-              <button onClick={() => onNewCoupon({ ...EMPTY_SPIN_COUPON })} style={addBtn}><Plus size={16} /> New offer</button>
-            </div>
+            <button onClick={onResetAllSpins} disabled={resettingSpins} style={{ ...iconBtn, width: 'auto', padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 700, fontSize: 'var(--text-xs)', opacity: resettingSpins ? 0.6 : 1 }}>
+              <RefreshCw size={14} /> {resettingSpins ? 'Resetting…' : 'Reset all spins'}
+            </button>
           }>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 6px', lineHeight: 1.5 }}>
             Each offer&apos;s <strong>Weight</strong> is its % chance of landing when someone spins. Weights across active offers currently sum to <strong>{totalSpinWeight.toFixed(1)}%</strong> — the remaining <strong>{noRewardChance.toFixed(1)}%</strong> is &quot;Better luck next time&quot;.
@@ -91,7 +94,7 @@ export default function CouponsTab({ coupons, search, onSearch, statusFilter, on
             <strong>How odds are guaranteed:</strong> every 1,000 spins draw from one shuffled batch pre-built to these exact weights (e.g. 5% weight = exactly 50 of the 1,000) — a real ratio per batch, not just an average over time. The batch auto-rebuilds the moment you change a weight here, and again once it runs out.
           </p>
           <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '0 0 14px', lineHeight: 1.5 }}>
-            <strong>One spin per customer:</strong> it's a single lifetime spin per device/account, not a daily reset — once their result (win or miss) is drawn, that's it for good. Use <strong>Reset all spins</strong> above to wipe everyone's record at once and open a fresh round (already-won coupons aren't affected).</p>
+            <strong>One spin per customer:</strong> it&apos;s a single lifetime spin per device/account, not a daily reset — once their result (win or miss) is drawn, that&apos;s it for good. Use <strong>Reset all spins</strong> above to wipe everyone&apos;s record at once and open a fresh round (already-won coupons aren&apos;t affected).</p>
           <Table head={['Wheel label', 'Code', 'Discount', 'Weight', 'Uses', 'Status', '']}>
             {spinCoupons.map(c => {
               const st = couponStatus(c);
@@ -108,7 +111,7 @@ export default function CouponsTab({ coupons, search, onSearch, statusFilter, on
               );
             })}
           </Table>
-          {coupons && !spinCoupons.length && <Empty text="No Spin Wheel offers yet — create one above." />}
+          {coupons && !spinCoupons.length && <Empty text={'No Spin Wheel offers yet. Add one with "New coupon" above, ticking "Show on the Spin & Win wheel".'} />}
         </Panel>
       </div>
     </>
