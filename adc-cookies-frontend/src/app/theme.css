@@ -142,11 +142,6 @@
   --espresso-30: rgba(20,12,4,.30);
   --espresso-10: rgba(20,12,4,.10);
 
-  /* Warm scrims for laying white type over a photograph without going black. The espresso set
-     above turns a colour photo grey-brown; these keep it in the brand's own orange. */
-  --brand-scrim-92: rgba(210,98,10,.92);
-  --brand-scrim-58: rgba(239,117,7,.58);
-  --brand-scrim-16: rgba(239,117,7,.16);
   /* Cream-100 (#FFF8F1) translucent — glass panels, hairlines on dark */
   --cream-100-72: rgba(255,248,241,.72);
   --cream-100-68: rgba(255,248,241,.68);
