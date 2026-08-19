@@ -55,8 +55,9 @@ export default function CookiesSoldCounter() {
   return (
     <div
       style={{
-        marginTop: 18,
-        padding: '14px 16px',
+        // No margin of its own — the footer positions it (bottom of the brand column), and a
+        // component that also nudges itself fights whatever places it next.
+        padding: '18px 20px',
         borderRadius: 'var(--radius-card)',
         /* Deep warm near-black, the token the theme already reserves for badge fills. A white tint
            over an orange footer is barely a shade lighter than the orange, which is why the original
@@ -70,20 +71,20 @@ export default function CookiesSoldCounter() {
     >
       {/* Warm glow behind the figure. Decorative only, and pointer-events-free so it can never
           swallow a tap meant for something underneath it. */}
-      <span aria-hidden style={{ position: 'absolute', top: -30, right: -30, width: 100, height: 100, borderRadius: '50%', background: 'radial-gradient(circle, var(--brand-scrim-16) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <span aria-hidden style={{ position: 'absolute', top: -34, right: -34, width: 118, height: 118, borderRadius: '50%', background: 'radial-gradient(circle, var(--brand-scrim-16) 0%, transparent 70%)', pointerEvents: 'none' }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, position: 'relative' }}>
-        <span aria-hidden style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none', boxShadow: '0 2px 8px var(--black-28)' }}>
-          <Cookie size={17} color="var(--white)" />
+        <span aria-hidden style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none', boxShadow: '0 2px 8px var(--black-28)' }}>
+          <Cookie size={21} color="var(--white)" />
         </span>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <b style={{ color: 'var(--amber-300)', font: `900 var(--text-h4)/1 var(--font-display)`, letterSpacing: '-.01em' }}>
+            <b style={{ color: 'var(--amber-300)', font: `900 var(--text-h3)/1 var(--font-display)`, letterSpacing: '-.01em' }}>
               {n.toLocaleString('en-IN')}+
             </b>
             {/* Live dot — the number really is ticking, and this is what says so. */}
             <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
           </div>
-          <span style={{ color: 'var(--cream-100-72)', fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '.02em' }}>
+          <span style={{ color: 'var(--cream-100-72)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.02em' }}>
             cookies baked &amp; sold
           </span>
         </div>

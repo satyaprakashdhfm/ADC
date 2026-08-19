@@ -57,7 +57,10 @@ export default function Footer() {
         >
           {/* Brand block — fills the left side so the link columns don't cluster in the right
               half with a dead gap. On phones this drops to full width above the columns. */}
-          <div className="footer-brand" style={{ flex: '1 1 240px', maxWidth: 300 }}>
+          {/* A flex column so the counter can be pushed to the bottom line of this column with
+              margin-top:auto — the grid stretches every column to the tallest one, so "bottom" here
+              means level with the foot of the link lists, not the foot of the footer. */}
+          <div className="footer-brand" style={{ flex: '1 1 240px', maxWidth: 300, display: 'flex', flexDirection: 'column' }}>
             {/* The secondary mark — the round bitten-cookie badge — rather than the wordmark, which
                 the navbar already carries at the top of every page.
 
@@ -85,8 +88,12 @@ export default function Footer() {
             </p>
             {/* Under the secondary mark rather than squeezed between the payment marks and the
                 copyright, where it was competing with small print for attention in the busiest strip
-                of the footer. This column had the room, and the number is worth more than a gap. */}
-            <CookiesSoldCounter />
+                of the footer. This column had the room, and the number is worth more than a gap.
+                marginTop:auto drops it to the column's bottom line; the padding is the floor on the
+                gap, since auto margin alone would let it hug the tagline in a short column. */}
+            <div style={{ marginTop: 'auto', paddingTop: 22 }}>
+              <CookiesSoldCounter />
+            </div>
           </div>
 
           <FooterCookies />
