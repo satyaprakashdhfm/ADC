@@ -8,6 +8,36 @@ import { td, inp, addBtn, iconBtn, Panel, Table, Empty, Field, FilterBar, Pager 
 
 type Editing = { id?: number; data: ProductInput };
 
+/* The editor's starting values for an existing row. This was a single 700-character object literal
+   inline in the Edit button, where a forgotten field was invisible — and forgetting one silently
+   blanks that field on save. */
+const editPayload = (p: Product): ProductInput => ({
+  name: p.name, category: p.category, description: p.description, price: p.price,
+  stockQuantity: p.stockQuantity, images: p.images, options: p.options,
+  isAvailable: p.isAvailable, menuGroup: p.menuGroup, tag: p.tag, featured: p.featured,
+  intracityAvailable: p.intracityAvailable, intracityUnavailableReason: p.intracityUnavailableReason || '',
+  intercityAvailable: p.intercityAvailable, intercityUnavailableReason: p.intercityUnavailableReason || '',
+  restrictCities: p.restrictCities || '',
+});
+
+/* On/off at a glance, one chip per delivery mode. These used to be up to three stacked red
+   sentences under the product name, which made every restricted row twice as tall as the others and
+   buried the two flags an admin comes to this table to check. The reason still travels with the
+   chip, as its tooltip. */
+function ModeChip({ label, on, reason }: { label: string; on: boolean; reason?: string | null }) {
+  return (
+    <span title={on ? `${label} on` : `${label} off${reason ? ` — ${reason}` : ''}`}
+      style={{
+        display: 'inline-block', padding: '2px 8px', borderRadius: 'var(--radius-pill)',
+        fontSize: 'var(--text-2xs)', fontWeight: 800, whiteSpace: 'nowrap',
+        background: on ? 'var(--status-success-bg)' : 'var(--status-error-bg)',
+        color: on ? 'var(--status-success)' : 'var(--status-error)',
+      }}>
+      {label} {on ? 'on' : 'off'}
+    </span>
+  );
+}
+
 interface Props {
   products: Product[] | null;
   search: string;
@@ -43,33 +73,27 @@ export default function ProductsTab({ products, search, onSearch, category, onCa
           <Field label="Category"><select value={category} onChange={e => { onCategory(e.target.value); onPage(1); }} style={selStyle}><option value="">All categories</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
           <Field label="Availability"><select value={availability} onChange={e => { onAvailability(e.target.value); onPage(1); }} style={selStyle}><option value="">Any</option><option value="in">In stock / available</option><option value="out">Unavailable</option></select></Field>
         </FilterBar>
-        <Table head={['Name', 'Category', 'Price', 'Stock', 'Tag', '']}>
+        <Table head={['Name', 'Category', 'Delivery', 'Price', 'Stock', 'Tag', '']}>
           {list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(p => (
             <tr key={p.id}>
-              <td style={td}>
-                <strong>{p.name}</strong>
-                  {!p.intracityAvailable && (
-                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>
-                      Intracity off{p.intracityUnavailableReason ? ` — ${p.intracityUnavailableReason}` : ''}
-                    </div>
-                  )}
-                  {!p.intercityAvailable && (
-                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', fontWeight: 800, marginTop: 2 }}>
-                      Intercity off{p.intercityUnavailableReason ? ` — ${p.intercityUnavailableReason}` : ''}
-                    </div>
-                  )}
-                  {p.intracityAvailable && p.restrictCities && (
-                    <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700, marginTop: 2 }}>
-                      Intracity restricted to {p.restrictCities}
-                    </div>
-                  )}
-              </td>
+              <td style={td}><strong>{p.name}</strong></td>
               <td style={td}>{p.category}</td>
+              <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  <ModeChip label="Same-day" on={p.intracityAvailable} reason={p.intracityUnavailableReason} />
+                  <ModeChip label="Parcel" on={p.intercityAvailable} reason={p.intercityUnavailableReason} />
+                </div>
+                {p.intracityAvailable && p.restrictCities && (
+                  <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700, marginTop: 3 }}>
+                    Same-day: {p.restrictCities} only
+                  </div>
+                )}
+              </td>
               <td style={td}>{money(p.price)}</td>
               <td style={td}><span style={{ color: p.stockQuantity <= 10 ? 'var(--status-error)' : 'var(--text-body)', fontWeight: p.stockQuantity <= 10 ? 800 : 400 }}>{p.stockQuantity}</span></td>
               <td style={td}>{p.tag || '—'}</td>
               <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                    <button onClick={() => setEditing({ id: p.id, data: { name: p.name, category: p.category, description: p.description, price: p.price, stockQuantity: p.stockQuantity, images: p.images, options: p.options, isAvailable: p.isAvailable, menuGroup: p.menuGroup, tag: p.tag, featured: p.featured, intracityAvailable: p.intracityAvailable, intracityUnavailableReason: p.intracityUnavailableReason || '', intercityAvailable: p.intercityAvailable, intercityUnavailableReason: p.intercityUnavailableReason || '', restrictCities: p.restrictCities || '' } })} aria-label="Edit" style={iconBtn}><Pencil size={15} /></button>
+                <button onClick={() => setEditing({ id: p.id, data: editPayload(p) })} aria-label="Edit" style={iconBtn}><Pencil size={15} /></button>
                 <button onClick={() => onRemove(p.id)} aria-label="Delete" style={{ ...iconBtn, color: 'var(--status-error)' }}><Trash2 size={15} /></button>
               </td>
             </tr>
