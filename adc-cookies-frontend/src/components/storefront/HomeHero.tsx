@@ -1,8 +1,10 @@
 'use client';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
+import { getHeroBanner } from '@/lib/api';
 import SiteNav from './SiteNav';
 
 const ctaPrimary: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 20px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' };
@@ -11,10 +13,12 @@ const ctaGhost: React.CSSProperties = { display: 'inline-flex', alignItems: 'cen
 /*
  * Art-directed hero backdrop. A single landscape photo gets its sides cropped away on a
  * portrait phone (the hero is a tall centred block), so desktop and mobile each get their own
- * crop via <picture>/media. Drop a portrait file at HERO_MOBILE to switch it on — until then
- * both breakpoints fall back to the landscape image, so nothing breaks if it's missing.
+ * crop via <picture>/media.
  *   HERO_DESKTOP  2400×1200 (2:1 landscape)
  *   HERO_MOBILE   1200×1600 (3:4 portrait)
+ *
+ * These two are the files the site ships, and they are also the fallback. The admin can replace
+ * either from Admin → Customize UI → Home page banner, and give the banner somewhere to link to.
  */
 const HERO_DESKTOP = '/assets/hero-cookies-wide.jpg';
 const HERO_MOBILE = '/assets/hero-cookies-portrait.jpg';
@@ -22,6 +26,23 @@ const HERO_MOBILE = '/assets/hero-cookies-portrait.jpg';
 export default function HomeHero() {
   const router = useRouter();
   const scrollToProducts = () => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
+
+  /*
+   * The admin's banner, fetched rather than rendered on the server.
+   *
+   * An uploaded image lives in a private bucket and resolves to a SIGNED url with an expiry, so it
+   * cannot be baked into this statically-prerendered page — the signature would lapse a week after a
+   * deploy, on the first image every visitor sees. Starting from the shipped files means the fetch
+   * swaps one photograph for another rather than filling a hole, so there is no empty hero while it
+   * is in flight.
+   */
+  const [banner, setBanner] = useState<{ desktop: string | null; mobile: string | null; href: string | null; alt: string | null }>(
+    { desktop: null, mobile: null, href: null, alt: null },
+  );
+  useEffect(() => { getHeroBanner().then(setBanner).catch(() => {}); }, []);
+
+  const desktopSrc = banner.desktop || HERO_DESKTOP;
+  const mobileSrc = banner.mobile || banner.desktop || HERO_MOBILE;
 
   return (
     <>
@@ -45,12 +66,26 @@ export default function HomeHero() {
           transition={{ duration: 2, ease: [0.16, 1, 0.3, 1] }}
           style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
           <picture>
-            <source media="(max-width: 680px)" srcSet={HERO_MOBILE} />
+            <source media="(max-width: 680px)" srcSet={mobileSrc} />
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={HERO_DESKTOP} alt="" fetchPriority="high" decoding="async"
+            <img src={desktopSrc} alt="" fetchPriority="high" decoding="async"
               style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
           </picture>
         </motion.div>
+
+        {/*
+          The photograph as a link, when the admin has given it a destination.
+
+          A transparent anchor over the photo and UNDER the copy (z-index 1 against the copy's 3),
+          rather than wrapping the whole hero: the headline block contains two buttons of its own, and
+          nesting them inside a link is invalid markup that leaves the browser to guess which one a
+          tap meant. Layered this way the photo is the link and the buttons are the buttons, with
+          nothing to intercept and no click handler to fight.
+        */}
+        {banner.href && (
+          <a href={banner.href} aria-label={banner.alt || 'See more'}
+            style={{ position: 'absolute', inset: 0, zIndex: 1, display: 'block' }} />
+        )}
 
         {/* Center content */}
         <motion.div className="home-hero-copy" initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}

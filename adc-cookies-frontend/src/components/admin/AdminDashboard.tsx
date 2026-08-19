@@ -8,6 +8,7 @@ import {
   LogOut, Truck, FileText, Store as StoreIcon, Paintbrush,
 } from 'lucide-react';
 import { usePagination } from '@/hooks/admin/usePagination';
+import { useTransientNotice } from '@/hooks/admin/useTransientNotice';
 import { useAdminUsers } from '@/hooks/admin/useAdminUsers';
 import { useAdminStats } from '@/hooks/admin/useAdminStats';
 import { useAdminAnalytics } from '@/hooks/admin/useAdminAnalytics';
@@ -60,7 +61,12 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState<TabId>('overview');
 
   const [err, setErr] = useState('');
-  const [notice, setNotice] = useState('');
+  /* Green confirmations clear themselves after a few seconds. Errors do not: one is a receipt
+     for something already done, the other is something still to deal with. */
+  const [notice, setNotice] = useTransientNotice();
+  /* Cancelled/failed orders sit in their own collapsible panel on the Orders tab. Held here,
+     not inside OrdersTab, so the Overview tab's "Cancelled / failed" card can open it. */
+  const [deadOrdersOpen, setDeadOrdersOpen] = useState(false);
 
   // Page numbers stay here, not in each tab, so a page survives switching tabs and back.
   const { pageOf, setPageOf } = usePagination();
@@ -71,7 +77,7 @@ export default function AdminDashboard() {
 
   const { users, search: userSearch, setSearch: setUserSearch, saveUser, savingUser } = useAdminUsers(isAdmin && tab === 'users', setErr);
   const { stats, refreshStats } = useAdminStats(isAdmin, setErr);
-  const { analytics, range, setRange } = useAdminAnalytics(isAdmin);
+  const { analytics, range, setRange, error: analyticsError, reload: reloadAnalytics } = useAdminAnalytics(isAdmin);
   const { products, search: productSearch, setSearch: setProductSearch, category: productCat, setCategory: setProductCat, availability: productAvail, setAvailability: setProductAvail, editing, setEditing, saveProduct, removeProduct, refreshProducts } = useAdminProducts(isAdmin && tab === 'products', setErr, refreshStats);
   const siteSettings = useSiteSettings(isAdmin, setErr);
   const {
@@ -117,7 +123,7 @@ export default function AdminDashboard() {
 
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '22px var(--gutter) 64px' }}>
         {err && <div onClick={() => setErr('')} style={{ ...card, padding: '12px 16px', marginBottom: 16, color: 'var(--status-error)', borderColor: 'var(--status-error)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{err}</div>}
-        {notice && <div onClick={() => setNotice('')} style={{ ...card, padding: '12px 16px', marginBottom: 16, color: 'var(--status-success, #1a7f4b)', borderColor: 'var(--status-success, #1a7f4b)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{notice}</div>}
+        {notice && <div onClick={() => setNotice('')} style={{ ...card, padding: '12px 16px', marginBottom: 16, color: 'var(--status-success, #1a7f4b)', borderColor: 'var(--status-success, #1a7f4b)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', animation: 'annSlide .28s var(--ease-out) both' }}>{notice}</div>}
 
         {/* Needs attention — orders that took money but did not complete downstream. Sits above the
             tabs because it applies to every screen, and is hidden entirely when there is nothing. */}
@@ -143,9 +149,12 @@ export default function AdminDashboard() {
           <OverviewTab
             stats={stats}
             analytics={analytics}
+            analyticsError={analyticsError}
+            onReloadAnalytics={reloadAnalytics}
             range={range}
             setRange={setRange}
             onOpenUsers={() => setTab('users')}
+            onOpenCancelled={() => { setTab('orders'); setDeadOrdersOpen(true); }}
             ordering={{
               orderingPaused: siteSettings.orderingPaused,
               orderingPausedBusy: siteSettings.orderingPausedBusy,
@@ -173,6 +182,10 @@ export default function AdminDashboard() {
             onChangeStatus={changeOrderStatus}
             page={pageOf('orders')}
             onPage={n => setPageOf('orders', n)}
+            deadOpen={deadOrdersOpen}
+            onDeadOpen={setDeadOrdersOpen}
+            deadPage={pageOf('deadOrders')}
+            onDeadPage={n => setPageOf('deadOrders', n)}
           />
         )}
 
@@ -202,6 +215,14 @@ export default function AdminDashboard() {
             addBannerMessage={siteSettings.addBannerMessage}
             removeBannerMessage={siteSettings.removeBannerMessage}
             saveBannerMessages={siteSettings.saveBannerMessages}
+            hero={siteSettings.heroBanner}
+            heroUrls={siteSettings.heroUrls}
+            heroSizes={siteSettings.heroSizes}
+            heroSaved={siteSettings.heroSaved}
+            heroBusy={siteSettings.heroBusy}
+            changeHeroImage={siteSettings.changeHeroImage}
+            changeHeroField={siteSettings.changeHeroField}
+            saveHeroBanner={siteSettings.saveHeroBanner}
           />
         )}
 

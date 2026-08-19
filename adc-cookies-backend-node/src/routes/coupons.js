@@ -2,7 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { getOne, getAll, query, withTransaction, nowIso } from '../db.js';
 import { requireAuth, ApiError } from '../middleware.js';
-import { serializeCoupon } from '../serializers.js';
+import { serializeCoupon, resolveImagesValue } from '../serializers.js';
 import { sendCouponEmail } from '../mailer.js';
 
 const router = Router();
@@ -161,7 +161,7 @@ router.get('/validate', requireAuth, couponLimiter, async (req, res) => {
   res.json({
     ...serializeCoupon(coupon),
     valid: true,
-    giftProduct: giftProduct ? { id: giftProduct.id, name: giftProduct.name, price: Number(giftProduct.price), images: giftProduct.images } : null,
+    giftProduct: giftProduct ? { id: giftProduct.id, name: giftProduct.name, price: Number(giftProduct.price), images: await resolveImagesValue(giftProduct.images) } : null,
   });
 });
 

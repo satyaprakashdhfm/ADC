@@ -29,7 +29,7 @@ export default function DeliveryModeToggle({ label, available, reason, onToggle,
       {!available && (
         <div style={{ marginTop: 8 }}>
           <input style={{ ...inp, borderColor: !reason.trim() ? 'var(--status-error)' : undefined }}
-            placeholder={'Reason shown to the customer (required) — e.g. "Out of same-day stock today"'}
+            placeholder={'Reason shown to the customer (required) — e.g. "Not baking these today"'}
             value={reason} onChange={e => onReason(e.target.value)} />
           {!reason.trim() && (
             <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--status-error)', margin: '4px 0 0' }}>

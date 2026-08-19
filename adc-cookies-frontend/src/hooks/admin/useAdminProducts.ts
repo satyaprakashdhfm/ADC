@@ -5,7 +5,16 @@ import {
   type Product, type ProductInput,
 } from '@/lib/api';
 
-export const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, stockQuantity: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, images: '', intracityAvailable: true, intracityUnavailableReason: '', intercityAvailable: true, intercityUnavailableReason: '', restrictCities: '' };
+/*
+ * What the editor is working on.
+ *
+ * `data` is what gets saved. `images` is the row's signed display URLs, carried along only so the
+ * form can show the photos that already exist — it is deliberately NOT part of `data`, because those
+ * URLs expire and must never be written back. See Product.imageRefs in lib/api.ts.
+ */
+export interface ProductEditing { id?: number; data: ProductInput; images?: string | null }
+
+export const EMPTY_PRODUCT: ProductInput = { name: '', category: 'COOKIES', description: '', price: 0, menuGroup: '', tag: '', featured: false, isAvailable: true, imageRefs: [], intracityAvailable: true, intracityUnavailableReason: '', intercityAvailable: true, intercityUnavailableReason: '', restrictCities: '' };
 
 /**
  * Products list and its editor. `refreshProducts` is exported rather than kept private because the
@@ -16,7 +25,7 @@ export function useAdminProducts(enabled: boolean, onError: (s: string) => void,
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [availability, setAvailability] = useState('');
-  const [editing, setEditing] = useState<{ id?: number; data: ProductInput } | null>(null);
+  const [editing, setEditing] = useState<ProductEditing | null>(null);
 
   useEffect(() => {
     if (enabled && products === null) adminGetProducts().then(setProducts).catch(() => setProducts([]));

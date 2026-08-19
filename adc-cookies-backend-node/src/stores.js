@@ -27,7 +27,7 @@
  *   'MANUAL' — the staff at that store key the order into their own Petpooja terminal and print the
  *              bill there. Our job is to show them everything they need to do that accurately.
  */
-import { getOne } from './db.js';
+import { getOne, getAll } from './db.js';
 
 export const ADC_STORES = [
   { code: 'begur', posMode: 'AUTO', name: 'A Dough Cookie, Begur (Warehouse)', contact: '9381502998', address_line_1: '167/3, First floor, Chickbegur Village, Singasandra Post, Manipal County Rd', city: 'Bengaluru', state: 'Karnataka', pincode: 560114, latitude: 12.8845, longitude: 77.6270, pickupName: process.env.SHIPROCKET_PICKUP_BEGUR || null },
@@ -172,6 +172,28 @@ export function storeProductAvailable(storeCode, product) {
 export function resolveProductAvailability(storeCode, product, override) {
   if (override != null) return !!override;
   return storeProductAvailable(storeCode, product);
+}
+
+/**
+ * Of these products, which has this store been explicitly told not to sell?
+ *
+ * The per-store override existed for a while as something only the admin panel and the store portal
+ * READ — nothing on the customer path consulted it, so turning an item off changed two screens and
+ * nothing a shopper could see. It could be ordered, paid for, and sent to a kitchen that had already
+ * said it had run out. This is what order creation checks so that stops being true.
+ *
+ * Only an explicit `false` counts. An explicit `true` is a store overriding the city rule to sell
+ * something it does have today, and the automatic rule is handled separately by deliveryEligible.
+ */
+export async function storeBlockedProductIds(storeCode, productIds) {
+  const ids = [...new Set((productIds || []).map(Number).filter(Boolean))];
+  if (!ids.length || !storeCode) return new Set();
+  const rows = await getAll(
+    `SELECT product_id FROM store_product_overrides
+      WHERE store_code = $1 AND is_available = FALSE AND product_id = ANY($2)`,
+    [String(storeCode).trim().toLowerCase(), ids]
+  ).catch(() => []);
+  return new Set(rows.map((r) => Number(r.product_id)));
 }
 
 const R_KM = 6371;
