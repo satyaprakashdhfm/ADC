@@ -5,12 +5,16 @@ import Footer from '@/components/storefront/Footer';
 import OrderCta from '@/components/storefront/OrderCta';
 import SiteHeader from '@/components/storefront/SiteHeader';
 
+/* Photography, matched to what each piece is actually about. These were three unrelated
+   single-cookie product shots — a plain cookie illustrating an article on gift tins, in
+   particular — while the branded tin and pulled-apart shots sat unused in the assets folder.
+   They are also all from one shoot, so the grid reads as a set rather than three stock photos. */
 const POSTS = [
   {
     title: 'How A Dough Cookie Gets That Soft-Center Bite',
     date: 'June 13, 2026',
     read: '4 min read',
-    image: '/assets/products/adc-special.jpg',
+    image: '/assets/cookies_new_images/nutella-filled.jpeg',
     excerpt: 'A look at dough resting, browned butter, chocolate selection, and the bake timing that keeps the middle tender.',
     body: 'Every A Dough Cookie starts with a dough that is rested before baking. That rest helps the flour hydrate, deepens the butter flavor, and gives the cookie enough structure to hold a soft center. We bake in small batches, pull the tray while the middle is still tender, and let the cookie finish gently as it cools. The result is a crisp edge, a warm aroma, and a center that still feels fresh when it reaches the box.',
   },
@@ -18,7 +22,7 @@ const POSTS = [
     title: 'Choosing the Right Cookie Tin for Gifting',
     date: 'June 13, 2026',
     read: '3 min read',
-    image: '/assets/products/m-and-m.jpg',
+    image: '/assets/cookies_new_images/nutella-tin.jpeg',
     excerpt: 'Nutella tins, Biscoff tins, handwritten notes, and the details that make a cookie box feel personal.',
     body: 'Gift tins work best when the flavor has a clear personality. Nutella is creamy and familiar, while Biscoff brings a caramel-spiced hit. At A Dough Cookie, tins are built for birthdays, team treats, festive tables, and last-minute surprises. Add a short note, choose the tin size based on how many people will share it, and keep the packaging neat enough that the box feels like a real present before it is even opened.',
   },
@@ -26,7 +30,7 @@ const POSTS = [
     title: 'Why We Bake All Day Instead of All Morning',
     date: 'August 12, 2026',
     read: '3 min read',
-    image: '/assets/products/red-velvet.jpg',
+    image: '/assets/cookies_new_images/chocolate-chip.jpeg',
     excerpt: 'Most bakeries run one big morning batch. We run small trays through the day, and it changes what an evening cookie tastes like.',
     body: 'A cookie is at its best in the first hour. Bake everything at seven in the morning and the tray that sells at seven in the evening has had twelve hours to dry out, however good the recipe was. So we bake in small trays through the day at each of our three Bengaluru stores — Jayanagar, S.G. Palya and Electronic City. It is more work and it wastes more dough, but it means there is no bad time to walk in. The same logic drives how we deliver: an order is routed to whichever store is nearest your address rather than to one central kitchen, so the cookie has a short trip and is still warm when it reaches you.',
   },
