@@ -239,7 +239,9 @@ export default function HomeProducts() {
             <span style={{ width: 46, height: 46, borderRadius: 13, background: 'var(--white-16)', color: 'var(--white)', display: 'grid', placeItems: 'center', flex: 'none' }}><Briefcase size={22} /></span>
             <div>
               <h3 style={{ font: '900 clamp(1.3rem,1rem + 1.2vw,1.9rem)/1.1 var(--font-display)', color: 'var(--white)', margin: '0 0 4px', letterSpacing: '-.02em' }}>Corporate &amp; Bulk Gifting</h3>
-              <p style={{ color: 'var(--cream-100-72)', margin: 0, fontSize: 'var(--text-sm)', lineHeight: 1.5, maxWidth: 460 }}>Cookies for teams, clients &amp; celebrations — branded boxes, bulk pricing and coordinated delivery.</p>
+              {/* Full cream, not 72%: that was set against a near-black scrim. The warm scrim
+                  behind this now is much lighter, and a translucent cream on it goes muddy. */}
+              <p style={{ color: 'var(--cream-100)', margin: 0, fontSize: 'var(--text-sm)', lineHeight: 1.5, maxWidth: 460, textShadow: '0 1px 6px var(--espresso-30)' }}>Cookies for teams, clients &amp; celebrations — branded boxes, bulk pricing and coordinated delivery.</p>
             </div>
           </div>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '13px 22px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', flex: 'none', boxShadow: 'var(--shadow-brand)' }}>Enquire / Order in bulk <ArrowRight size={16} /></span>
