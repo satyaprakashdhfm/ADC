@@ -444,9 +444,12 @@ export async function checkDeliveryPin(pincode: string, lat?: number | null, lng
 
 /* ---- Admin ---- */
 export interface AdminStats {
-  totalOrders: number; totalRevenue: number; paidRevenue: number;
-  totalProducts: number; totalUsers: number; totalAdmins: number;
-  lowStock: number; newMessages: number;
+  /** Cancelled orders are excluded from every figure here and counted separately, so these agree
+   *  with the Orders tab. An abandoned checkout is not revenue and not an order. */
+  totalOrders: number; cancelledOrders: number; totalRevenue: number; paidRevenue: number;
+  totalProducts: number; unavailableProducts: number;
+  totalUsers: number; totalAdmins: number;
+  newMessages: number;
   ordersByStatus: Record<string, number>;
   topProducts: { name: string; qty: number; revenue: number }[];
 }
@@ -466,6 +469,8 @@ export interface ProductInput {
 export interface AdminAnalytics {
   from?: string; to?: string;
   salesByDay: { day: string; orders: number; revenue: number; paid: number }[];
+  /** Abandoned/cancelled orders per day, kept out of salesByDay so they cannot inflate revenue. */
+  cancelledByDay: { day: string; orders: number }[];
   ordersByArea: { city: string; orders: number; revenue: number }[];
   usersByCity: { city: string; users: number }[];
   paymentBreakdown: { status: string; count: number; amount: number }[];

@@ -61,6 +61,9 @@ export default function AdminDashboard() {
 
   const [err, setErr] = useState('');
   const [notice, setNotice] = useState('');
+  /* Cancelled/failed orders sit in their own collapsible panel on the Orders tab. Held here,
+     not inside OrdersTab, so the Overview tab's "Cancelled / failed" card can open it. */
+  const [deadOrdersOpen, setDeadOrdersOpen] = useState(false);
 
   // Page numbers stay here, not in each tab, so a page survives switching tabs and back.
   const { pageOf, setPageOf } = usePagination();
@@ -71,7 +74,7 @@ export default function AdminDashboard() {
 
   const { users, search: userSearch, setSearch: setUserSearch, saveUser, savingUser } = useAdminUsers(isAdmin && tab === 'users', setErr);
   const { stats, refreshStats } = useAdminStats(isAdmin, setErr);
-  const { analytics, range, setRange } = useAdminAnalytics(isAdmin);
+  const { analytics, range, setRange, error: analyticsError, reload: reloadAnalytics } = useAdminAnalytics(isAdmin);
   const { products, search: productSearch, setSearch: setProductSearch, category: productCat, setCategory: setProductCat, availability: productAvail, setAvailability: setProductAvail, editing, setEditing, saveProduct, removeProduct, refreshProducts } = useAdminProducts(isAdmin && tab === 'products', setErr, refreshStats);
   const siteSettings = useSiteSettings(isAdmin, setErr);
   const {
@@ -143,9 +146,12 @@ export default function AdminDashboard() {
           <OverviewTab
             stats={stats}
             analytics={analytics}
+            analyticsError={analyticsError}
+            onReloadAnalytics={reloadAnalytics}
             range={range}
             setRange={setRange}
             onOpenUsers={() => setTab('users')}
+            onOpenCancelled={() => { setTab('orders'); setDeadOrdersOpen(true); }}
             ordering={{
               orderingPaused: siteSettings.orderingPaused,
               orderingPausedBusy: siteSettings.orderingPausedBusy,
@@ -173,6 +179,10 @@ export default function AdminDashboard() {
             onChangeStatus={changeOrderStatus}
             page={pageOf('orders')}
             onPage={n => setPageOf('orders', n)}
+            deadOpen={deadOrdersOpen}
+            onDeadOpen={setDeadOrdersOpen}
+            deadPage={pageOf('deadOrders')}
+            onDeadPage={n => setPageOf('deadOrders', n)}
           />
         )}
 
