@@ -461,9 +461,13 @@ export async function initSchema() {
 
     -- The admin allowlist has to exist on every environment: seed.js is skipped on staging
     -- (SKIP_SEED=true) and an empty allowlist means nobody can open the dashboard at all.
-    -- DO NOTHING on conflict, so a redeploy never switches a number back on that was turned off.
+    -- Kept here rather than run by hand against each database, so staging and production cannot end
+    -- up with different admins and a number added for one is not forgotten for the other.
+    -- DO NOTHING on conflict, so a redeploy never switches a number back on that was turned off,
+    -- and never overwrites a name somebody edited.
     INSERT INTO admin_accounts (phone, name, is_active, created_at)
-    VALUES ('9381502998', 'ADC Admin', TRUE, NOW())
+    VALUES ('9381502998', 'ADC Admin', TRUE, NOW()),
+           ('8861657617', 'ADC Admin', TRUE, NOW())
     ON CONFLICT (phone) DO NOTHING;
 
     -- Retire admin from the users table. The role grants nothing now (see admin_accounts above), and
