@@ -64,10 +64,14 @@ export default function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: 
 
   return (
     <Panel title="Store &amp; product availability" loading={stores === null} action={<button onClick={load} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.6 }}>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 8px', lineHeight: 1.6 }}>
         Take a whole store offline (it stops receiving new orders) or turn one product on/off for just one store —
         e.g. Red Velvet already hides outside Bengaluru automatically, but this also lets you turn it off at a
         single Bengaluru store specifically, for a one-off reason like running out of it for the day.
+      </p>
+      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', margin: '0 0 14px', lineHeight: 1.6 }}>
+        Each store can do these two things for itself from its own portal, so a shop that has run out does not
+        have to wait on anyone here. Which delivery kinds a store serves is set only here.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {stores?.map(s => (
