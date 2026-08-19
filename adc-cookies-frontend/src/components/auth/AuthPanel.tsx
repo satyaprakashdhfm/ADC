@@ -19,8 +19,12 @@ import { Divider, GoogleG, authInput, authLabel, authPrimaryBtn, authLinkBtn, au
  */
 
 interface AuthPanelProps {
-  /** Sign-in finished AND the profile is complete. `role` is 'ADMIN' for staff accounts. */
-  onSuccess: (role: string) => void;
+  /* Sign-in finished AND the profile is complete.
+     Deliberately reports nothing about the account. It used to pass the role through so callers
+     could redirect an 'ADMIN' row into the dashboard — which is precisely the coupling that let the
+     storefront open the admin. Admin has its own sign-in; this one only ever means "a customer is
+     now signed in". */
+  onSuccess: () => void;
   /** True while the mandatory name/email step is showing — the host must not allow dismissal. */
   onLockChange?: (locked: boolean) => void;
   /** Change this to reset the flow back to the phone step (hosts pass their `open` flag). */
@@ -88,11 +92,11 @@ export default function AuthPanel({ onSuccess, onLockChange, resetKey, compact =
   const handleVerifyOtp = async () => {
     setError(''); setLoading(true);
     try {
-      const { role, needsName } = await verifyOtp(otpPhone, verificationId, code);
+      const { needsName } = await verifyOtp(otpPhone, verificationId, code);
       // Missing name and/or email → ask now, mandatory, no skip; only a fully-complete profile
       // goes straight in.
       if (needsName) { setProfileName(''); setProfileEmail(''); setStep('name'); }
-      else onSuccess(role);
+      else onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Invalid OTP');
     } finally {
@@ -107,7 +111,7 @@ export default function AuthPanel({ onSuccess, onLockChange, resetKey, compact =
     setError(''); setLoading(true);
     try {
       await updateProfile({ name: profileName.trim(), email: profileEmail.trim() });
-      onSuccess('CUSTOMER'); // a brand-new phone signup is always a customer
+      onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save your details');
     } finally {

@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { X, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { isValidName, isValidEmail } from '@/lib/profileValidation';
@@ -32,7 +31,6 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   // Raised by AuthPanel while its mandatory name/email step is showing — see `dismissible`.
   const [locked, setLocked] = useState(false);
   const { login, register, resetPassword, setAuthModalOpen } = useAuth();
-  const router = useRouter();
   // Compact sizing is for mobile only — desktop gets the roomier layout back.
   const desktop = useIsDesktop();
 
@@ -56,20 +54,20 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
     ? !!email.trim() && !!password.trim()
     : isValidName(name) && !!phone.trim() && isValidEmail(email) && !!password.trim();
 
-  const finishLogin = (role: string) => {
+  /* No admin redirect. This modal signs customers in, full stop — the dashboard is reached only
+     through its own phone-OTP sign-in at /admin. */
+  const finishLogin = () => {
     onSuccess?.();
     onClose();
-    if (role === 'ADMIN') router.push('/admin');
   };
 
   const handleSubmit = async () => {
     if (!submitValid) return;
     setError(''); setLoading(true);
     try {
-      let role = 'CUSTOMER';
-      if (mode === 'login') role = await login(email, password);
+      if (mode === 'login') await login(email, password);
       else await register(name, email, phone, password);
-      finishLogin(role);
+      finishLogin();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {

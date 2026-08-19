@@ -20,10 +20,9 @@ export async function seedIfEmpty() {
 
   const q = (sql, p = []) => pool.query(sql, p);
 
-  const { rows: [admin] } = await q(
-    `INSERT INTO users (name, email, phone, password, role, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-    ['ADC Admin', 'admin@adccookies.com', '9000000001', await hash('admin123'), 'ADMIN', ts, ts]
-  );
+  /* No seeded admin user. Admin is an allowlisted phone number in admin_accounts with its own
+     OTP sign-in, so a role on a users row grants nothing — and a default admin email/password in a
+     public repository is a credential with no purpose. */
   const { rows: [priya] } = await q(
     `INSERT INTO users (name, email, phone, password, role, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
     ['Priya Sharma', 'priya@example.com', '9876543210', await hash('priya123'), 'CUSTOMER', ts, ts]
@@ -32,7 +31,7 @@ export async function seedIfEmpty() {
     `INSERT INTO users (name, email, phone, password, role, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
     ['Rahul Verma', 'rahul@example.com', '9123456789', await hash('rahul123'), 'CUSTOMER', ts, ts]
   );
-  console.log('Users created: admin, priya, rahul');
+  console.log('Users created: priya, rahul');
 
   const { rows: [addr1] } = await q(
     `INSERT INTO addresses (user_id, full_name, phone, address_line1, address_line2, city, state, pincode, latitude, longitude, is_default)
@@ -158,7 +157,7 @@ export async function seedIfEmpty() {
 
   console.log('Sample orders created');
   console.log('=== Dummy data loaded successfully! ===');
-  console.log('Admin: admin@adccookies.com / admin123');
+  console.log('Admin: sign in at /admin with an allowlisted phone number (see admin_accounts).');
   console.log('Customer 1: priya@example.com / priya123');
   console.log('Customer 2: rahul@example.com / rahul123');
 }
