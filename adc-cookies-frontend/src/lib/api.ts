@@ -21,6 +21,21 @@ async function getToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+/*
+ * The admin session token, kept apart from the customer's Supabase session in every respect: its
+ * own storage key, its own header, its own lifetime. A customer token grants nothing on /admin and
+ * this grants nothing on the customer API. See adminAuth.js on the server.
+ */
+const ADMIN_TOKEN_KEY = 'adc_admin_token';
+export const adminSessionToken = {
+  get: (): string => { try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ''; } catch { return ''; } },
+  set: (t: string) => { try { localStorage.setItem(ADMIN_TOKEN_KEY, t); } catch { /* private mode */ } },
+  clear: () => { try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch { /* private mode */ } },
+};
+
+/** Thrown by request() so callers can act on the reason, not just the sentence. */
+export interface ApiRequestError extends Error { code?: string; status?: number }
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await getToken();
   const headers: Record<string, string> = {
@@ -28,6 +43,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...(options.headers as Record<string, string> || {}),
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Every /admin and /admin-auth path carries the admin session instead. Applied here rather than
+  // at each of the sixty-odd admin calls, so a new one cannot forget it.
+  if (path.startsWith('/admin')) {
+    const at = adminSessionToken.get();
+    if (at) headers['X-Admin-Token'] = at;
+  }
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
@@ -36,9 +57,38 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     // `error` (e.g. shipment_rejected) and the carrier's own message in `detail.rmk`.
     const detailRmk = err?.detail?.rmk || err?.detail?.remarks;
     const base = err.message || err.error || `HTTP ${res.status}`;
-    throw new Error(detailRmk && detailRmk !== base ? `${base}: ${detailRmk}` : base);
+    const e: ApiRequestError = new Error(detailRmk && detailRmk !== base ? `${base}: ${detailRmk}` : base);
+    e.code = err.code;
+    e.status = res.status;
+    /* A refused admin session is dead. Drop it here so every subsequent call does not re-send a
+       token the server has already rejected, and so the dashboard falls back to its sign-in. */
+    if (e.code === 'ADMIN_AUTH_REQUIRED' || e.code === 'ADMIN_SESSION_EXPIRED' || e.code === 'ADMIN_REVOKED') {
+      adminSessionToken.clear();
+    }
+    throw e;
   }
   return res.json();
+}
+
+/* ---- Admin sign-in: phone OTP only, and nothing to do with the customer login ---- */
+
+/** Ask for a code. The reply is identical whether or not the number is an admin. */
+export async function adminOtpSend(phone: string): Promise<{ sent: boolean; message: string; verificationId?: string; timeout?: number }> {
+  return request('/admin-auth/otp/send', { method: 'POST', body: JSON.stringify({ phone }) });
+}
+
+export interface AdminSession { token: string; expiresAt: string; name: string | null; phone: string; sessionDays: number }
+export async function adminOtpVerify(phone: string, verificationId: string, code: string): Promise<AdminSession> {
+  return request('/admin-auth/otp/verify', { method: 'POST', body: JSON.stringify({ phone, verificationId, code }) });
+}
+
+/** Who the stored token belongs to, and when it runs out. The dashboard calls this on load. */
+export async function adminMe(): Promise<{ phone: string; name: string | null; expiresAt: string; sessionDays: number }> {
+  return request('/admin-auth/me');
+}
+
+export async function adminLogout(): Promise<{ ok: boolean }> {
+  return request('/admin-auth/logout', { method: 'POST' });
 }
 
 /* ---- Auth ---- */

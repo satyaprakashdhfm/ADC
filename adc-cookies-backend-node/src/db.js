@@ -185,6 +185,37 @@ export async function initSchema() {
     -- turning something ordinarily city-restricted back on for one specific store. No row for a
     -- store/product pair means "no override" — the automatic intracity_available/restrict_cities rule (or
     -- plain storewide availability) still decides it.
+    -- ADMIN ACCESS, deliberately not a flag on the users table.
+    --
+    -- Admin used to mean users.role = 'ADMIN', which put the dashboard behind the same login as the
+    -- storefront: an email/password or Google session could hold it. It is now a phone allowlist
+    -- with its own OTP login and its own session, and the two share nothing.
+    --
+    -- Why not simply trust a phone claim on the customer's Supabase token: user_metadata is
+    -- writable by the account holder, so any customer could set user_metadata.phone to an admin
+    -- number and be believed. Authorisation has to rest on something the client cannot author,
+    -- which is a row here plus a session row below.
+    CREATE TABLE IF NOT EXISTS admin_accounts (
+      phone TEXT PRIMARY KEY,                       -- 10 digits, no country code
+      name TEXT,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_login_at TIMESTAMPTZ
+    );
+
+    -- One row per signed-in admin. Only the SHA-256 of the bearer token is stored, so a dump of
+    -- this table cannot be replayed as a login. expires_at is what enforces the re-authentication
+    -- window; a Supabase JWT refreshes itself indefinitely and could not.
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+      token_hash TEXT PRIMARY KEY,
+      phone TEXT NOT NULL REFERENCES admin_accounts(phone) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      last_seen_at TIMESTAMPTZ,
+      user_agent TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_sessions_phone ON admin_sessions(phone);
+
     CREATE TABLE IF NOT EXISTS store_product_overrides (
       store_code TEXT NOT NULL,
       product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -421,6 +452,13 @@ export async function initSchema() {
     -- Best-effort city/region from the IP they last logged in from (see POST /auth/log-location) —
     -- for admin visibility into where customers are logging in from, not precise geolocation.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_location TEXT;
+
+    -- The admin allowlist has to exist on every environment: seed.js is skipped on staging
+    -- (SKIP_SEED=true) and an empty allowlist means nobody can open the dashboard at all.
+    -- DO NOTHING on conflict, so a redeploy never switches a number back on that was turned off.
+    INSERT INTO admin_accounts (phone, name, is_active, created_at)
+    VALUES ('9381502998', 'ADC Admin', TRUE, NOW())
+    ON CONFLICT (phone) DO NOTHING;
 
     -- Spin & Win wheel — exactly 5 real rewards + one "better luck next time" slot.
     -- Odds: 50% 5% off, 10% free filled cookie, 10% ₹75 off on ₹599, 1% free tin,

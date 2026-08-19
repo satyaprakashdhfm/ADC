@@ -17,6 +17,7 @@ import orderRoutes from './routes/orders.js';
 import addressRoutes from './routes/addresses.js';
 import couponRoutes from './routes/coupons.js';
 import adminRoutes from './routes/admin/index.js';
+import adminAuthRoutes from './routes/adminAuth.js';
 import contactRoutes from './routes/contact.js';
 import deliveryRoutes from './routes/delivery.js';
 import petpoojaRoutes from './routes/petpooja.js';
@@ -99,6 +100,9 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/addresses', addressRoutes);
+// Outside /api/admin on purpose: everything under that prefix requires an admin session, and the
+// endpoints that issue one cannot require it.
+app.use('/api/admin-auth', adminAuthRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/delivery', deliveryRoutes);
