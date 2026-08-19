@@ -133,7 +133,7 @@ export default function InstagramReels() {
       <div style={{ maxWidth: 1680, margin: '0 auto', padding: '0 var(--gutter)' }}>
         <div style={{ textAlign: 'center', maxWidth: 720, margin: '0 auto clamp(18px,2.5vw,32px)' }}>
           <p style={{ fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' }}>
-            @{INSTAGRAM_HANDLE}
+            {INSTAGRAM_HANDLE}
           </p>
           <h2 style={{ font: '900 clamp(1.5rem,1.1rem + 1.7vw,2.25rem)/1.08 var(--font-display)', letterSpacing: '-.02em', margin: '0 0 10px', color: 'var(--text-strong)' }}>
             A Dough Cookie on Social Media
