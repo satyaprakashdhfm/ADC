@@ -1349,5 +1349,19 @@
         "note": "Also note the API returns fewer addresses than the panel shows — a 6th address (\"home\") present in the panel was absent from this response, so do not treat the API list as the full picture for anything except nickname resolution."
       }
     ]
+  },
+  "geocoding_olamaps": {
+    "provider": "Ola Maps",
+    "codeFile": "adc-cookies-backend-node/src/geo.js",
+    "docs": "https://maps.olakrutrim.com/docs  (server https://api.olamaps.io)",
+    "auth": "client_credentials exchanged for a bearer token at POST https://api.olamaps.io/auth/v1/token, cached until its JWT exp. Env: OLA_CLIENT_ID, OLA_CLIENT_SECRET.",
+    "endpointsUsed": {
+      "suggest": "GET /places/v1/autocomplete?input=&location=lat,lng",
+      "reverse": "GET /places/v1/reverse-geocode?latlng=lat,lng",
+      "forward": "GET /places/v1/geocode?address="
+    },
+    "fallback": "Nominatim (https://nominatim.openstreetmap.org) whenever OLA_CLIENT_ID/SECRET are unset, which is what keeps staging and local dev working without credentials. geoProvider() reports which one is live.",
+    "status_2026-08-19": "Code is complete and on Ola Maps. Credentials are NOT set on either Railway service, so Nominatim is what is actually serving right now. Set OLA_CLIENT_ID/OLA_CLIENT_SECRET to switch it over; no code change needed.",
+    "mappls_removed_2026-08-19": "Mappls was evaluated and dropped. Its static key authenticated only against sdk.mappls.com (Map SDK and JS plugins); every REST product (autosuggest, geocode, reverse-geocode, nearby, textsearch) returned invalid_token, and enabling CORS made no difference because CORS is a browser rule and these were server-to-server calls. Note for anyone retesting: sdk.mappls.com answers 'Working Fine' with HTTP 200 on ANY path, key or no key, so a 200 from that host proves nothing. Do not re-add it."
   }
 }

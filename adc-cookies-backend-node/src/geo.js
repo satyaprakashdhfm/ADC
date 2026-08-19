@@ -5,43 +5,33 @@
  * address into a point, and turn a point back into an address. Everything above this file asks for
  * those three and does not care who answers.
  *
- * It lives on the server, not in the browser, for two reasons. The Mappls credential must not ship
- * to a client — a referer whitelist is not a secret — and the public Nominatim instance forbids the
- * autocomplete traffic a checkout generates and blocks by IP when it sees it. One server-side
- * caller is also one place to cache, throttle and swap providers.
+ * It lives on the server, not in the browser, for two reasons. A credential shipped to the client
+ * either has to be domain/referer-restricted (useless for a server call, which carries no Referer)
+ * or it's a secret sitting in view-source — neither works here. And the public Nominatim instance
+ * forbids the autocomplete traffic a checkout generates and blocks by IP when it sees it. One
+ * server-side caller is also one place to cache, throttle and swap providers.
  *
- * MAPPLS, AS OF NOW, ONLY DRAWS MAPS.
+ * Ola Maps is the primary provider, authenticated via OAuth2 client_credentials (OLA_CLIENT_ID +
+ * OLA_CLIENT_SECRET), not a static API key. Ola offers both, but the static key is secured by a
+ * domain/IP allowlist — a browser-facing mechanism that a Railway server call can't satisfy, since
+ * there's no Referer to match. client_credentials authenticates by possession of the secret instead,
+ * which is the same shape every other server-side credential in this codebase already uses
+ * (Razorpay's key_id:key_secret, Message Central's token exchange) and needs no allowlist at all.
  *
- * Probed live against the credential on Railway (MAPPLE_INDIA). It is a valid Web Maps SDK static
- * key — sdk.mappls.com returns real SDK JavaScript for it — but only when the request carries a
- * whitelisted domain: without a Referer it answers "Required String parameter 'domain' is not
- * present". The REST APIs (Autosuggest, Geocode, Reverse Geocode) reject the same key outright with
- * invalid_token, because they are separate products that have to be enabled on the account.
- *
- * Two consequences shape this file. A domain-locked key can only be used from a browser on that
- * domain, so it can never serve a server-side call from Railway, and it will not work on Vercel
- * previews or localhost. And with the REST products disabled there is nothing here for Mappls to
- * answer yet regardless.
- *
- * So the Mappls path below is written to their post-August-2025 static-key scheme (access_token as
- * a query parameter, not the retired OAuth flow) and switches on the moment a REST-enabled key
- * exists in MAPPLS_REST_KEY. Until then every request falls through to Nominatim, which is what
- * keeps staging and local development working and is why the fallback is not a nicety.
+ * Nominatim is the fallback for whenever OLA_CLIENT_ID/SECRET aren't set, which is what keeps
+ * staging and local development working without needing real credentials.
  */
 
-/* A key entitled to the REST products, whitelisted by IP so the server can use it. Deliberately
-   NOT MAPPLE_INDIA: that one is the browser's map key, domain-locked, and asking it these
-   questions returns invalid_token. Keeping them as separate variables is what stops someone
-   "fixing" the outage by pasting the map key here and getting silent 401s under a fallback. */
-const MAPPLS_REST_KEY = (process.env.MAPPLS_REST_KEY || '').trim();
+const OLA_CLIENT_ID = (process.env.OLA_CLIENT_ID || '').trim();
+const OLA_CLIENT_SECRET = (process.env.OLA_CLIENT_SECRET || '').trim();
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
 /* Nominatim asks every caller to identify itself and will block anonymous traffic. This is the
  * courtesy the browser could never extend, because a browser cannot set User-Agent. */
 const UA = 'ADoughCookie/1.0 (+https://www.adoughcookie.com; orders@adoughcookie.com)';
 
-export const mapplsConfigured = () => !!MAPPLS_REST_KEY;
-export function geoProvider() { return mapplsConfigured() ? 'mappls' : 'nominatim'; }
+export const olaConfigured = () => !!(OLA_CLIENT_ID && OLA_CLIENT_SECRET);
+export function geoProvider() { return olaConfigured() ? 'olamaps' : 'nominatim'; }
 
 const digits = (s) => String(s ?? '').replace(/\D/g, '');
 
@@ -56,48 +46,96 @@ async function getJson(url, opts = {}, ms = 7000) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Mappls                                                              */
+/* Ola Maps                                                            */
 /* ------------------------------------------------------------------ */
 
-/* Post-August-2025 auth: the static key IS the token, passed as access_token. The old
-   client_id/client_secret exchange against outpost.mappls.com is retired. */
-const withKey = (u) => `${u}${u.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(MAPPLS_REST_KEY)}`;
+/* One token, reused until it's about to expire. A fresh client_credentials exchange on every
+   geocode call would work, but there's no reason to pay for a network round trip we don't need. */
+let olaToken = { value: null, exp: 0 };
 
-async function mapplsSuggest(q, near) {
-  const p = new URLSearchParams({ query: q, region: 'IND' });
+function decodeJwtExp(jwt) {
+  try {
+    const payload = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64').toString('utf8'));
+    return Number.isFinite(payload.exp) ? payload.exp : null;
+  } catch { return null; }
+}
+
+async function getOlaToken() {
+  const now = Math.floor(Date.now() / 1000);
+  if (olaToken.value && olaToken.exp - 60 > now) return olaToken.value;
+
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    scope: 'openid',
+    client_id: OLA_CLIENT_ID,
+    client_secret: OLA_CLIENT_SECRET,
+  });
+  const r = await getJson('https://api.olamaps.io/auth/v1/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  const token = r?.access_token;
+  if (!token) return null;
+
+  olaToken = { value: token, exp: decodeJwtExp(token) || now + 3300 };
+  return token;
+}
+
+async function olaGet(url) {
+  const token = await getOlaToken();
+  if (!token) return null;
+  return getJson(url, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+const addressComponent = (components, type) => {
+  const c = (components || []).find((c) => c.types?.includes(type));
+  return c?.long_name || c?.short_name || null;
+};
+
+async function olaSuggest(q, near) {
+  const p = new URLSearchParams({ input: q });
   if (near) p.set('location', `${near.lat},${near.lng}`);
-  const r = await getJson(withKey(`https://atlas.mappls.com/api/places/search/json?${p}`));
-  const list = r?.suggestedLocations;
+  const r = await olaGet(`https://api.olamaps.io/places/v1/autocomplete?${p}`);
+  const list = r?.predictions;
   if (!Array.isArray(list)) return null;
   return list.map((s) => ({
-    label: s.placeName || s.placeAddress || '',
-    detail: s.placeAddress || '',
-    latitude: Number(s.latitude ?? s.lat),
-    longitude: Number(s.longitude ?? s.lng ?? s.lon),
-    id: s.eLoc || null,
+    label: s.structured_formatting?.main_text || s.description || '',
+    detail: s.structured_formatting?.secondary_text || '',
+    latitude: Number(s.geometry?.location?.lat),
+    longitude: Number(s.geometry?.location?.lng),
+    id: s.place_id || null,
   })).filter((s) => s.label && Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
 }
 
-async function mapplsReverse(lat, lng) {
-  const r = await getJson(withKey(`https://apis.mappls.com/advancedmaps/v1/rev_geocode?lat=${lat}&lng=${lng}`));
+async function olaReverse(lat, lng) {
+  const r = await olaGet(`https://api.olamaps.io/places/v1/reverse-geocode?latlng=${lat},${lng}`);
   const a = r?.results?.[0];
   if (!a) return null;
+  const c = a.address_components;
   return {
-    street: [a.street || a.subSubLocality, a.subLocality || a.locality].filter(Boolean).join(', '),
-    area: a.locality || a.subLocality || a.village || null,
-    city: a.city || a.district || null,
-    state: a.state || null,
-    postcode: digits(a.pincode) || null,
+    street: [addressComponent(c, 'sublocality'), addressComponent(c, 'neighborhood')].filter(Boolean).join(', '),
+    area: addressComponent(c, 'sublocality') || addressComponent(c, 'neighborhood') || null,
+    city: addressComponent(c, 'locality') || addressComponent(c, 'administrative_area_level_2') || null,
+    state: addressComponent(c, 'administrative_area_level_1') || null,
+    postcode: digits(addressComponent(c, 'postal_code')) || null,
     formatted: a.formatted_address || null,
   };
 }
 
-async function mapplsForward(address) {
-  const r = await getJson(withKey(`https://atlas.mappls.com/api/places/geocode?address=${encodeURIComponent(address)}&region=IND`));
-  const c = r?.copResults;
-  const lat = Number(c?.latitude), lng = Number(c?.longitude);
+async function olaForward(address) {
+  const r = await olaGet(`https://api.olamaps.io/places/v1/geocode?address=${encodeURIComponent(address)}`);
+  const c = r?.geocodingResults?.[0];
+  const lat = Number(c?.geometry?.location?.lat), lng = Number(c?.geometry?.location?.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { latitude: lat, longitude: lng, postcode: digits(c.pincode) || null, city: c.city || null, state: c.state || null };
+  const comps = c.address_components;
+  return {
+    latitude: lat,
+    longitude: lng,
+    postcode: digits(addressComponent(comps, 'postal_code')) || null,
+    city: addressComponent(comps, 'locality') || null,
+    state: addressComponent(comps, 'administrative_area_level_1') || null,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -154,30 +192,30 @@ async function osmForward(address, pincode) {
 export async function geoSuggest(query, near) {
   const q = String(query || '').trim();
   if (q.length < 3) return [];
-  if (mapplsConfigured()) {
-    const r = await mapplsSuggest(q, near);
+  if (olaConfigured()) {
+    const r = await olaSuggest(q, near);
     if (r?.length) return r;
     // A provider that answers nothing is not a reason to answer nothing.
-    console.log('[GEO] mappls suggest empty → nominatim');
+    console.log('[GEO] olamaps suggest empty → nominatim');
   }
   return osmSuggest(q, near);
 }
 
 export async function geoReverse(lat, lng) {
   if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null;
-  if (mapplsConfigured()) {
-    const r = await mapplsReverse(lat, lng);
+  if (olaConfigured()) {
+    const r = await olaReverse(lat, lng);
     if (r) return r;
-    console.log('[GEO] mappls reverse empty → nominatim');
+    console.log('[GEO] olamaps reverse empty → nominatim');
   }
   return osmReverse(lat, lng);
 }
 
 export async function geoForward(address, pincode) {
-  if (mapplsConfigured()) {
-    const r = await mapplsForward([address, pincode].filter(Boolean).join(' '));
+  if (olaConfigured()) {
+    const r = await olaForward([address, pincode].filter(Boolean).join(' '));
     if (r) return r;
-    console.log('[GEO] mappls forward empty → nominatim');
+    console.log('[GEO] olamaps forward empty → nominatim');
   }
   return osmForward(address, pincode);
 }

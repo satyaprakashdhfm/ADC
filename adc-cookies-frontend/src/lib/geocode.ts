@@ -21,8 +21,8 @@
 /* Our own backend, never a geocoder directly.
    Two reasons, both hard: the public Nominatim instance forbids autocomplete traffic and blocks by
    IP, and a browser cannot send the User-Agent it asks callers to identify themselves with; and the
-   Mappls key is domain-locked, so shipping it here hands it to anyone reading the page source. The
-   server picks the provider — see adc-cookies-backend-node/src/geo.js. */
+   Ola Maps credentials are exchanged server-side for a bearer token, which has no business being in
+   page source. The server picks the provider — see adc-cookies-backend-node/src/geo.js. */
 const API = typeof window !== 'undefined' ? '/api' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api');
 const TIMEOUT_MS = 8000;
 

@@ -6,12 +6,12 @@ import { geoSuggest, geoReverse, geoForward, geoProvider } from '../geo.js';
  *
  * Nothing on the storefront talks to a geocoding provider directly any more. That was never a
  * layering nicety: the public Nominatim instance forbids autocomplete traffic and blocks by IP, and
- * a browser cannot send the User-Agent it asks every caller to identify itself with. Meanwhile the
- * Mappls key is domain-locked, so shipping it to a client makes it usable by anyone who reads the
- * page source on that domain.
+ * a browser cannot send the User-Agent it asks every caller to identify itself with. The Ola Maps
+ * credentials are a client_id/secret pair exchanged for a bearer token, which must never reach a
+ * browser at all.
  *
- * Behind this router the provider can change without a single frontend edit — which is the whole
- * point, given Mappls' REST products are not enabled on our account yet.
+ * Behind this router the provider can change without a single frontend edit, which is the whole
+ * point: it already has been swapped once, with no change above this line.
  *
  * Public, like the storefront it serves: someone has to be able to type an address before they have
  * an account. Deliberately read-only and parameter-shaped, so the worst it can be abused for is
