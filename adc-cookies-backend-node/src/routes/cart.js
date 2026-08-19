@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../db.js';
 import { requireAuth, ApiError } from '../middleware.js';
-import { serializeCart, serializeCartItem } from '../serializers.js';
+import { serializeCart, serializeCartItem, withImageUrls } from '../serializers.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -35,7 +35,8 @@ async function fullCart(cart) {
     const product = await getOne('SELECT * FROM products WHERE id = $1', [ci.product_id]);
     return serializeCartItem(ci, product);
   }));
-  return serializeCart(cart, serialized);
+  // The cart shows product photos too, so its items need signing exactly like a catalogue row.
+  return serializeCart(cart, await withImageUrls(serialized));
 }
 
 router.get('/', async (req, res) => {

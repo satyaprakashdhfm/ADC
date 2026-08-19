@@ -25,6 +25,7 @@ import hyperlocalRoutes from './routes/hyperlocal.js';
 import geoRoutes from './routes/geo.js';
 import storeRoutes from './routes/store.js';
 import { ensureStoreAccounts } from './storeAuth.js';
+import { ensureMediaBucket } from './storage.js';
 import { paymentWebhook } from './routes/paymentsWebhook.js';
 import { paymentCallback } from './routes/orders.js';
 
@@ -151,6 +152,10 @@ if (!process.env.VERCEL) {
     // Give any store that has no staff login one. Idempotent — an existing account is never
     // touched, so a password someone changed cannot be reset by a redeploy.
     await ensureStoreAccounts().catch((e) => console.error('[STORE] account seed failed:', e?.message || e));
+    /* The private media bucket, created here rather than by hand so staging and production cannot
+       drift into one having it and the other not. Never fatal: no bucket means image uploads report
+       themselves unavailable, which is a great deal better than the API refusing to start. */
+    await ensureMediaBucket().catch((e) => console.error('[STORAGE] bucket check failed:', e?.message || e));
     /* Carrier status refresh. The store tablet polls and so stays current, but the admin list and
        the customer's account render the stored value — which went stale the moment nobody was
        looking at a portal. The webhook was meant to cover this and has not fired once. */

@@ -57,7 +57,7 @@ export default function StoreCard({ store, busy, setBusy, onChanged, setErr, set
           sees, without opening the store portal, exactly what each shop cannot sell. */}
       {store.doesNotCarry.length > 0 && (
         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 14px', padding: '8px 12px', background: 'var(--surface-sunken)', borderRadius: 8 }}>
-          Does not carry (same-day delivery restricted elsewhere): <strong style={{ color: 'var(--text-body)' }}>{store.doesNotCarry.join(', ')}</strong>
+          Does not carry (intracity delivery restricted elsewhere): <strong style={{ color: 'var(--text-body)' }}>{store.doesNotCarry.join(', ')}</strong>
         </p>
       )}
 

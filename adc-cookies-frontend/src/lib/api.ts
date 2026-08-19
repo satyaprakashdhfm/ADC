@@ -125,7 +125,12 @@ export async function logLoginLocation(): Promise<{ ok: boolean }> {
 /* ---- Products ---- */
 export interface Product {
   id: number; name: string; category: ProductCategory;
-  description: string; price: number; stockQuantity: number;
+  description: string; price: number;
+  /** The stored image references — 'supabase://products/…' for an upload, or a legacy '/assets/…'
+   *  path. This is what an editor must send back on save. */
+  imageRefs: string[];
+  /** The same list resolved to loadable URLs, which for an uploaded file is a SIGNED url that
+   *  expires. Display only — writing it back would store a link that dies in a week. */
   images: string; options: string; isAvailable: boolean;
   menuGroup: string; tag: string; featured: boolean;
   /** Per-delivery-mode availability, each with the reason to show the customer when off (e.g. Red
@@ -459,7 +464,8 @@ export interface CouponInput { code: string; discountType: 'PERCENTAGE' | 'FIXED
 export interface AdminMessage { id: number; name: string; email: string; phone?: string | null; message: string; handled: boolean; createdAt: string; }
 export interface ProductInput {
   name: string; category: ProductCategory; description?: string; price: number;
-  stockQuantity?: number; images?: string; options?: string; isAvailable?: boolean;
+  /** Stored references, never the signed display URLs. See Product.imageRefs. */
+  imageRefs?: string[]; options?: string; isAvailable?: boolean;
   menuGroup?: string; tag?: string; featured?: boolean;
   intracityAvailable?: boolean; intracityUnavailableReason?: string;
   intercityAvailable?: boolean; intercityUnavailableReason?: string;
@@ -682,6 +688,46 @@ export async function adminRetryPosRelay(orderId: number): Promise<{ ok: boolean
 }
 
 export async function adminGetProducts(): Promise<Product[]> { return request('/admin/products'); }
+/* ---- Uploaded media (private bucket, signed reads) ---- */
+
+export interface UploadedMedia {
+  /** Store this. */
+  ref: string;
+  /** Show this. It expires — see the note on Product.images. */
+  url: string;
+  bytes: number;
+  contentType: string;
+}
+
+/**
+ * Send one image to the admin upload endpoint.
+ *
+ * The file's bytes ARE the request body, with the file's own content type — no multipart, no
+ * FormData. request() is bypassed because it hard-codes application/json and would stringify a
+ * Blob into "[object Object]"; the admin token has to be attached by hand here for the same reason.
+ */
+export async function adminUploadMedia(file: File, kind: 'product' | 'hero'): Promise<UploadedMedia> {
+  const headers: Record<string, string> = { 'Content-Type': file.type || 'application/octet-stream' };
+  const at = adminSessionToken.get();
+  if (at) headers['X-Admin-Token'] = at;
+
+  const qs = `?kind=${encodeURIComponent(kind)}&name=${encodeURIComponent(file.name || 'image')}`;
+  const res = await fetch(`${API_BASE}/admin/uploads${qs}`, { method: 'POST', headers, body: file });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const e: ApiRequestError = new Error(err.message || err.error || `Upload failed (HTTP ${res.status})`);
+    e.code = err.code; e.status = res.status;
+    if (e.code === 'ADMIN_AUTH_REQUIRED' || e.code === 'ADMIN_SESSION_EXPIRED' || e.code === 'ADMIN_REVOKED') adminSessionToken.clear();
+    throw e;
+  }
+  return res.json();
+}
+
+/** Delete an uploaded object. Only for a ref nothing points at any more. */
+export async function adminDeleteMedia(ref: string): Promise<{ ok: boolean }> {
+  return request('/admin/uploads', { method: 'DELETE', body: JSON.stringify({ ref }) });
+}
+
 export async function adminCreateProduct(data: ProductInput): Promise<Product> {
   return request('/admin/products', { method: 'POST', body: JSON.stringify(data) });
 }

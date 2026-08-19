@@ -13,6 +13,7 @@ import insights from './insights.js';
 import delivery from './delivery.js';
 import shipments from './shipments.js';
 import cancelRefund from './cancelRefund.js';
+import uploads from './uploads.js';
 
 /*
  * Everything under /api/admin, split by domain.
@@ -42,5 +43,6 @@ router.use('/', insights);
 router.use('/', delivery);
 router.use('/', shipments);
 router.use('/', cancelRefund);
+router.use('/', uploads);
 
 export default router;
