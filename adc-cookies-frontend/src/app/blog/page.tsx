@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Clock, ShoppingBag } from 'lucide-react';
 import Footer from '@/components/storefront/Footer';
+import OrderCta from '@/components/storefront/OrderCta';
 import SiteHeader from '@/components/storefront/SiteHeader';
 
 const POSTS = [
@@ -77,15 +78,11 @@ export default function BlogPage() {
         </div>
       </section>
 
-      <section style={{ padding: '0 var(--gutter) 96px' }}>
-        <div style={{ maxWidth: 980, margin: '0 auto', textAlign: 'center', padding: '42px 28px', borderRadius: 28, background: 'var(--surface-inverse)', color: 'var(--cream-100)' }}>
-          <h2 style={{ color: 'var(--white)', fontSize: 'var(--text-h2)', marginBottom: 12 }}>Reading made you hungry?</h2>
-          <p style={{ color: 'var(--cream-100-68)', marginBottom: 26 }}>Order a fresh batch while the next blog post is still baking.</p>
-          <Link href="/order" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '16px 34px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 900, boxShadow: 'var(--shadow-brand)' }}>
-            <ShoppingBag size={19} /> Order Now
-          </Link>
-        </div>
-      </section>
+      <OrderCta
+        title="Reading made you hungry?"
+        body="Order a fresh batch while the next blog post is still baking."
+        href="/order"
+      />
 
       <Footer />
     </main>
