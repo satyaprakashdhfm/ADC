@@ -1,6 +1,5 @@
 'use client';
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
-import { addToCart, updateCartItem, removeCartItem, clearCart } from '@/lib/api';
 import { useAuth } from './AuthContext';
 
 export interface CartEntry { id: string; name: string; price: number; qty: number; img?: string; addOns?: string[]; note?: string; }
@@ -83,20 +82,30 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearAll = useCallback(() => { setCart({}); setGift(false); setGiftMessage(''); setGiftOccasion(''); setCoupon(''); setApplied(false); setDiscount(0); setGiftLineId(null); }, []);
 
-  // Keep carts independent per user: when a logged-in user LOGS OUT (or a different user signs in),
-  // start a fresh cart so the next person never inherits someone else's items. A guest logging in
-  // (null → user) keeps their cart, so items added before login survive checkout.
-  const { user } = useAuth();
-  const prevUserKey = useRef<string | null | undefined>(undefined);
+  /*
+   * Keep carts independent per account: when someone LOGS OUT, or a different person signs in on
+   * this browser, start fresh so nobody inherits someone else's items. A guest signing in
+   * (null → account) keeps their cart, which is the whole point — items added before signing in
+   * have to survive it.
+   *
+   * Keyed on authId, the Supabase auth user id. It used to be keyed on
+   * `user.phone || user.email || 'user'`, which is not an identity — it is whichever contact field
+   * happened to arrive first, and it changes for the SAME person moments after signing in:
+   * refineFromBackend replaces `user` wholesale with the DB row, so a phone-OTP login went
+   * 'user' → '9999999999' and a Google login went 'a@b.com' → the phone on its DB row. Either
+   * transition read as "a different person signed in" and wiped the guest cart it was supposed to
+   * be preserving. authId comes from the session alone and does not move.
+   */
+  const { authId } = useAuth();
+  const prevAuthId = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    const key = user ? String(user.phone || user.email || 'user') : null;
-    if (prevUserKey.current === undefined) { prevUserKey.current = key; return; } // record initial; never clear on first resolve
-    if (prevUserKey.current !== null && prevUserKey.current !== key) {
+    if (prevAuthId.current === undefined) { prevAuthId.current = authId; return; } // record initial; never clear on first resolve
+    if (prevAuthId.current !== null && prevAuthId.current !== authId) {
       clearAll();
       try { localStorage.removeItem('adc_cart'); } catch { /* ignore */ }
     }
-    prevUserKey.current = key;
-  }, [user, clearAll]);
+    prevAuthId.current = authId;
+  }, [authId, clearAll]);
 
   const count = Object.values(cart).reduce((s, e) => s + e.qty, 0);
   const total = Object.values(cart).reduce((s, e) => s + e.price * e.qty, 0);
