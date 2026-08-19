@@ -9,6 +9,10 @@ interface User { name: string; email: string; role: string; initials: string; ph
 
 interface AuthContextType {
   user: User | null;
+  /* The Supabase auth user id — a stable identity for "which account is this", unlike anything on
+     `user`, whose phone/email arrive at different moments and can each be the first one present.
+     Use this to scope per-account client state (see CartContext); never a contact field. */
+  authId: string | null;
   loading: boolean;
   profileLoaded: boolean;  // true once the authoritative /me profile has loaded (or there's no user)
   authModalOpen: boolean;          // true while a LoginModal instance is open anywhere in the app
@@ -38,6 +42,10 @@ const userFromMe = (me: MeResponse): User =>
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  // Set only from the session, and deliberately NOT touched by refineFromBackend: that replaces
+  // `user` wholesale on every page load and token refresh, which is exactly what made a
+  // contact-field-derived identity change under its own feet.
+  const [authId, setAuthId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoaded, setProfileLoaded] = useState(false);
   // While any LoginModal is open, ProfileGate stays quiet — the OTP path already runs its own
@@ -100,12 +108,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUser(prev => mergeSessionUser(prev, fromSessionMeta(data.session)));   // instant — no waiting on the backend
+      setAuthId(data.session?.user?.id ?? null);
       setLoading(false);
       if (data.session) refineFromBackend(); else setProfileLoaded(true);
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(prev => mergeSessionUser(prev, fromSessionMeta(session)));         // instant on login / logout / token refresh
+      setAuthId(session?.user?.id ?? null);
       if (session) refineFromBackend(); else setProfileLoaded(true);
     });
     return () => sub.subscription.unsubscribe();
@@ -189,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, profileLoaded, authModalOpen, setAuthModalOpen, login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
+    <AuthContext.Provider value={{ user, authId, loading, profileLoaded, authModalOpen, setAuthModalOpen, login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
