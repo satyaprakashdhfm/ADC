@@ -15,7 +15,7 @@ const ASKED_KEY = 'adc_location_asked';
    to" is their doorstep. Which store bakes it is ours to work out (the backend picks the nearest
    serviceable one at checkout), so the shop list moved behind a "Find a store" link. ---- */
 function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { store, detect, detecting, error, chooseStore, setArea } = useLocation();
+  const { store, detect, detecting, error, chooseStore, setArea, setCustPin } = useLocation();
   const { user } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -64,6 +64,9 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
       // the customer, and it never becomes a delivery coordinate (see the note on this component).
       const p = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
       areaName = [p?.area || p?.street, p?.city].filter(Boolean).join(', ');
+      // The postcode came back with the area name all along and was being discarded. It is the only
+      // thing that can tell same-day territory from courier territory, so keep it.
+      if (p?.postcode) setCustPin(p.postcode);
     } catch { /* the store name alone still tells them something */ }
     setArea(areaName);
     setFound({ area: areaName || 'your current location', storeName: storeArea(s) });
@@ -78,6 +81,7 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
     setBusy(true); setPinErr('');
     const zone = STORES.find(s => String(s.pincode).slice(0, 3) === p.slice(0, 3));
     if (zone) chooseStore(zone);
+    setCustPin(p);
     setArea(`PIN ${p}`);
     setFound({ area: `PIN ${p}`, storeName: zone ? storeArea(zone) : 'nearest' });
     setBusy(false);
@@ -87,6 +91,7 @@ function LocationModal({ open, onClose }: { open: boolean; onClose: () => void }
      the header has something to show; the authoritative pick happens backend-side at checkout. */
   const chooseAddress = (a: Address) => {
     if (a.latitude != null && a.longitude != null) chooseStore(nearestStore(a.latitude, a.longitude));
+    if (a.pincode) setCustPin(String(a.pincode));
     setArea([a.addressLine2 || a.addressLine1, a.city].filter(Boolean).join(', '));
     onClose();
   };
