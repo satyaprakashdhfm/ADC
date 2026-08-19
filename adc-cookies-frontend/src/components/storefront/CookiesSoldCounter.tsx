@@ -40,13 +40,17 @@ export default function CookiesSoldCounter() {
 
   if (n == null) return null;
   /*
-   * A card of its own in the footer's brand column, under the secondary mark.
+   * The footer's brand column, as a full-height celebration panel.
    *
    * It began as a line of text at the same size and weight as the copyright and policy links it sat
    * between, so the one genuinely interesting number in the footer — and the only thing on the page
-   * that moves — read as small print. It then became a pill in that same crowded centre strip. It
-   * now has the left column to itself and is dressed for it: warm rim, an amber glow behind the
-   * figure, the cookie mark, and the number at heading size.
+   * that moves — read as small print. Then a pill in that same crowded centre strip. It now owns the
+   * bottom of the brand column and runs to the foot of the columns row, so it is sized and dressed
+   * for that: two warm glows, the cookie mark, the figure at h2, and a live line saying it is still
+   * counting.
+   *
+   * Content is centred and the box is height:100%, so it stays composed whatever height the column
+   * hands it — that depends on how long the neighbouring copy runs, which is not fixed.
    *
    * Not a button, though it borrows the shape: nothing happens when you press it, and a card that
    * looks clickable and isn't is a worse outcome than one that goes unnoticed. No hover state and
@@ -55,9 +59,11 @@ export default function CookiesSoldCounter() {
   return (
     <div
       style={{
-        // No margin of its own — the footer positions it (bottom of the brand column), and a
-        // component that also nudges itself fights whatever places it next.
-        padding: '18px 20px',
+        width: '100%',
+        height: '100%',
+        minHeight: 150,
+        boxSizing: 'border-box',
+        padding: '22px 20px',
         borderRadius: 'var(--radius-card)',
         /* Deep warm near-black, the token the theme already reserves for badge fills. A white tint
            over an orange footer is barely a shade lighter than the orange, which is why the original
@@ -67,28 +73,39 @@ export default function CookiesSoldCounter() {
         boxShadow: '0 6px 20px var(--black-18)',
         position: 'relative',
         overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        textAlign: 'center',
       }}
     >
-      {/* Warm glow behind the figure. Decorative only, and pointer-events-free so it can never
-          swallow a tap meant for something underneath it. */}
-      <span aria-hidden style={{ position: 'absolute', top: -34, right: -34, width: 118, height: 118, borderRadius: '50%', background: 'radial-gradient(circle, var(--brand-scrim-16) 0%, transparent 70%)', pointerEvents: 'none' }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 11, position: 'relative' }}>
-        <span aria-hidden style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none', boxShadow: '0 2px 8px var(--black-28)' }}>
-          <Cookie size={21} color="var(--white)" />
+      {/* Warm glows, opposite corners, for depth on a large flat panel. Decorative only and
+          pointer-events-free so they can never swallow a tap meant for something underneath. */}
+      <span aria-hidden style={{ position: 'absolute', top: -40, right: -40, width: 140, height: 140, borderRadius: '50%', background: 'radial-gradient(circle, var(--brand-scrim-16) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <span aria-hidden style={{ position: 'absolute', bottom: -46, left: -46, width: 150, height: 150, borderRadius: '50%', background: 'radial-gradient(circle, var(--brand-scrim-16) 0%, transparent 72%)', pointerEvents: 'none' }} />
+
+      <span aria-hidden style={{ position: 'relative', width: 46, height: 46, borderRadius: '50%', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none', boxShadow: '0 3px 12px var(--black-28)' }}>
+        <Cookie size={24} color="var(--white)" />
+      </span>
+
+      <div style={{ position: 'relative' }}>
+        <b style={{ display: 'block', color: 'var(--amber-300)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em' }}>
+          {n.toLocaleString('en-IN')}+
+        </b>
+        <span style={{ display: 'block', marginTop: 4, color: 'var(--cream-100-72)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.02em' }}>
+          cookies baked &amp; sold
         </span>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <b style={{ color: 'var(--amber-300)', font: `900 var(--text-h3)/1 var(--font-display)`, letterSpacing: '-.01em' }}>
-              {n.toLocaleString('en-IN')}+
-            </b>
-            {/* Live dot — the number really is ticking, and this is what says so. */}
-            <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
-          </div>
-          <span style={{ color: 'var(--cream-100-72)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.02em' }}>
-            cookies baked &amp; sold
-          </span>
-        </div>
       </div>
+
+      {/* The number really is ticking, and this is what says so. */}
+      <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '4px 11px', borderRadius: 'var(--radius-pill)', background: 'var(--white-16)' }}>
+        <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
+        <span style={{ color: 'var(--cream-100-72)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+          counting live
+        </span>
+      </span>
     </div>
   );
 }
