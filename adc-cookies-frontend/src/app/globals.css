@@ -466,18 +466,21 @@ body::before {
    are actually visible — a photo you cannot see is just an expensive background colour.
    The card wraps to stacked rows on a phone, where a left-to-right scrim would leave the CTA on
    bare photo, so below 760px it runs top-to-bottom instead and holds a floor of darkness. */
+/* Warm brand scrim, not a black one. The espresso version read as fog over the gift boxes and
+   drained the colour out of the only celebratory photograph on the page; this keeps the photo warm
+   and still carries white type. It cannot be dropped altogether — the type on this card is white. */
 .corp-cta {
   background:
-    linear-gradient(90deg, var(--espresso-95) 0%, var(--espresso-62) 52%, var(--espresso-30) 100%),
+    linear-gradient(90deg, var(--brand-scrim-92) 0%, var(--brand-scrim-58) 52%, var(--brand-scrim-16) 100%),
     url('/assets/corporate-gifting.jpg') center/cover no-repeat,
-    var(--surface-inverse);
+    var(--navbar-bg);
 }
 @media (max-width: 760px) {
   .corp-cta {
     background:
-      linear-gradient(180deg, var(--espresso-95) 0%, var(--espresso-62) 100%),
+      linear-gradient(180deg, var(--brand-scrim-92) 0%, var(--brand-scrim-58) 100%),
       url('/assets/corporate-gifting.jpg') center/cover no-repeat,
-      var(--surface-inverse);
+      var(--navbar-bg);
   }
 }
 
