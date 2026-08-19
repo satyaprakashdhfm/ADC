@@ -215,6 +215,14 @@ export default function AdminDashboard() {
             addBannerMessage={siteSettings.addBannerMessage}
             removeBannerMessage={siteSettings.removeBannerMessage}
             saveBannerMessages={siteSettings.saveBannerMessages}
+            hero={siteSettings.heroBanner}
+            heroUrls={siteSettings.heroUrls}
+            heroSizes={siteSettings.heroSizes}
+            heroSaved={siteSettings.heroSaved}
+            heroBusy={siteSettings.heroBusy}
+            changeHeroImage={siteSettings.changeHeroImage}
+            changeHeroField={siteSettings.changeHeroField}
+            saveHeroBanner={siteSettings.saveHeroBanner}
           />
         )}
 

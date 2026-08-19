@@ -3,6 +3,7 @@ import { getAll, getOne } from '../db.js';
 import { ApiError } from '../middleware.js';
 import { serializeProduct, withImageUrls } from '../serializers.js';
 import { readBannerMessages } from '../bannerMessages.js';
+import { resolveHeroBanner } from '../heroBanner.js';
 
 const router = Router();
 
@@ -28,6 +29,17 @@ router.get('/', async (req, res) => {
 router.get('/announcement', async (_req, res) => {
   const messages = await readBannerMessages();
   res.json({ messages, text: messages[0] || null });
+});
+
+/* Public: the home page's hero photograph and where clicking it goes.
+   Declared before '/:id' so "hero-banner" isn't captured as an id.
+
+   Asked for at run time rather than baked into the page because an uploaded image resolves to a
+   SIGNED url with an expiry — one captured at build time would stop working a week after a deploy,
+   on the first image every visitor sees. Nothing set here means the storefront keeps the file it
+   ships, so this can never blank the hero. */
+router.get('/hero-banner', async (_req, res) => {
+  res.json(await resolveHeroBanner());
 });
 
 /* Public: is online ordering paused, and what should we say?
