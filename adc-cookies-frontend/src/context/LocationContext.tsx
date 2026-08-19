@@ -1,6 +1,8 @@
 'use client';
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { STORES, type Store } from '@/lib/stores';
+import { useAuth } from '@/context/AuthContext';
+import { getAddresses } from '@/lib/api';
 
 /*
  * Delivery location — the industry-standard "Deliver to …" selector.
@@ -54,6 +56,7 @@ const Ctx = createContext<LocationValue | null>(null);
 const AREA_KEY = 'adc_location_area';
 
 export function LocationProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [store, setStore] = useState<Store | null>(null);
   const [area, setAreaState] = useState('');
   const [detecting, setDetecting] = useState(false);
@@ -79,6 +82,32 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       else localStorage.removeItem(LS_KEY);
     } catch { /* ignore */ }
   };
+
+  /*
+   * Seed from the account's own saved address when this device has told us nothing.
+   * A signed-in shopper with a saved address has already said where they are, so leaving the menu
+   * unnarrowed (or asking the browser again) throws away what we already know. Coordinates are
+   * preferred over the pincode: nearestStore() works from any coordinates, whereas the pincode only
+   * matches if it happens to BE one of our store pincodes.
+   *
+   * An explicit or previously-stored choice always wins — this only fills a blank, and only once
+   * localStorage has been read (`ready`), so it can never race ahead of the stored value.
+   */
+  useEffect(() => {
+    if (!ready || !user || store) return;
+    let cancelled = false;
+    getAddresses()
+      .then(list => {
+        if (cancelled || !list.length) return;
+        const pick = list.find(a => a.isDefault) ?? list[0];
+        const s = (pick.latitude != null && pick.longitude != null)
+          ? nearestStore(Number(pick.latitude), Number(pick.longitude))
+          : STORES.find(x => x.pincode === Number(pick.pincode)) ?? null;
+        if (s) { setStore(s); persist(s); }
+      })
+      .catch(() => { /* no addresses, or not reachable — the menu simply stays unnarrowed */ });
+    return () => { cancelled = true; };
+  }, [ready, user, store]);
 
   const setArea = useCallback((a: string) => {
     setAreaState(a);
