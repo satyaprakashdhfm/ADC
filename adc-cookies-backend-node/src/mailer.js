@@ -68,12 +68,30 @@ async function send({ to, subject, html, replyTo }) {
 const rupee = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 
+/*
+ * The logo, as an absolute public URL. An email is rendered outside our site, so a relative path
+ * would resolve against the mail client rather than adoughcookie.com. Overridable via env so a
+ * staging build can point at its own deploy; the production asset is a fine default either way,
+ * since it is the same artwork.
+ */
+const LOGO_URL = process.env.MAIL_LOGO_URL || 'https://www.adoughcookie.com/assets/adc-logo.png';
+
 const shell = (title, body) => `
   <div style="font-family:Arial,Helvetica,sans-serif;background:#f6efe3;padding:24px">
     <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #eadfce">
-      <div style="background:linear-gradient(135deg,#F29F05,#EF7507);padding:20px 24px">
-        <div style="font-size:20px;font-weight:800;color:#fff">a dough cookie</div>
-        <div style="font-size:12px;color:#fff;opacity:.9">Aroma of Freshness</div>
+      <!-- background-color first as the fallback: Outlook's Word engine ignores the gradient, and
+           without a solid colour under it the header rendered as a white band. -->
+      <div style="background-color:#EF7507;background:linear-gradient(135deg,#F29F05,#EF7507);padding:20px 24px">
+        <!-- The artwork is amber, so it cannot sit straight on this orange — and the site's
+             crush-to-black-then-invert trick is a CSS filter, which email clients do not support.
+             A white chip gives it a surface it reads on everywhere, with no second asset to keep in
+             step. alt carries the name for the many clients that block remote images by default,
+             which is also why the tagline below stays live text rather than being part of the image. -->
+        <div style="display:inline-block;background:#ffffff;border-radius:12px;padding:6px 12px">
+          <img src="${LOGO_URL}" alt="a dough cookie" width="150"
+               style="display:block;width:150px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none" />
+        </div>
+        <div style="font-size:12px;color:#fff;opacity:.9;margin-top:10px">Aroma of Freshness</div>
       </div>
       <div style="padding:24px">
         <h2 style="margin:0 0 14px;color:#2B1D12;font-size:18px">${title}</h2>
