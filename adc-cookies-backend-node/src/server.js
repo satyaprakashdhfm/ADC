@@ -167,9 +167,13 @@ if (!process.env.VERCEL) {
       console.log(`[CONFIG] DELHIVERY_TOKEN=${process.env.DELIVERY_API_TOKEN || process.env.DELHIVERY_API_TOKEN ? 'set' : 'MISSING'}`);
       console.log(`[CONFIG] DELHIVERY_BASE_URL=${process.env.DELHIVERY_BASE_URL || '(default: track.delhivery.com)'}`);
       console.log(`[CONFIG] RESEND=${process.env.RESEND_API_KEY ? 'set' : 'MISSING'}`);
-      // Admin is granted on the users row, not by env var — see the note in middleware.js.
-      getOne("SELECT count(*)::int AS n FROM users WHERE role = 'ADMIN'")
-        .then((r) => console.log(`[CONFIG] ADMIN accounts in DB=${r?.n ?? '?'}`)).catch(() => {});
+      /* The admin allowlist, which is admin_accounts — NOT users.role.
+         This counted users WHERE role = 'ADMIN' long after that column was retired, and initSchema
+         itself sets every such row to CUSTOMER. So it printed 0 on every boot of every environment
+         and read like "nobody can sign in to the dashboard", which was never true and sent somebody
+         looking for a seeding bug that did not exist. */
+      getOne('SELECT count(*)::int AS n FROM admin_accounts WHERE is_active = TRUE')
+        .then((r) => console.log(`[CONFIG] ADMIN phone allowlist=${r?.n ?? '?'} active`)).catch(() => {});
     });
   })().catch(err => { console.error('Startup failed:', err); process.exit(1); });
 }

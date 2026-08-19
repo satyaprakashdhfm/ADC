@@ -87,10 +87,21 @@ let bucketReady = false;
  * and 500s in production.
  */
 export async function ensureMediaBucket() {
-  if (bucketReady || !storageConfigured()) return bucketReady;
+  if (bucketReady) return true;
+  /* Says so out loud rather than returning quietly. Whether uploads work depends entirely on two
+     environment variables, so a silent no-op at boot means the first person to try uploading a photo
+     is the one who finds out — and the log gives no clue which of the two is missing. */
+  if (!storageConfigured()) {
+    console.warn('[STORAGE] image uploads are OFF — set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+    return false;
+  }
   const sb = adminClient();
   const { data } = await sb.storage.getBucket(MEDIA_BUCKET);
-  if (data) { bucketReady = true; return true; }
+  if (data) {
+    console.log(`[STORAGE] bucket ${MEDIA_BUCKET} already there (public=${!!data.public})`);
+    bucketReady = true;
+    return true;
+  }
   const { error } = await sb.storage.createBucket(MEDIA_BUCKET, {
     public: false,
     fileSizeLimit: MAX_UPLOAD_BYTES,
