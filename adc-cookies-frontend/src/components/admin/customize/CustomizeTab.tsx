@@ -27,13 +27,15 @@ export default function CustomizeTab({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <Panel title="Top banner messages">
         <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 4px' }}>
-          The lines that rotate in the thin strip at the very top of every page, one every four
-          seconds, in this order. Edit any of them, and add your own — an offer, a holiday notice,
-          a new flavour.
+          The lines that rotate in the thin strip across the top of the home page, one every four
+          seconds, in this order. Every line is listed here, however many there are — edit any of
+          them, reorder them by editing the text, or add your own: an offer, a holiday notice, a new
+          flavour.
         </p>
         <p style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', margin: '0 0 14px' }}>
           If you mention a coupon code, make sure it is a real one that works at checkout. Keep at
-          least one message — the strip is always part of the page.
+          least one message — the strip&apos;s height is part of the page layout, so it can never be
+          empty. Up to twelve, 160 characters each.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
