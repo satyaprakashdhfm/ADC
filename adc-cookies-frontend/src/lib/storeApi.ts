@@ -110,9 +110,14 @@ export interface StoreTrack {
 export interface StoreMenuItem {
   id: number; name: string; category: string; menuGroup: string | null;
   price: number; available: boolean;
-  /** Whether THIS store carries it — separate from `available`, which is storewide. A same-day-only,
+  /** Whether THIS store carries it — separate from `available`, which is storewide. An intracity-only,
    *  city-restricted item (Red Velvet: Bengaluru only) is a flat no at Besant Nagar regardless. */
   availableHere: boolean;
+  /** What the automatic rule says, ignoring anything set for this store. The two together are what
+   *  let the portal say whether an "off" is something this store can turn back on. */
+  automaticallyAvailable: boolean;
+  /** True when somebody has decided this item's state for this store specifically. */
+  isOverride: boolean;
   posItemId: string | null; posVariation: string | null;
   posPrice: number | null; posInStock: boolean | null;
 }
@@ -146,6 +151,20 @@ export const storeMarkReady = (code: string, id: number) =>
 
 export const storeSetPosBill = (code: string, id: number, billNo: string) =>
   request<{ ok: boolean; billNo: string }>(code, `/orders/${id}/pos-bill`, { method: 'POST', body: JSON.stringify({ billNo }) });
+
+/* ---- What this store can currently sell ----
+   Scoped to the signed-in store by the token; there is no store code in these paths to get wrong. */
+
+export const storeAvailability = (code: string) =>
+  request<{ code: string; isActive: boolean }>(code, '/availability');
+
+/** Open or close this store. Closed means it stops being given new orders. */
+export const storeSetAvailability = (code: string, isActive: boolean) =>
+  request<{ ok: boolean; code: string; isActive: boolean }>(code, '/availability', { method: 'PATCH', body: JSON.stringify({ isActive }) });
+
+/** On, off, or `null` to hand the item back to the automatic rule. */
+export const storeSetItemAvailability = (code: string, productId: number, available: boolean | null) =>
+  request<{ ok: boolean }>(code, `/menu/${productId}/availability`, { method: 'PUT', body: JSON.stringify({ available }) });
 
 export const storeChangePassword = (code: string, currentPassword: string, newPassword: string) =>
   request<{ ok: boolean }>(code, '/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
