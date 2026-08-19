@@ -38,12 +38,12 @@ const chipIcon: React.CSSProperties = { width: 38, height: 38, borderRadius: 11,
 // img → public/assets/ingredients/<slug>.jpg (4:3). Optional — a branded number tile shows until
 // the photo is dropped in, so the section never renders a broken image.
 const INGREDIENTS = [
-  { n: '01', title: 'No Preservatives, No Artificial Flavours', img: '/assets/ingredients/no-preservatives.jpg', text: 'Nothing goes in to make a cookie last longer than it should. No preservatives, no artificial flavouring, no colouring — which is exactly why ours keep for days rather than months, and why they taste like something that came out of an oven this morning.' },
+  { n: '01', title: 'No Preservatives, No Artificial Flavours', img: '/assets/ingredients/no-preservatives.jpg', text: 'Nothing goes in to make a cookie last longer than it should. No preservatives, no artificial flavouring, no colouring, which is exactly why ours keep for days rather than months, and why they taste like something that came out of an oven this morning.' },
   { n: '02', title: 'Handcrafted in Small Batches', img: '/assets/ingredients/handcrafted.jpg', text: 'Every ball of dough is portioned, filled and shaped by hand, and baked in small trays through the day. It is slower and it does not scale neatly, but it is the only way to get a centre that stays molten and an edge that stays crisp.' },
   { n: '03', title: 'Président Butter', img: '/assets/ingredients/president-butter.jpg', text: 'We use Président Butter, a premium French butter with a higher fat content that gives our cookies their signature gooey centre and soft, melt-in-your-mouth texture.' },
-  { n: '04', title: 'Couverture Chocolate', img: '/assets/ingredients/couverture-chocolate.jpg', text: 'Made with imported Couverture Chocolate — known for its high cocoa content and silky finish. This rich, decadent chocolate delivers an intense cocoa flavour in every bite, elevating each cookie to gourmet status.' },
-  { n: '05', title: 'Artisanal Flour Blend', img: '/assets/ingredients/artisanal-flour.jpg', text: 'A curated blend of artisanal flours gives the perfect cookie structure and a nuanced, complex flavour profile — the kind of taste and texture only premium flour can deliver.' },
-  { n: '06', title: 'Premium Fillings', img: '/assets/ingredients/premium-fillings.jpg', text: 'No compromises, just the best. Stuffed with only 100% real Nutella, Lotus Biscoff, Reese’s Cups and homemade peanut butter — our fillings are never substitutes, they’re the real deal.' },
+  { n: '04', title: 'Couverture Chocolate', img: '/assets/ingredients/couverture-chocolate.jpg', text: 'Made with imported Couverture Chocolate, known for its high cocoa content and silky finish. This rich, decadent chocolate delivers an intense cocoa flavour in every bite, elevating each cookie to gourmet status.' },
+  { n: '05', title: 'Artisanal Flour Blend', img: '/assets/ingredients/artisanal-flour.jpg', text: 'A curated blend of artisanal flours gives the perfect cookie structure and a nuanced, complex flavour profile, the kind of taste and texture only premium flour can deliver.' },
+  { n: '06', title: 'Premium Fillings', img: '/assets/ingredients/premium-fillings.jpg', text: 'No compromises, just the best. Stuffed with only 100% real Nutella, Lotus Biscoff, Reese’s Cups and homemade peanut butter. Our fillings are never substitutes, they’re the real deal.' },
 ];
 
 function useIsMobile(bp = 760) {
@@ -89,24 +89,24 @@ export default function StoresAbout() {
             /* Mobile: compact — heading, a small image, a short line, and a link to the full story */
             <div>
               <p style={eyebrow}>About Us</p>
-              <h2 style={{ ...heading, marginBottom: 12 }}>A Dough Cookie — baked fresh, served warm.</h2>
+              <h2 style={{ ...heading, marginBottom: 12 }}>A Dough Cookie. Baked fresh, served warm.</h2>
               <AboutVideo
                 sizes="100vw"
                 style={{ width: '100%', aspectRatio: '16 / 9', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-md)', marginBottom: 12 }}
               />
-              <p style={{ ...body, marginBottom: 12 }}>Warm, soft-centre cookies with premium fillings and gift-ready packaging — baked in small batches so every centre stays soft.</p>
+              <p style={{ ...body, marginBottom: 12 }}>Warm, soft-centre cookies with premium fillings and gift-ready packaging, baked in small batches so every centre stays soft.</p>
               <Link href="/about" style={link}>Read our full story <ArrowRight size={15} /></Link>
             </div>
           ) : (
             <div style={split}>
               <div style={col}>
                 <p style={eyebrow}>About Us</p>
-                <h2 style={heading}>A Dough Cookie — baked fresh, served warm.</h2>
+                <h2 style={heading}>A Dough Cookie. Baked fresh, served warm.</h2>
                 <p style={body}>
-                  Warm, soft-centre cookies with premium fillings and gift-ready packaging — baked small in small batches so every centre stays soft and every bite smells like the oven.
+                  Warm, soft-centre cookies with premium fillings and gift-ready packaging, baked in small batches so every centre stays soft and every bite smells like the oven.
                 </p>
                 <p style={body}>
-                  From our first kitchen to stores across Bengaluru and Chennai, the idea hasn&apos;t changed — real ingredients, no shortcuts. We bake with Président butter, couverture chocolate and 100% real fillings like Nutella and Lotus Biscoff, in small batches through the day, so what reaches you is warm, soft-centred and never mass-produced.
+                  From our first kitchen to stores across Bengaluru and Chennai, the idea hasn&apos;t changed. Real ingredients, no shortcuts. We bake with Président butter, couverture chocolate and 100% real fillings like Nutella and Lotus Biscoff, in small batches through the day, so what reaches you is warm, soft-centred and never mass-produced.
                 </p>
                 <p style={body}>
                   Whether it&apos;s a treat for yourself, a gift box for someone you love, or a bulk order for your team, we bake it fresh and deliver it with care.
@@ -132,7 +132,7 @@ export default function StoresAbout() {
           <div style={{ textAlign: 'center', maxWidth: 720, margin: '0 auto clamp(22px,3vw,40px)' }}>
             <p style={eyebrow}>Freshly Baked</p>
             <h3 style={heading}>The Finest Ingredients</h3>
-            <p style={{ ...body, maxWidth: '100%', margin: 0 }}>Crafted from the best — because extraordinary cookies deserve nothing less.</p>
+            <p style={{ ...body, maxWidth: '100%', margin: 0 }}>Crafted from the best, because extraordinary cookies deserve nothing less.</p>
           </div>
           {/* Sideways auto-scrolling marquee (same as the reviews strip) instead of a tall grid. */}
           <IngredientsCarousel items={INGREDIENTS} />
@@ -210,7 +210,7 @@ export default function StoresAbout() {
               <div style={col}>
                 <p style={eyebrow}>Get in Touch</p>
                 <h3 style={subhead}>Bulk orders, gifting or a question?</h3>
-                <p style={{ ...body, marginBottom: 18 }}>Drop your details and our team will get back to you — fast. Or reach us directly:</p>
+                <p style={{ ...body, marginBottom: 18 }}>Drop your details and our team will get back to you fast. Or reach us directly:</p>
                 {contactLinks}
               </div>
               <div style={col}>

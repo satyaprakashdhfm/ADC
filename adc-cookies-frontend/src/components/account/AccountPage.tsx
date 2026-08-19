@@ -474,7 +474,7 @@ export default function AccountPage() {
               </div>
 
               {addresses.length === 0 && !addingAddr && (
-                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>No saved addresses yet — add your delivery address to speed up checkout.</p>
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>No saved addresses yet. Add your delivery address to speed up checkout.</p>
               )}
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }} className="account-address-list">

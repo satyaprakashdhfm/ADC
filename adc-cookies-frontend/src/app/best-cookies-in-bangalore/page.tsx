@@ -24,9 +24,9 @@ import { SITE_PHONE, SITE_EMAIL } from '@/lib/site';
 
 const SITE_URL = 'https://www.adoughcookie.com';
 const PATH = '/best-cookies-in-bangalore';
-const TITLE = 'Best Cookies in Bangalore — Freshly Baked & Same-Day Delivery | a dough cookie';
+const TITLE = 'Best Cookies in Bangalore, Freshly Baked & Same-Day Delivery | a dough cookie';
 const DESCRIPTION =
-  'Looking for the best cookies in Bangalore? A Dough Cookie bakes in small batches all day at three Bengaluru stores — Jayanagar, S.G. Palya and Electronic City — with same-day delivery across the city in about an hour.';
+  'Looking for the best cookies in Bangalore? A Dough Cookie bakes in small batches all day at three Bengaluru stores in Jayanagar, S.G. Palya and Electronic City, with same-day delivery across the city in about an hour.';
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -63,7 +63,7 @@ const COOKIES = PRODUCT_DOCS.filter(p => !/tin$/i.test(p.slug));
 const FAQS = [
   {
     q: 'Where can I buy the best cookies in Bangalore?',
-    a: 'A Dough Cookie has three Bengaluru stores — Jayanagar 9th Block, S.G. Palya near Christ University, and Electronic City Phase 1. All three bake in small batches through the day, so an evening cookie is as fresh as a morning one. You can also order online for same-day delivery anywhere we reach in the city.',
+    a: 'A Dough Cookie has three Bengaluru stores, in Jayanagar 9th Block, S.G. Palya near Christ University, and Electronic City Phase 1. All three bake in small batches through the day, so an evening cookie is as fresh as a morning one. You can also order online for same-day delivery anywhere we reach in the city.',
   },
   {
     q: 'Do you deliver cookies across Bangalore on the same day?',
@@ -87,7 +87,7 @@ const FAQS = [
   },
   {
     q: 'Which is your best-selling cookie?',
-    a: 'The Double Choco Chip and the Nutella Filled are the two that move fastest. If you are ordering for the first time and cannot decide, the Chocolate Chip is the honest benchmark — it is the cookie the rest of the menu is measured against.',
+    a: 'The Double Choco Chip and the Nutella Filled are the two that move fastest. If you are ordering for the first time and cannot decide, the Chocolate Chip is the honest benchmark. It is the cookie the rest of the menu is measured against.',
   },
 ];
 
@@ -187,7 +187,7 @@ export default function BestCookiesInBangalorePage() {
             The Best Cookies in Bangalore, Baked Fresh All Day
           </h1>
           <p style={{ ...para, fontSize: 'var(--text-lg)', maxWidth: 780 }}>
-            A Dough Cookie is a small-batch cookie kitchen with three stores across Bengaluru — Jayanagar,
+            A Dough Cookie is a small-batch cookie kitchen with three stores across Bengaluru, in Jayanagar,
             S.G. Palya and Electronic City. Everything is shaped by hand, baked through the day rather
             than all at once, and delivered anywhere in the city in about an hour.
           </p>
@@ -217,7 +217,7 @@ export default function BestCookiesInBangalorePage() {
           <h2 style={h2}>Our cookie stores in Bengaluru</h2>
           <p style={{ ...para, maxWidth: 760 }}>
             Three shopfronts, each baking its own trays through the day. Walk in for a warm cookie, a
-            cookie shake or a coffee — or order from the nearest one and have it brought to you.
+            cookie shake or a coffee, or order from the nearest one and have it brought to you.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'clamp(14px,2vw,22px)', marginTop: 26 }}>
             {BLR_STORES.map(s => (
@@ -229,7 +229,7 @@ export default function BestCookiesInBangalorePage() {
                 )}
                 <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
                   <h3 style={{ font: '900 var(--text-lg)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>
-                    {s.name.replace('A Dough Cookie — ', '')}
+                    {s.name.replace('A Dough Cookie, ', '')}
                   </h3>
                   <p style={{ display: 'flex', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.6, margin: 0 }}>
                     <MapPin size={16} style={{ flex: 'none', marginTop: 2, color: 'var(--brand-secondary)' }} />
@@ -287,7 +287,7 @@ export default function BestCookiesInBangalorePage() {
             {COOKIES.map(p => (
               <Link key={p.slug} href={`/?q=${encodeURIComponent(p.name)}`} style={{ background: 'var(--vanilla)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: 'var(--surface-sunken)' }}>
-                  <Image src={p.image} alt={`${p.name} — a dough cookie Bangalore`} fill sizes="(max-width: 760px) 50vw, 260px" style={{ objectFit: 'cover' }} />
+                  <Image src={p.image} alt={`${p.name}, a dough cookie Bangalore`} fill sizes="(max-width: 760px) 50vw, 260px" style={{ objectFit: 'cover' }} />
                 </div>
                 <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
                   <h3 style={{ font: '900 var(--text-base)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: 0 }}>{p.name}</h3>
@@ -306,14 +306,14 @@ export default function BestCookiesInBangalorePage() {
           <h2 style={h2}>Cookie delivery across Bengaluru</h2>
           <p style={para}>
             Put in your address at checkout and the order is routed to whichever of our three stores is
-            actually closest to you — not to a single central kitchen. That is what makes same-day
+            actually closest to you, not to a single central kitchen. That is what makes same-day
             realistic: the cookie has a short trip, so it is still warm when it arrives, usually within
             about an hour.
           </p>
           <p style={para}>
             The delivery fee is the real distance-based rate from that store, shown on the bill before
             you pay, along with how many kilometres away your cookies are. Outside Bengaluru we ship
-            nationwide by courier — though a few items, like the Red Velvet with its 24-hour life, stay
+            nationwide by courier, though a few items, like the Red Velvet with its 24-hour life, stay
             inside the city where we can get them to you the same day.
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 22 }}>
@@ -332,7 +332,7 @@ export default function BestCookiesInBangalorePage() {
         <div style={wrap}>
           <h2 style={h2}>Cookie gifts and corporate boxes in Bangalore</h2>
           <p style={{ ...para, maxWidth: 820 }}>
-            Cookie tins from ₹500 — Chocolate Chip, Nutella, Red Velvet and Biscoff — packed in a
+            Cookie tins from ₹500 in Chocolate Chip, Nutella, Red Velvet and Biscoff, packed in a
             reusable tin with a ribbon and a hand-written card. For teams, clients and events we do
             branded boxes, bulk pricing and delivery coordinated to a single date across the city.
           </p>

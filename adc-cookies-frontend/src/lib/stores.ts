@@ -17,7 +17,7 @@ export interface Store {
 export const STORES: Store[] = [
   {
     city: 'Bengaluru',
-    name: 'A Dough Cookie — Jayanagar',
+    name: 'A Dough Cookie, Jayanagar',
     address: 'Jain University, 1314, 24th Main Rd, opposite Gate 1, Kottapalya, Jayanagar 9th Block, Jayanagar, Bengaluru, Karnataka 560041',
     pincode: 560041,
     phone: SITE_PHONE,
@@ -29,7 +29,7 @@ export const STORES: Store[] = [
   },
   {
     city: 'Bengaluru',
-    name: 'A Dough Cookie — S.G. Palya',
+    name: 'A Dough Cookie, S.G. Palya',
     address: 'No 10, 1st Main Rd, Venkateshwara Layout, S.G. Palya, Bengaluru, Karnataka 560029',
     pincode: 560029,
     phone: SITE_PHONE,
@@ -41,7 +41,7 @@ export const STORES: Store[] = [
   },
   {
     city: 'Bengaluru',
-    name: 'A Dough Cookie — Electronic City',
+    name: 'A Dough Cookie, Electronic City',
     address: 'F3 Alley, GF, 1st Cross, Neeladri Rd, Electronic City Phase I, Bengaluru, Karnataka 560100',
     pincode: 560100,
     phone: SITE_PHONE,
@@ -53,7 +53,7 @@ export const STORES: Store[] = [
   },
   {
     city: 'Chennai',
-    name: 'A Dough Cookie — Besant Nagar',
+    name: 'A Dough Cookie, Besant Nagar',
     address: '63, 6th Avenue, Besant Nagar, Chennai, Tamil Nadu 600090',
     pincode: 600090,
     phone: SITE_PHONE,

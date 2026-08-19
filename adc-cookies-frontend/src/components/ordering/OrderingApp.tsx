@@ -177,7 +177,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   );
 
   // Honest arrival line for the success screen — same-day for intra-city, a real date for courier, else generic.
-  const successEta = intracity ? 'Arriving today' : deliverBy ? `Arriving ${fmtDay(deliverBy)}` : 'On its way — we’ll email tracking updates';
+  const successEta = intracity ? 'Arriving today' : deliverBy ? `Arriving ${fmtDay(deliverBy)}` : 'On its way, we’ll email tracking updates';
   if (done) return <OrderSuccessPage show total={paid} orderId={orderId} eta={successEta} summary={placedOrderSummary} pendingPayment={pendingPayment} onBackToMenu={() => router.push('/#products')} onViewOrder={() => router.push('/account')} />;
 
   if (placing) return (
@@ -301,12 +301,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             {delivCheck.intracity ? (
               <>
                 Your cookies are <strong style={{ color: 'var(--text-muted)' }}>{Math.round(delivCheck.distanceKm * 10) / 10} km</strong> away
-                {delivCheck.store ? <> — riding over from {delivCheck.store}</> : null}
+                {delivCheck.store ? <>, riding over from {delivCheck.store}</> : null}
               </>
             ) : (
               <>
                 Your cookies have about <strong style={{ color: 'var(--text-muted)' }}>{Math.round(delivCheck.distanceKm).toLocaleString('en-IN')} km</strong> to travel
-                {delivCheck.originStore ? <> — packed and posted from {delivCheck.originStore}</> : null}
+                {delivCheck.originStore ? <>, packed and posted from {delivCheck.originStore}</> : null}
               </>
             )}
           </div>
@@ -459,7 +459,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                   ) : (
                   <>
                   {addresses.length === 0 && !adding && (
-                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 2 }}>No saved addresses yet — please add your delivery address below.</p>
+                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 2 }}>No saved addresses yet. Please add your delivery address below.</p>
                   )}
                   {addresses.map(a => {
                     const on = addr === a.id;
@@ -555,7 +555,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       <span style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--gradient-warm)', display: 'grid', placeItems: 'center', flex: 'none' }}><MapPin size={16} style={{ color: 'var(--white)' }} /></span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>We need this address pinned on the map</div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>Same-day delivery is priced from your exact location. Open the address and drop the pin — it takes a moment.</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>Same-day delivery is priced from your exact location. Open the address and drop the pin, it takes a moment.</div>
                       </div>
                       {chosen && (
                         <button onClick={() => editAddr(chosen)} style={{ flex: 'none', padding: '8px 14px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>Pin it</button>
@@ -746,7 +746,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     </a>
                   </div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
-                    Or visit any of our stores — see all locations on the <a href="/locations" style={{ color: 'var(--text-link)', fontWeight: 700 }}>Locations page</a>.
+                    Or visit any of our stores. See all locations on the <a href="/locations" style={{ color: 'var(--text-link)', fontWeight: 700 }}>Locations page</a>.
                   </div>
                 </div>
               </div>
@@ -765,9 +765,9 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {([
                     ['We bake to order', 'Your cookies go into the oven as soon as this is paid, so an order can’t be cancelled or changed once placed. Do check your basket and address above.', '/terms', 'Terms of Service'],
-                    ['If anything is wrong, we fix it', 'Damaged, wrong or missing items, or an order that never arrives — tell us within 24 hours and you get it remade or refunded, back to the account you paid from.', '/refund-policy', 'Refund Policy'],
+                    ['If anything is wrong, we fix it', 'Damaged, wrong or missing items, or an order that never arrives. Tell us within 24 hours and you get it remade or refunded, back to the account you paid from.', '/refund-policy', 'Refund Policy'],
                     ['How it reaches you', 'Same-day from the shop nearest your address inside our cities, courier elsewhere. The fee and the arrival date shown above are the real ones.', '/shipping-policy', 'Shipping Policy'],
-                    ['Your details stay yours', 'We never see your card or UPI details — they go straight to Razorpay. We keep only what’s needed to bake and deliver the order.', '/privacy', 'Privacy Policy'],
+                    ['Your details stay yours', 'We never see your card or UPI details. They go straight to Razorpay. We keep only what’s needed to bake and deliver the order.', '/privacy', 'Privacy Policy'],
                   ] as [string, string, string, string][]).map(([title, text, href, linkLabel]) => (
                     <div key={href} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                       <Check size={15} strokeWidth={3} style={{ flex: 'none', marginTop: 3, color: 'var(--green-success)' }} />

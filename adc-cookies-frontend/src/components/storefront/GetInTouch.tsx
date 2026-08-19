@@ -17,7 +17,7 @@ export default function GetInTouch() {
     <div id="get-in-touch" style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
       <p style={{ fontSize: 'var(--text-xs)', fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--brand-secondary)', margin: '0 0 8px' }}>Get in Touch</p>
       <h3 style={{ font: '900 clamp(1.2rem,1rem + 1vw,1.65rem)/1.1 var(--font-display)', letterSpacing: '-.02em', margin: '0 0 8px', color: 'var(--text-strong)' }}>Bulk orders, gifting or a question?</h3>
-      <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-body)', lineHeight: 1.6, margin: '0 auto 18px', maxWidth: 520 }}>Drop your details and our team will get back to you — fast.</p>
+      <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-body)', lineHeight: 1.6, margin: '0 auto 18px', maxWidth: 520 }}>Drop your details and our team will get back to you fast.</p>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(16px,2.4vw,32px)', flexWrap: 'wrap', marginBottom: 18 }}>
         <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={chip}>

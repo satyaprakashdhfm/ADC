@@ -18,7 +18,7 @@ const DEFAULT_POSTER = `https://i.ytimg.com/vi/${VIDEO_ID}/maxresdefault.jpg`;
 export default function AboutVideo({
   style,
   poster = DEFAULT_POSTER,
-  alt = 'A Dough Cookie — watch the story',
+  alt = 'Watch the A Dough Cookie story',
   sizes = '(max-width:860px) 100vw, 540px',
 }: {
   style?: React.CSSProperties;

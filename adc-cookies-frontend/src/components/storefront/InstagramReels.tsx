@@ -202,7 +202,7 @@ export default function InstagramReels() {
             </span>
             <span style={{ flex: '1 1 240px', minWidth: 0 }}>
               <span style={{ display: 'block', font: 'var(--weight-bold) var(--text-lg)/1.2 var(--font-display)', color: 'var(--text-strong)', marginBottom: 4 }}>
-                Fresh batches, daily — on our Instagram
+                Fresh batches, daily on our Instagram
               </span>
               <span style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                 Behind-the-scenes bakes, new flavours and gooey close-ups. Follow @{INSTAGRAM_HANDLE} for the good stuff.

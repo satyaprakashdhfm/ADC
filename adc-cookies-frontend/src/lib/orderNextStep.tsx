@@ -46,7 +46,7 @@ export function orderNextStep({ orderStatus, shipmentStatus, bookingStatus, carr
 
   const stage = Math.max(shipStage(shipmentStatus), shipStage(orderStatus));
   if (os === 'DELIVERED' || stage >= 3)
-    return 'Delivered — we hope you love it! 🍪';
+    return 'Delivered. We hope you love it! 🍪';
 
   // Prepaid-only: nothing is prepared or shipped until payment clears.
   if (!paid)
@@ -56,17 +56,17 @@ export function orderNextStep({ orderStatus, shipmentStatus, bookingStatus, carr
      different courier. Ranked above the stage ladder because the carrier will happily keep
      reporting scans against a waybill we have already cancelled. */
   if (isCancelledStatus(bookingStatus) || isCancelledStatus(shipmentStatus))
-    return "We're re-arranging the courier for this order — nothing to do at your end.";
+    return "We're re-arranging the courier for this order. Nothing to do at your end.";
 
   // Out for delivery.
   if (stage >= 2)
-    return 'Your order is on the way — keep your phone handy.';
+    return 'Your order is on the way. Keep your phone handy.';
 
   // Shipped / picked up / in transit.
   if (stage >= 1)
     return intracity
-      ? 'On its way with a rider — arriving today. Keep your phone handy.'
-      : "Handed to Delhivery and on the move — it'll arrive in a few days.";
+      ? 'On its way with a rider, arriving today. Keep your phone handy.'
+      : "Handed to Delhivery and on the move. It'll arrive in a few days.";
 
   /* Packed is its own step, and it used to be missing. "Packed" fell through to "we're baking your
      order" (wrong — it is baked) or, worse, got read as stage 1 and became "on its way with a
@@ -74,20 +74,20 @@ export function orderNextStep({ orderStatus, shipmentStatus, bookingStatus, carr
      the collection has not happened. */
   if (isPacked(orderStatus) || isPacked(shipmentStatus))
     return intracity
-      ? 'Baked and packed — a rider is being assigned to collect it. Arriving today.'
-      : "Packed and waiting for Delhivery to collect it — it'll arrive in a few days.";
+      ? 'Baked and packed. A rider is being assigned to collect it. Arriving today.'
+      : "Packed and waiting for Delhivery to collect it. It'll arrive in a few days.";
 
   // Paid, assigned to a store, but that store hasn't tapped Accept yet — no rider is booked until
   // they do, so say that plainly rather than a generic "preparing" that implies it's already moving.
   if (hasStore && !storeAccepted && !carrier)
-    return "We're confirming your order with the store — it'll start baking any moment.";
+    return "We're confirming your order with the store. It'll start baking any moment.";
 
   // Paid & confirmed, still being made.
   if (intracity)
-    return "We're baking your order — a rider will pick it up from our store and deliver today.";
+    return "We're baking your order. A rider will pick it up from our store and deliver today.";
   if (delhivery)
-    return "We're packing your order — it'll be handed to Delhivery and arrive in a few days.";
-  return "We're preparing your order — tracking updates will appear here soon.";
+    return "We're packing your order. It'll be handed to Delhivery and arrive in a few days.";
+  return "We're preparing your order. Tracking updates will appear here soon.";
 }
 
 /**

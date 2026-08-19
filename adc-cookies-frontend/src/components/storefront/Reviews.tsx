@@ -5,10 +5,10 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 interface Review { title: string; body: string; name: string; verified: boolean; city: string; img: string; }
 
 const REVIEWS: Review[] = [
-  { title: 'Gooey and unreal', body: 'The Biscoff filled is unreal — gooey, warm, perfect. My weekly ritual now.', name: 'Ananya R.', verified: true, city: 'Bengaluru', img: '/assets/products/adc-special.jpg' },
-  { title: 'Best in the city', body: 'Arrived warm and smelled incredible — the signature cookie is the best in town.', name: 'Karthik M.', verified: true, city: 'Hyderabad', img: '/assets/products/triple-choc.jpg' },
-  { title: 'Gifting done right', body: 'Beautiful packaging — gifted a Nutella tin and it was a total hit.', name: 'Sneha P.', verified: true, city: 'Mumbai', img: '/assets/products/caramel-cashew.jpg' },
-  { title: 'Ordered 10 at once', body: 'Ordered 10 cookies all at once. Definitely better than expected — tasted too good. 😊', name: 'Vedant', verified: true, city: 'Delhi', img: '/assets/products/m-and-m.jpg' },
+  { title: 'Gooey and unreal', body: 'The Biscoff filled is unreal. Gooey, warm, perfect. My weekly ritual now.', name: 'Ananya R.', verified: true, city: 'Bengaluru', img: '/assets/products/adc-special.jpg' },
+  { title: 'Best in the city', body: 'Arrived warm and smelled incredible. The signature cookie is the best in town.', name: 'Karthik M.', verified: true, city: 'Hyderabad', img: '/assets/products/triple-choc.jpg' },
+  { title: 'Gifting done right', body: 'Beautiful packaging. Gifted a Nutella tin and it was a total hit.', name: 'Sneha P.', verified: true, city: 'Mumbai', img: '/assets/products/caramel-cashew.jpg' },
+  { title: 'Ordered 10 at once', body: 'Ordered 10 cookies all at once. Definitely better than expected, tasted too good. 😊', name: 'Vedant', verified: true, city: 'Delhi', img: '/assets/products/m-and-m.jpg' },
   { title: 'Soft centres every time', body: 'Every batch has that soft molten centre. The peanut butter one is my favourite.', name: 'Farah K.', verified: true, city: 'Bengaluru', img: '/assets/products/peanut-butter.jpg' },
   { title: 'Loved it', body: 'Very nice cookie, loved it. Ordering again this weekend for sure.', name: 'Pratham', verified: true, city: 'Pune', img: '/assets/products/red-velvet.jpg' },
 ];

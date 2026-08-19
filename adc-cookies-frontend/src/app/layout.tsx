@@ -4,7 +4,7 @@ import Providers from "./providers";
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, SITE_PHONE, SITE_EMAIL } from "@/lib/site";
 
 const SITE_URL = "https://www.adoughcookie.com";
-const TITLE = "a dough cookie — Aroma of Freshness";
+const TITLE = "a dough cookie | Aroma of Freshness";
 const DESCRIPTION = "Handcrafted cookies baked fresh daily. Premium cookies delivered warm to your door.";
 
 export const metadata: Metadata = {
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     siteName: "a dough cookie",
     locale: "en_IN",
     type: "website",
-    images: [{ url: "/assets/hero-cookies-wide.jpg", width: 2400, height: 1200, alt: "a dough cookie — freshly baked cookies" }],
+    images: [{ url: "/assets/hero-cookies-wide.jpg", width: 2400, height: 1200, alt: "a dough cookie, freshly baked cookies" }],
   },
   twitter: {
     card: "summary_large_image",

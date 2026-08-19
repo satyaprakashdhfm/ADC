@@ -96,7 +96,7 @@ export default function SiteNav({ revealOnScroll = false }: { revealOnScroll?: b
     .map(sec => ({ label: sec.label, href: `/order?cat=${sec.codes[0].toLowerCase()}` }));
   const menuFor = (key: NavKey) =>
     key === 'menu' ? categoryMenu()
-      : key === 'locations' ? STORES.map(s => ({ label: `${s.city} — ${s.name}`, href: `/locations#store-${s.pincode}` }))
+      : key === 'locations' ? STORES.map(s => ({ label: s.name, href: `/locations#store-${s.pincode}` }))
           : undefined;
   // Account icon → login modal (or account/admin page if already signed in).
   const accountClick = () => { if (user) router.push(user.role === 'ADMIN' ? '/admin' : '/account'); else setLoginOpen(true); };

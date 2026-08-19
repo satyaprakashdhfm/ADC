@@ -57,7 +57,7 @@ export default function StoreMap({ withHeadOffice = false }: { withHeadOffice?: 
         markers.push(
           L.marker([HEAD_OFFICE.lat, HEAD_OFFICE.lng], { icon: officeIcon })
             .addTo(m)
-            .bindPopup(`<strong>${COMPANY_NAME} — head office</strong><br/>${HEAD_OFFICE.address}`)
+            .bindPopup(`<strong>${COMPANY_NAME} head office</strong><br/>${HEAD_OFFICE.address}`)
         );
       }
       if (markers.length) {

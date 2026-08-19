@@ -152,7 +152,7 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
               {/* Reset is only relevant to the email/password login path (Google & OTP users never set one). */}
               {mode === 'login' && (
                 resetSent
-                  ? <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-success)', fontWeight: 700, margin: '0 2px 12px' }}>Reset link sent — check your email to set a new password.</p>
+                  ? <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-success)', fontWeight: 700, margin: '0 2px 12px' }}>Reset link sent. Check your email to set a new password.</p>
                   : <button onClick={handleForgot} disabled={loading} style={{ ...authLinkBtn, display: 'block', margin: '0 2px 12px', fontSize: 'var(--text-xs)' }}>Forgot password?</button>
               )}
 

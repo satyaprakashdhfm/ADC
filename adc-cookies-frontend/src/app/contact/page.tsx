@@ -10,7 +10,7 @@ import { STORES } from '@/lib/stores';
 import { SITE_EMAIL, SITE_PHONE, whatsappLink, COMPANY_NAME, HEAD_OFFICE } from '@/lib/site';
 
 export const metadata = {
-  title: `Contact Us — ${COMPANY_NAME} (a dough cookie)`,
+  title: `Contact Us | ${COMPANY_NAME} (a dough cookie)`,
   description: `Contact ${COMPANY_NAME}, the company behind a dough cookie. Head office in Jayanagar, Bengaluru, with shops across Bengaluru and Chennai.`,
 };
 
@@ -22,7 +22,7 @@ const COMMITMENTS = [
   { icon: Wheat, title: 'Real ingredients, named', text: 'Président butter, couverture chocolate, and genuine Nutella and Lotus Biscoff. No compound coatings and no vegetable-fat “chocolate”. If we cannot get the real thing, we do not bake the cookie that day.' },
   { icon: Clock, title: 'Baked the day you get it', text: 'Small trays through the day at every shop rather than one batch each morning. Nothing is baked from frozen and nothing sits waiting for you.' },
   { icon: Truck, title: 'An honest delivery promise', text: 'The arrival time and the delivery fee are worked out from your actual address and the shop that will dispatch it, and both are shown before you pay. We would rather say no to an address than quietly turn a same-day order into a three-day parcel.' },
-  { icon: HeartHandshake, title: 'A real person answers', text: 'Call, WhatsApp or email and you reach the team, not a queue. If an order arrives wrong, tell us and we will put it right — that is the whole policy.' },
+  { icon: HeartHandshake, title: 'A real person answers', text: 'Call, WhatsApp or email and you reach the team, not a queue. If an order arrives wrong, tell us and we will put it right. That is the whole policy.' },
 ];
 
 export default function ContactPage() {
@@ -33,7 +33,7 @@ export default function ContactPage() {
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
           <p style={{ fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 }}>Contact Us</p>
           <h1 style={{ font: '900 clamp(3rem,2.2rem + 4vw,6rem)/.9 var(--font-display)', letterSpacing: '-.02em', marginBottom: 22 }}>Talk to the people who bake them.</h1>
-          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>a dough cookie is run by {COMPANY_NAME}, from a head office in Jayanagar, Bengaluru. Whether it is a bulk order for an office, a gifting request with a deadline, a franchise enquiry, or something that went wrong with an order — this is where it reaches us, and a person will answer.</p>
+          <p style={{ fontSize: 'var(--text-lg)', lineHeight: 1.75, maxWidth: 760, color: 'var(--text-body)' }}>a dough cookie is run by {COMPANY_NAME}, from a head office in Jayanagar, Bengaluru. Whether it is a bulk order for an office, a gifting request with a deadline, a franchise enquiry, or something that went wrong with an order, this is where it reaches us, and a person will answer.</p>
           {/* Plain feature tags — not buttons (no card/pill background) */}
           <div style={{ display: 'flex', gap: 'clamp(14px,3vw,28px)', flexWrap: 'wrap', marginTop: 22, color: 'var(--text-body)' }}>
             {['Store pickup', 'Bulk gifting', 'Fresh delivery', 'Custom notes'].map((item) => (
@@ -84,8 +84,8 @@ export default function ContactPage() {
           <aside style={{ background: 'var(--panel-90)', border: '1px solid var(--border-default)', borderRadius: 20, padding: 'clamp(20px,2.6vw,30px)', boxShadow: 'var(--shadow-md)' }}>
             <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 10 }}>Come and see us</h2>
             <p style={{ fontSize: 'var(--text-base)', lineHeight: 1.75, color: 'var(--text-body)', marginBottom: 14 }}>
-              We bake at {BLR_STORE_COUNT} shops across Bengaluru — Jayanagar, S.G. Palya and
-              Electronic City — and one in Chennai at Besant Nagar. Every one of them bakes its own
+              We bake at {BLR_STORE_COUNT} shops across Bengaluru, in Jayanagar, S.G. Palya and
+              Electronic City, and one in Chennai at Besant Nagar. Every one of them bakes its own
               trays through the day, so there is no wrong time to walk in.
             </p>
             <p style={{ fontSize: 'var(--text-base)', lineHeight: 1.75, color: 'var(--text-body)', marginBottom: 18 }}>

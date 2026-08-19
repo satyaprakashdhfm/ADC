@@ -14,7 +14,7 @@ import { COMPANY_NAME, SITE_EMAIL } from '@/lib/site';
  */
 
 export const metadata: Metadata = {
-  title: `Terms of Service — ${COMPANY_NAME} (a dough cookie)`,
+  title: `Terms of Service | ${COMPANY_NAME} (a dough cookie)`,
   description: `The terms that apply when you order from a dough cookie, operated by ${COMPANY_NAME}.`,
   alternates: { canonical: '/terms' },
 };
@@ -24,7 +24,7 @@ const SECTIONS: LegalSection[] = [
     heading: 'Who these terms are between',
     body: [
       `This website and the a dough cookie brand are operated by ${COMPANY_NAME} ("we", "us"). By browsing this site, creating an account or placing an order, you agree to these terms.`,
-      'If you do not agree with them, please do not place an order. We would rather you asked us a question first — our contact details are at the bottom of this page.',
+      'If you do not agree with them, please do not place an order. We would rather you asked us a question first. Our contact details are at the bottom of this page.',
     ],
   },
   {
@@ -48,7 +48,7 @@ const SECTIONS: LegalSection[] = [
       'Prices on this site are in Indian Rupees and include GST. The price you see at checkout is the price you pay for that order.',
       'Prices and the menu can change without notice, and an item can sell out during the day. Our kitchens bake in small batches, so availability genuinely does move.',
       'Delivery is charged separately and is worked out from your delivery address and the shop the order will be sent from. The fee and the expected arrival are both shown before you pay.',
-      'Every order total is recalculated on our own servers when the order is created. If what your browser shows and what we calculate ever disagree, our figure is the one charged — this protects you as much as us.',
+      'Every order total is recalculated on our own servers when the order is created. If what your browser shows and what we calculate ever disagree, our figure is the one charged, and this protects you as much as us.',
     ],
   },
   {
@@ -71,7 +71,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: 'Cancellations and refunds',
     body: [
-      'We bake to order, so an order cannot be cancelled once it is placed. If something is wrong with what arrives, we will put it right — our Refund Policy sets out how.',
+      'We bake to order, so an order cannot be cancelled once it is placed. If something is wrong with what arrives, we will put it right. Our Refund Policy sets out how.',
     ],
   },
   {
@@ -93,7 +93,7 @@ const SECTIONS: LegalSection[] = [
         'Use the site to post or send anything unlawful, abusive, misleading or harmful.',
         'Interfere with the running of the site or the systems behind it.',
       ],
-      'Everything on this site — the name, logo, photographs, wording and design — belongs to us or is used with permission.',
+      'Everything on this site, including the name, logo, photographs, wording and design, belongs to us or is used with permission.',
     ],
   },
   {

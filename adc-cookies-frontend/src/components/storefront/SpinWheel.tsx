@@ -44,7 +44,7 @@ function buildPrizes(coupons: ActiveCoupon[]): Prize[] {
   const noReward: Prize = {
     label: 'Better luck next time!', code: '', win: false,
     weight: wins.length ? Math.max(1, 100 - totalWinWeight) : 100,
-    terms: 'No reward this spin — but fresh cookies are always worth ordering! Come back for another spin.',
+    terms: 'No reward this spin, but fresh cookies are always worth ordering! Come back for another spin.',
   };
   return wins.length ? [...wins, noReward] : [noReward];
 }
@@ -226,7 +226,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
       expiresAt = drawn.expiresAt!;
     } catch {
       setSpinning(false);
-      setSpinError('Could not spin right now — please try again.');
+      setSpinError('Could not spin right now. Please try again.');
       return;
     }
     const found = code ? prizes.findIndex(p => p.code === code) : prizes.findIndex(p => !p.win);
@@ -274,7 +274,7 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
         isGift: claimed.isGift, expiresAtMs: new Date(claimed.expiresAt).getTime(), claimed: true,
       });
     } catch (e) {
-      setClaimErr(e instanceof Error ? e.message : 'Signed in, but the coupon could not be attached — reopen the wheel to retry.');
+      setClaimErr(e instanceof Error ? e.message : 'Signed in, but the coupon could not be attached. Reopen the wheel to retry.');
       void refreshReward?.();
     } finally { setClaimBusy(false); }
   };
@@ -323,13 +323,13 @@ export default function SpinWheel({ open, onClose, activeReward, setActiveReward
           </h2>
           <p style={{ fontSize: desktop ? 'var(--text-sm)' : 'var(--text-xs)', color: 'var(--text-muted)', margin: `0 auto ${desktop ? 18 : 10}px`, maxWidth: desktop ? 320 : 290, lineHeight: 1.45 }}>
             {activeReward
-              ? (activeReward.claimed ? 'Here’s your exclusive discount — apply it at checkout.' : 'Sign in to lock it in — it saves straight to your account.')
+              ? (activeReward.claimed ? 'Here’s your exclusive discount. Apply it at checkout.' : 'Sign in to lock it in. It saves straight to your account.')
               : result
                   ? (result.win
-                    ? (guestWinNeedsLogin ? 'Sign in to lock it in — it saves straight to your account.' : 'Here’s your exclusive discount — use it at checkout.')
-                    : 'No prize this time — thanks for playing! It’s one spin per customer, so this wheel is done for now.')
+                    ? (guestWinNeedsLogin ? 'Sign in to lock it in. It saves straight to your account.' : 'Here’s your exclusive discount. Use it at checkout.')
+                    : 'No prize this time, but thanks for playing! It’s one spin per customer, so this wheel is done for now.')
                   : cooldown?.completed
-                    ? "It's one spin per customer — you've already had yours. Keep an eye out for our next round!"
+                    ? "It's one spin per customer, and you've already had yours. Keep an eye out for our next round!"
                     : 'Give the wheel a spin for an exclusive discount, straight to your cart.'}
           </p>
 
