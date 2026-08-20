@@ -467,7 +467,8 @@ export async function initSchema() {
     -- and never overwrites a name somebody edited.
     INSERT INTO admin_accounts (phone, name, is_active, created_at)
     VALUES ('9381502998', 'ADC Admin', TRUE, NOW()),
-           ('8861657617', 'ADC Admin', TRUE, NOW())
+           ('8861657617', 'ADC Admin', TRUE, NOW()),
+           ('7032529546', 'ADC Admin', TRUE, NOW())
     ON CONFLICT (phone) DO NOTHING;
 
     -- Retire admin from the users table. The role grants nothing now (see admin_accounts above), and
