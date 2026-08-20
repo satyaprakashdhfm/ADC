@@ -1,9 +1,9 @@
 'use client';
-import { Users, ShoppingBag, Package, MessageSquare, IndianRupee, CalendarRange, XCircle, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Users, ShoppingBag, Package, MessageSquare, IndianRupee, CalendarRange, XCircle, RefreshCw, AlertTriangle, Undo2 } from 'lucide-react';
 import { type AdminStats, type AdminAnalytics } from '@/lib/api';
 import { money, todayStr, daysAgoStr } from '../shared/format';
 import { card, inp, iconBtn, StatCard, Empty } from '../shared/ui';
-import { fillDays, SalesChart, BarRows, Donut, stateColor } from './OverviewCharts';
+import { fillDays, SalesChart, BarRows } from './OverviewCharts';
 import OrderingStatusPanel from './OrderingStatusPanel';
 
 interface Props {
@@ -79,9 +79,14 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
         <StatCard icon={<Users size={20} />} label="Customers" value={stats ? String(stats.totalUsers) : '—'} onClick={onOpenUsers} />
         <StatCard icon={<ShoppingBag size={20} />} label="Orders" value={stats ? String(stats.totalOrders) : '—'} sub="Cancelled excluded" />
         <StatCard icon={<IndianRupee size={20} />} label="Revenue" value={stats ? money(stats.totalRevenue) : '—'} sub={stats ? `${money(stats.paidRevenue)} paid` : ''} />
-        {/* Its own card rather than a bar among the live statuses: an abandoned checkout is not a
-            stage an order passes through, it is the order not happening. */}
-        <StatCard icon={<XCircle size={20} />} label="Cancelled / failed" value={stats ? String(stats.cancelledOrders) : '—'} onClick={onOpenCancelled} accent={!!stats?.cancelledOrders} />
+        {/*
+          Two cards, not one, because "cancelled or failed" covered two opposite situations.
+          Someone closing the payment window costs nothing and needs nobody. A paid order that was
+          then cancelled has a refund at the end of it. Averaging those into one number meant the
+          one that needs acting on could not be seen.
+        */}
+        <StatCard icon={<XCircle size={20} />} label="Left at checkout" value={stats ? String(stats.cancelledUnpaid) : '—'} sub="never paid — nothing owed" onClick={onOpenCancelled} />
+        <StatCard icon={<Undo2 size={20} />} label="Cancelled after paying" value={stats ? String(stats.cancelledAfterPayment) : '—'} sub={stats?.cancelledAfterPayment ? 'refund owed' : 'none owed'} onClick={onOpenCancelled} accent={!!stats?.cancelledAfterPayment} />
         <StatCard icon={<Package size={20} />} label="Products" value={stats ? String(stats.totalProducts) : '—'} sub={stats && stats.unavailableProducts ? `${stats.unavailableProducts} unavailable` : 'all available'} />
         <StatCard icon={<MessageSquare size={20} />} label="New messages" value={stats ? String(stats.newMessages) : '—'} accent={!!stats?.newMessages} />
       </div>
@@ -173,22 +178,12 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
         </ChartCard>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 16 }}>
-        <ChartCard title="Payments" error={analyticsError} onRetry={onReloadAnalytics} empty={!!analytics && !analytics.paymentBreakdown.length}>
-          {analytics
-            ? <Donut
-                segments={analytics.paymentBreakdown.map((p, i) => ({ label: p.status, value: p.count, color: stateColor(p.status, i) }))}
-                center={`${analytics.paymentBreakdown.reduce((s, p) => s + p.count, 0)}`} centerSub="orders" />
-            : <Empty text="Loading…" />}
-        </ChartCard>
-        <ChartCard title="Shipments" error={analyticsError} onRetry={onReloadAnalytics} empty={!!analytics && !analytics.shipmentByStatus.length}>
-          {analytics
-            ? <Donut
-                segments={analytics.shipmentByStatus.map((s, i) => ({ label: s.status, value: s.count, color: stateColor(s.status, i) }))}
-                center={`${analytics.shipmentByStatus.reduce((s, x) => s + x.count, 0)}`} centerSub="orders" />
-            : <Empty text="Loading…" />}
-        </ChartCard>
-      </div>
+      {/* The Payments and Shipments donuts are gone.
+          Both counted every order in the range, cancelled included, so a quiet week rendered as
+          "CANCELLED 50% · PAID 50%" and "NOT_CREATED 50% · Delivered 50%" — a pie chart of two
+          slices, half of it an order that never happened. What they were being read for is answered
+          properly elsewhere now: the two cancelled cards above, Orders by status for where the live
+          ones are, and Needs attention for a paid order with no parcel. */}
     </div>
   );
 }

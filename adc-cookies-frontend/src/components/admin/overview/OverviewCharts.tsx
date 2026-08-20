@@ -4,31 +4,6 @@ import { money } from '../shared/format';
 
 /* ---------- Charts (lightweight inline SVG/CSS — no external deps) ---------- */
 
-/** Fallback series colours, for breakdowns whose labels we don't recognise. */
-export const PIE = ['var(--orange-600)', 'var(--green-success)', 'var(--google-blue)', 'var(--purple)', 'var(--orange-dark)', 'var(--gray)'];
-
-/*
- * A payment or shipment state's colour, by meaning rather than by position in the list.
- *
- * These donuts used to take their colours from PIE by array index, so PAID was green only until a
- * quiet week reordered the rows and "cancelled" inherited the green. A status colour that moves is
- * worse than no colour at all — this is the one chart where the legend is the point.
- */
-const STATE_COLOR: Record<string, string> = {
-  PAID: 'var(--green-success)',
-  DELIVERED: 'var(--green-success)',
-  PENDING: 'var(--amber-500)',
-  CANCELLED: 'var(--red-danger)',
-  FAILED: 'var(--red-danger)',
-  REFUNDED: 'var(--purple)',
-  NOT_CREATED: 'var(--gray)',
-  CREATED: 'var(--google-blue)',
-};
-export function stateColor(label: string, fallbackIndex = 0): string {
-  const key = String(label || '').toUpperCase().replace(/[\s-]+/g, '_');
-  return STATE_COLOR[key] || PIE[fallbackIndex % PIE.length];
-}
-
 /**
  * The element's live pixel width.
  *
@@ -327,43 +302,6 @@ export function BarRows({ items, color = 'var(--orange-600)' }: { items: { label
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-export function Donut({ segments, center, centerSub }: { segments: { label: string; value: number; color: string }[]; center?: string; centerSub?: string }) {
-  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
-  const r = 52, sw = 18, c = 2 * Math.PI * r;
-  /* Each arc's start is the sum of the ones before it. Accumulated up front rather than by mutating
-     a `let` inside the map below — a variable reassigned while rendering is not safe under the React
-     compiler, and this says the same thing without the mutation. */
-  const arcs = segments.map((s, i) => ({
-    ...s,
-    dash: (s.value / total) * c,
-    offset: segments.slice(0, i).reduce((acc, prev) => acc + (prev.value / total) * c, 0),
-  }));
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-      <div style={{ position: 'relative', width: 130, height: 130, flex: 'none' }}>
-        <svg viewBox="0 0 130 130" width="130" height="130" style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx="65" cy="65" r={r} fill="none" stroke="var(--surface-sunken)" strokeWidth={sw} />
-          {arcs.map(s => (
-            <circle key={s.label} cx="65" cy="65" r={r} fill="none" strokeWidth={sw}
-              strokeDasharray={`${s.dash} ${c - s.dash}`} strokeDashoffset={-s.offset} style={{ stroke: s.color }} />
-          ))}
-        </svg>
-        {center && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center' }}><div><div style={{ fontWeight: 900, fontSize: 'var(--text-h4)', color: 'var(--text-strong)' }}>{center}</div>{centerSub && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)' }}>{centerSub}</div>}</div></div>}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7, flex: 1, minWidth: 120 }}>
-        {segments.map(s => (
-          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)' }}>
-            <span style={{ width: 11, height: 11, borderRadius: 3, background: s.color, flex: 'none' }} />
-            <span style={{ flex: 1, color: 'var(--text-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
-            <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>{s.value}</span>
-            <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)', flex: 'none', width: 34, textAlign: 'right' }}>{Math.round((s.value / total) * 100)}%</span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

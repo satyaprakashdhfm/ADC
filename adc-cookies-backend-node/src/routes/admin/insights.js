@@ -36,9 +36,28 @@ router.get('/dashboard', async (_req, res) => {
   const orders = await getAll('SELECT total_amount, order_status, payment_status FROM orders');
   const live = orders.filter((o) => o.order_status !== 'CANCELLED');
   const totalOrders = live.length;
-  const cancelledOrders = orders.length - live.length;
   const totalRevenue = live.reduce((s, o) => s + Number(o.total_amount), 0);
   const paidRevenue = live.filter((o) => o.payment_status === 'PAID').reduce((s, o) => s + Number(o.total_amount), 0);
+
+  /*
+   * The orders that did not happen, split by whether money changed hands — because the two are
+   * somebody else's problem in opposite directions and lumping them under one "cancelled/failed"
+   * figure hid that.
+   *
+   *   cancelledUnpaid       — the shopper reached the payment step and left. /orders/:id/abandon
+   *                           marks it when the window closes unpaid. Nothing is owed, nothing to do.
+   *   cancelledAfterPayment — we took the money and the order was then cancelled. This one is ours:
+   *                           there is a refund at the end of it.
+   *
+   * Worth being straight about the limit: this is the only split the data actually supports. An
+   * admin cancelling a paid order records free-text remarks, not a reason code, so "we broke it" and
+   * "the customer rang up and asked" both land in the second bucket. And a PAID order that a store
+   * never accepted, or that failed to reach the POS or the courier, is not cancelled at all — it is
+   * still live and shows in Needs attention, which is where an operational failure belongs.
+   */
+  const dead = orders.filter((o) => o.order_status === 'CANCELLED');
+  const cancelledUnpaid = dead.filter((o) => o.payment_status !== 'PAID').length;
+  const cancelledAfterPayment = dead.length - cancelledUnpaid;
 
   const { c: totalProducts } = await getOne('SELECT COUNT(*) AS c FROM products');
   const { c: unavailableProducts } = await getOne('SELECT COUNT(*) AS c FROM products WHERE is_available = FALSE');
@@ -101,7 +120,7 @@ router.get('/dashboard', async (_req, res) => {
   const topProducts = topRows.map((r) => ({ name: r.product_name, qty: Number(r.qty), revenue: Number(r.revenue) }));
 
   res.json({
-    totalOrders, cancelledOrders, totalRevenue, paidRevenue,
+    totalOrders, cancelledUnpaid, cancelledAfterPayment, totalRevenue, paidRevenue,
     totalProducts: Number(totalProducts),
     unavailableProducts: Number(unavailableProducts),
     totalUsers: Number(totalUsers), totalAdmins,
@@ -167,22 +186,11 @@ router.get('/analytics', async (req, res) => {
      "Customers by …" is read as — see customersByState on /dashboard, which counts the customer base
      itself and is not scoped to a period. */
 
-  /*
-   * Payments and shipments deliberately count EVERY order in the range, cancelled included.
-   *
-   * These two answer "what state is the money / the parcel in", and a cancelled order still has a
-   * payment state worth seeing — a cancelled-but-PAID row is a refund somebody owes. Excluding them
-   * here would hide exactly the rows an admin opens this panel to find.
-   */
-  const paymentBreakdown = (await getAll(
-    `SELECT o.payment_status AS status, COUNT(*) AS count, COALESCE(SUM(o.total_amount),0) AS amount
-       FROM orders o WHERE ${inRange} GROUP BY 1 ORDER BY count DESC`, p
-  )).map((r) => ({ status: r.status, count: Number(r.count), amount: Number(r.amount) }));
-
-  const shipmentByStatus = (await getAll(
-    `SELECT COALESCE(NULLIF(TRIM(o.shipment_status),''),'NOT_CREATED') AS status, COUNT(*) AS count
-       FROM orders o WHERE ${inRange} GROUP BY 1 ORDER BY count DESC`, p
-  )).map((r) => ({ status: r.status, count: Number(r.count) }));
+  /* There are no payment or shipment breakdowns here any more. Both were donuts counting every
+     order in the range, cancelled included, so on a quiet week they read "CANCELLED 50% · PAID 50%"
+     and "NOT_CREATED 50% · Delivered 50%" — a pie chart of two rows, half of it an order that never
+     happened. What those numbers were being read FOR is already better answered elsewhere: the two
+     cancelled figures on /dashboard, and Needs attention for a paid order with no parcel. */
 
   const topProducts = (await getAll(
     `SELECT oi.product_name AS name, SUM(oi.quantity) AS qty, COALESCE(SUM(oi.total_price),0) AS revenue
@@ -191,7 +199,7 @@ router.get('/analytics', async (req, res) => {
       GROUP BY 1 ORDER BY revenue DESC LIMIT 8`, p
   )).map((r) => ({ name: r.name, qty: Number(r.qty), revenue: Number(r.revenue) }));
 
-  res.json({ from, to, salesByDay, cancelledByDay, ordersByArea, paymentBreakdown, shipmentByStatus, topProducts });
+  res.json({ from, to, salesByDay, cancelledByDay, ordersByArea, topProducts });
 });
 
 export default router;
