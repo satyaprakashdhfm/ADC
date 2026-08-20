@@ -9,6 +9,7 @@ import {
 } from '@/lib/api';
 import { todayStr } from '../shared/format';
 import { card, td, inp, addBtn, iconBtn, actionBtn, Panel, Table, Badge, Empty, Field } from '../shared/ui';
+import { belongsInShipments } from '../orders/orderConstants';
 import { SR_ORDER_STATES } from './srOrderStates';
 import { shipStatusLabel } from './shipStatusLabel';
 import { EMPTY_WH } from './warehouseDefaults';
@@ -53,6 +54,23 @@ export default function DeliveryTab({
      and it must not join the props chain every other field here already travels through. */
   const [wallet, setWallet] = useState<ShiprocketWallet | null>(null);
   useEffect(() => { adminGetShiprocketWallet().then(setWallet).catch(() => {}); }, []);
+
+  /*
+   * What this panel is for: orders that still need something doing about a parcel.
+   *
+   * An abandoned checkout — cancelled before it was ever paid for — has no shipment and can never
+   * have one, so it sat here reading "Not created · No shipment" forever with two buttons that could
+   * do nothing. The Orders tab already stopped counting those as orders; this is the same rule
+   * applied to the same list, which is what it should have been from the start.
+   *
+   * A cancelled order that WAS booked stays visible: cancelling on our side does not always succeed
+   * downstream, and a live waybill on a cancelled order means a rider may still be coming.
+   */
+  const liveShipments = (orders || []).filter(belongsInShipments);
+  const shipmentRows = delivSub === 'delhivery'
+    ? liveShipments.filter(o => o.carrier === 'DELHIVERY')
+    : liveShipments;
+  const hiddenCancelled = (orders || []).length - liveShipments.length;
 
   return (
 
@@ -205,12 +223,14 @@ export default function DeliveryTab({
       })()}
       </>)}
 
-      {/* Orders with shipment actions — all carriers under "All", or Delhivery-only under its tab */}
+      {/* Orders with shipment actions — all carriers under "All", or Delhivery-only under its tab.
+          Cancelled orders with no booking are left out: nothing to ship, and they already live on the
+          Orders tab. One that WAS booked stays, because its courier may still need calling off. */}
       <Panel title={delivSub === 'delhivery' ? 'Delhivery — outstation shipments' : 'Order shipments'} loading={orders === null}
         action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
         {orders && (
           <Table head={['Order', 'Customer', 'Service', 'Waybill', 'Status', 'Actions']}>
-            {(delivSub === 'delhivery' ? (orders || []).filter(o => o.carrier === 'DELHIVERY') : (orders || [])).map(o => {
+            {shipmentRows.map(o => {
               const w = shipmentWeights[o.id] ?? '0.5';
               /* What is still true of this shipment, decided once per row.
                  Separators flattened because our statuses are SCREAMING_SNAKE and the carriers'
@@ -373,7 +393,15 @@ export default function DeliveryTab({
             })}
           </Table>
         )}
-        {orders !== null && !(delivSub === 'delhivery' ? orders.filter(o => o.carrier === 'DELHIVERY') : orders).length && <Empty text={delivSub === 'delhivery' ? 'No Delhivery (outstation) shipments yet.' : 'No orders yet.'} />}
+        {orders !== null && !shipmentRows.length && <Empty text={delivSub === 'delhivery' ? 'No Delhivery (outstation) shipments yet.' : 'No shipments to handle.'} />}
+        {/* Never silently drop rows: say how many were left out and where to find them. */}
+        {hiddenCancelled > 0 && (
+          <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '12px 0 0', lineHeight: 1.5 }}>
+            {hiddenCancelled} cancelled order{hiddenCancelled === 1 ? '' : 's'} with no booking {hiddenCancelled === 1 ? 'is' : 'are'} not
+            listed — there is nothing to ship. {hiddenCancelled === 1 ? 'It is' : 'They are'} kept under
+            <strong> Orders → Cancelled &amp; failed payments</strong>.
+          </p>
+        )}
         {orders === null && <button onClick={() => adminGetOrders().then(setOrders).catch(() => setOrders([]))} style={addBtn}>Load orders</button>}
       </Panel>
       </>)}
