@@ -143,10 +143,33 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
             : <Empty text="Loading…" />}
         </ChartCard>
 
-        <ChartCard title="Customers by city" error={analyticsError} onRetry={onReloadAnalytics} empty={!!analytics && !analytics.usersByCity.length}>
-          {analytics
-            ? <BarRows color="var(--google-blue)" items={analytics.usersByCity.map(u => ({ label: u.city, value: u.users, sub: `${u.users} customer${u.users === 1 ? '' : 's'}` }))} />
-            : <Empty text="Loading…" />}
+        {/* Reads from `stats`, not `analytics`, and so is NOT scoped by the Period control above —
+            said out loud in the panel, because a chart sitting under a date filter that ignores it
+            needs to explain itself. It replaces a "Customers by city" panel built on orders, which
+            on a shop with nine customers and one completed order reported a single customer. */}
+        <ChartCard title="Customers by state" right={<span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 700 }}>all customers · not filtered by period</span>}>
+          {!stats ? <Empty text="Loading…" />
+            : !stats.customersByState?.length ? <Empty text="No customers yet." />
+            : (() => {
+                const rows = stats.customersByState;
+                const shown = rows.slice(0, 10);
+                const restStates = rows.length - shown.length;
+                return (
+                  <>
+                    <BarRows color="var(--google-blue)" items={shown.map(r => ({
+                      label: r.state,
+                      value: r.customers,
+                      sub: `${r.customers} customer${r.customers === 1 ? '' : 's'}`,
+                    }))} />
+                    {/* Never silently truncate: if any state is off the bottom, say how many. */}
+                    {restStates > 0 && (
+                      <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '10px 0 0', fontWeight: 700 }}>
+                        +{restStates} more state{restStates === 1 ? '' : 's'}
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
         </ChartCard>
       </div>
 
