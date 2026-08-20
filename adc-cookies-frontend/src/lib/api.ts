@@ -545,7 +545,19 @@ export async function adminSetDeliveryFeeOutstation(deliveryFeeOutstation: numbe
 /** serviceMode is an admin switch, not a fact about the shop: which delivery kinds it takes part
  *  in. Narrowing every store in a zone to INTERCITY cannot close that zone — see activeZoneStores. */
 export type StoreServiceMode = 'BOTH' | 'INTRACITY' | 'INTERCITY';
-export interface AdminStoreStatus { code: string; name: string; city: string; posMode: 'AUTO' | 'MANUAL'; isActive: boolean; serviceMode: StoreServiceMode; }
+export interface AdminStoreStatus {
+  code: string; name: string; city: string; posMode: 'AUTO' | 'MANUAL';
+  isActive: boolean; serviceMode: StoreServiceMode;
+  /** Every out-of-town parcel ships from this one store, so its two switches are the shop's
+   *  intercity switches. */
+  isIntercityOrigin: boolean;
+}
+export interface AdminStoreStatusReport {
+  /** Whether outstation delivery is open at all — decided by the origin store above, server-side. */
+  intercityOpen: boolean;
+  intercityOriginCode: string;
+  stores: AdminStoreStatus[];
+}
 /* Cancel + refund, in two calls on purpose: the code is sent to the number on the admin's own user
    row (never one this client supplies), and only the digits come back here. */
 export async function adminRequestCancelCode(orderId: number): Promise<{ sent: boolean; phoneHint: string; expiresInSeconds: number }> {
@@ -555,7 +567,7 @@ export async function adminCancelAndRefund(orderId: number, reason: string, code
   return request(`/admin/orders/${orderId}/cancel`, { method: 'POST', body: JSON.stringify({ reason, code }) });
 }
 
-export async function adminGetStoreStatus(): Promise<{ stores: AdminStoreStatus[] }> { return request('/admin/store-status'); }
+export async function adminGetStoreStatus(): Promise<AdminStoreStatusReport> { return request('/admin/store-status'); }
 export async function adminToggleStoreStatus(code: string): Promise<{ ok: boolean; code: string; isActive: boolean }> {
   return request(`/admin/store-status/${code}/toggle`, { method: 'PATCH' });
 }
