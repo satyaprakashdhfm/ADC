@@ -7,7 +7,7 @@ import { checkServiceability, expectedTat, delhiveryConfigured } from '../delhiv
 // shopper is shown are the ones the order will actually be dispatched from. Quoting against a single
 // fixed origin is what let checkout advertise a store we then could not collect from.
 import { pickServiceableStore, shiprocketConfigured } from '../shiprocket.js';
-import { nearestStore, zoneStores, activeZoneStores, orderStoresByProximity, deliveryEligible, storeByPincode, straightLineKm, isStoreActive, WAREHOUSE_CODE } from '../stores.js';
+import { nearestStore, zoneStores, activeZoneStores, orderStoresByProximity, deliveryEligible, storeByPincode, straightLineKm, isStoreActive, intercityOpen, WAREHOUSE_CODE } from '../stores.js';
 
 const router = Router();
 
@@ -197,9 +197,13 @@ router.get('/check', async (req, res) => {
    * Hyderabad was quoted a real fee and a real delivery date, carried that promise the whole way
    * through checkout, and was turned away at the final step. Refusing here costs them one screen
    * instead of the entire basket.
+   *
+   * intercityOpen() rather than isStoreActive(), so the warehouse's delivery-mode switch counts as
+   * well: set it to Intracity and outstation closes while the shop keeps trading same-day, which is
+   * the gentler of the two ways to close it.
    */
-  if (!(await isStoreActive(WAREHOUSE_CODE))) {
-    console.log(`[DELIVERY] check | pin=${pin} | outstation UNAVAILABLE (warehouse closed)`);
+  if (!(await intercityOpen())) {
+    console.log(`[DELIVERY] check | pin=${pin} | outstation UNAVAILABLE (warehouse closed or set to intracity only)`);
     return res.json({
       serviceable: false, intracity: false, sameDay: false, reason: 'outstation_unavailable',
       message: 'We are not shipping outside our delivery cities at the moment. Please check back soon.',
