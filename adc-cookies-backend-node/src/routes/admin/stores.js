@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db.js';
 import { ApiError } from '../../middleware.js';
-import { ADC_STORES, storeProductAvailable, resolveProductAvailability, SERVICE_MODES } from '../../stores.js';
+import { ADC_STORES, storeProductAvailable, resolveProductAvailability, SERVICE_MODES, intercityOpen, WAREHOUSE_CODE } from '../../stores.js';
 import { hashPassword, defaultPasswordFor } from '../../storeAuth.js';
 
 const router = Router();
@@ -71,6 +71,15 @@ router.get('/store-status', async (_req, res) => {
   const rows = await getAll('SELECT store_code, is_active, service_mode FROM store_status');
   const byCode = new Map(rows.map((r) => [r.store_code, r]));
   res.json({
+    /*
+     * Whether outstation delivery is open, reported alongside the stores rather than left for the UI
+     * to work out. It hangs entirely off the warehouse — every address outside a store city is
+     * dispatched from there — so an admin taking that one store offline closes intercity for the
+     * whole shop, and nothing on this screen used to say so. The rule lives in stores.js and is
+     * asked for here; duplicating it in the frontend is how the two would come to disagree.
+     */
+    intercityOpen: await intercityOpen(),
+    intercityOriginCode: WAREHOUSE_CODE,
     stores: ADC_STORES.map((s) => {
       const row = byCode.get(s.code);
       const mode = String(row?.service_mode || 'BOTH').toUpperCase();
@@ -78,6 +87,9 @@ router.get('/store-status', async (_req, res) => {
         code: s.code, name: s.name, city: s.city, posMode: s.posMode,
         isActive: row ? !!row.is_active : true,
         serviceMode: SERVICE_MODES.includes(mode) ? mode : 'BOTH',
+        // This is the store every out-of-town parcel ships from, so its switches are the shop's
+        // intercity switches. Flagged so the UI can say that where it matters.
+        isIntercityOrigin: s.code === WAREHOUSE_CODE,
       };
     }),
   });

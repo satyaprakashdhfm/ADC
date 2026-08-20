@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
+import { RefreshCw, ToggleLeft, ToggleRight, AlertTriangle, Truck } from 'lucide-react';
 import {
   adminGetStoreStatus, adminToggleStoreStatus, adminGetStoreProducts, adminSetStoreProductOverride,
   adminSetStoreServiceMode,
@@ -17,11 +17,17 @@ import { card, iconBtn, actionBtn, Panel, Badge, Empty } from '../shared/ui';
  */
 export default function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: (s: string) => void; setNotice: (s: string) => void }) {
   const [stores, setStores] = useState<AdminStoreStatus[] | null>(null);
+  /* Whether outstation is open, straight from the server. Not re-derived here from the store rows:
+     the rule is "is the origin store open and willing", it lives in stores.js, and a second copy of
+     it in the browser is a copy that will eventually disagree with the one enforcing orders. */
+  const [intercityOpen, setIntercityOpen] = useState<boolean | null>(null);
   const [openCode, setOpenCode] = useState<string | null>(null);
   const [products, setProducts] = useState<AdminStoreProduct[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // a store code, or "code:productId", currently saving
 
-  const load = () => adminGetStoreStatus().then(r => setStores(r.stores)).catch(() => setStores([]));
+  const load = () => adminGetStoreStatus()
+    .then(r => { setStores(r.stores); setIntercityOpen(r.intercityOpen); })
+    .catch(() => setStores([]));
   useEffect(() => { load(); }, []);
 
   const toggleStore = async (code: string) => {
@@ -73,6 +79,28 @@ export default function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: 
         Each store can do these two things for itself from its own portal, so a shop that has run out does not
         have to wait on anyone here. Which delivery kinds a store serves is set only here.
       </p>
+
+      {/* The one consequence on this screen that is not obvious from the rows themselves: outstation
+          delivery rests on a single store, so switching that one store changes what the whole shop
+          can sell to the rest of the country. It said nothing about that until now. */}
+      {intercityOpen === false && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', marginBottom: 14, borderRadius: 'var(--radius-input)', background: 'var(--status-error-bg)', color: 'var(--status-error)' }}>
+          <AlertTriangle size={17} style={{ flex: 'none', marginTop: 1 }} />
+          <div style={{ fontSize: 'var(--text-sm)', lineHeight: 1.55 }}>
+            <strong style={{ display: 'block' }}>Intercity delivery is closed right now.</strong>
+            <span style={{ opacity: 0.9 }}>
+              Every out-of-town parcel ships from the warehouse, so with it offline (or set to Intracity)
+              nobody outside our delivery cities can order at all — checkout tells them we are not shipping
+              there at the moment. Same-day inside the cities is unaffected.
+            </span>
+          </div>
+        </div>
+      )}
+      {intercityOpen === true && (
+        <p style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 14px', fontWeight: 700 }}>
+          <Truck size={14} /> Intercity delivery is open — parcels ship from the warehouse.
+        </p>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {stores?.map(s => (
           <div key={s.code} style={{ ...card, padding: 14, opacity: busy === s.code ? 0.6 : 1 }}>
@@ -80,6 +108,13 @@ export default function StoreAvailabilityPanel({ setErr, setNotice }: { setErr: 
               <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>{s.name}</strong>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{s.city}</span>
               <Badge text={s.isActive ? 'Online' : 'Offline'} ok={s.isActive} />
+              {/* Says which row is load-bearing for the whole country's orders. */}
+              {s.isIntercityOrigin && (
+                <span title="Every out-of-town parcel ships from here. Taking this store offline, or setting it to Intracity, closes intercity delivery for the whole shop."
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-50)', color: 'var(--orange-800)', fontSize: 'var(--text-2xs)', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                  <Truck size={11} /> ships all intercity
+                </span>
+              )}
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {/* Three-way, not two toggles: the states are mutually exclusive, and a pair of
                     checkboxes would let an admin turn both off and mean nothing by it.
