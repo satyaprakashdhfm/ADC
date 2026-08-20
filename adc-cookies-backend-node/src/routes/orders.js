@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, storeByCode, deliveryEligible, isStoreActive, storeBlockedProductIds } from '../stores.js';
+import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, storeByCode, deliveryEligible, isStoreActive, intercityOpen, storeBlockedProductIds } from '../stores.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore, getWalletBalance } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -473,6 +473,20 @@ router.post('/', async (req, res) => {
       throw new ApiError(`Add "${giftProduct.name}" to your cart to use this reward.`);
     }
     discount = calculateDiscount(coupon, subtotal, giftProduct);
+  }
+
+  /*
+   * Outstation, and the warehouse has to be both open AND willing to do it.
+   *
+   * Checked BEFORE the store is assigned, because for an out-of-town address the assignment failing
+   * produces "none of our stores near this address are taking orders" — which is true of every
+   * outstation address on the best day of the year, and says nothing about what actually went wrong.
+   *
+   * The same routine the checkout quote uses, so a basket cannot be quoted and then refused here.
+   */
+  if (!zoneStores(destPin).length && !(await intercityOpen())) {
+    console.log(`[ORDER] create | ✗ intercity_closed | pin=${destPin}`);
+    throw new ApiError('We are not shipping outside our delivery cities at the moment. Please check back soon.', 503);
   }
 
   // Which kitchen this belongs to, from the address alone. Assigned now rather than at booking so

@@ -85,6 +85,27 @@ export async function storeDoesIntercity(code) {
 }
 
 /**
+ * Is outstation delivery open at all?
+ *
+ * It rests entirely on ONE store. storeForAddress() hands every address outside a store city to
+ * WAREHOUSE_CODE, so the warehouse is the only origin an out-of-town parcel can ship from — which
+ * means its two switches are the intercity switches for the whole shop:
+ *
+ *   taken offline        -> no outstation, and it also stops being a Bengaluru same-day store.
+ *   set to Intracity     -> no outstation, and it keeps trading same-day. The gentler of the two,
+ *                           and until now not enforced at all: the button said "never an intercity
+ *                           pickup" while outstation orders were still assigned to it regardless.
+ *
+ * Asked here rather than re-derived by each caller, so the checkout quote and order creation cannot
+ * drift into disagreeing — which is exactly how a customer once got quoted a real fee and a real
+ * date, and was then refused at the final step.
+ */
+export async function intercityOpen() {
+  if (!(await isStoreActive(WAREHOUSE_CODE))) return false;
+  return storeDoesIntercity(WAREHOUSE_CODE);
+}
+
+/**
  * The stores in this pincode's zone that are actually switched on, nearest pincode first.
  *
  * Serviceability used to be decided from zoneStores()[0] alone — the single nearest store BY
