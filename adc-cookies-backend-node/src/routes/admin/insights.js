@@ -55,6 +55,42 @@ router.get('/dashboard', async (_req, res) => {
   const ordersByStatus = {};
   for (const o of live) ordersByStatus[o.order_status] = (ordersByStatus[o.order_status] || 0) + 1;
 
+  /*
+   * Where the customers ARE, by state.
+   *
+   * This replaces a "Customers by city" panel that was built on ORDERS — distinct order.user_id in
+   * the selected period, grouped by delivery city. On a shop with nine customers and one completed
+   * order it reported a single customer, which is a true answer to a question nobody was asking.
+   * Who your customers are is a property of the customer base, not of a date range, so it lives here
+   * on the unscoped dashboard rather than under the Period filter that made it read as broken.
+   *
+   * State, not city, because city is whatever the geocoder called the administrative area — real
+   * rows here include "Chennai Corporation" and "Kanadiya Tahsil", which no one would pick out of a
+   * list as Chennai and Indore. State comes back clean.
+   *
+   * DISTINCT ON gives each customer exactly ONE state — their default address, or their oldest if
+   * none is marked default — so the bars sum to the customer count instead of counting somebody
+   * twice for having addresses in two states.
+   */
+  const stateRows = await getAll(
+    `WITH primary_address AS (
+       SELECT DISTINCT ON (a.user_id) a.user_id, a.state
+         FROM addresses a
+         JOIN users u ON u.id = a.user_id AND u.role = 'CUSTOMER'
+        ORDER BY a.user_id, a.is_default DESC, a.id ASC
+     )
+     SELECT COALESCE(INITCAP(LOWER(NULLIF(TRIM(state),''))),'Unknown') AS state, COUNT(*)::int AS customers
+       FROM primary_address GROUP BY 1 ORDER BY customers DESC, state ASC`
+  ).catch(() => []);
+  const customersByState = stateRows.map((r) => ({ state: r.state, customers: Number(r.customers) }));
+
+  /* Customers who have not saved an address yet, reported as their own row so the bars add up to the
+     Customers figure above. Without it the chart quietly totals less than the headline number, which
+     is the next question somebody asks. */
+  const placed = customersByState.reduce((acc, r) => acc + r.customers, 0);
+  const noAddress = Math.max(0, Number(totalUsers) - placed);
+  if (noAddress > 0) customersByState.push({ state: 'No address yet', customers: noAddress });
+
   // Top products by quantity sold, cancelled orders excluded — an abandoned basket is not a sale.
   const topRows = await getAll(
     `SELECT oi.product_name, SUM(oi.quantity) AS qty, SUM(oi.total_price) AS revenue
@@ -70,7 +106,7 @@ router.get('/dashboard', async (_req, res) => {
     unavailableProducts: Number(unavailableProducts),
     totalUsers: Number(totalUsers), totalAdmins,
     newMessages,
-    ordersByStatus, topProducts,
+    ordersByStatus, topProducts, customersByState,
   });
 });
 
@@ -126,13 +162,10 @@ router.get('/analytics', async (req, res) => {
       GROUP BY 1 ORDER BY orders DESC, revenue DESC LIMIT 8`, p
   )).map((r) => ({ city: r.city, orders: Number(r.orders), revenue: Number(r.revenue) }));
 
-  // Distinct customers who ordered in this period, by their delivery city.
-  const usersByCity = (await getAll(
-    `SELECT COALESCE(INITCAP(LOWER(NULLIF(TRIM(a.city),''))),'Unknown') AS city, COUNT(DISTINCT o.user_id) AS users
-       FROM orders o LEFT JOIN addresses a ON a.id = o.address_id
-      WHERE ${inRange} AND ${VALID}
-      GROUP BY 1 ORDER BY users DESC LIMIT 8`, p
-  )).map((r) => ({ city: r.city, users: Number(r.users) }));
+  /* There is deliberately no per-period "customers by city" here any more. Counting distinct
+     order.user_id in a date range answers "who bought recently", which is not what a panel headed
+     "Customers by …" is read as — see customersByState on /dashboard, which counts the customer base
+     itself and is not scoped to a period. */
 
   /*
    * Payments and shipments deliberately count EVERY order in the range, cancelled included.
@@ -158,7 +191,7 @@ router.get('/analytics', async (req, res) => {
       GROUP BY 1 ORDER BY revenue DESC LIMIT 8`, p
   )).map((r) => ({ name: r.name, qty: Number(r.qty), revenue: Number(r.revenue) }));
 
-  res.json({ from, to, salesByDay, cancelledByDay, ordersByArea, usersByCity, paymentBreakdown, shipmentByStatus, topProducts });
+  res.json({ from, to, salesByDay, cancelledByDay, ordersByArea, paymentBreakdown, shipmentByStatus, topProducts });
 });
 
 export default router;
