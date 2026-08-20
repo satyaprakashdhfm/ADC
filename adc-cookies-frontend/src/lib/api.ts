@@ -424,7 +424,9 @@ export interface DeliveryCheck {
   distanceKm?: number | null;
   distanceApprox?: boolean;     // true when distanceKm is as-the-crow-flies, so the copy says "about"
   originStore?: string | null;  // outstation only — the warehouse the parcel is posted from
-  etaLabel?: string;            // e.g. "within ~1 hour" — same-day intracity promise
+  etaLabel?: string;            // e.g. "Same-day" — the intracity promise. Never a duration: an
+                                // hour depends on a free rider and clear traffic, neither of which
+                                // we control, so it is not a number to print next to a Pay button.
   maintenanceMessage?: string;  // shown when same-day is unavailable and checkout is blocked
   /** Per-product delivery eligibility for THIS pincode — independent of `serviceable`, which is
    *  about the destination in general. Cross-reference against cart contents to flag a restricted

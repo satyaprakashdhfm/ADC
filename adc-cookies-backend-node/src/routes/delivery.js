@@ -125,7 +125,7 @@ router.get('/check', async (req, res) => {
   };
 
   // Intracity: if the pincode is in a city where we have a store (Bengaluru / Chennai zones), it
-  // ALWAYS ships SAME-DAY, ~1 hour, fulfilled from the nearest store — that's the intracity promise,
+  // ALWAYS ships SAME-DAY, fulfilled from the nearest store — that's the intracity promise,
   // so a store-zone pincode is never dropped to multi-day Delhivery. When the hyperlocal carrier
   // (Shiprocket) is live and we have coordinates, we quote its real rate/ETA; otherwise we promise a
   // store-fulfilled ~1h delivery at the configured intracity fee (the shipment is created at order
@@ -133,7 +133,7 @@ router.get('/check', async (req, res) => {
   /*
    * Intracity. A store-zone pincode is served SAME-DAY by the hyperlocal carrier or it is not served
    * at all — it is never quoted as a multi-day Delhivery parcel, because the shopper chose us for
-   * "within ~1 hour" and quietly substituting a three-day courier is not the thing they bought.
+   * same-day and quietly substituting a three-day courier is not the thing they bought.
    *
    * This check therefore refuses to promise anything it has not actually confirmed. It used to
    * answer "same-day, ~1h" purely from the pincode PREFIX, before any carrier was asked, which meant
@@ -177,7 +177,12 @@ router.get('/check', async (req, res) => {
       return res.json({ serviceable: true, intracity: true, sameDay: true, carrier: 'SHIPROCKET',
         store: chosen.store.name, city: chosen.store.city, deliveryFee: chosen.rate, etaHours,
         distanceKm: chosen.distance ?? null,
-        etaLabel: 'within ~1 hour', tat: null, expectedDeliveryDate: null, pincode: pin });
+        /* "Same-day", not "within ~1 hour".
+           An hour is a promise that depends on a rider being free, a kitchen not being mid-bake and
+           traffic behaving, none of which we control or measure — so it was a number we could not
+           stand behind, printed on the screen where somebody decides to pay. Same-day is the thing
+           that is actually true, and it is what the footer and the store copy already say. */
+        etaLabel: 'Same-day', tat: null, expectedDeliveryDate: null, pincode: pin });
     } catch (e) {
       // A carrier outage must not silently become a Delhivery quote — say we cannot confirm.
       console.log(`[DELIVERY] check | pin=${pin} | hyperlocal quote errored (${e?.message || e})`);
