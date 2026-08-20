@@ -457,6 +457,10 @@ export interface AdminStats {
   newMessages: number;
   ordersByStatus: Record<string, number>;
   topProducts: { name: string; qty: number; revenue: number }[];
+  /** Where the customer base is, one state per customer (their default address). NOT scoped to the
+   *  dashboard's date range — it describes who the customers are, not who bought recently. Includes
+   *  a "No address yet" row so the figures reconcile with totalUsers. */
+  customersByState: { state: string; customers: number }[];
 }
 export interface AdminUser { id: number; name: string; email: string | null; phone?: string; role: string; createdAt: string; orderCount: number; addresses?: Address[]; lastLoginLocation?: string | null; }
 export interface AdminCoupon { id: number; code: string; discountType: string; discountValue: number; minimumOrderAmount?: number | null; maximumDiscount?: number | null; expiryDate?: string | null; usageLimit?: number | null; isActive: boolean; timesUsed?: number; spinWeight?: number | null; spinLabel?: string | null; terms?: string | null; }
@@ -478,7 +482,6 @@ export interface AdminAnalytics {
   /** Abandoned/cancelled orders per day, kept out of salesByDay so they cannot inflate revenue. */
   cancelledByDay: { day: string; orders: number }[];
   ordersByArea: { city: string; orders: number; revenue: number }[];
-  usersByCity: { city: string; users: number }[];
   paymentBreakdown: { status: string; count: number; amount: number }[];
   shipmentByStatus: { status: string; count: number }[];
   topProducts: { name: string; qty: number; revenue: number }[];
