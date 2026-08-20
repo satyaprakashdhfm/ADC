@@ -32,3 +32,21 @@ export function deadOrderReason(o: Order): { text: string; owed: boolean } {
   if (o.paymentStatus === 'CANCELLED') return { text: 'Payment not completed — checkout closed before paying', owed: false };
   return { text: 'Cancelled before payment', owed: false };
 }
+
+/**
+ * Does this order belong in a shipments list?
+ *
+ * A cancelled order with no booking has nothing to ship and never will — an abandoned checkout that
+ * never reached payment sits in the Delivery tab reading "Not created · No shipment" forever, in a
+ * panel whose entire job is "which parcels still need something doing". It is noise there, and it is
+ * already kept on the Orders tab under Cancelled & failed payments.
+ *
+ * A cancelled order that DOES have a booking is the opposite, and is the reason this is not simply
+ * `!isDeadOrder`: cancelling on our side does not always succeed downstream, so a waybill on a
+ * cancelled order may be a rider still coming for a parcel nobody is going to pay for. That has to
+ * stay in front of somebody until the booking is cancelled too.
+ */
+export function belongsInShipments(o: Order): boolean {
+  if (!isDeadOrder(o)) return true;
+  return !!(o.delhiveryWaybill || o.carrierOrderId);
+}
