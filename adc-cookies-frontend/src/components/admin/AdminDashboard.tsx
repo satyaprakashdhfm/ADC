@@ -184,8 +184,6 @@ export default function AdminDashboard() {
             onPage={n => setPageOf('orders', n)}
             deadOpen={deadOrdersOpen}
             onDeadOpen={setDeadOrdersOpen}
-            deadPage={pageOf('deadOrders')}
-            onDeadPage={n => setPageOf('deadOrders', n)}
           />
         )}
 

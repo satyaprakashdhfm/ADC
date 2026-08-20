@@ -24,14 +24,71 @@ interface Props {
   /** Cancelled/failed orders live in their own collapsible panel; this is its open state. */
   deadOpen: boolean;
   onDeadOpen: (v: boolean) => void;
-  deadPage: number;
-  onDeadPage: (n: number) => void;
+}
+
+/**
+ * One half of the cancelled list.
+ *
+ * The two halves are shown as separate groups rather than one table with a "why" column, because
+ * they need opposite things from whoever is reading: a paid order that was cancelled has a refund
+ * waiting, and a closed payment window has nothing at all. Sorting that out by squinting at a column
+ * was the problem.
+ *
+ * Capped, and says when it capped — a long tail of abandoned checkouts must not be able to push the
+ * half that needs acting on off the screen, and silently truncating would read as "that is all of
+ * them".
+ */
+function DeadGroup({ title, note, rows, emptyText, owed, onOpenOrder }: {
+  title: string; note: string; rows: Order[]; emptyText: string; owed?: boolean;
+  onOpenOrder: (o: Order) => void;
+}) {
+  const CAP = 10;
+  const shown = rows.slice(0, CAP);
+  const hidden = rows.length - shown.length;
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+        <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--text-strong)', margin: 0 }}>{title}</h4>
+        <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, color: owed && rows.length ? 'var(--status-error)' : 'var(--text-subtle)' }}>
+          {rows.length}
+        </span>
+      </div>
+      <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '0 0 10px', lineHeight: 1.5 }}>{note}</p>
+      {!rows.length ? <Empty text={emptyText} /> : (
+        <>
+          <Table head={['Order', 'Customer', 'Total', 'Why', 'Date', '']}>
+            {shown.map(o => {
+              const reason = deadOrderReason(o);
+              return (
+                <tr key={o.id} onClick={() => onOpenOrder(o)} style={{ cursor: 'pointer', opacity: 0.9 }}>
+                  <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{(o.items || []).length} item{(o.items || []).length !== 1 ? 's' : ''} · tap for details</span></td>
+                  <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city || ''}</span></td>
+                  <td style={{ ...td, color: 'var(--text-muted)' }}>{money(o.totalAmount)}</td>
+                  <td style={td}>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)' }}>{reason.text}</span>
+                    {reason.owed && <div style={{ marginTop: 4 }}><Badge text="refund owed" /></div>}
+                  </td>
+                  <td style={td}>{fmtDate(o.createdAt)}</td>
+                  <td style={td}><XCircle size={15} color="var(--text-subtle)" /></td>
+                </tr>
+              );
+            })}
+          </Table>
+          {hidden > 0 && (
+            <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: '8px 0 0', fontWeight: 700 }}>
+              +{hidden} more — use the search above to narrow this down.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function OrdersTab({
   orders, search, onSearch, statusFilter, onStatusFilter, carrierFilter, onCarrierFilter,
   paymentFilter, onPaymentFilter, onRefresh, onOpenOrder, onChangeStatus, page, onPage,
-  deadOpen, onDeadOpen, deadPage, onDeadPage,
+  deadOpen, onDeadOpen,
 }: Props) {
   const q = search.trim().toLowerCase();
   const matches = (o: Order) => {
@@ -58,6 +115,12 @@ export default function OrdersTab({
   });
   const deadFiltered = dead.filter(matches);
 
+  /* Split on whether money changed hands. A closed payment window costs nothing and needs nobody;
+     a paid order that was then cancelled has a refund at the end of it. These were one list, which
+     meant the half that needed acting on was buried in the half that did not. */
+  const deadPaid = deadFiltered.filter(o => o.paymentStatus === 'PAID');
+  const deadUnpaid = deadFiltered.filter(o => o.paymentStatus !== 'PAID');
+
   const active = !!(statusFilter || carrierFilter || paymentFilter);
   const clear = () => { onStatusFilter(''); onCarrierFilter(''); onPaymentFilter(''); onSearch(''); onPage(1); };
   const selStyle = { ...inp, cursor: 'pointer' } as React.CSSProperties;
@@ -66,7 +129,7 @@ export default function OrdersTab({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <Panel title={`Orders${orders ? ` (${filtered.length}${filtered.length !== live.length ? '/' + live.length : ''})` : ''}`} loading={orders === null}
         action={<button onClick={onRefresh} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-        <FilterBar search={search} onSearch={v => { onSearch(v); onPage(1); onDeadPage(1); }} placeholder="Search order #, customer, city…" active={active} onClear={clear}>
+        <FilterBar search={search} onSearch={v => { onSearch(v); onPage(1); }} placeholder="Search order #, customer, city…" active={active} onClear={clear}>
           <Field label="Order status"><select value={statusFilter} onChange={e => { onStatusFilter(e.target.value); onPage(1); }} style={selStyle}><option value="">All statuses</option>{LIVE_ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
           <Field label="Carrier"><select value={carrierFilter} onChange={e => { onCarrierFilter(e.target.value); onPage(1); }} style={selStyle}><option value="">All carriers</option><option value="SHIPROCKET">Shiprocket (intracity)</option><option value="DELHIVERY">Delhivery (outstation)</option></select></Field>
           <Field label="Payment"><select value={paymentFilter} onChange={e => { onPaymentFilter(e.target.value); onPage(1); }} style={selStyle}><option value="">Any payment</option><option value="PAID">Paid</option><option value="PENDING">Pending</option></select></Field>
@@ -132,32 +195,30 @@ export default function OrdersTab({
                 {deadOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} {deadOpen ? 'Hide' : 'Show'}
               </button>
             }>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: deadOpen ? '0 0 14px' : 0, lineHeight: 1.6 }}>
-              These are not live orders and are excluded from the list above, from the takings on
-              Overview, and from every sales chart. A row marked <strong>refund owed</strong> was paid
-              for before it was cancelled — those still need settling in the Razorpay dashboard.
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: deadOpen ? '0 0 16px' : 0, lineHeight: 1.6 }}>
+              None of these are live orders. They are excluded from the list above, from the takings on
+              Overview, and from every sales chart — and split below by whether money changed hands,
+              because only one of the two needs anybody to do anything.
             </p>
             {deadOpen && (<>
-              <Table head={['Order', 'Customer', 'Total', 'Why', 'Date', '']}>
-                {deadFiltered.slice((deadPage - 1) * PAGE_SIZE, deadPage * PAGE_SIZE).map(o => {
-                  const reason = deadOrderReason(o);
-                  return (
-                    <tr key={o.id} onClick={() => onOpenOrder(o)} style={{ cursor: 'pointer', opacity: 0.9 }}>
-                      <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{(o.items || []).length} item{(o.items || []).length !== 1 ? 's' : ''} · tap for details</span></td>
-                      <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city || ''}</span></td>
-                      <td style={{ ...td, color: 'var(--text-muted)' }}>{money(o.totalAmount)}</td>
-                      <td style={td}>
-                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)' }}>{reason.text}</span>
-                        {reason.owed && <div style={{ marginTop: 4 }}><Badge text="refund owed" /></div>}
-                      </td>
-                      <td style={td}>{fmtDate(o.createdAt)}</td>
-                      <td style={td}><XCircle size={15} color="var(--text-subtle)" /></td>
-                    </tr>
-                  );
-                })}
-              </Table>
+              {/* Money taken first. This is the half that needs acting on, so it does not sit
+                  underneath a longer list of checkouts nobody completed. */}
+              <DeadGroup
+                title="Cancelled after payment"
+                note="Paid for, then cancelled — by us or on request. Each of these has a refund to settle in the Razorpay dashboard."
+                rows={deadPaid}
+                emptyText="None — nothing is owed."
+                owed
+                onOpenOrder={onOpenOrder}
+              />
+              <DeadGroup
+                title="Left at checkout"
+                note="The customer reached the payment step and closed it without paying. Nothing was charged and there is nothing to do."
+                rows={deadUnpaid}
+                emptyText="None."
+                onOpenOrder={onOpenOrder}
+              />
               {!deadFiltered.length && <Empty text="None match the search." />}
-              <Pager page={deadPage} total={deadFiltered.length} pageSize={PAGE_SIZE} onPage={onDeadPage} />
             </>)}
           </Panel>
         </div>
