@@ -77,7 +77,7 @@ async function attemptShipment(orderId, addressArg) {
    */
   if (stores.length && shiprocketConfigured() && !SHIPROCKET_DISABLED) {
     if (address.latitude == null || address.longitude == null) {
-      // NEVER Delhivery. This order was sold as same-day, ~1 hour, from a nearby store. Handing it
+      // NEVER Delhivery. This order was sold as same-day, from a nearby store. Handing it
       // to a multi-day courier would silently turn the promise the customer paid for into something
       // else entirely — worse than not booking at all. Leave it unbooked and let the admin
       // "Needs attention" list surface it so a person decides what to do.

@@ -467,11 +467,23 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                       <div key={a.id} onClick={() => setAddr(a.id)} role="button" tabIndex={0} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '14px 16px', borderRadius: 'var(--radius-card)', cursor: 'pointer', textAlign: 'left', border: on ? '2px solid var(--amber-300)' : '1.5px solid var(--border-default)', background: on ? 'var(--amber-50)' : 'var(--surface-raised)' }}>
                         <span style={{ width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: on ? 'var(--gradient-warm)' : 'var(--surface-sunken)', display: 'grid', placeItems: 'center', flex: 'none' }}>{a.label === 'Office' ? <Briefcase size={18} color={on ? 'var(--white)' : 'var(--brand-secondary)'} /> : a.label === 'Other' ? <MapPin size={18} color={on ? 'var(--white)' : 'var(--brand-secondary)'} /> : <Home size={18} color={on ? 'var(--white)' : 'var(--brand-secondary)'} />}</span>
                         <span style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                             <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>{a.label || 'Home'}</span>
                             {a.isDefault && <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 800 }}>Default</span>}
                           </span>
                           <span style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.45 }}>{[a.addressLine1, a.addressLine2, a.city, a.pincode].filter(Boolean).join(', ')}</span>
+                          {/* Who the rider asks for and the number they ring, on the card where the
+                              address is CHOSEN — not only on the payment screen after it is. Several
+                              saved addresses can read almost identically (same flat, same layout),
+                              and the receiver is often the thing that actually tells them apart.
+                              A missing or malformed number is called out here too, because it blocks
+                              payment later and finding that out at the Pay button is too late. */}
+                          {a.fullName && (
+                            <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-body)', fontWeight: 700, marginTop: 5 }}>{a.fullName}</span>
+                          )}
+                          {PHONE_RE.test((a.phone || '').replace(/\D/g, ''))
+                            ? <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 2 }}>{a.phone}</span>
+                            : <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, marginTop: 2 }}>No phone on file — add one before paying.</span>}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
                           <button onClick={e => { e.stopPropagation(); editAddr(a); }} aria-label="Edit address" style={{ width: 30, height: 30, borderRadius: '50%', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-muted)' }}><Pencil size={14} /></button>

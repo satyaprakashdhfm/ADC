@@ -61,6 +61,19 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
   const [locating, setLocating] = useState(false);
   const [locErr, setLocErr] = useState('');
 
+  /*
+   * The suggestion the customer chose, kept rather than reduced to a pair of coordinates.
+   *
+   * This is the fix for a real and very confusing bug. Picking "Sukruti CoLiving PG" used to keep
+   * only its lat/lng and then ask the geocoder what was AT that point — which is a different
+   * question, and on a street with several co-living buildings it answered "Zolo Selene CoLiving",
+   * eleven metres away. Same provider, same coordinates, different question, so the map showed the
+   * right pin under the wrong name and the building the customer had just chosen appeared nowhere.
+   *
+   * Null when there is no chosen place to trust: arriving by GPS, or after dragging the pin. In both
+   * of those "what is at this point" IS the right question, so the reverse geocode takes over again.
+   */
+  const [chosen, setChosen] = useState<PlaceSuggestion | null>(null);
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(
     initial?.latitude != null && initial?.longitude != null ? { lat: initial.latitude, lng: initial.longitude } : null,
   );
@@ -105,7 +118,7 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
     if (typeof navigator === 'undefined' || !navigator.geolocation) { setLocErr('Location is not available on this device.'); return; }
     setLocating(true); setLocErr('');
     navigator.geolocation.getCurrentPosition(
-      (pos) => { setLocating(false); setPin({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setStep('map'); },
+      (pos) => { setLocating(false); setChosen(null); setPin({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setStep('map'); },
       (err) => {
         setLocating(false);
         setLocErr(err.code === 1 ? 'Location permission denied. Allow it, or search for your area instead.'
@@ -117,30 +130,45 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
   };
 
   /* ---------------- the pin's address ---------------- */
-  const lookup = useCallback(async (lat: number, lng: number) => {
+  /*
+   * What the map says about the point, used for the fields a chosen suggestion does not carry.
+   *
+   * The division of labour is the point here. The reverse geocode is authoritative about WHERE the
+   * point is — pincode, city, state — and those are never typed in and then argued with. It is NOT
+   * authoritative about what the customer meant: on a dense street it names whichever building it
+   * considers strongest, which is how "Sukruti CoLiving PG" became "Zolo Selene CoLiving".
+   *
+   * So the name comes from the chosen suggestion when there is one, and only from the map when there
+   * is not (GPS, or a dragged pin). `named` is passed in rather than read from state because this
+   * runs from an effect that fires before a state update would be visible to it.
+   */
+  const lookup = useCallback(async (lat: number, lng: number, named?: PlaceSuggestion | null) => {
     setResolving(true);
     const p = await reverseGeocode(lat, lng);
     setResolving(false);
     if (!p) return;
     setPlace(p);
-    /* The point is the authority. Pincode, city and state are what it resolves to — never typed in
-       and then argued with. Area is only ever a default: someone who names their own landmark knows
-       better than the map does, so an existing value is left alone. */
     setForm(f => ({
       ...f,
       pincode: p.postcode || f.pincode,
       city: p.city || f.city,
       state: p.state || f.state,
-      addressLine2: f.addressLine2 || p.street || p.area || '',
+      /* Address* is "flat / floor / building name", and it used to be left completely empty for the
+         customer to retype a building they had just picked from a list. The chosen place's own name
+         is exactly that field, so it goes in as a starting point — they add the flat number to it. */
+      addressLine1: f.addressLine1 || named?.label || '',
+      /* Area is only ever a default: someone who names their own landmark knows better than the map
+         does, so an existing value is left alone. */
+      addressLine2: f.addressLine2 || named?.detail || p.street || p.area || '',
     }));
   }, []);
 
   useEffect(() => {
     if (step !== 'map' || !pin) return;
     // Same reason as the search debounce: hop out of the effect before touching state.
-    const t = setTimeout(() => void lookup(pin.lat, pin.lng), 0);
+    const t = setTimeout(() => void lookup(pin.lat, pin.lng, chosen), 0);
     return () => clearTimeout(t);
-  }, [step, pin, lookup]);
+  }, [step, pin, chosen, lookup]);
 
   const valid = !!(form.fullName.trim() && /^[6-9]\d{9}$/.test(form.phone.replace(/\D/g, '').slice(-10))
     && form.addressLine1.trim() && form.city.trim() && /^[1-9]\d{5}$/.test(form.pincode.trim()) && pin);
@@ -185,7 +213,7 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {hits.map((h, i) => (
                 <button key={`${h.latitude},${h.longitude},${i}`}
-                  onClick={() => { setPin({ lat: h.latitude, lng: h.longitude }); setStep('map'); }}
+                  onClick={() => { setChosen(h); setPin({ lat: h.latitude, lng: h.longitude }); setStep('map'); }}
                   style={{ display: 'flex', alignItems: 'flex-start', gap: 10, textAlign: 'left', padding: '12px 4px', border: 'none', borderTop: i ? '1px solid var(--border-soft)' : 'none', background: 'transparent', cursor: 'pointer' }}>
                   <MapPin size={16} style={{ color: 'var(--text-muted)', flex: 'none', marginTop: 2 }} />
                   <span style={{ minWidth: 0 }}>
@@ -219,10 +247,12 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
       {step === 'map' && pin && (
         <PinMap
           lat={pin.lat} lng={pin.lng}
-          onSettle={(lat, lng) => { setPin({ lat, lng }); void lookup(lat, lng); }}
+          /* Moving the pin abandons the chosen place — it is no longer where the customer is
+             pointing — so the label goes back to being read off the map. */
+          onSettle={(lat, lng) => { setChosen(null); setPin({ lat, lng }); void lookup(lat, lng); }}
           onUseGps={useGps}
           resolving={resolving}
-          selected={place?.formatted || place?.street || null}
+          selected={chosen ? [chosen.label, chosen.detail].filter(Boolean).join(' · ') : (place?.formatted || place?.street || null)}
           onConfirm={() => setStep('details')}
         />
       )}
@@ -235,7 +265,9 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
                 <MapPin size={16} style={{ color: teal, flex: 'none', marginTop: 2 }} />
                 <div style={{ minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: 1.5 }}>
-                    {place?.formatted || [place?.street, place?.city, form.pincode].filter(Boolean).join(', ') || 'Selected location'}
+                    {chosen
+                      ? [chosen.label, chosen.detail].filter(Boolean).join(', ')
+                      : (place?.formatted || [place?.street, place?.city, form.pincode].filter(Boolean).join(', ') || 'Selected location')}
                   </p>
                   <button onClick={() => setStep('map')} style={{ marginTop: 4, padding: 0, border: 'none', background: 'transparent', color: teal, fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
                     Edit location on Map
