@@ -283,7 +283,9 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
             {/* Read off the pin, and editable — a map can be a street out on a new layout, and the
                 customer is the one who knows. Editing these never moves the pin: the point is
                 already confirmed, and it is the point we deliver to. */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {/* minmax(0,1fr): an <input> carries a ~170px min-content width, so two bare 1fr
+                columns refuse to go below ~350px and overflow the sheet on a narrow phone. */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 }}>
               <div><label style={labelStyle}>Pincode*</label>
                 <input value={form.pincode} inputMode="numeric" maxLength={6}
                   onChange={(e) => setForm(f => ({ ...f, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))} style={inputStyle} /></div>
@@ -300,7 +302,9 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
               <input value={form.addressLine2} placeholder="Nearby locality, hospital, mall"
                 onChange={(e) => setForm(f => ({ ...f, addressLine2: e.target.value }))} style={inputStyle} /></div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {/* minmax(0,1fr): an <input> carries a ~170px min-content width, so two bare 1fr
+                columns refuse to go below ~350px and overflow the sheet on a narrow phone. */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 }}>
               <div><label style={labelStyle}>Receiver&apos;s name*</label>
                 <input value={form.fullName} onChange={(e) => setForm(f => ({ ...f, fullName: e.target.value }))} style={inputStyle} /></div>
               <div><label style={labelStyle}>Phone*</label>
