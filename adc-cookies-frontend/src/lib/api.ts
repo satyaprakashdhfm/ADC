@@ -889,18 +889,33 @@ export async function adminFetchOrderDocument(orderId: number, docType: Delhiver
 
 
 /**
- * Open the shipping-label PDF in a new tab. The label route is admin-protected, so a plain
- * <a href> link 401s (browser navigation can't send the Bearer token). We fetch it with the
- * auth header, then open the PDF as a blob URL.
+ * Open the shipping-label PDF in a new tab.
+ *
+ * request() is bypassed because the response is a PDF, not JSON — so, exactly as in
+ * adminUploadMedia, the admin session token has to be attached by hand. Missing it is not a
+ * subtle failure: /admin is gated on X-Admin-Token alone, so the request never reaches
+ * Delhivery and comes back a bare "Unauthorized" that reads like a carrier problem.
+ *
+ * The Bearer token stays because the label URL sits under /admin, which the customer-auth
+ * middleware also parses; it is the admin header that actually opens the gate.
  */
 export async function openLabel(waybills: string): Promise<void> {
   const token = await getToken();
-  const res = await fetch(adminLabelUrl(waybills), {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const at = adminSessionToken.get();
+  if (at) headers['X-Admin-Token'] = at;
+
+  const res = await fetch(adminLabelUrl(waybills), { headers });
   if (!res.ok) {
     const err = await res.json().catch(() => null);
-    throw new Error(err?.error || err?.message || `Label fetch failed (${res.status})`);
+    const e: ApiRequestError = new Error(err?.error || err?.message || `Label fetch failed (${res.status})`);
+    e.code = err?.code; e.status = res.status;
+    /* Drop a session the server has already refused, so the dashboard falls back to its sign-in
+       instead of this one button failing on its own forever. request() and adminUploadMedia both
+       do this; leaving it out is how the label ends up behaving differently from everything else. */
+    if (e.code === 'ADMIN_AUTH_REQUIRED' || e.code === 'ADMIN_SESSION_EXPIRED' || e.code === 'ADMIN_REVOKED') adminSessionToken.clear();
+    throw e;
   }
   const blobUrl = URL.createObjectURL(await res.blob());
   window.open(blobUrl, '_blank', 'noopener');
