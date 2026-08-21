@@ -333,6 +333,28 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
    *                    next" copy reads it via order.store.acceptedAt — and POST /store/orders/:id/
    *                    accept books it the moment a real person there taps Accept.
    */
+  /* The confirmation, now that there is something to confirm. Fire-and-forget: the money is taken
+     and the row is already PAID, so a mail failure must not surface as a failed payment. Only the
+     caller that won the claim above reaches this line, so it cannot be sent twice. */
+  (async () => {
+    const buyer = await getOne('SELECT name, email FROM users WHERE id = $1', [order.user_id]);
+    if (!buyer?.email) return;
+    const [mailItems, mailAddress] = await Promise.all([
+      getAll('SELECT product_name, quantity, total_price FROM order_items WHERE order_id = $1 ORDER BY id', [orderId]),
+      order.address_id ? getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null,
+    ]);
+    await sendOrderEmails({
+      orderNumber: order.order_number,
+      subtotal: Number(order.subtotal) || 0,
+      discount: Number(order.discount_amount) || 0,
+      deliveryFee: Number(order.delivery_fee) || 0,
+      total: Number(order.total_amount) || 0,
+      customerName: buyer.name, customerEmail: buyer.email,
+      items: mailItems.map((i) => ({ name: i.product_name, qty: i.quantity, total: Number(i.total_price) || 0 })),
+      address: mailAddress,
+    });
+  })().catch((err) => console.error(`[ORDER] email send failed | order=${order.order_number} | ${err?.message || err}`));
+
   const assignedStore = storeByCode(order.store_code);
   if (assignedStore && assignedStore.posMode === 'MANUAL') {
     await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
@@ -613,14 +635,17 @@ router.post('/', async (req, res) => {
   const cart = await getOne('SELECT * FROM cart WHERE user_id = $1', [user.id]);
   if (cart) await query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
 
-  // Confirmation email to the customer + a copy to the business — fire-and-forget so order
-  // placement returns immediately (two SMTP sends used to block the response). Best-effort.
-  sendOrderEmails({
-    orderNumber, subtotal, discount, deliveryFee, total,
-    customerName: user.name, customerEmail: user.email,
-    items: lineItems.map((li) => ({ name: li.productName, qty: li.quantity, total: li.unitPrice * li.quantity })),
-    address,
-  }).catch((err) => console.error(`[ORDER] email send failed | order=${orderNumber} | ${err?.message || err}`));
+  /* No confirmation email here.
+   *
+   * This row is created BEFORE Razorpay opens, so reaching this line means a basket was submitted,
+   * not that anyone paid. Mailing "Order confirmed" from here told every shopper who closed the
+   * payment window that an order they had not paid for was on its way — and nothing ever followed,
+   * because no cancellation mail is sent for an abandoned checkout either.
+   *
+   * It is sent from finalizePaidOrder instead, on the same atomic PAID claim that guards the
+   * courier booking and the coupon redemption — which is also what stops the verify route and the
+   * webhook sending it twice when they land together.
+   */
 
   // NOTE: the Delhivery shipment is created on payment success (see /:id/payment/verify),
   // not here — we only ship orders that are actually paid.
