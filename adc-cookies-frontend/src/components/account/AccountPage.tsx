@@ -115,13 +115,19 @@ function OrderCard({ order, onReorder }: { order: Order; onReorder: () => void }
         <span style={{ width: 46, height: 46, borderRadius: 16, display: 'grid', placeItems: 'center', background: 'var(--amber-50)', color: 'var(--brand-secondary)', flex: 'none' }}>
           <PackageCheck size={22} />
         </span>
-        <div style={{ flex: 1, minWidth: 260 }}>
+        {/* minWidth 0, not 260. The row already wraps, so the floor bought nothing and cost a
+            great deal: it is the widest thing in the grid column, and the column cannot size
+            below its content, so on a narrow phone it pushed the whole page sideways the moment
+            an order rendered. */}
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 7 }}>
             <span style={{ padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: colors.bg, color: colors.fg, fontSize: 'var(--text-xs)', fontWeight: 900 }}>{displayStatus}</span>
             <span style={{ padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', color: 'var(--text-muted)', fontSize: 'var(--text-xs)', fontWeight: 800 }}>{order.paymentStatus}</span>
             {giftCount > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-xs)', fontWeight: 900 }}><Gift size={12} /> Gift packed</span>}
           </div>
-          <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 5 }}>Order {order.orderNumber}</h2>
+          {/* An order number is one unbreakable 17-character token; without this it sets the
+              minimum width of everything around it. */}
+          <h2 style={{ fontSize: 'var(--text-h4)', marginBottom: 5, overflowWrap: 'anywhere' }}>Order {order.orderNumber}</h2>
           <p style={{ color: 'var(--text-muted)', lineHeight: 1.45, fontSize: 'var(--text-sm)' }}>{formatDate(order.createdAt)} · {itemCount || items.length} item{(itemCount || items.length) === 1 ? '' : 's'} · {cancelled ? 'Cancelled' : rebooking ? 'Arranging a new courier' : (order.shipmentStatus || 'Preparing shipment')}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -170,7 +176,7 @@ function OrderCard({ order, onReorder }: { order: Order; onReorder: () => void }
               )}
             </h3>
             {address ? (
-              <p style={{ color: 'var(--text-body)', lineHeight: 1.6, fontSize: 'var(--text-sm)' }}>{address.fullName} · {address.phone}<br />{[address.addressLine1, address.addressLine2, address.city, address.state, address.pincode].filter(Boolean).join(', ')}</p>
+              <p style={{ color: 'var(--text-body)', lineHeight: 1.6, fontSize: 'var(--text-sm)', overflowWrap: 'anywhere' }}>{address.fullName} · {address.phone}<br />{[address.addressLine1, address.addressLine2, address.city, address.state, address.pincode].filter(Boolean).join(', ')}</p>
             ) : (
               <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Delivery address will appear here once the order is synced.</p>
             )}
@@ -490,7 +496,7 @@ export default function AccountPage() {
                           ? <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 'var(--text-2xs)', fontWeight: 900 }}>Default</span>
                           : <button onClick={() => makeDefault(a.id)} style={{ padding: '2px 8px', borderRadius: 'var(--radius-pill)', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-link)', fontSize: 'var(--text-2xs)', fontWeight: 900, cursor: 'pointer' }}>Set default</button>}
                       </div>
-                      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>{[a.addressLine1, a.addressLine2, a.city, a.state, a.pincode].filter(Boolean).join(', ')}</p>
+                      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, overflowWrap: 'anywhere' }}>{[a.addressLine1, a.addressLine2, a.city, a.state, a.pincode].filter(Boolean).join(', ')}</p>
                       <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 5 }}>{a.fullName} · {a.phone}</p>
                     </div>
                     <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
