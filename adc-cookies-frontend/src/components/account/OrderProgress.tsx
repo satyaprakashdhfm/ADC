@@ -127,7 +127,15 @@ export default function OrderProgress({ events, cancelled, eta }: {
                 {i > 0 && (
                   <span aria-hidden style={{ flex: 1, height: 2, marginTop: 15, background: i <= reached ? 'var(--brand-secondary)' : 'var(--border-default)', borderRadius: 2 }} />
                 )}
-                <div style={{ flex: 'none', width: 78, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                {/* Allowed to SHRINK below 78px, never to grow past it.
+                    `flex:'none'` with a fixed 78 made four stages plus the padding a 332px floor
+                    that nothing could reduce — and because a grid column cannot size below its
+                    content, that floor travelled outward through the card's padding to 400px and
+                    pushed the whole account page wider than a phone screen. The wrapper's
+                    overflow:hidden hid the symptom on this box while the width still escaped it.
+                    `0 1 78px` keeps the desktop layout identical (no growth) and lets a narrow
+                    screen compress the marks instead of the page. */}
+                <div style={{ flex: '0 1 78px', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                   <Icon size={22} strokeWidth={2.2} style={{ color: done ? 'var(--brand-secondary)' : 'var(--text-subtle)' }} />
                   <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, lineHeight: 1.25, textAlign: 'center', color: done ? 'var(--text-strong)' : 'var(--text-subtle)' }}>{label}</span>
                 </div>
