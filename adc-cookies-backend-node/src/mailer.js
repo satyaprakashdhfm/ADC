@@ -160,15 +160,16 @@ function orderBody(o) {
 }
 
 /*
- * One email per order, to the customer.
+ * Two emails per PAID order: the customer's confirmation, and a copy to the business.
  *
- * There used to be a second copy to the business on every order. It doubled the send volume for
- * something nobody reads: an order reaches the shop through the admin dashboard, the store portal
- * the counter actually watches, and Petpooja where that store is on AUTO. The mailbox was the one
- * channel that told no one anything they were not already looking at.
+ * The business copy was dropped once because it doubled the send volume against a plan counted per
+ * message. What made that expensive was WHERE it was sent from: order creation, so every abandoned
+ * checkout mailed twice for an order nobody had paid for. Sent from payment instead, the volume is
+ * the number of real orders — and at that rate a copy in the mailbox is worth having as the one
+ * record that does not depend on somebody being logged into a dashboard.
  *
- * Halving the sends matters because the mail plan is counted per message, and the customer's
- * confirmation is the one that must never be the send that hits the cap.
+ * The customer's copy is sent FIRST and awaited on its own, so if the plan ever does hit its cap
+ * the send that fails is the internal one.
  */
 /*
  * We cancelled an order the customer had already paid for. They are owed the reason in writing and
@@ -197,7 +198,20 @@ export async function sendOrderCancelledEmail({ order, reason, refunded }) {
 }
 
 export async function sendOrderEmails(o) {
-  await send({ to: o.customerEmail, subject: `Your order ${o.orderNumber} is placed 🍪`, html: shell('Order confirmed', orderBody(o)) });
+  const html = shell('Order confirmed', orderBody(o));
+  // Customer first, and alone: see the note above about which send is allowed to be the one that fails.
+  await send({ to: o.customerEmail, subject: `Your order ${o.orderNumber} is placed 🍪`, html });
+  const { business } = cfg();
+  // Never mail the business twice when BUSINESS_EMAIL is just the sending address again.
+  if (business && business.toLowerCase() !== String(o.customerEmail || '').toLowerCase()) {
+    await send({
+      to: business,
+      subject: `New paid order ${o.orderNumber} — ${o.customerName || 'Customer'}`,
+      html,
+      // Replying to the copy reaches the customer, which is the only thing anyone wants to do with it.
+      replyTo: o.customerEmail || undefined,
+    });
+  }
 }
 
 /* ---- Previous SMTP/nodemailer implementation (kept for reference/fallback) ----
