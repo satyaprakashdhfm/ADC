@@ -100,8 +100,13 @@ body {
   background: var(--surface-page);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Paired with the same rule on html below. On body ALONE the value is propagated to the
+     viewport and body itself falls back to visible, which clips unreliably on mobile once a
+     sticky/fixed element is in play — the configuration that let a stray wide child show a
+     strip of page background down the right-hand side. */
   overflow-x: hidden;
 }
+html { overflow-x: hidden; }
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   color: var(--text-strong);
@@ -291,7 +296,10 @@ body::before {
   .store-card-img { width: 100% !important; aspect-ratio: 4 / 5 !important; }
   /* Reels rail: swiping is the gesture on a phone, so drop the arrows and keep just Follow */
   .reels-controls > button { display: none !important; }
-  .account-layout { grid-template-columns: 1fr !important; }
+  /* minmax(0,1fr), never a bare 1fr. `1fr` is `minmax(auto,1fr)` and that `auto` floor is
+     min-content, so one child that refuses to shrink widens the COLUMN itself and the whole
+     page scrolls sideways — which is what the account page did once orders rendered. */
+  .account-layout { grid-template-columns: minmax(0, 1fr) !important; }
   .account-sidebar { position: static !important; }
   .account-order-detail-grid { grid-template-columns: 1fr !important; }
   .account-address-list { grid-template-columns: 1fr !important; }
@@ -544,7 +552,10 @@ body::before {
   .gallery-grid { grid-template-columns: repeat(2,1fr) !important; }
   .blog-grid { grid-template-columns: 1fr !important; }
   .contact-layout { grid-template-columns: 1fr !important; }
-  .account-layout { grid-template-columns: 1fr !important; }
+  /* minmax(0,1fr), never a bare 1fr. `1fr` is `minmax(auto,1fr)` and that `auto` floor is
+     min-content, so one child that refuses to shrink widens the COLUMN itself and the whole
+     page scrolls sideways — which is what the account page did once orders rendered. */
+  .account-layout { grid-template-columns: minmax(0, 1fr) !important; }
   .account-sidebar { position: static !important; }
   .account-address-list { grid-template-columns: 1fr !important; }
 }
