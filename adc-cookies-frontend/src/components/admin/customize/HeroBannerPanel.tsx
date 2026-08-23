@@ -1,5 +1,5 @@
 'use client';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, RotateCcw, Clock } from 'lucide-react';
 import { type HeroBannerRefs, type HeroBannerUrls, type HeroSizes } from '@/lib/api';
 import { inp, addBtn, Panel, Field } from '../shared/ui';
 import ImageUploadField from '../shared/ImageUploadField';
@@ -24,13 +24,52 @@ interface Props {
   sizes: HeroSizes;
   saved: boolean;
   busy: boolean;
+  live: boolean;
   onImage: (which: 'desktop' | 'mobile', ref: string, url: string) => void;
-  onField: (patch: Partial<Pick<HeroBannerRefs, 'href' | 'alt'>>) => void;
+  onField: (patch: Partial<Pick<HeroBannerRefs, 'href' | 'alt' | 'enabled' | 'startsAt' | 'endsAt' | 'hideOverlay'>>) => void;
   onSave: () => void;
+  onReset: () => void;
 }
 
-export default function HeroBannerPanel({ hero, urls, sizes, saved, busy, onImage, onField, onSave }: Props) {
+/* <input type="datetime-local"> speaks local wall-clock time with no zone; the field is stored as
+   UTC. These two are the only conversion, kept together so a value cannot be read one way and
+   written the other. */
+const toLocalInput = (iso: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null);
+
+/* The lengths an offer actually runs for. Typing an end date by hand is the fiddly part, so these
+   set it from the start (or from now, if no start is given). */
+const DURATIONS: { label: string; mins: number }[] = [
+  { label: '30 min', mins: 30 },
+  { label: '1 hour', mins: 60 },
+  { label: '6 hours', mins: 360 },
+  { label: '1 day', mins: 1440 },
+  { label: '3 days', mins: 4320 },
+  { label: '1 week', mins: 10080 },
+];
+
+/** "2 days, 4 hours left" — the number the person setting an offer actually wants to see. */
+function remaining(endsAt: string | null): string | null {
+  if (!endsAt) return null;
+  const ms = new Date(endsAt).getTime() - Date.now();
+  if (!Number.isFinite(ms)) return null;
+  if (ms <= 0) return 'ended';
+  const mins = Math.floor(ms / 60000), d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+  if (d) return `${d} day${d > 1 ? 's' : ''}, ${h} hr left`;
+  if (h) return `${h} hr ${m} min left`;
+  return `${m} min left`;
+}
+
+export default function HeroBannerPanel({ hero, urls, sizes, saved, busy, live, onImage, onField, onSave, onReset }: Props) {
   const href = hero.href || '';
+  const left = remaining(hero.endsAt);
+  const hasImage = !!(hero.desktopRef || hero.mobileRef);
 
   return (
     <Panel title="Home page banner">
@@ -105,10 +144,93 @@ export default function HeroBannerPanel({ hero, urls, sizes, saved, busy, onImag
           />
         </Field>
 
-        <div>
+        {/* ---- When it runs ---- */}
+        <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Clock size={15} style={{ color: 'var(--brand-secondary)' }} />
+            <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>When this banner runs</strong>
+            {/* Straight from the server. The admin's clock and the server's are not the same clock,
+                and this line is the one that must not be a guess. */}
+            <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 900, padding: '2px 9px', borderRadius: 'var(--radius-pill)',
+              background: live ? 'var(--status-success)' : 'var(--surface-sunken)', color: live ? 'var(--white)' : 'var(--text-muted)' }}>
+              {live ? 'ON THE SITE NOW' : 'not showing'}
+            </span>
+            {left && <span style={{ fontSize: 'var(--text-2xs)', color: left === 'ended' ? 'var(--status-error)' : 'var(--text-muted)', fontWeight: 800 }}>{left}</span>}
+          </div>
+
+          <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: 0, lineHeight: 1.5 }}>
+            Leave both empty and it runs until you press Reset. Once the end time passes the site goes
+            back to the usual hero on its own — nobody has to be awake for it.
+          </p>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Field label="Start (optional)">
+              <input type="datetime-local" style={{ ...inp, width: 210 }} value={toLocalInput(hero.startsAt)}
+                onChange={e => onField({ startsAt: fromLocalInput(e.target.value) })} />
+            </Field>
+            <Field label="End (optional)">
+              <input type="datetime-local" style={{ ...inp, width: 210 }} value={toLocalInput(hero.endsAt)}
+                onChange={e => onField({ endsAt: fromLocalInput(e.target.value) })} />
+            </Field>
+          </div>
+
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 800 }}>Run for:</span>
+            {DURATIONS.map(d => (
+              <button key={d.label} type="button"
+                onClick={() => {
+                  // From the start if one is set, otherwise from now — and set the start too, so the
+                  // window is always a pair rather than an end date hanging on its own.
+                  const from = hero.startsAt ? new Date(hero.startsAt) : new Date();
+                  onField({ startsAt: from.toISOString(), endsAt: new Date(from.getTime() + d.mins * 60000).toISOString() });
+                }}
+                style={{ padding: '5px 11px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)',
+                  background: 'var(--surface-raised)', color: 'var(--text-body)', fontFamily: 'var(--font-body)',
+                  fontWeight: 800, fontSize: 'var(--text-2xs)', cursor: 'pointer' }}>
+                {d.label}
+              </button>
+            ))}
+            {(hero.startsAt || hero.endsAt) && (
+              <button type="button" onClick={() => onField({ startsAt: null, endsAt: null })}
+                style={{ padding: '5px 11px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'transparent',
+                  color: 'var(--text-link)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-2xs)', cursor: 'pointer' }}>
+                Clear dates
+              </button>
+            )}
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!hero.hideOverlay} style={{ marginTop: 3 }}
+              onChange={e => onField({ hideOverlay: e.target.checked })} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)', lineHeight: 1.5 }}>
+              <strong>Show the image on its own</strong> — hides the wordmark, the headline and the
+              &quot;Order Cookies&quot; / &quot;Our Story&quot; buttons while this banner is up. Leave
+              it on for an offer poster that already has its own words; turn it off if you have
+              uploaded a plain photograph to sit behind the usual headline.
+            </span>
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={onSave} disabled={busy} style={{ ...addBtn, opacity: busy ? 0.6 : 1 }}>
             {busy ? 'Saving…' : saved ? 'Saved ✓' : 'Save banner'}
           </button>
+          {/* Its own call, not a save of this form: pressing Reset must not also publish whatever
+              half-typed edit happens to be on screen. The artwork is kept — an offer usually runs
+              again, and ending one should not cost an upload. */}
+          <button onClick={onReset} disabled={busy || (!hasImage && !hero.enabled)}
+            title="Show the usual hero again now. The uploaded images are kept."
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 'var(--radius-pill)',
+              border: '1.5px solid var(--status-error)', background: 'transparent', color: 'var(--status-error)',
+              fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)',
+              cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+            <RotateCcw size={14} /> Reset to the usual hero
+          </button>
+          {!hero.enabled && hasImage && (
+            <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)' }}>
+              Off — the images are still here. Set a window and save to run it again.
+            </span>
+          )}
         </div>
       </div>
     </Panel>

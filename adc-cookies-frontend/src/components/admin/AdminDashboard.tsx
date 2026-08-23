@@ -221,6 +221,8 @@ export default function AdminDashboard() {
             changeHeroImage={siteSettings.changeHeroImage}
             changeHeroField={siteSettings.changeHeroField}
             saveHeroBanner={siteSettings.saveHeroBanner}
+            heroLive={siteSettings.heroLive}
+            resetHeroBanner={siteSettings.resetHeroBanner}
           />
         )}
 

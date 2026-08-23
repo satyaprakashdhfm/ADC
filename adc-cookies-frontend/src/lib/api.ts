@@ -507,6 +507,13 @@ export interface HeroBannerRefs {
   mobileRef: string | null;
   href: string | null;
   alt: string | null;
+  /** Off keeps the artwork but shows the ordinary hero. Reset sets this. */
+  enabled: boolean;
+  /** UTC ISO, or null for "no limit". Outside the window the server sends no banner at all. */
+  startsAt: string | null;
+  endsAt: string | null;
+  /** Hide the headline and the two buttons while the banner is up — an offer image carries its own words. */
+  hideOverlay: boolean;
 }
 export interface HeroBannerUrls {
   /** Resolved for display. Signed, and therefore expiring — never save these. */
@@ -514,6 +521,7 @@ export interface HeroBannerUrls {
   mobile: string | null;
   href: string | null;
   alt: string | null;
+  hideOverlay: boolean;
 }
 export interface HeroSizes { desktop: { width: number; height: number; note?: string }; mobile: { width: number; height: number; note?: string } }
 
@@ -522,6 +530,8 @@ interface SiteSettings {
   heroBanner: HeroBannerRefs;
   heroBannerUrls: HeroBannerUrls;
   heroSizes: HeroSizes;
+  /** Whether the banner is on screen right now — decided server-side, on the server's clock. */
+  heroBannerLive: boolean;
   deliveryFeeOutstation: number;
   orderingPaused: string | null;
 }
@@ -536,6 +546,10 @@ export async function adminSetBannerMessages(bannerMessages: string[]): Promise<
 /** The hero photograph and where clicking it goes. Sends REFERENCES, never the signed URLs. */
 export async function adminSetHeroBanner(heroBanner: HeroBannerRefs): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ heroBanner }) });
+}
+/** Back to the ordinary hero now. Keeps the uploaded images so the offer can be run again. */
+export async function adminResetHeroBanner(): Promise<SiteSettings> {
+  return request('/admin/settings/hero-banner/reset', { method: 'POST' });
 }
 export async function adminSetOrderingPaused(orderingPaused: string | null): Promise<SiteSettings> {
   return request('/admin/settings', { method: 'PUT', body: JSON.stringify({ orderingPaused }) });

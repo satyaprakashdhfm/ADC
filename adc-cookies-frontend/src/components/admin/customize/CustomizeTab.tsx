@@ -26,13 +26,15 @@ interface Props {
   heroSaved: boolean;
   heroBusy: boolean;
   changeHeroImage: (which: 'desktop' | 'mobile', ref: string, url: string) => void;
-  changeHeroField: (patch: Partial<Pick<HeroBannerRefs, 'href' | 'alt'>>) => void;
+  changeHeroField: (patch: Partial<Pick<HeroBannerRefs, 'href' | 'alt' | 'enabled' | 'startsAt' | 'endsAt' | 'hideOverlay'>>) => void;
   saveHeroBanner: () => void;
+  heroLive: boolean;
+  resetHeroBanner: () => void;
 }
 
 export default function CustomizeTab({
   bannerMessages, bannerMessagesSaved, changeBannerMessage, addBannerMessage, removeBannerMessage, saveBannerMessages,
-  hero, heroUrls, heroSizes, heroSaved, heroBusy, changeHeroImage, changeHeroField, saveHeroBanner,
+  hero, heroUrls, heroSizes, heroSaved, heroBusy, heroLive, changeHeroImage, changeHeroField, saveHeroBanner, resetHeroBanner,
 }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -40,6 +42,7 @@ export default function CustomizeTab({
       <HeroBannerPanel
         hero={hero} urls={heroUrls} sizes={heroSizes} saved={heroSaved} busy={heroBusy}
         onImage={changeHeroImage} onField={changeHeroField} onSave={saveHeroBanner}
+        live={heroLive} onReset={resetHeroBanner}
       />
 
       <Panel title="Top banner messages">

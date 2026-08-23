@@ -47,8 +47,27 @@ function normaliseImage(v) {
   throw new ApiError('A banner image must be uploaded here, or be a path to a file on the site.');
 }
 
+/*
+ * A moment, or nothing. Stored as UTC ISO so the window means the same thing wherever it is read;
+ * the admin form does the local-time conversion, because that is the only place a human types one.
+ */
+function normaliseWhen(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return null;
+  const t = new Date(s);
+  if (Number.isNaN(t.getTime())) throw new ApiError('That start or end time is not a real date.');
+  return t.toISOString();
+}
+
 export function normaliseHeroBanner(input) {
   const b = input || {};
+  const startsAt = normaliseWhen(b.startsAt);
+  const endsAt = normaliseWhen(b.endsAt);
+  /* An end before its start is a window that can never open. Caught here rather than left to
+     bannerIsLive, where it would simply never show and read as a broken upload. */
+  if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) {
+    throw new ApiError('The banner\u2019s end time has to be after its start time.');
+  }
   return {
     desktopRef: normaliseImage(b.desktopRef),
     mobileRef: normaliseImage(b.mobileRef),
@@ -56,10 +75,38 @@ export function normaliseHeroBanner(input) {
     // Alt text is what a screen reader and a blocked-image fallback read out, so it is worth a field
     // of its own rather than a guess assembled from the destination.
     alt: String(b.alt ?? '').trim().slice(0, 160) || null,
+    /* Off is a real state, and it keeps the uploaded photograph. Reset is pressed when an offer has
+       finished, and making that throw away the artwork would mean re-uploading it to run the same
+       promotion again. */
+    enabled: b.enabled === undefined ? true : !!b.enabled,
+    startsAt,
+    endsAt,
+    /* An offer banner is a finished piece of artwork with its own words on it. Our headline and the
+       two buttons sit ON TOP of the hero photograph, so leaving them there prints our copy over
+       theirs. Hidden by default for that reason; a plain photographic backdrop can turn it back on. */
+    hideOverlay: b.hideOverlay === undefined ? true : !!b.hideOverlay,
   };
 }
 
-const EMPTY = { desktopRef: null, mobileRef: null, href: null, alt: null };
+const EMPTY = {
+  desktopRef: null, mobileRef: null, href: null, alt: null,
+  enabled: true, startsAt: null, endsAt: null, hideOverlay: true,
+};
+
+/**
+ * Is this banner showing right now?
+ *
+ * No window at all means "until I say otherwise", which is what every banner saved before scheduling
+ * existed meant — so those keep working untouched. A window is inclusive of its start and exclusive
+ * of its end, so "ends 6pm" stops at 6pm rather than lingering through it.
+ */
+export function bannerIsLive(b, now = new Date()) {
+  if (!b?.enabled) return false;
+  if (!b.desktopRef && !b.mobileRef) return false;
+  if (b.startsAt && now < new Date(b.startsAt)) return false;
+  if (b.endsAt && now >= new Date(b.endsAt)) return false;
+  return true;
+}
 
 /** The stored settings, unresolved. Never throws — a corrupt row must not take the home page down. */
 export async function readHeroBanner() {
@@ -72,6 +119,11 @@ export async function readHeroBanner() {
       mobileRef: saved.mobileRef || null,
       href: saved.href || null,
       alt: saved.alt || null,
+      // Absent on every banner saved before scheduling existed, and those must keep showing.
+      enabled: saved.enabled === undefined ? true : !!saved.enabled,
+      startsAt: saved.startsAt || null,
+      endsAt: saved.endsAt || null,
+      hideOverlay: saved.hideOverlay === undefined ? true : !!saved.hideOverlay,
     };
   } catch {
     return { ...EMPTY };
@@ -97,6 +149,16 @@ export async function writeHeroBanner(input) {
  */
 export async function resolveHeroBanner() {
   const b = await readHeroBanner();
+  /*
+   * The window is enforced HERE, not in the browser.
+   *
+   * This is the one call the storefront makes, so an offer that has finished stops being sent at
+   * all - it cannot be shown by a tab left open since yesterday, or by a cached bundle, and there is
+   * no clock on the visitor's device for it to depend on. Expiry is a fact about the server.
+   */
+  if (!bannerIsLive(b)) {
+    return { desktop: null, mobile: null, href: null, alt: null, hideOverlay: false };
+  }
   const signed = await signMediaRefs([b.desktopRef, b.mobileRef].filter(Boolean));
   /* signMediaRefs hands back the reference unchanged when it could not sign it. Passing that on
      would put 'supabase://…' into an <img src>, so it is reported as nothing instead — the
@@ -107,5 +169,10 @@ export async function resolveHeroBanner() {
     const url = signed.get(ref);
     return url && !isMediaRef(url) ? url : null;
   };
-  return { desktop: usable(b.desktopRef), mobile: usable(b.mobileRef), href: b.href, alt: b.alt };
+  const desktop = usable(b.desktopRef);
+  const mobile = usable(b.mobileRef);
+  /* If neither image could be signed the storefront is about to fall back to the photograph it
+     ships - which is the ordinary hero, and the ordinary hero keeps its headline. */
+  const showing = !!(desktop || mobile);
+  return { desktop, mobile, href: b.href, alt: b.alt, hideOverlay: showing && !!b.hideOverlay };
 }
