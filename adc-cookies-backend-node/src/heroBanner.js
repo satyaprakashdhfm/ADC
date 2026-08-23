@@ -147,7 +147,7 @@ export async function writeHeroBanner(input) {
  * baked into the page: a signature captured at build time would stop working a week after a deploy,
  * on the one image every visitor sees first.
  */
-export async function resolveHeroBanner() {
+export async function resolveHeroBanner({ ignoreWindow = false } = {}) {
   const b = await readHeroBanner();
   /*
    * The window is enforced HERE, not in the browser.
@@ -155,8 +155,13 @@ export async function resolveHeroBanner() {
    * This is the one call the storefront makes, so an offer that has finished stops being sent at
    * all - it cannot be shown by a tab left open since yesterday, or by a cached bundle, and there is
    * no clock on the visitor's device for it to depend on. Expiry is a fact about the server.
+   *
+   * ignoreWindow is for the admin panel, and only the admin panel. It edits the banner whether or
+   * not the banner is currently on the site - before it starts, after it ends, and while it is
+   * switched off - so filtering its preview by the window blanked the very image somebody had just
+   * uploaded and reported it as one that could not be loaded.
    */
-  if (!bannerIsLive(b)) {
+  if (!ignoreWindow && !bannerIsLive(b)) {
     return { desktop: null, mobile: null, href: null, alt: null, hideOverlay: false };
   }
   const signed = await signMediaRefs([b.desktopRef, b.mobileRef].filter(Boolean));

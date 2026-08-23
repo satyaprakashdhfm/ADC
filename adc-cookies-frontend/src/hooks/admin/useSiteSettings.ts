@@ -106,7 +106,10 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
   };
   const saveHeroBanner = async () => {
     setHeroBusy(true);
-    const saved = await adminSetHeroBanner(heroBanner).catch(err => { onError(String(err.message || err)); return null; });
+    /* Saving IS publishing. Reset is the only off switch, so `enabled` is not something the form
+       can carry back as false: after a Reset the flag stayed off, and setting a fresh window and
+       pressing Save then did nothing at all, with no control on screen explaining why. */
+    const saved = await adminSetHeroBanner({ ...heroBanner, enabled: true }).catch(err => { onError(String(err.message || err)); return null; });
     setHeroBusy(false);
     if (!saved) return;
     // Show what was actually stored: the server normalises the destination, so a path it tidied up
