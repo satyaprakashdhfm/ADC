@@ -2,11 +2,11 @@
 import { useState, useEffect } from 'react';
 import {
   adminGetSettings, adminSetBannerMessages, adminSetOrderingPaused, adminSetDeliveryFeeOutstation,
-  adminSetHeroBanner, type HeroBannerRefs, type HeroBannerUrls, type HeroSizes,
+  adminSetHeroBanner, adminResetHeroBanner, type HeroBannerRefs, type HeroBannerUrls, type HeroSizes,
 } from '@/lib/api';
 
-const EMPTY_HERO: HeroBannerRefs = { desktopRef: null, mobileRef: null, href: null, alt: null };
-const EMPTY_HERO_URLS: HeroBannerUrls = { desktop: null, mobile: null, href: null, alt: null };
+const EMPTY_HERO: HeroBannerRefs = { desktopRef: null, mobileRef: null, href: null, alt: null, enabled: true, startsAt: null, endsAt: null, hideOverlay: true };
+const EMPTY_HERO_URLS: HeroBannerUrls = { desktop: null, mobile: null, href: null, alt: null, hideOverlay: false };
 const DEFAULT_HERO_SIZES: HeroSizes = {
   desktop: { width: 2400, height: 1200, note: '2:1 landscape' },
   mobile: { width: 1200, height: 1600, note: '3:4 portrait' },
@@ -36,6 +36,8 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
   const [heroSizes, setHeroSizes] = useState<HeroSizes>(DEFAULT_HERO_SIZES);
   const [heroSaved, setHeroSaved] = useState(false);
   const [heroBusy, setHeroBusy] = useState(false);
+  // Straight from the server, on the server's clock — see the note on heroBannerLive in settings.js.
+  const [heroLive, setHeroLive] = useState(false);
 
   useEffect(() => {
     if (enabled) adminGetSettings().then(s => {
@@ -44,6 +46,7 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
       setDeliveryFeeOutstation(String(s.deliveryFeeOutstation ?? 100));
       setHeroBanner(s.heroBanner || EMPTY_HERO);
       setHeroUrls(s.heroBannerUrls || EMPTY_HERO_URLS);
+      setHeroLive(!!s.heroBannerLive);
       if (s.heroSizes) setHeroSizes(s.heroSizes);
       setOrderingLoaded(true);
     }).catch(() => {});
@@ -97,7 +100,7 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
     setHeroUrls(u => ({ ...u, [which]: url || null }));
     setHeroSaved(false);
   };
-  const changeHeroField = (patch: Partial<Pick<HeroBannerRefs, 'href' | 'alt'>>) => {
+  const changeHeroField = (patch: Partial<Pick<HeroBannerRefs, 'href' | 'alt' | 'enabled' | 'startsAt' | 'endsAt' | 'hideOverlay'>>) => {
     setHeroBanner(h => ({ ...h, ...patch }));
     setHeroSaved(false);
   };
@@ -110,7 +113,21 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
     // appears here tidied rather than sitting in the form looking like something else was saved.
     setHeroBanner(saved.heroBanner || EMPTY_HERO);
     setHeroUrls(saved.heroBannerUrls || EMPTY_HERO_URLS);
+    setHeroLive(!!saved.heroBannerLive);
     setHeroSaved(true);
+  };
+
+  /* Back to the ordinary hero, now. Its own call rather than a save of the current form, so it
+     cannot carry half-typed edits live on its way to switching the banner off. */
+  const resetHeroBanner = async () => {
+    setHeroBusy(true);
+    const saved = await adminResetHeroBanner().catch(err => { onError(String(err.message || err)); return null; });
+    setHeroBusy(false);
+    if (!saved) return;
+    setHeroBanner(saved.heroBanner || EMPTY_HERO);
+    setHeroUrls(saved.heroBannerUrls || EMPTY_HERO_URLS);
+    setHeroLive(!!saved.heroBannerLive);
+    setHeroSaved(false);
   };
 
   const changeDeliveryFeeOutstation = (v: string) => { setDeliveryFeeOutstation(v); setDeliveryFeeSaved(false); };
@@ -125,6 +142,6 @@ export function useSiteSettings(enabled: boolean, onError: (s: string) => void) 
     bannerMessages, bannerMessagesSaved, changeBannerMessage, addBannerMessage, removeBannerMessage, saveBannerMessages,
     orderingPaused, orderingPausedSaved, orderingPausedBusy, orderingLoaded, changeOrderingPaused, saveOrderingPaused,
     deliveryFeeOutstation, deliveryFeeSaved, changeDeliveryFeeOutstation, saveDeliveryFeeOutstation,
-    heroBanner, heroUrls, heroSizes, heroSaved, heroBusy, changeHeroImage, changeHeroField, saveHeroBanner,
+    heroBanner, heroUrls, heroSizes, heroSaved, heroBusy, heroLive, changeHeroImage, changeHeroField, saveHeroBanner, resetHeroBanner,
   };
 }

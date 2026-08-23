@@ -36,13 +36,23 @@ export default function HomeHero() {
    * swaps one photograph for another rather than filling a hole, so there is no empty hero while it
    * is in flight.
    */
-  const [banner, setBanner] = useState<{ desktop: string | null; mobile: string | null; href: string | null; alt: string | null }>(
+  const [banner, setBanner] = useState<{ desktop: string | null; mobile: string | null; href: string | null; alt: string | null; hideOverlay?: boolean }>(
     { desktop: null, mobile: null, href: null, alt: null },
   );
   useEffect(() => { getHeroBanner().then(setBanner).catch(() => {}); }, []);
 
   const desktopSrc = banner.desktop || HERO_DESKTOP;
   const mobileSrc = banner.mobile || banner.desktop || HERO_MOBILE;
+  /*
+   * An offer banner is finished artwork with its own words on it, so our wordmark, headline and
+   * buttons print over the top of someone else's design. When the banner asks for it they step
+   * aside and the image is the whole hero.
+   *
+   * The flag arrives with the banner, from the server, and is false whenever no banner is showing —
+   * so an expired offer or a storage hiccup cannot leave the home page with no headline and nothing
+   * to click. The ordinary hero always keeps its copy.
+   */
+  const bare = !!banner.hideOverlay && !!(banner.desktop || banner.mobile);
 
   return (
     <>
@@ -87,7 +97,8 @@ export default function HomeHero() {
             style={{ position: 'absolute', inset: 0, zIndex: 1, display: 'block' }} />
         )}
 
-        {/* Center content */}
+        {/* Center content — stood down while a bare offer banner is up (see `bare` above). */}
+        {!bare && (
         <motion.div className="home-hero-copy" initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           style={{ position: 'relative', zIndex: 3, textAlign: 'center', padding: '0 var(--gutter)', maxWidth: 720 }}>
           {/* White wordmark, as in the navbar and footer. The asset is amber, which only read
@@ -112,6 +123,7 @@ export default function HomeHero() {
             <button onClick={() => router.push('/about')} style={ctaGhost}>Our Story</button>
           </div>
         </motion.div>
+        )}
 
         {/* The bouncing scroll-down chevron is gone. "Order Cookies" above already scrolls to the
             menu, so it was a second control doing the same thing, animating forever at the foot of

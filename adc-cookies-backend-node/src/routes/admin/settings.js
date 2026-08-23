@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { getOne, query } from '../../db.js';
 import { ApiError } from '../../middleware.js';
 import { readBannerMessages, writeBannerMessages } from '../../bannerMessages.js';
-import { readHeroBanner, writeHeroBanner, resolveHeroBanner, HERO_SIZES } from '../../heroBanner.js';
+import { readHeroBanner, writeHeroBanner, resolveHeroBanner, bannerIsLive, HERO_SIZES } from '../../heroBanner.js';
 
 const router = Router();
 
@@ -22,6 +22,10 @@ async function settingsPayload() {
   return {
     bannerMessages: await readBannerMessages(),
     heroBanner: await readHeroBanner(),
+    // Whether it is on screen RIGHT NOW, decided by the same routine the storefront is served from.
+    // Working it out again in the browser is how a panel ends up disagreeing with the site it
+    // describes — the admin's clock and the server's are not the same clock.
+    heroBannerLive: bannerIsLive(await readHeroBanner()),
     heroBannerUrls: await resolveHeroBanner(),
     heroSizes: HERO_SIZES,
     orderingPaused: paused?.value || null,
@@ -74,6 +78,23 @@ router.put('/settings', async (req, res) => {
       [String(n)]
     );
   }
+  res.json(await settingsPayload());
+});
+
+/*
+ * POST /settings/hero-banner/reset — back to the ordinary hero, now.
+ *
+ * Turns the banner off and clears its window; it deliberately KEEPS the uploaded images. Reset gets
+ * pressed when a promotion has finished, and the same artwork is usually wanted again next month —
+ * throwing it away would make ending an offer cost an upload.
+ *
+ * Its own endpoint rather than a shape of the settings PUT, because "off" has to be unambiguous:
+ * a partial save that happened to omit a field must never be able to end an offer by accident.
+ */
+router.post('/settings/hero-banner/reset', async (_req, res) => {
+  const current = await readHeroBanner();
+  await writeHeroBanner({ ...current, enabled: false, startsAt: null, endsAt: null });
+  // The same full payload the save returns, so the panel refreshes from one shape either way.
   res.json(await settingsPayload());
 });
 
