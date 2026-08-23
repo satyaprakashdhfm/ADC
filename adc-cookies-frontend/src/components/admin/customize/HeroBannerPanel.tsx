@@ -160,7 +160,8 @@ export default function HeroBannerPanel({ hero, urls, sizes, saved, busy, live, 
 
           <p style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', margin: 0, lineHeight: 1.5 }}>
             Leave both empty and it runs until you press Reset. Once the end time passes the site goes
-            back to the usual hero on its own — nobody has to be awake for it.
+            back to the usual hero on its own — nobody has to be awake for it. Saving puts the banner
+            live; Reset is the only thing that takes it down.
           </p>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -228,7 +229,7 @@ export default function HeroBannerPanel({ hero, urls, sizes, saved, busy, live, 
           </button>
           {!hero.enabled && hasImage && (
             <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)' }}>
-              Off — the images are still here. Set a window and save to run it again.
+              Off — the images are still here. Press Save banner to run it again.
             </span>
           )}
         </div>

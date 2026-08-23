@@ -26,7 +26,7 @@ async function settingsPayload() {
     // Working it out again in the browser is how a panel ends up disagreeing with the site it
     // describes — the admin's clock and the server's are not the same clock.
     heroBannerLive: bannerIsLive(await readHeroBanner()),
-    heroBannerUrls: await resolveHeroBanner(),
+    heroBannerUrls: await resolveHeroBanner({ ignoreWindow: true }),
     heroSizes: HERO_SIZES,
     orderingPaused: paused?.value || null,
     // Intracity is never a flat setting — it's Shiprocket's own live per-order quote (see
