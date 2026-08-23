@@ -23,7 +23,9 @@ const ctaGhost: React.CSSProperties = { display: 'inline-flex', alignItems: 'cen
 const HERO_DESKTOP = '/assets/hero-cookies-wide.jpg';
 const HERO_MOBILE = '/assets/hero-cookies-portrait.jpg';
 
-export default function HomeHero() {
+type HeroBanner = { desktop: string | null; mobile: string | null; href: string | null; alt: string | null; hideOverlay?: boolean };
+
+export default function HomeHero({ initialBanner }: { initialBanner?: HeroBanner | null }) {
   const router = useRouter();
   const scrollToProducts = () => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
 
@@ -36,8 +38,11 @@ export default function HomeHero() {
    * swaps one photograph for another rather than filling a hole, so there is no empty hero while it
    * is in flight.
    */
-  const [banner, setBanner] = useState<{ desktop: string | null; mobile: string | null; href: string | null; alt: string | null; hideOverlay?: boolean }>(
-    { desktop: null, mobile: null, href: null, alt: null },
+  /* Seeded from the server (see loadHeroBanner in page.tsx) so the first paint is already right,
+     and re-fetched on mount so a banner switched on in admin shows up without waiting for the
+     page's 60-second revalidation. Same shape either way, so there is no hydration mismatch. */
+  const [banner, setBanner] = useState<HeroBanner>(
+    initialBanner ?? { desktop: null, mobile: null, href: null, alt: null },
   );
   useEffect(() => { getHeroBanner().then(setBanner).catch(() => {}); }, []);
 
