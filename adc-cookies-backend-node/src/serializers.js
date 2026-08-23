@@ -163,6 +163,11 @@ export function serializeOrder(order, items = [], address = null, payment = null
     // Why the automatic courier booking failed, if it did — a paid order with no shipment is money
     // taken for something nobody is delivering, so the reason belongs on the order, not in a log.
     shipmentError: order.shipment_error ?? null,
+    // How many automatic "Ship Now" retries this intracity booking has used. The Delivery tab
+    // shows it so a rider search that is quietly going nowhere reads as such, rather than as an
+    // order that has simply not moved yet.
+    riderRetryCount: order.rider_retry_count ?? 0,
+    riderRetryAt: order.rider_retry_at ?? null,
     carrier: order.carrier ?? null,
     estimatedDelivery: order.estimated_delivery ?? null,
     // Which kitchen owns this order, and how far it has got with it. Everywhere except Begur the
