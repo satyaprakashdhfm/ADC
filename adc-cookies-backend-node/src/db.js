@@ -280,6 +280,15 @@ export async function initSchema() {
       updated_at TIMESTAMPTZ NOT NULL
     );
 
+    /* Automatic "Ship Now" retries after Shiprocket abandons a rider search.
+       When nobody accepts, Shiprocket drops the ASSIGNMENT and puts the order back to NEW - the
+       shipment itself is still live, which is why the retry re-assigns rather than re-books.
+       rider_retry_at is the debounce: a refused assign (an empty wallet is the usual one) leaves
+       the status at NEW, so without it every retry would burn in one poll interval on a problem
+       that has nothing to do with whether a rider is available. */
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_retry_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_retry_at TIMESTAMPTZ;
+
     CREATE TABLE IF NOT EXISTS order_items (
       id SERIAL PRIMARY KEY,
       order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,

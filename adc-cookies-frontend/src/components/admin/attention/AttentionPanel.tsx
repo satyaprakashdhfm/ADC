@@ -1,5 +1,5 @@
 'use client';
-import { Truck, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Truck, RefreshCw, AlertTriangle, UserX } from 'lucide-react';
 import { type AttentionReport } from '@/lib/api';
 import { money } from '../shared/format';
 import { card, iconBtn, actionBtn } from '../shared/ui';
@@ -62,6 +62,28 @@ export default function AttentionPanel({ report, busy, onRebook, onRetryPos, onO
                 <Truck size={13} /> {busy === o.id ? 'Booking…' : (o.shipment_id || o.carrier_order_id) ? 'Book again' : 'Book courier'}
               </button>
             )}
+          </div>
+        ))}
+      </>}
+
+      {!!report.riderSearchExhausted?.length && <>
+        <div style={head}>Tried {report.riderRetryMax}× — still no rider ({report.riderSearchExhausted.length})</div>
+        {report.riderSearchExhausted.map(o => (
+          <div key={o.id} style={line}>
+            <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
+            <span>{money(o.total_amount)}</span>
+            {/* No retry button on purpose. The automatic Ship Now has already spent its attempts
+                against this exact booking, so a button offering to do it once more is offering to
+                repeat what has just failed three times. What is left is a person deciding. */}
+            <span style={why}>
+              {o.shipment_error
+                ? o.shipment_error
+                : `Booking #${o.shipment_id || '?'} is live${o.shipment_status ? ` (${o.shipment_status})` : ''} but no rider has accepted it after ${o.rider_retry_count} attempts. Check the delivery wallet, then call the customer or cancel and refund.`}
+            </span>
+            <button onClick={() => onOpen(o.id)} style={{ ...actionBtn(), whiteSpace: 'nowrap' }}
+              title="Open the order — cancel and refund lives there, behind its code">
+              <UserX size={13} /> Open order
+            </button>
           </div>
         ))}
       </>}

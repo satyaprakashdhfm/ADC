@@ -4,6 +4,9 @@ import { ApiError } from '../../middleware.js';
 import { serializeProduct, withImageUrls } from '../../serializers.js';
 import { ADC_STORES } from '../../stores.js';
 import { relayOrder, unmappedProducts } from '../../petpooja.js';
+// Same constant the poller counts against, so the panel and the retry cannot disagree about
+// what "out of attempts" means.
+import { RIDER_RETRY_MAX } from '../../statusPoller.js';
 
 const router = Router();
 
@@ -158,7 +161,7 @@ router.get('/attention', async (_req, res) => {
   // Stores whose orders WE relay to Petpooja. Everywhere else the staff bill on their own terminal,
   // so "no POS ticket" is the normal state there and listing it would bury the real failures.
   const autoPosStores = ADC_STORES.filter((s) => s.posMode === 'AUTO').map((s) => s.code);
-  const [noShipment, noRelay, cancelStuck, disputes] = await Promise.all([
+  const [noShipment, noRelay, cancelStuck, disputes, riderExhausted] = await Promise.all([
     /*
      * Paid, live, and no courier is coming.
      *
@@ -180,6 +183,9 @@ router.get('/attention', async (_req, res) => {
                AND o.delhivery_waybill IS NULL
                AND COALESCE(o.shipment_status, '') !~* 'cancel'
                AND NOT (o.store_code IS NOT NULL AND NOT (o.store_code = ANY($1::text[])) AND o.store_accepted_at IS NULL)
+               -- Out of Ship Now attempts is its own list below, with its own action. Listing the
+               -- same order twice under two headings is how a panel stops being read.
+               AND COALESCE(o.rider_retry_count, 0) < $4
                AND (
                  -- The carrier said no. That is an answer, not silence, so it shows straight away.
                  o.shipment_error IS NOT NULL
@@ -189,7 +195,7 @@ router.get('/attention', async (_req, res) => {
                  -- Booked, but the rider search has run past the point of being a search.
                  OR o.created_at < now() - make_interval(mins => $3::int)
                )
-             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores, BOOKING_GRACE_MIN, RIDER_GRACE_MIN]),
+             ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores, BOOKING_GRACE_MIN, RIDER_GRACE_MIN, RIDER_RETRY_MAX]),
     /*
      * Paid, relayed by us, and the kitchen never got the ticket.
      *
@@ -229,6 +235,24 @@ router.get('/attention', async (_req, res) => {
               FROM orders o JOIN order_tracking t ON t.order_id = o.id
              WHERE t.status IN ('DISPUTE_OPENED','REFUNDED','REFUND_FAILED','FULFILLED_THEN_REFUNDED')
              ORDER BY t.created_at DESC LIMIT 100`),
+    /*
+     * Same-day orders the carrier has now been asked to ship three times without finding a rider.
+     *
+     * Distinct from "no courier booked": the booking exists and is perfectly healthy, it is the
+     * RIDER that does not. Nothing here is retryable by us any more - the automatic Ship Now has
+     * spent its attempts - so the action is a person deciding, which is why the row leads to the
+     * order rather than to another button that would do what already failed.
+     */
+    getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error,
+                   o.delhivery_shipment_id AS shipment_id, o.shipment_status,
+                   COALESCE(o.rider_retry_count, 0) AS rider_retry_count, o.rider_retry_at
+              FROM orders o
+             WHERE o.payment_status = 'PAID' AND o.order_status NOT IN ('CANCELLED','DELIVERED')
+               AND o.carrier = 'SHIPROCKET'
+               AND o.delhivery_waybill IS NULL
+               AND COALESCE(o.shipment_status, '') !~* 'cancel'
+               AND COALESCE(o.rider_retry_count, 0) >= $1
+             ORDER BY o.created_at DESC LIMIT 100`, [RIDER_RETRY_MAX]),
   ]);
   /*
    * The manual stores' missing bill numbers used to be a fifth list here. It is a real gap — a
@@ -242,7 +266,9 @@ router.get('/attention', async (_req, res) => {
     paidNoPosTicket: noRelay,
     cancelStuckDownstream: cancelStuck,
     moneyReversed: disputes,
-    total: noShipment.length + noRelay.length + cancelStuck.length + disputes.length,
+    riderSearchExhausted: riderExhausted,
+    riderRetryMax: RIDER_RETRY_MAX,
+    total: noShipment.length + noRelay.length + cancelStuck.length + disputes.length + riderExhausted.length,
   });
 });
 

@@ -334,6 +334,9 @@ export interface Order {
   carrierOrderId?: string | null;   // the carrier's own order id — Shiprocket's cancel API keys off it
   carrier?: string | null; // 'SHIPROCKET' (intracity, same-day) | 'DELHIVERY' (outstation)
   shipmentError?: string | null;    // why the automatic courier booking failed, if it did
+  /** Automatic "Ship Now" retries used after Shiprocket abandoned a rider search. */
+  riderRetryCount?: number;
+  riderRetryAt?: string | null;
   estimatedDelivery?: string | null; // carrier promised date from webhook (YYYY-MM-DD HH:MM:SS)
   payment?: OrderPayment | null;
   /** Petpooja relay state (admin views only) — whether the kitchen actually received the ticket. */
@@ -621,6 +624,10 @@ export interface AttentionReport {
   paidNoPosTicket: { id: number; order_number: string; total_amount: number; created_at: string; last_error: string | null; attempts: number }[];
   cancelStuckDownstream: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
   moneyReversed: { id: number; order_number: string; status: string; remarks: string; created_at: string }[];
+  /** Same-day bookings the carrier has been asked to ship riderRetryMax times without finding a
+   *  rider. The booking is healthy; the rider is not. Nothing left for us to retry automatically. */
+  riderSearchExhausted: { id: number; order_number: string; total_amount: number; created_at: string; shipment_error: string | null; shipment_id: string | null; shipment_status: string | null; rider_retry_count: number; rider_retry_at: string | null }[];
+  riderRetryMax: number;
   total: number;
 }
 export async function adminAttention(): Promise<AttentionReport> { return request('/admin/attention'); }
