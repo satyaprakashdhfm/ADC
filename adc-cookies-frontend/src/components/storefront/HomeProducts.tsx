@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Plus, Minus, ArrowRight, Cookie, Briefcase, IceCreamBowl, IceCreamCone, Flame, Milk, Coffee, CupSoda, CakeSlice, Boxes, Cylinder } from 'lucide-react';
-import { getProducts, firstImage, type Product } from '@/lib/api';
+import { Plus, Minus, ArrowRight, Info, Cookie, Briefcase, IceCreamBowl, IceCreamCone, Flame, Milk, Coffee, CupSoda, CakeSlice, Boxes, Cylinder } from 'lucide-react';
+import { getProducts, getArea, firstImage, type Product, type AreaServiceability } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { MENU_SECTIONS, menuRank, type ProductCategory } from '@/lib/categories';
 import MenuRail from './MenuRail';
@@ -148,6 +148,18 @@ export default function HomeProducts() {
      `ready` as well so the first paint (before localStorage is read) never flashes a filtered
      shelf and then widens it. */
   const { store: locStore, custPin, ready: locReady } = useLocation();
+  /* Whether we serve this address at all, which is a fact about our STORES and nothing to do with
+     which products may travel. Kept apart because the menu could not previously tell "outside our
+     delivery area" from "still loading" and showed a spinner for the first. Cheap endpoint — store
+     switches only, no carrier quotes; the real quote happens at checkout. */
+  const [area, setArea] = useState<AreaServiceability | null>(null);
+  useEffect(() => {
+    const pin = String(custPin || '').replace(/\D/g, '');
+    if (!locReady || pin.length !== 6) { setArea(null); return; }
+    let live = true;
+    getArea(pin).then(a => { if (live) setArea(a); }).catch(() => {});
+    return () => { live = false; };
+  }, [custPin, locReady]);
   const forLocation = locReady ? locStore : null;
   /* Their OWN pincode, not the nearest store's. This is the whole point: nearestStore() has no
      distance limit, so a Lakdikapul address resolved to the Bengaluru store and every same-day-only
@@ -245,8 +257,39 @@ export default function HomeProducts() {
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-body)', maxWidth: 520, margin: '0 auto' }}>Pick your favourites and add them to the cart. Checkout in a tap.</p>
         </div>
 
+        {/* We do not deliver here — said once, at the top, with the menu still underneath it.
+            Hiding the menu was the old behaviour and it taught the visitor nothing: they could not
+            see what we make, so there was nothing to come back for.
+            Sized in the same clamp() rhythm as the headings above so it reads as part of the block
+            on a phone and on a desktop rather than a box dropped into it. */}
+        {area && !area.open && area.message && (
+          <div role="status" style={{
+            maxWidth: 760, margin: '0 auto clamp(18px,2.5vw,28px)',
+            display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'nowrap',
+            padding: 'clamp(11px,1.4vw,14px) clamp(13px,1.6vw,18px)',
+            borderRadius: 'var(--radius-sm)', background: 'var(--amber-50)',
+            border: '1.5px solid var(--brand-secondary)', textAlign: 'left',
+          }}>
+            <Info size={17} style={{ color: 'var(--brand-secondary)', flex: 'none', marginTop: 1 }} />
+            {/* minWidth 0 so a long sentence wraps inside the row instead of widening it */}
+            <span style={{ minWidth: 0, fontSize: 'var(--text-sm)', lineHeight: 1.5, color: 'var(--text-body)', fontWeight: 600 }}>
+              {area.message}
+            </span>
+          </div>
+        )}
+
+        {/* Three states, not two. An empty grid used to say "Loading fresh cookies…" whether it was
+            still fetching or had simply filtered everything away, so a shopper outside our delivery
+            area sat on a spinner that would never finish. */}
         {sections.length === 0 ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0' }}>Loading fresh cookies…</p>
+          products.length === 0 ? (
+            <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0' }}>Loading fresh cookies…</p>
+          ) : (
+            <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0', maxWidth: 480, margin: '0 auto', lineHeight: 1.55 }}>
+              Nothing on the menu can be delivered to this address yet. Change the delivery location
+              to see what we bake.
+            </p>
+          )
         ) : sections.map(s => {
           // A section can span several categories (Hug in a Dip + Cookie Sundae), so the icon comes
           // from the first of them rather than from the section itself.

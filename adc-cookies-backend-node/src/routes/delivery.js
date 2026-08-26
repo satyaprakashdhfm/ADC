@@ -28,6 +28,44 @@ async function getOriginPin() {
   return process.env.ORIGIN_PINCODE || '';
 }
 
+/*
+ * GET /api/delivery/area?pincode=560001 — can we serve this pincode AT ALL, and by which mode?
+ *
+ * Deliberately cheap: store switches and a warehouse row, no carrier calls. /check quotes a real
+ * rate and asks Shiprocket and Delhivery to do it, which is right at checkout and far too heavy for
+ * a menu that renders on every visit.
+ *
+ * It answers the question the storefront could not previously ask. The menu knew only whether a
+ * PRODUCT may travel a given way, so when nothing survived that filter it had no way to tell "this
+ * address is outside our delivery area" from "still loading" — and showed a spinner that never
+ * resolved. This separates the two: the area is a fact about our stores, the product list is a fact
+ * about the products.
+ */
+router.get('/area', async (req, res) => {
+  const pin = String(req.query.pincode || '').replace(/\D/g, '');
+  if (!/^\d{6}$/.test(pin)) return res.json({ pincode: pin, mode: null, open: false, reason: 'invalid_pincode' });
+
+  const zone = zoneStores(pin);
+  if (zone.length) {
+    const open = await activeZoneStores(pin);
+    return res.json({
+      pincode: pin, mode: 'intracity', open: open.length > 0,
+      city: zone[0].city,
+      reason: open.length ? null : 'stores_closed',
+      message: open.length ? null
+        : `Same-day delivery around ${zone[0].city} is paused right now. Please try again shortly.`,
+    });
+  }
+
+  const open = await intercityOpen();
+  return res.json({
+    pincode: pin, mode: 'intercity', open, city: null,
+    reason: open ? null : 'intercity_closed',
+    message: open ? null
+      : 'We are not shipping outside our delivery cities at the moment. You can still browse the menu — check back soon.',
+  });
+});
+
 // GET /api/delivery/serviceability?pincode=560001
 router.get('/serviceability', async (req, res) => {
   if (!delhiveryConfigured()) throw new ApiError('Delivery checks are not configured yet.', 503);

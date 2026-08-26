@@ -6,7 +6,7 @@ import { getCartRow } from './cart.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.js';
 import { sendOrderEmails } from '../mailer.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../delhivery.js';
-import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, storeByCode, deliveryEligible, isStoreActive, intercityOpen, storeBlockedProductIds } from '../stores.js';
+import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, intercityStoreForAddress, storeByCode, deliveryEligible, isStoreActive, intercityOpen, storeBlockedProductIds } from '../stores.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore, getWalletBalance } from '../shiprocket.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
@@ -534,7 +534,14 @@ router.post('/', async (req, res) => {
   // the store owns the order from the moment it is paid for — a courier that cannot be booked must
   // not also mean no kitchen ever sees it. attemptShipment corrects this if the carrier ends up
   // serving the drop from a different store.
-  let fulfillingStore = storeForAddress(address);
+  /* Outstation orders go to a store that can actually dispatch one — switched on, set to allow
+     intercity, and with a Delhivery warehouse registered at its pincode. storeForAddress sends
+     every out-of-town address to the warehouse by default, which was right while Begur was the only
+     candidate and silently wrong the moment a second store could be. Intracity is unchanged: the
+     zone decides, as before. */
+  let fulfillingStore = zoneStores(destPin).length
+    ? storeForAddress(address)
+    : await intercityStoreForAddress();
   if (fulfillingStore && !(await isStoreActive(fulfillingStore.code))) {
     /* The nearest store is shut — hand the order to the nearest one that is open rather than
        refusing it. Refusing was right when every store traded and one being off meant a genuine

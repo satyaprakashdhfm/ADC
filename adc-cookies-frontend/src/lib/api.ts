@@ -626,6 +626,20 @@ export interface PackPick { slot: string; productId: number; name: string; quant
 /* Resolved on the server against the live catalogue, never listed in the storefront: the same
    rules decide whether the order is accepted, and two copies of them is how a picker and a
    validator drift apart. */
+/** Can we serve this pincode at all, and how? Cheap — store switches only, no carrier quotes. */
+export interface AreaServiceability {
+  pincode: string;
+  mode: 'intracity' | 'intercity' | null;
+  /** False when no store can serve this address right now — the MENU still shows, with a note. */
+  open: boolean;
+  city?: string | null;
+  reason?: string | null;
+  message?: string | null;
+}
+export async function getArea(pincode: string): Promise<AreaServiceability> {
+  return request(`/delivery/area?pincode=${encodeURIComponent(pincode)}`);
+}
+
 export async function getPacks(): Promise<PackConfig[]> { return request('/products/packs'); }
 
 export async function getHeroBanner(): Promise<HeroBannerUrls> { return request('/products/hero-banner'); }
