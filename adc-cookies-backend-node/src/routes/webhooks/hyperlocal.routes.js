@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getOne, query, nowIso } from '../../db/index.js';
 import { shiprocketStatusToOrderStatus, getRiderData } from '../../services/shiprocket.client.js';
-import { riderStatus } from '../../services/petpooja.service.js';
+import { riderStatus } from '../../services/petpooja.client.js';
 
 /*
  * Shiprocket Hyperlocal webhook — the ONLY way tracking reaches us.

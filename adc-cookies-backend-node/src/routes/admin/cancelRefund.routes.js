@@ -5,7 +5,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { createRefund, fetchOrderPayments } from '../../services/razorpay.client.js';
 import { cancelShiprocketOrder } from '../../services/shiprocket.client.js';
 import { cancelShipment, delhiveryConfigured } from '../../services/delhivery.client.js';
-import { cancelOrder as petpoojaCancelOrder } from '../../services/petpooja.service.js';
+import { cancelOrder as petpoojaCancelOrder } from '../../services/petpooja.client.js';
 import { normalizePhone, sendOtp, validateOtp, messageCentralConfigured } from '../../services/messageCentral.client.js';
 import { sendOrderCancelledEmail } from '../../services/mailer.client.js';
 

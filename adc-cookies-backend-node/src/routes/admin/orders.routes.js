@@ -4,7 +4,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { serializeOrder, PAYMENT_SELECT } from '../../serializers/index.js';
 import { cancelShipment } from '../../services/delhivery.client.js';
 import { cancelShiprocketOrder } from '../../services/shiprocket.client.js';
-import { cancelOrder as petpoojaCancelOrder } from '../../services/petpooja.service.js';
+import { cancelOrder as petpoojaCancelOrder } from '../../services/petpooja.client.js';
 
 const router = Router();
 

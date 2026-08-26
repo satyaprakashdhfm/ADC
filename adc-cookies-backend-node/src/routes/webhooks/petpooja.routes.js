@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getOne, query, nowIso } from '../../db/index.js';
-import { ingestMenu, setStoreOpen, getStoreOpen, REST_ID } from '../../services/petpooja.service.js';
+import { ingestMenu, setStoreOpen, getStoreOpen } from '../../services/petpooja.service.js';
+import { REST_ID } from '../../services/petpooja.client.js';
 
 /*
  * Endpoints Petpooja calls on US. All are PUBLIC by necessity — their servers have no user login —

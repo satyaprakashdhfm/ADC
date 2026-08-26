@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { getOne, query } from '../../db/index.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { readBannerMessages, writeBannerMessages } from '../../services/bannerMessages.service.js';
-import { readHeroBanner, writeHeroBanner, resolveHeroBanner, bannerIsLive, HERO_SIZES } from '../../services/heroBanner.service.js';
+import { readBannerMessages, writeBannerMessages, readHeroBanner, writeHeroBanner,
+         resolveHeroBanner, bannerIsLive, HERO_SIZES } from '../../services/siteContent.service.js';
 
 const router = Router();
 
