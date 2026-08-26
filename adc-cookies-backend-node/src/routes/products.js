@@ -4,6 +4,7 @@ import { ApiError } from '../middleware.js';
 import { serializeProduct, withImageUrls } from '../serializers.js';
 import { readBannerMessages } from '../bannerMessages.js';
 import { resolveHeroBanner } from '../heroBanner.js';
+import { resolvePackOptions } from '../packs.js';
 
 const router = Router();
 
@@ -49,6 +50,19 @@ router.get('/hero-banner', async (_req, res) => {
 router.get('/ordering-status', async (_req, res) => {
   const row = await getOne("SELECT value FROM site_settings WHERE key = 'ordering_paused'");
   res.json({ paused: !!row?.value, message: row?.value || null });
+});
+
+/* Public: what goes in a build-your-own pack, resolved against the live catalogue.
+   Declared before '/:id' so "packs" isn't captured as an id.
+
+   The slots and their eligible cookies are worked out on the server (see packs.js) rather than
+   listed in the storefront, because the same rules decide whether an order is accepted. Two copies
+   of "which cookie may go in which slot" is how a picker and a validator end up disagreeing, and
+   the customer meets that disagreement at the Pay button. */
+router.get('/packs', async (_req, res) => {
+  const rows = await getAll("SELECT * FROM products WHERE is_available = TRUE AND category = 'COMBOS' ORDER BY id");
+  const packs = (await Promise.all(rows.map(resolvePackOptions))).filter(Boolean);
+  res.json(packs);
 });
 
 router.get('/:id', async (req, res) => {

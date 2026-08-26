@@ -9,6 +9,8 @@ import { MENU_SECTIONS, menuRank, type ProductCategory } from '@/lib/categories'
 import MenuRail from './MenuRail';
 import { useLocation } from '@/context/LocationContext';
 import { deliveryEligibleFor } from '@/lib/stores';
+import { usePacks } from '@/hooks/usePacks';
+import PackBuilderModal from '@/components/ordering/ui/PackBuilderModal';
 
 /* The registry says what the sections ARE and what order they come in; this says what each one
    looks like. Icons live here rather than in lib/categories.ts so that file stays free of React
@@ -42,12 +44,24 @@ const hoverImageFor = (name: string): string | null =>
 
 function ProductCard({ p }: { p: Product }) {
   const { cart, setQty } = useCart();
+  const { packFor, addPack } = usePacks();
+  const [building, setBuilding] = useState(false);
   const id = String(p.id);
-  const qty = cart[id]?.qty || 0;
   const img = firstImage(p.images);
   const hoverImg = hoverImageFor(p.name);
   const price = Number(p.price);
+
+  /* A pack is one product with slots underneath it, so its cart lines are keyed by what is IN
+     them — the plain product id is never one of them. The count on the card is therefore every
+     box of this pack in the cart, however each was filled, and the stepper is not offered: there
+     is no single line for it to change, and "+1" would have to guess which box. Building another
+     is a new trip through the picker, which is also the only way to say what goes in it. */
+  const pack = packFor(p.id);
+  const qty = pack
+    ? Object.values(cart).filter(e => e.productId === p.id).reduce((n, e) => n + e.qty, 0)
+    : (cart[id]?.qty || 0);
   const change = (n: number) => setQty(id, Math.max(0, n), p.name, price, img);
+  const onAdd = () => { if (pack) setBuilding(true); else change(1); };
 
   return (
     <div style={{ background: 'var(--vanilla)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column' }}>
@@ -64,8 +78,15 @@ function ProductCard({ p }: { p: Product }) {
               orange pill, which is the wrong way round: the price is the decision, the button is
               only how you act on it. */}
           <span style={{ fontWeight: 900, color: 'var(--text-strong)', font: '900 var(--text-lg)/1 var(--font-display)', letterSpacing: '-.01em' }}>Rs {price}</span>
-          {qty === 0 ? (
-            <button onClick={() => change(1)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}>
+          {/* A pack never gets the stepper: its cart lines are keyed by their contents, so there is
+              no single line for "+1" to change and it would have to guess which box. "Add another"
+              sends you back through the picker, which is also the only place to say what is in it. */}
+          {pack ? (
+            <button onClick={onAdd} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}>
+              <Plus size={15} /> {qty > 0 ? `Add another (${qty})` : 'Choose & add'}
+            </button>
+          ) : qty === 0 ? (
+            <button onClick={onAdd} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}>
               <Plus size={15} /> Add
             </button>
           ) : (
@@ -77,6 +98,14 @@ function ProductCard({ p }: { p: Product }) {
           )}
         </div>
       </div>
+
+      {building && pack && (
+        <PackBuilderModal
+          pack={pack}
+          onClose={() => setBuilding(false)}
+          onAdd={(picks, summary) => { addPack(pack, picks, summary, img); setBuilding(false); }}
+        />
+      )}
     </div>
   );
 }

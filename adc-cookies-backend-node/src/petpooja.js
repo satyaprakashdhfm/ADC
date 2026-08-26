@@ -25,6 +25,7 @@ import { ProxyAgent } from 'undici';
 import { getAll, getOne, query, nowIso } from './db.js';
 import { logApiCall } from './apiLogger.js';
 import { storeRelaysToPos } from './stores.js';
+import { summarisePicks } from './packs.js';
 
 const BASE = (process.env.PETPOOJA_BASE_URL || 'https://qle1yy2ydc.execute-api.ap-southeast-1.amazonaws.com/V1').replace(/\/+$/, '');
 // Two accepted spellings: the descriptive ones matching Petpooja's own field names, and the
@@ -375,7 +376,10 @@ export function buildOrderPayload({ order, items, customer, address, taxIds = []
       price: money(unit),
       final_price: money(unit - itemDiscount),
       quantity: String(i.quantity),
-      description: i.special_notes || '',
+      /* A pack relays as ONE line at one price, so without its contents the KOT reads "8 Pack
+         Cookies" and the kitchen has no idea which eight to bake. The picks ride in the line's
+         description, which is the only free-text field their order item has. */
+      description: [i.pack_summary, i.special_notes].filter(Boolean).join(' — '),
       variation_name: i.petpooja_variation_name || '',
       variation_id: i.petpooja_variation_id || '',
       AddonItem: { details: (i.addons || []).map((a) => ({
@@ -513,6 +517,7 @@ export async function relayOrder(orderId, { force = false } = {}) {
     // Join our line items to their catalogue. A LEFT JOIN so we can name what is missing.
     const items = await getAll(
       `SELECT oi.product_name, oi.quantity, oi.unit_price, oi.total_price, oi.special_notes,
+              oi.selected_options,
               pi.item_id AS petpooja_item_id, pi.variation_id AS petpooja_variation_id,
               pi.variation_name AS petpooja_variation_name
          FROM order_items oi
@@ -521,6 +526,15 @@ export async function relayOrder(orderId, { force = false } = {}) {
       [orderId, REST_ID]
     );
     if (!items.length) return await fail('no_items');
+    /* Flatten a pack's picks into one readable line for the KOT. Parsed defensively: a line whose
+       options are missing or malformed must still relay — the kitchen losing the breakdown for one
+       item is bad, the whole ticket never printing is worse. */
+    for (const i of items) {
+      try {
+        const opts = typeof i.selected_options === 'string' ? JSON.parse(i.selected_options) : i.selected_options;
+        if (opts?.packPicks?.length) i.pack_summary = summarisePicks(opts.packPicks);
+      } catch { /* not a pack, or unreadable options — leave the description to special_notes */ }
+    }
     const unmapped = items.filter((i) => !i.petpooja_item_id).map((i) => i.product_name);
     if (unmapped.length) return await fail(`unmapped_products: ${unmapped.join(', ')}`);
 

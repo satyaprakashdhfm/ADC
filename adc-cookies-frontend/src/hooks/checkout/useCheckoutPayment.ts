@@ -60,9 +60,17 @@ export function useCheckoutPayment({ step, chosen, addresses, grand, onNeedLogin
       .map((e, index) => {
         const opts: Record<string, unknown> = {};
         if (e.addOns && e.addOns.length) opts.addOns = e.addOns;
+        // A pack's contents. Re-checked against the catalogue server-side before the order is
+        // accepted — sending them is not the same as being trusted about them.
+        if (e.packPicks && e.packPicks.length) opts.packPicks = e.packPicks;
         if (index === 0 && gift) { opts.giftWrap = true; opts.giftMessage = giftMessage; if (giftOccasion) opts.giftOccasion = giftOccasion; }
+        /* productId first. A pack's cart key carries its picks so that two differently-filled packs
+           stay two lines, which makes the key deliberately unparseable as a number — and this used
+           to read the id straight off it. The name fallback stays for cart entries saved before
+           products finished loading, whose ids are not real ids either. */
         const numericId = Number(e.id);
-        const productId = Number.isFinite(numericId) ? numericId : idByName.get(e.name.trim().toLowerCase());
+        const productId = e.productId
+          ?? (Number.isFinite(numericId) ? numericId : idByName.get(e.name.trim().toLowerCase()));
         return {
           productId: productId as number,
           quantity: e.qty,

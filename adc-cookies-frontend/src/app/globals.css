@@ -563,3 +563,10 @@ body::before {
   .account-sidebar { position: static !important; }
   .account-address-list { grid-template-columns: 1fr !important; }
 }
+
+/* Pack builder: a sheet from the bottom on a phone, a centred dialog on a desktop.
+   One component, two placements — see PackBuilderModal for why it is not two components. */
+@media (min-width: 681px) {
+  .pack-scrim { align-items: center !important; padding: 24px; }
+  .pack-sheet { border-radius: var(--radius-card) !important; max-height: 86svh !important; }
+}
