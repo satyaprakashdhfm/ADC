@@ -100,13 +100,17 @@ body {
   background: var(--surface-page);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  /* Paired with the same rule on html below. On body ALONE the value is propagated to the
-     viewport and body itself falls back to visible, which clips unreliably on mobile once a
-     sticky/fixed element is in play — the configuration that let a stray wide child show a
-     strip of page background down the right-hand side. */
+  /* On body ALONE, and deliberately NOT on html as well.
+     Adding `html { overflow-x: hidden }` looks like a safer belt-and-braces version of this and is
+     the opposite: it makes the html element its own scroll container, and every `position: sticky`
+     descendant then resolves against that instead of the viewport. The announcement ribbon stopped
+     sticking on every page — it scrolled away and left the fixed header's reserved `top:
+     var(--ribbon-h)` band showing bare page behind it. On body alone the value propagates to the
+     viewport, which is the behaviour that was wanted in the first place.
+     The account-page overflow this was added for is fixed at the root instead — minmax(0,1fr) on
+     the grid track, minWidth 0 on the card body, and the progress marks made compressible. */
   overflow-x: hidden;
 }
-html { overflow-x: hidden; }
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   color: var(--text-strong);
