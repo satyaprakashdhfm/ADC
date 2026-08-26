@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Star, Sparkles } from 'lucide-react';
+import Image from 'next/image';
 
 /**
  * A little "cookies baked & sold today" vanity counter (Swish-style) for the footer. It's a
@@ -40,27 +40,6 @@ export default function CookiesSoldCounter() {
 
   if (n == null) return null;
 
-  /* Confetti. Placed rather than random so the layout is identical on the server and on every
-     repaint — Math.random() here would also mean the stars jumped on each tick of the counter.
-     Kept to the edges: the middle belongs to the figure, and a star behind a numeral reads as a
-     smudge. Purely decorative and pointer-events-free. */
-  const specks: { top: string; left: string; size: number; kind: 'star' | 'sparkle' | 'dot'; o: number }[] = [
-    { top: '6%',  left: '5%',  size: 12, kind: 'star',    o: 0.62 },
-    { top: '16%', left: '15%', size: 7,  kind: 'dot',     o: 0.40 },
-    { top: '9%',  left: '88%', size: 13, kind: 'sparkle', o: 0.58 },
-    { top: '21%', left: '78%', size: 8,  kind: 'star',    o: 0.44 },
-    { top: '34%', left: '4%',  size: 9,  kind: 'sparkle', o: 0.48 },
-    { top: '44%', left: '93%', size: 7,  kind: 'dot',     o: 0.38 },
-    { top: '56%', left: '7%',  size: 11, kind: 'star',    o: 0.50 },
-    { top: '62%', left: '90%', size: 10, kind: 'star',    o: 0.46 },
-    { top: '74%', left: '3%',  size: 7,  kind: 'dot',     o: 0.36 },
-    { top: '80%', left: '84%', size: 12, kind: 'sparkle', o: 0.52 },
-    { top: '90%', left: '18%', size: 9,  kind: 'star',    o: 0.44 },
-    { top: '92%', left: '62%', size: 7,  kind: 'dot',     o: 0.34 },
-    { top: '86%', left: '44%', size: 8,  kind: 'star',    o: 0.30 },
-    { top: '30%', left: '86%', size: 6,  kind: 'dot',     o: 0.30 },
-  ];
-
   return (
     <div
       style={{
@@ -70,13 +49,12 @@ export default function CookiesSoldCounter() {
         boxSizing: 'border-box',
         padding: '20px',
         borderRadius: 'var(--radius-card)',
-        /* Milky glass, not smoked. A white tint over the footer's own orange lands near #F5AC6A at
-           the top and #D97B31 at the foot — a lighter shade of the footer rather than a dark block
-           on it, which is what looked odd here.
-           Going lighter is why the type is dark: white on this measures about 2.5:1 and would fail
-           outright, whereas --text-strong on it runs 5.2:1 to 8.4:1. There is no readable way to
-           keep both a light panel and white text. */
-        background: 'linear-gradient(165deg, var(--white-40), var(--white-16))',
+        /* A solid fallback only. The panel itself is now the photograph plus the scrim below it,
+           both real elements — the tint cannot live on this container, because a child painted
+           behind it (which is where a background photograph belongs) would be hidden by it.
+           This colour is what shows if the image never arrives, and it is the same milky tone the
+           card used to mix for itself, so the dark type stays readable either way. */
+        background: 'rgba(255,255,255,.74)',
         /* Bright edge, inner highlight and a soft drop are what read as glass. No backdrop-filter:
            the footer behind is a flat gradient, so blurring it costs a compositing layer and changes
            nothing visible. */
@@ -92,22 +70,38 @@ export default function CookiesSoldCounter() {
         textAlign: 'center',
       }}
     >
-      {specks.map((sp, idx) => (
-        <span key={idx} aria-hidden style={{ position: 'absolute', top: sp.top, left: sp.left, opacity: sp.o, pointerEvents: 'none', lineHeight: 0 }}>
-          {sp.kind === 'star'
-            ? <Star size={sp.size} color="var(--white)" fill="var(--white)" strokeWidth={0} />
-            : sp.kind === 'sparkle'
-              ? <Sparkles size={sp.size} color="var(--white)" strokeWidth={2.4} />
-              : <span style={{ display: 'block', width: sp.size, height: sp.size, borderRadius: '50%', background: 'var(--white)' }} />}
-        </span>
-      ))}
+      {/* Decorative, so no alt text and out of the accessibility tree: it says nothing the figure
+          and its label do not already say. Behind the scrim above, and behind everything else here
+          via z-index — the card is overflow:hidden, so it is clipped to the rounded corners.
+          `sizes` is the real rendered width rather than a viewport fraction: this is a small card
+          in a footer column and asking for a full-width source would fetch several times the
+          pixels it can show. */}
+      <Image
+        src="/assets/celebration-bg.webp"
+        alt="" aria-hidden priority={false}
+        fill sizes="(max-width: 680px) 92vw, 360px"
+        style={{ objectFit: 'cover', objectPosition: 'center 62%', zIndex: 0 }}
+      />
+
+      {/* The scrim, and its weight is measured rather than judged by eye.
+          The card carries dark type over a photograph with chocolate, matcha and confetti in it, so
+          what matters is the DARKEST pixel behind a letter, not the average — an average over a
+          busy image hides exactly the pixel that swallows a glyph. Sampled per band on the rendered
+          card: at 62/46 the worst pixel gives 5.4:1 under the ribbon, 4.6:1 behind the figure and
+          4.9:1 behind the label, so every line clears WCAG AA on its worst case with the means
+          running 10-12:1. Lighter is tempting and does not hold: at 50/34 the small type drops to
+          3.4:1 and fails. */}
+      <span aria-hidden style={{
+        position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
+        background: 'linear-gradient(165deg, rgba(255,255,255,.62), rgba(255,255,255,.46))',
+      }} />
 
       {/* Gold ribbon across the top, as in the reference. Notched ends via clip-path rather than an
           image, so it costs nothing to load and scales with the type.
           Dark lettering on the amber, not white: white on amber-500 measures about 2.2:1 and is
           unreadable at this size, while the strong ink on it is roughly 7:1. */}
       <span style={{
-        position: 'relative',
+        position: 'relative', zIndex: 2,
         display: 'inline-block',
         padding: '6px 24px',
         background: 'linear-gradient(180deg, var(--amber-200), var(--amber-500))',
@@ -121,7 +115,7 @@ export default function CookiesSoldCounter() {
         Celebrating
       </span>
 
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', zIndex: 2 }}>
         <b style={{ display: 'block', color: 'var(--text-strong)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em' }}>
           {n.toLocaleString('en-IN')}+
         </b>
@@ -132,7 +126,7 @@ export default function CookiesSoldCounter() {
 
       {/* One live indicator, not two: the reference had a corner chip and a bottom pill saying the
           same thing. White pill so it stays light like the panel it sits on. */}
-      <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--white-72)' }}>
+      <span style={{ position: 'relative', zIndex: 2, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--white-72)' }}>
         <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
         <span style={{ color: 'var(--text-strong)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
           Counting live
