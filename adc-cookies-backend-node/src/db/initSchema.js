@@ -275,6 +275,25 @@ export async function initSchema() {
       created_at TIMESTAMPTZ NOT NULL
     );
 
+    /* The Razorpay detail columns, and the refund tally.
+       These are NOT optional extras: finalizePaidOrder writes razorpay_fee, razorpay_tax, method,
+       card_network, card_last4, vpa and bank on every payment, and that INSERT is not guarded. The
+       CREATE TABLE above never made them, so on any database provisioned by initSchema alone —
+       a fresh environment, or a developer's local copy — recording a payment threw, AFTER the
+       atomic claim had already marked the order PAID. The order came out paid with no CONFIRMED
+       row, no coupon redemption, no confirmation email and no courier booking.
+       Staging and production escaped it only because their schema came from drizzle's baseline,
+       which has always had these. Added here so the two descriptions of the table agree; the types
+       match production exactly, so this is a no-op there. */
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_fee NUMERIC(12,2);
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS razorpay_tax NUMERIC(12,2);
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS method TEXT;
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS card_network TEXT;
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS card_last4 TEXT;
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS vpa TEXT;
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS bank TEXT;
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_refunded NUMERIC(12,2) NOT NULL DEFAULT 0;
+
     CREATE TABLE IF NOT EXISTS coupon_usage (
       id SERIAL PRIMARY KEY,
       coupon_id INTEGER NOT NULL REFERENCES coupons(id),
