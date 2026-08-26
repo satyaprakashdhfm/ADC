@@ -85,24 +85,53 @@ export async function storeDoesIntercity(code) {
 }
 
 /**
+ * Every store that could dispatch an outstation parcel right now.
+ *
+ * Three conditions, and all three are needed:
+ *
+ *   1. the store is switched on
+ *   2. its delivery mode allows intercity (BOTH or INTERCITY, i.e. not INTRACITY-only)
+ *   3. a Delhivery warehouse is registered and active at its pincode
+ *
+ * The third is what stops this from being a promise we cannot keep. Delhivery collects from a
+ * warehouse registered in THEIR panel, keyed by its pickup name — a store we have merely ticked
+ * "intercity" for in our own admin has nowhere for a van to go. Without this the capability check
+ * and the booking would disagree, and the customer would meet that disagreement after paying.
+ *
+ * Matched on pincode because that is the field the two sides genuinely share: ADC-BEGUR is
+ * registered at 560114, which is Begur's pincode. Names are not comparable — ours are shop names,
+ * theirs are pickup nicknames.
+ */
+export async function intercityCapableStores() {
+  const rows = await getAll(
+    `SELECT DISTINCT pincode FROM warehouses WHERE is_active = TRUE AND pincode IS NOT NULL`
+  ).catch(() => []);
+  const withWarehouse = new Set(rows.map((r) => String(r.pincode).replace(/\D/g, '')));
+
+  const checked = await Promise.all(ADC_STORES.map(async (s) => {
+    if (!withWarehouse.has(String(s.pincode).replace(/\D/g, ''))) return null;
+    if (!(await isStoreActive(s.code))) return null;
+    if (!(await storeDoesIntercity(s.code))) return null;
+    return s;
+  }));
+  return checked.filter(Boolean);
+}
+
+/**
  * Is outstation delivery open at all?
  *
- * It rests entirely on ONE store. storeForAddress() hands every address outside a store city to
- * WAREHOUSE_CODE, so the warehouse is the only origin an out-of-town parcel can ship from — which
- * means its two switches are the intercity switches for the whole shop:
- *
- *   taken offline        -> no outstation, and it also stops being a Bengaluru same-day store.
- *   set to Intracity     -> no outstation, and it keeps trading same-day. The gentler of the two,
- *                           and until now not enforced at all: the button said "never an intercity
- *                           pickup" while outstation orders were still assigned to it regardless.
+ * This used to ask exactly one store — WAREHOUSE_CODE — because storeForAddress() sent every
+ * out-of-town address there, so Begur's two switches were the intercity switches for the whole
+ * shop. That stopped being true the moment a second store could be set to BOTH: two other stores
+ * could be active and explicitly marked intercity, and this still answered false, because it never
+ * looked at them. Now it asks the capability set above.
  *
  * Asked here rather than re-derived by each caller, so the checkout quote and order creation cannot
  * drift into disagreeing — which is exactly how a customer once got quoted a real fee and a real
  * date, and was then refused at the final step.
  */
 export async function intercityOpen() {
-  if (!(await isStoreActive(WAREHOUSE_CODE))) return false;
-  return storeDoesIntercity(WAREHOUSE_CODE);
+  return (await intercityCapableStores()).length > 0;
 }
 
 /**
@@ -308,6 +337,21 @@ export function nearestStore(destPincode) {
  *
  * Anything outside a store zone is the warehouse's: outstation parcels leave from Begur.
  */
+/**
+ * Which store an OUTSTATION order ships from.
+ *
+ * Async, and separate from storeForAddress, because the answer depends on live state: which stores
+ * are switched on, which allow intercity, and which have a warehouse Delhivery will collect from.
+ * Falls back to the warehouse so an order is never left unassigned and invisible to every kitchen —
+ * booking will then fail visibly, which is better than an order nobody owns.
+ */
+export async function intercityStoreForAddress() {
+  const capable = await intercityCapableStores();
+  if (!capable.length) return storeByCode(WAREHOUSE_CODE);
+  // Prefer the warehouse when it qualifies: it is the one with a proven Delhivery pickup history.
+  return capable.find((s) => s.code === WAREHOUSE_CODE) || capable[0];
+}
+
 export function storeForAddress(address) {
   if (!address) return storeByCode(WAREHOUSE_CODE);
   const inZone = zoneStores(String(address.pincode || '').replace(/\D/g, ''));
