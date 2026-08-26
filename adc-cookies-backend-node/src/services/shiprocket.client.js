@@ -522,8 +522,24 @@ export async function cancelShiprocketOrder(srOrderIds) {
  */
 export function shiprocketStatusToOrderStatus(status) {
   const s = String(status || '').toUpperCase();
-  if (/DELIVERED/.test(s)) return 'DELIVERED';
-  if (/CANCELL?ED|RTO/.test(s)) return 'CANCELLED';
+
+  /* ORDER MATTERS HERE, and it did not used to.
+   *
+   * `/DELIVERED/` was tested first and matched on substring, so it also matched UNDELIVERED, NOT
+   * DELIVERED and RTO DELIVERED — three states that mean the customer did NOT receive the parcel.
+   * All three were recorded as delivered.
+   *
+   * That was not a display glitch. applyCarrierTerminalStatus treats DELIVERED as terminal and
+   * refuses any later change, so a failed delivery became a permanent "delivered" that the real
+   * status arriving afterwards could not correct. */
+
+  // RTO comes first: "RTO DELIVERED" means it was delivered back to US.
+  if (/\bRTO\b|CANCELL?ED|\bRETURN(ED)?\b/.test(s)) return 'CANCELLED';
+
+  // A failed attempt is not terminal — the courier tries again — so say nothing rather than guess.
+  if (/\bUN ?DELIVERED\b|\bNOT DELIVERED\b/.test(s)) return null;
+
+  if (/\bDELIVERED\b/.test(s)) return 'DELIVERED';
   if (/OUT FOR DELIVERY|IN TRANSIT|PICKED ?UP|DISPATCH/.test(s)) return 'OUT_FOR_DELIVERY';
   if (/RIDER ASSIGNED|PICKUP SCHEDULED|AWB ASSIGNED/.test(s)) return 'PACKED';
   return null;   // unknown status: leave the order alone rather than guess
