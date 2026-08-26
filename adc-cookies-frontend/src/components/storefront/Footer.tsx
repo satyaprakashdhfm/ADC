@@ -23,16 +23,18 @@ export default function Footer() {
         overflow: 'hidden',
         background: 'var(--footer-bg)',
         color: 'var(--white)',
-        /* Bottom padding clears the floating cart bar, which is fixed at bottom:20 and ~52 tall and
-           was sitting straight over the copyright. Nothing here is allowed to end up underneath it. */
-        padding: '72px 0 118px',
+        /* Bottom padding clears the floating cart bar: fixed at bottom:20, ~50 tall, so it covers
+           the last ~70px of the viewport and the copyright must stay above that. 84 leaves that
+           margin and no more — the 118 it was before read as a band of empty orange under the
+           small print, which is most of what the footer looked too tall for. */
+        padding: '72px 0 84px',
         display: 'flex',
         flexDirection: 'column',
       }}
     >
       {/* Footer background is clean — the old ghosted-logo watermark + glow were removed per request. */}
 
-      <div style={{ position: 'relative', zIndex: 2, flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div className="footer-inner" style={{ position: 'relative', zIndex: 2, flex: 1, display: 'flex', flexDirection: 'column' }}>
         <h2 style={srOnly}>a dough cookie</h2>
 
         {/* No nav strip here — it repeated the header link-for-link, which just read as the header
@@ -156,7 +158,7 @@ export default function Footer() {
             names carried nothing the icons don't, and a fifth column of text links read as yet more
             site navigation rather than a way out to our channels.
             aria-label carries the name for anyone not seeing the glyph. */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 22, flexWrap: 'wrap', padding: '38px var(--gutter) 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 22, flexWrap: 'wrap', padding: '26px var(--gutter) 0' }}>
           {([
             ['WhatsApp', whatsappLink(), <WhatsAppIcon key="w" size={23} />],
             ['Instagram', INSTAGRAM_URL, <InstagramIcon key="i" size={23} />],
