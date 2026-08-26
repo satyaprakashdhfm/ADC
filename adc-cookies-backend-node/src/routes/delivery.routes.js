@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getOne, getAll } from '../db/index.js';
-import { ApiError } from '../middlewares/auth.middleware.js';
+import { ApiError } from '../utils/ApiError.js';
 import { checkServiceability, expectedTat, delhiveryConfigured } from '../services/delhivery.client.js';
 // Aliased: delhivery.js already exports a checkServiceability with a different signature.
 // Quoting uses pickServiceableStore — the SAME routine the booking uses — so the store and rate the

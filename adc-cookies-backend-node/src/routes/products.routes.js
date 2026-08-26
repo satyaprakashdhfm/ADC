@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getAll, getOne } from '../db/index.js';
-import { ApiError } from '../middlewares/auth.middleware.js';
+import { ApiError } from '../utils/ApiError.js';
 import { serializeProduct, withImageUrls } from '../serializers/index.js';
 import { readBannerMessages } from '../services/bannerMessages.service.js';
 import { resolveHeroBanner } from '../services/heroBanner.service.js';

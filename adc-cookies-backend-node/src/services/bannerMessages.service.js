@@ -1,5 +1,5 @@
 import { getOne, query } from '../db/index.js';
-import { ApiError } from '../middlewares/auth.middleware.js';
+import { ApiError } from '../utils/ApiError.js';
 
 /*
  * The rotating lines in the top ribbon.

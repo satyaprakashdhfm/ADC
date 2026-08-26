@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { getOne, getAll, query, nowIso } from '../db/index.js';
-import { ApiError } from '../middlewares/auth.middleware.js';
+import { ApiError } from '../utils/ApiError.js';
 import {
   requireStoreUser, signStoreToken, checkPassword, hashPassword, storeAuthConfigured,
 } from '../services/storeAuth.service.js';

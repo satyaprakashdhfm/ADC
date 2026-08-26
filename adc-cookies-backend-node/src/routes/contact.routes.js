@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { query, nowIso } from '../db/index.js';
-import { ApiError } from '../middlewares/auth.middleware.js';
+import { ApiError } from '../utils/ApiError.js';
 import { sendContactEmail } from '../services/mailer.client.js';
 
 const router = Router();

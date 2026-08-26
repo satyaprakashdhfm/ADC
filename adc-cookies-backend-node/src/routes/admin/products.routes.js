@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db/index.js';
-import { ApiError } from '../../middlewares/auth.middleware.js';
+import { ApiError } from '../../utils/ApiError.js';
 import { serializeProduct, withImageUrls } from '../../serializers/index.js';
 import { parseMediaList, serialiseMediaList, deleteMedia, isMediaRef } from '../../services/storage.client.js';
 

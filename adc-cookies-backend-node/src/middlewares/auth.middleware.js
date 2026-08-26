@@ -152,11 +152,3 @@ export function requireAuth(req, res, next) {
    purpose rather than left unused: it looks like the admin gate, and anything importing it would be
    protecting the dashboard with a customer session again. The real gate is requireAdminSession in
    adminAuth.js, which is keyed on an allowlisted phone and its own OTP session. */
-
-// Lets services throw new ApiError(msg) to produce a 400, like Spring's RuntimeException handler.
-export class ApiError extends Error {
-  constructor(message, status = 400) {
-    super(message);
-    this.status = status;
-  }
-}

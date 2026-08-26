@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getOne, getAll } from '../../db/index.js';
-import { ApiError } from '../../middlewares/auth.middleware.js';
+import { ApiError } from '../../utils/ApiError.js';
 
 const router = Router();
 

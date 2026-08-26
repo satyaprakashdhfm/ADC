@@ -1,5 +1,5 @@
 import { getAll } from '../db/index.js';
-import { ApiError } from '../middlewares/auth.middleware.js';
+import { ApiError } from '../utils/ApiError.js';
 
 /*
  * Build-your-own packs: a product that is really N slots the customer fills with other products.

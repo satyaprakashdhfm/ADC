@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db/index.js';
-import { ApiError } from '../../middlewares/auth.middleware.js';
+import { ApiError } from '../../utils/ApiError.js';
 import { serializeWarehouse } from '../../serializers/index.js';
 import { delhiveryConfigured, createWarehouseOnDelhivery, updateWarehouseOnDelhivery, getShippingCost } from '../../services/delhivery.client.js';
 import { ADC_STORES } from '../../services/store.service.js';

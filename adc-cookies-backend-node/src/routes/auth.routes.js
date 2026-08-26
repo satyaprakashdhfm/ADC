@@ -2,10 +2,11 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { getOne, query, nowIso } from '../db/index.js';
-import { requireAuth, ApiError } from '../middlewares/auth.middleware.js';
+import { requireAuth } from '../middlewares/auth.middleware.js';
+import { ApiError } from '../utils/ApiError.js';
 import { normalizePhone, sendOtp, validateOtp, messageCentralConfigured } from '../services/messageCentral.client.js';
 import { adminClient, anonClient, supabaseConfigured } from '../config/supabase.js';
-import { linkEmailClaimsToUser } from './coupons.routes.js';
+import { linkEmailClaimsToUser } from '../services/coupon.service.js';
 
 // Rejects junk like "123@gmail.com" (digits-only local part) — requires a real-looking local
 // part (at least one letter, 2+ characters) and a proper domain/TLD.

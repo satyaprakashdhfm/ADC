@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db/index.js';
-import { ApiError } from '../../middlewares/auth.middleware.js';
+import { ApiError } from '../../utils/ApiError.js';
 import { serializeOrder } from '../../serializers/index.js';
 import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../services/delhivery.client.js';
 import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, walletStatus, assignAwb, shiprocketConfigured } from '../../services/shiprocket.client.js';

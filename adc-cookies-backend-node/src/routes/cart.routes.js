@@ -1,43 +1,11 @@
 import { Router } from 'express';
-import { getOne, getAll, query, nowIso } from '../db/index.js';
-import { requireAuth, ApiError } from '../middlewares/auth.middleware.js';
-import { serializeCart, serializeCartItem, withImageUrls } from '../serializers/index.js';
+import { getOne, query } from '../db/index.js';
+import { requireAuth } from '../middlewares/auth.middleware.js';
+import { ApiError } from '../utils/ApiError.js';
+import { getCartRow, touchCart, cartById, fullCart } from '../services/cart.service.js';
 
 const router = Router();
 router.use(requireAuth);
-
-async function userByEmail(email) {
-  const user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
-  if (!user) throw new ApiError('User not found');
-  return user;
-}
-
-export async function getCartRow(email) {
-  const user = await userByEmail(email);
-  let cart = await getOne('SELECT * FROM cart WHERE user_id = $1', [user.id]);
-  if (!cart) {
-    const ts = nowIso();
-    cart = await getOne(
-      'INSERT INTO cart (user_id, created_at, updated_at) VALUES ($1, $2, $3) RETURNING *',
-      [user.id, ts, ts]
-    );
-  }
-  return cart;
-}
-
-async function touchCart(cartId) {
-  await query('UPDATE cart SET updated_at = $1 WHERE id = $2', [nowIso(), cartId]);
-}
-
-async function fullCart(cart) {
-  const items = await getAll('SELECT * FROM cart_items WHERE cart_id = $1 ORDER BY id', [cart.id]);
-  const serialized = await Promise.all(items.map(async (ci) => {
-    const product = await getOne('SELECT * FROM products WHERE id = $1', [ci.product_id]);
-    return serializeCartItem(ci, product);
-  }));
-  // The cart shows product photos too, so its items need signing exactly like a catalogue row.
-  return serializeCart(cart, await withImageUrls(serialized));
-}
 
 router.get('/', async (req, res) => {
   const cart = await getCartRow(req.user.email);
@@ -61,7 +29,7 @@ router.post('/items', async (req, res) => {
     );
   }
   await touchCart(cart.id);
-  res.json(await fullCart(await getOne('SELECT * FROM cart WHERE id = $1', [cart.id])));
+  res.json(await fullCart(await cartById(cart.id)));
 });
 
 router.patch('/items/:itemId', async (req, res) => {
@@ -76,14 +44,14 @@ router.patch('/items/:itemId', async (req, res) => {
     }
     await touchCart(cart.id);
   }
-  res.json(await fullCart(await getOne('SELECT * FROM cart WHERE id = $1', [cart.id])));
+  res.json(await fullCart(await cartById(cart.id)));
 });
 
 router.delete('/items/:itemId', async (req, res) => {
   const cart = await getCartRow(req.user.email);
   await query('DELETE FROM cart_items WHERE id = $1 AND cart_id = $2', [req.params.itemId, cart.id]);
   await touchCart(cart.id);
-  res.json(await fullCart(await getOne('SELECT * FROM cart WHERE id = $1', [cart.id])));
+  res.json(await fullCart(await cartById(cart.id)));
 });
 
 router.delete('/', async (req, res) => {

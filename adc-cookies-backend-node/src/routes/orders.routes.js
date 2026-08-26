@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { getOne, getAll, query, withTransaction, nowIso } from '../db/index.js';
-import { requireAuth, ApiError } from '../middlewares/auth.middleware.js';
+import { requireAuth } from '../middlewares/auth.middleware.js';
+import { ApiError } from '../utils/ApiError.js';
 import { serializeOrder, serializeOrderItem, serializeTracking, serializeAddress, PAYMENT_SELECT } from '../serializers/index.js';
-import { getCartRow } from './cart.routes.js';
-import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from './coupons.routes.js';
+import { getCartRow } from '../services/cart.service.js';
+import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from '../services/coupon.service.js';
 import { sendOrderEmails } from '../services/mailer.client.js';
 import { fetchWaybill, createShipment, trackShipment, delhiveryConfigured } from '../services/delhivery.client.js';
 import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, intercityStoreForAddress, storeByCode, deliveryEligible, isStoreActive, intercityOpen, storeBlockedProductIds } from '../services/store.service.js';
@@ -12,6 +13,7 @@ import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSi
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../services/petpooja.service.js';
 import { applyCarrierTerminalStatus, bookingNote } from '../services/orderProgress.service.js';
 import { isPackProduct, validatePackPicks } from '../services/pack.service.js';
+import { userByEmail } from '../services/user.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -389,11 +391,6 @@ export function bookShipmentAndRelay(orderId) {
     .finally(() => relayOrder(orderId).catch(() => {}));
 }
 
-async function userByEmail(email) {
-  const user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
-  if (!user) throw new ApiError('User not found');
-  return user;
-}
 
 function pad(n) { return String(n).padStart(2, '0'); }
 async function genOrderNumber() {

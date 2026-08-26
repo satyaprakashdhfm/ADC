@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { getOne, getAll, query } from '../db/index.js';
-import { requireAuth, ApiError } from '../middlewares/auth.middleware.js';
+import { requireAuth } from '../middlewares/auth.middleware.js';
+import { ApiError } from '../utils/ApiError.js';
 import { serializeAddress } from '../serializers/index.js';
 import { normalizePhone } from '../services/messageCentral.client.js';
+import { userByEmail } from '../services/user.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -19,11 +21,6 @@ export const CITY_ALIASES = {
 };
 export const canonicalCity = (s) => { const t = titleCase(s); return CITY_ALIASES[t] || t; };
 
-async function userByEmail(email) {
-  const user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
-  if (!user) throw new ApiError('User not found');
-  return user;
-}
 
 // A delivery address with no (or an unusable) phone number can never actually ship — Delhivery
 // and Shadowfax both require one to create a shipment, and until now nothing stopped a customer

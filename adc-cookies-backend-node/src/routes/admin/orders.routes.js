@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db/index.js';
-import { ApiError } from '../../middlewares/auth.middleware.js';
+import { ApiError } from '../../utils/ApiError.js';
 import { serializeOrder, PAYMENT_SELECT } from '../../serializers/index.js';
 import { cancelShipment } from '../../services/delhivery.client.js';
 import { cancelShiprocketOrder } from '../../services/shiprocket.client.js';

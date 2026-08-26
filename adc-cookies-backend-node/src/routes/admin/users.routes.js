@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getOne, getAll, nowIso } from '../../db/index.js';
-import { ApiError } from '../../middlewares/auth.middleware.js';
+import { ApiError } from '../../utils/ApiError.js';
 import { serializeAddress, serializeUser } from '../../serializers/index.js';
 import { normalizePhone } from '../../services/messageCentral.client.js';
 import { adminClient, supabaseConfigured } from '../../config/supabase.js';

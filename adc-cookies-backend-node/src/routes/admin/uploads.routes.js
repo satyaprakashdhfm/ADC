@@ -1,5 +1,5 @@
 import { Router, raw } from 'express';
-import { ApiError } from '../../middlewares/auth.middleware.js';
+import { ApiError } from '../../utils/ApiError.js';
 import {
   uploadMedia, deleteMedia, signMediaRef, storageConfigured,
   ALLOWED_TYPES, MAX_UPLOAD_BYTES, isMediaRef,

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { getOne, query, nowIso } from '../../db/index.js';
-import { ApiError } from '../../middlewares/auth.middleware.js';
+import { ApiError } from '../../utils/ApiError.js';
 import { createRefund, fetchOrderPayments } from '../../services/razorpay.client.js';
 import { cancelShiprocketOrder } from '../../services/shiprocket.client.js';
 import { cancelShipment, delhiveryConfigured } from '../../services/delhivery.client.js';

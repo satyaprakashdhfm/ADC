@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db/index.js';
-import { ApiError } from '../../middlewares/auth.middleware.js';
+import { ApiError } from '../../utils/ApiError.js';
 import { serializeProduct, withImageUrls } from '../../serializers/index.js';
 import { ADC_STORES } from '../../services/store.service.js';
 import { relayOrder, unmappedProducts } from '../../services/petpooja.service.js';

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db/index.js';
-import { ApiError } from '../../middlewares/auth.middleware.js';
+import { ApiError } from '../../utils/ApiError.js';
 import { ADC_STORES, storeProductAvailable, resolveProductAvailability, SERVICE_MODES, intercityOpen, WAREHOUSE_CODE } from '../../services/store.service.js';
 import { hashPassword, defaultPasswordFor } from '../../services/storeAuth.service.js';
 
