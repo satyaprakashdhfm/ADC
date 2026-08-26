@@ -19,13 +19,18 @@ export const metadata: Metadata = {
     siteName: "a dough cookie",
     locale: "en_IN",
     type: "website",
-    images: [{ url: "/assets/hero-cookies-wide.jpg", width: 2400, height: 1200, alt: "a dough cookie, freshly baked cookies" }],
+    /* A purpose-made card, not the hero photograph. The hero is 2400x1200 and carries no branding,
+       so a crawler cropping it to a square thumbnail produced an anonymous close-up of two cookies
+       with nothing saying whose they were — which is what the Bing result was showing. This is
+       1200x630, the size every crawler and social preview expects, with the wordmark centred so a
+       square crop still keeps it. */
+    images: [{ url: "/assets/og-image.jpg", width: 1200, height: 630, alt: "a dough cookie — Aroma of Freshness" }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/assets/hero-cookies-wide.jpg"],
+    images: ["/assets/og-image.jpg"],
   },
   verification: {
     google: "p9NGcYrukr4Fn19_ONF9Ny5NRTF0VQ3BlvPvEas9swU",
@@ -41,7 +46,7 @@ const ORG_JSON_LD = {
   alternateName: "ADC",
   url: SITE_URL,
   logo: `${SITE_URL}/assets/adc-logo.png`,
-  image: `${SITE_URL}/assets/hero-cookies-wide.jpg`,
+  image: `${SITE_URL}/assets/og-image.jpg`,
   description: DESCRIPTION,
   sameAs: [INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL],
   telephone: SITE_PHONE,
