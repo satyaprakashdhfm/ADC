@@ -13,8 +13,8 @@
  * 560100 -> drop 560087. That is a different product from /courier/serviceability's
  * is_new_hyperlocal, not a bug in our call. Re-run this after Shiprocket change anything.
  */
-import { listPickups, checkServiceability } from '../src/shiprocket.js';
-import { ADC_STORES } from '../src/stores.js';
+import { listPickups, checkServiceability } from '../src/services/shiprocket.client.js';
+import { ADC_STORES } from '../src/services/store.service.js';
 
 const [, , dropPin, dropLat, dropLng] = process.argv;
 

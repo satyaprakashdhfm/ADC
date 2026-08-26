@@ -1,8 +1,8 @@
 // Register the active default DB warehouse on the currently-configured Delhivery env
 // (staging or production, per .env). Safe to re-run; "already exists" is treated as OK.
 import 'dotenv/config';
-const dh = await import('../src/delhivery.js');
-const db = await import('../src/db.js');
+const dh = await import('../src/services/delhivery.client.js');
+const db = await import('../src/db/index.js');
 
 const wh = await db.getOne('SELECT * FROM warehouses WHERE is_active = TRUE ORDER BY is_default DESC, id ASC LIMIT 1');
 if (!wh) { console.error('No active warehouse in DB.'); await db.pool.end(); process.exit(1); }

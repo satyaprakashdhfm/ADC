@@ -3,7 +3,7 @@
 // lines 29/130/138 to be fabricated demo content from initial project setup, not a real customer
 // or a product of any current-code bug. Zero other real activity found under this user.
 import 'dotenv/config';
-import { query } from '../src/db.js';
+import { query } from '../src/db/index.js';
 
 async function main() {
   await query('DELETE FROM payments WHERE order_id = 1');

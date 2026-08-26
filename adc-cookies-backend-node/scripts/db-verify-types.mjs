@@ -1,5 +1,5 @@
 // Verifies the JS-side shape of migrated columns via the app's own db.js (parsers included).
-import { getOne, getAll } from '../src/db.js';
+import { getOne, getAll } from '../src/db/index.js';
 const bad = [];
 const check = (label, val, want) => {
   const got = val === null ? 'null' : (val instanceof Date ? 'Date' : typeof val);
