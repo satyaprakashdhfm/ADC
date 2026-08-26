@@ -57,7 +57,10 @@ export default function Footer() {
         >
           {/* Brand block — fills the left side so the link columns don't cluster in the right
               half with a dead gap. On phones this drops to full width above the columns. */}
-          <div className="footer-brand" style={{ flex: '1 1 240px', maxWidth: 300 }}>
+          {/* A flex column so the counter can be pushed to the bottom line of this column with
+              margin-top:auto — the grid stretches every column to the tallest one, so "bottom" here
+              means level with the foot of the link lists, not the foot of the footer. */}
+          <div className="footer-brand" style={{ flex: '1 1 240px', maxWidth: 300, display: 'flex', flexDirection: 'column' }}>
             {/* The secondary mark — the round bitten-cookie badge — rather than the wordmark, which
                 the navbar already carries at the top of every page.
 
@@ -83,6 +86,18 @@ export default function Footer() {
             >
               Handcrafted cookies, baked fresh daily. Aroma of Freshness, delivered warm.
             </p>
+            {/* Under the secondary mark rather than squeezed between the payment marks and the
+                copyright, where it was competing with small print for attention in the busiest strip
+                of the footer. This column had the room, and the number is worth more than a gap.
+                marginTop:auto drops it to the column's bottom line; the padding is the floor on the
+                gap, since auto margin alone would let it hug the tagline in a short column. */}
+            {/* flex:1 rather than margin-top:auto — auto only pushed the card down, this makes it
+                absorb the leftover height, so it runs from under the tagline to the foot of the
+                columns row, which is where the social line begins. minHeight:0 keeps a flex child
+                from refusing to shrink below its content on narrow desktop widths. */}
+            <div style={{ flex: 1, display: 'flex', paddingTop: 22, minHeight: 0 }}>
+              <CookiesSoldCounter />
+            </div>
           </div>
 
           <FooterCookies />
@@ -169,7 +184,6 @@ export default function Footer() {
         <div className="footer-baseline" style={{ marginTop: 34, paddingTop: 26, borderTop: '1px solid var(--white-16)' }}>
           <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 var(--gutter)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' }}>
             <div style={{ display: 'flex', justifyContent: 'center' }}><PaymentMarks /></div>
-            <CookiesSoldCounter />
             {/* The policies belong at the very bottom, where people look for them, and they have to
                 be real pages rather than anchors on Contact — a payment provider checks that these
                 URLs exist, and a customer looking for the refund terms is usually already unhappy
