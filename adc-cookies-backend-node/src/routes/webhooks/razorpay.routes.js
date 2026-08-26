@@ -1,6 +1,6 @@
 import { verifyWebhookSignature } from '../../services/razorpay.client.js';
 import { getOne, query, nowIso } from '../../db/index.js';
-import { finalizePaidOrder } from '../orders.routes.js';
+import { finalizePaidOrder } from '../../services/order.service.js';
 import { logApiCall } from '../../utils/logger.js';
 
 /*

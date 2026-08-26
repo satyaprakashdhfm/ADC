@@ -4,7 +4,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { serializeOrder } from '../../serializers/index.js';
 import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../services/delhivery.client.js';
 import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, walletStatus, assignAwb, shiprocketConfigured } from '../../services/shiprocket.client.js';
-import { autoCreateShipment } from '../orders.routes.js';
+import { autoCreateShipment } from '../../services/shipment.service.js';
 import { applyCarrierTerminalStatus, bookingNote } from '../../services/orderProgress.service.js';
 
 const router = Router();

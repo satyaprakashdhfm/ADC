@@ -8,7 +8,7 @@ import {
 import { storeRelaysToPos, storeProductAvailable, resolveProductAvailability } from '../services/store.service.js';
 import { trackShiprocket, getRiderData, shiprocketConfigured, walletStatus } from '../services/shiprocket.client.js';
 import { trackShipment, delhiveryConfigured } from '../services/delhivery.client.js';
-import { bookShipmentAndRelay } from './orders.routes.js';
+import { bookShipmentAndRelay } from '../services/shipment.service.js';
 
 /*
  * The store portal — /store/<code> on the frontend, /api/store here.
