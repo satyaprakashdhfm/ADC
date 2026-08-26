@@ -346,6 +346,15 @@ body::before {
 }
 @media (min-width: 901px) {
   .site-footer { min-height: calc(100svh - var(--header-h)); }
+  /* The min-height above is a floor, not a measurement, so on a tall screen the footer is taller
+     than the things in it. That slack has to go somewhere, and by default it pooled AFTER the last
+     child — a band of empty orange under the copyright, with the social row stranded above it.
+     space-between spends it in the gaps instead of after the end: columns at the top, the legal
+     strip on the bottom edge, and the social row rising into the space between them. Nothing moves
+     when the footer is already full.
+     It goes on the INNER wrapper, not on .site-footer: the footer has exactly one child and that
+     child is flex:1, so distributing on the footer itself had nothing to distribute. */
+  .footer-inner { justify-content: space-between; }
 }
 @supports not (height: 100svh) {
   @media (min-width: 901px) { .site-footer { min-height: calc(100vh - var(--header-h)); } }
