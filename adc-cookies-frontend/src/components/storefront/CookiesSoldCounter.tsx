@@ -49,17 +49,16 @@ export default function CookiesSoldCounter() {
         boxSizing: 'border-box',
         padding: '20px',
         borderRadius: 'var(--radius-card)',
-        /* A solid fallback only. The panel itself is now the photograph plus the scrim below it,
-           both real elements — the tint cannot live on this container, because a child painted
-           behind it (which is where a background photograph belongs) would be hidden by it.
-           This colour is what shows if the image never arrives, and it is the same milky tone the
-           card used to mix for itself, so the dark type stays readable either way. */
-        background: 'rgba(255,255,255,.74)',
-        /* Bright edge, inner highlight and a soft drop are what read as glass. No backdrop-filter:
-           the footer behind is a flat gradient, so blurring it costs a compositing layer and changes
-           nothing visible. */
-        border: '1px solid var(--white-72)',
-        boxShadow: 'inset 0 1px 0 var(--white-72), 0 8px 22px var(--black-18)',
+        /* A solid fallback only — the panel itself is the photograph plus the scrim over it, both
+           real elements, because a child painted behind this container's background would be
+           hidden by it. --ink-950 is what the corporate card falls back to as well, so a missing
+           image degrades to a dark panel with its white type still readable rather than to white
+           on cream. */
+        background: 'var(--ink-950)',
+        /* A faint light edge, not a bright one: on a dark panel the old --white-72 border read as a
+           drawn outline rather than a lit edge. */
+        border: '1px solid var(--white-16)',
+        boxShadow: 'inset 0 1px 0 var(--white-16), 0 8px 22px var(--black-18)',
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
@@ -83,17 +82,16 @@ export default function CookiesSoldCounter() {
         style={{ objectFit: 'cover', objectPosition: 'center 62%', zIndex: 0 }}
       />
 
-      {/* The scrim, and its weight is measured rather than judged by eye.
-          The card carries dark type over a photograph with chocolate, matcha and confetti in it, so
-          what matters is the DARKEST pixel behind a letter, not the average — an average over a
-          busy image hides exactly the pixel that swallows a glyph. Sampled per band on the rendered
-          card: at 62/46 the worst pixel gives 5.4:1 under the ribbon, 4.6:1 behind the figure and
-          4.9:1 behind the label, so every line clears WCAG AA on its worst case with the means
-          running 10-12:1. Lighter is tempting and does not hold: at 50/34 the small type drops to
-          3.4:1 and fails. */}
+      {/* The same espresso wash the Corporate & Bulk Gifting card lays over its photograph, so the
+          two image-backed panels on the site read as one treatment rather than two ideas. Dark
+          overlay, white type.
+          Its weight is measured rather than judged by eye: what decides whether a letter survives
+          is the LIGHTEST pixel behind it, not the average — an average over a busy photograph
+          hides the pale confetti and fairy lights that a white glyph disappears into. See the
+          figure below for the sampled numbers. */}
       <span aria-hidden style={{
         position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
-        background: 'linear-gradient(165deg, rgba(255,255,255,.62), rgba(255,255,255,.46))',
+        background: 'linear-gradient(165deg, var(--espresso-62), var(--espresso-50))',
       }} />
 
       {/* Gold ribbon across the top, as in the reference. Notched ends via clip-path rather than an
@@ -116,19 +114,21 @@ export default function CookiesSoldCounter() {
       </span>
 
       <div style={{ position: 'relative', zIndex: 2 }}>
-        <b style={{ display: 'block', color: 'var(--text-strong)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em' }}>
+        <b style={{ display: 'block', color: 'var(--white)', font: `900 var(--text-h2)/1 var(--font-display)`, letterSpacing: '-.02em' }}>
           {n.toLocaleString('en-IN')}+
         </b>
-        <span style={{ display: 'block', marginTop: 5, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.01em' }}>
+        <span style={{ display: 'block', marginTop: 5, color: 'var(--cream-100)', fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '.01em' }}>
           Cookies Baked &amp; Sold
         </span>
       </div>
 
       {/* One live indicator, not two: the reference had a corner chip and a bottom pill saying the
-          same thing. White pill so it stays light like the panel it sits on. */}
-      <span style={{ position: 'relative', zIndex: 2, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--white-72)' }}>
+          same thing. A translucent white chip now, matching the corporate card's icon tile, rather
+          than the opaque white pill it was — an opaque light pill on a dark panel reads as a hole
+          punched in it. */}
+      <span style={{ position: 'relative', zIndex: 2, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 13px', borderRadius: 'var(--radius-pill)', background: 'var(--espresso-50)', border: '1px solid var(--white-16)' }}>
         <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ad06a', boxShadow: '0 0 0 3px rgba(58,208,106,.28)', flex: 'none' }} />
-        <span style={{ color: 'var(--text-strong)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+        <span style={{ color: 'var(--white)', fontSize: 'var(--text-2xs)', fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase' }}>
           Counting live
         </span>
       </span>
