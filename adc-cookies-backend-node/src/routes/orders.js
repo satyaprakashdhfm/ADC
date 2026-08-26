@@ -11,6 +11,7 @@ import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../razorpay.js';
 import { relayOrder, cancelOrder as petpoojaCancelOrder } from '../petpooja.js';
 import { applyCarrierTerminalStatus, bookingNote } from '../orderProgress.js';
+import { isPackProduct, validatePackPicks } from '../packs.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -440,8 +441,26 @@ router.post('/', async (req, res) => {
     lineItems = await Promise.all(bodyItems.map(async (it) => {
       const product = await getOne('SELECT * FROM products WHERE id = $1', [it.productId]);
       if (!product) { console.log(`[ORDER] create | ✗ product_not_found=${it.productId}`); throw new ApiError(`Product not found: ${it.productId}`); }
+
+      let selectedOptions = it.selectedOptions ?? null;
+      /*
+       * A pack's contents are re-checked here, against the catalogue, every time.
+       *
+       * The picker already enforces the slot counts — but it runs on the customer's machine, and
+       * the price is fixed whatever goes in. Without this, eight Biscoff at the price of a mixed
+       * box is one edited request away, and the resulting order would look completely ordinary
+       * for the rest of its life. validatePackPicks also rewrites the human-readable lines from
+       * what the catalogue says the cookies are called, so a renamed product cannot leave a stale
+       * name printed on the kitchen's copy.
+       */
+      if (isPackProduct(product)) {
+        const checked = await validatePackPicks(product, selectedOptions?.packPicks);
+        selectedOptions = { ...(selectedOptions || {}), packPicks: checked.picks, addOns: checked.addOns };
+        console.log(`[ORDER] create | pack=${product.name} | ${checked.summary}`);
+      }
+
       return { product, productName: product.name, quantity: it.quantity || 1, unitPrice: product.price,
-               selectedOptions: it.selectedOptions ? JSON.stringify(it.selectedOptions) : null,
+               selectedOptions: selectedOptions ? JSON.stringify(selectedOptions) : null,
                specialNotes: it.specialNotes ?? null };
     }));
   } else {

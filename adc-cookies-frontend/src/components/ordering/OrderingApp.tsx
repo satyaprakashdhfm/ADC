@@ -32,6 +32,9 @@ import { useCheckoutPayment } from '@/hooks/checkout/useCheckoutPayment';
 import { WEEKDAYS as _WD, MONTHS as _MO } from '@/lib/orderFormat';
 import { CheckoutStepper, Dot, Dash } from './ui/CheckoutStepper';
 import { Thumb, QStepper } from './ui/ProductCards';
+import PackBuilderModal from './ui/PackBuilderModal';
+import { usePacks } from '@/hooks/usePacks';
+import type { PackConfig } from '@/lib/api';
 import OfferCard from './ui/OfferCard';
 import OrderSuccessPage from './OrderSuccessPage';
 
@@ -80,6 +83,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   const { cart, total, setQty, gift, setGift, giftMessage, setGiftMessage, giftOccasion, setGiftOccasion, addrId: addr, setAddrId: setAddr, coupon, setCoupon, applied, setApplied, discount, setDiscount, giftLineId, setGiftLineId } = useCart();
   const { user } = useAuth();
   const { store: locationStore } = useLocation();
+  /* The upsell rail can offer a pack too, and a pack cannot be added in one tap — it has to be
+     built first. Same hook the menu uses, so both rails agree about what is in a box. */
+  const { packFor, addPack } = usePacks();
+  const [buildingPack, setBuildingPack] = useState<PackConfig | null>(null);
   const {
     addresses, chosen, adding, editId, savingAddr, saveErr,
     openAddForm, editAddr, closeAddrForm, saveAddr,
@@ -434,7 +441,11 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                           <div style={{ fontSize: 'var(--text-2xs)', fontWeight: 700, color: 'var(--text-strong)', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.name}</div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 'auto' }}>
                             <span style={{ fontWeight: 900, fontSize: 'var(--text-xs)', color: 'var(--text-strong)' }}>₹{Number(p.price)}</span>
-                            <button onClick={() => setQty(String(p.id), (cart[String(p.id)]?.qty || 0) + 1, p.name, Number(p.price), firstImage(p.images))}
+                            <button onClick={() => {
+                              const pk = packFor(p.id);
+                              if (pk) { setBuildingPack(pk); return; }
+                              setQty(String(p.id), (cart[String(p.id)]?.qty || 0) + 1, p.name, Number(p.price), firstImage(p.images));
+                            }}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '4px 8px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--brand-secondary)', background: 'var(--amber-50)', color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-2xs)', cursor: 'pointer' }}>
                               <Plus size={11} /> Add
                             </button>
@@ -885,6 +896,14 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             </div>
           </div>
         </div>
+      )}
+
+      {buildingPack && (
+        <PackBuilderModal
+          pack={buildingPack}
+          onClose={() => setBuildingPack(null)}
+          onAdd={(picks, summary) => { addPack(buildingPack, picks, summary); setBuildingPack(null); }}
+        />
       )}
     </div>
   );

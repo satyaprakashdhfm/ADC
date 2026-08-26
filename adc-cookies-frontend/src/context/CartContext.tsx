@@ -1,8 +1,17 @@
 'use client';
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
+import type { PackPick } from '@/lib/api';
 
-export interface CartEntry { id: string; name: string; price: number; qty: number; img?: string; addOns?: string[]; note?: string; }
+export interface CartEntry {
+  id: string; name: string; price: number; qty: number; img?: string; addOns?: string[]; note?: string;
+  /* The real product id. A pack's cart key has its picks baked into it so two differently-filled
+     packs stay two lines, which makes the key unparseable as a number — and checkout used to derive
+     the product id from exactly that. Carried explicitly rather than inferred from the key. */
+  productId?: number;
+  /* Set only on a pack line: the eight cookies chosen. Re-validated server-side at order time. */
+  packPicks?: PackPick[];
+}
 
 // Flat fee to wrap the whole order as a gift (with an optional message card).
 export const GIFT_FEE = 30;
@@ -11,7 +20,7 @@ interface CartContextType {
   cart: Record<string, CartEntry>;
   count: number;
   total: number;
-  setQty: (id: string, qty: number, name?: string, price?: number, img?: string, addOns?: string[], note?: string) => void;
+  setQty: (id: string, qty: number, name?: string, price?: number, img?: string, addOns?: string[], note?: string, extra?: { productId?: number; packPicks?: PackPick[] }) => void;
   gift: boolean;
   setGift: (v: boolean) => void;
   giftMessage: string;
@@ -60,7 +69,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem('adc_cart', JSON.stringify(cart)); } catch { /* quota / private mode */ }
   }, [cart]);
 
-  const setQty = useCallback((id: string, qty: number, name?: string, price?: number, img?: string, addOns?: string[], note?: string) => {
+  const setQty = useCallback((id: string, qty: number, name?: string, price?: number, img?: string, addOns?: string[], note?: string, extra?: { productId?: number; packPicks?: PackPick[] }) => {
     setCart(prev => {
       const next = { ...prev };
       if (qty <= 0) {
@@ -74,6 +83,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
           img: img || prev[id]?.img,
           addOns: addOns !== undefined ? addOns : prev[id]?.addOns,
           note: note !== undefined ? note : prev[id]?.note,
+          // Preserved across a quantity change: bumping a pack from 1 to 2 must not forget what is in it.
+          productId: extra?.productId ?? prev[id]?.productId,
+          packPicks: extra?.packPicks ?? prev[id]?.packPicks,
         };
       }
       return next;

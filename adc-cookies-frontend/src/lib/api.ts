@@ -606,6 +606,28 @@ export async function getAnnouncement(): Promise<{ messages: string[]; text: str
 
 /** Public: the hero photograph, resolved. Fetched at run time because a signed URL expires — one
  *  baked into the build would stop working a week after a deploy. */
+/* ---- Build-your-own packs (the 8 Pack) ---- */
+
+/** One cookie that may go in a slot. */
+export interface PackChoice { productId: number; name: string; price: number; images?: string | null }
+/** A run of slots the customer fills — "3 filled cookies", "5 classic & premium". */
+export interface PackSlot { key: string; label: string; count: number; hint?: string; choices: PackChoice[] }
+export interface PackConfig {
+  packKey: string; productId: number; name: string;
+  /** Fixed: the pack costs this whatever goes in it. */
+  price: number;
+  size: number; slots: PackSlot[];
+  /** Slots with nothing available to pick — a catalogue problem, shown as one. */
+  unavailableSlots: string[];
+}
+/** What the customer chose, sent back with the order and re-checked server-side. */
+export interface PackPick { slot: string; productId: number; name: string; quantity: number }
+
+/* Resolved on the server against the live catalogue, never listed in the storefront: the same
+   rules decide whether the order is accepted, and two copies of them is how a picker and a
+   validator drift apart. */
+export async function getPacks(): Promise<PackConfig[]> { return request('/products/packs'); }
+
 export async function getHeroBanner(): Promise<HeroBannerUrls> { return request('/products/hero-banner'); }
 // Public: today's stall/store-visit note (or null if the admin hasn't set one).
 /** Our own record of what happened to an order — placed, paid, accepted, packed, shipped. Separate
