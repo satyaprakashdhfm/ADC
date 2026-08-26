@@ -12,9 +12,9 @@ const env = (keys) => Object.fromEntries(keys.map((k) => [k, 'x']));
 
 const PROD = ['DATABASE_URL','DELHIVERY_BASE_URL','DELIVERY_API_TOKEN','PETPOOJA_API','PETPOOJA_API_SECRET',
   'PETPOOJA_API_TOKEN','PETPOOJA_BASE_URL','PETPOOJA_REST_ID','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD',
-  'CUSTOMER_ID','AUTH_KEY','SUPABASE_URL'];
+  'SHIPROCKET_BASE_URL','CUSTOMER_ID','AUTH_KEY','MC_BASE_URL','SUPABASE_URL'];
 const STAGING = ['DATABASE_URL','DELHIVERY_BASE_URL','DELIVERY_API_TOKEN','PETPOOJA_BASE_URL','PETPOOJA_REST_ID',
-  'SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD','CUSTOMER_ID','AUTH_KEY','SUPABASE_URL'];
+  'SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD','SHIPROCKET_BASE_URL','CUSTOMER_ID','AUTH_KEY','MC_BASE_URL','SUPABASE_URL'];
 const LOCAL = ['DATABASE_URL','DELHIVERY_BASE_URL','DELIVERY_API_TOKEN','SUPABASE_URL'];
 
 test('all three real environments boot', () => {
@@ -44,9 +44,16 @@ test('every problem is reported at once, not one per boot', () => {
     /PETPOOJA_BASE_URL/.test(e.message) && /DELHIVERY_BASE_URL/.test(e.message));
 });
 
-test('Shiprocket and Message Central warn rather than fail', () => {
-  // Neither Railway service sets these; making them errors would take both environments down.
-  const warnings = checkEnv(env(PROD));
-  assert.ok(warnings.some((w) => /SHIPROCKET_BASE_URL/.test(w)));
-  assert.ok(warnings.some((w) => /MC_BASE_URL/.test(w)));
+test('a Shiprocket account with no host named is refused', () => {
+  // The default is production — the same wallet staging would be spending.
+  assert.throws(() => checkEnv(env(PROD.filter((k) => k !== 'SHIPROCKET_BASE_URL'))), /SHIPROCKET_BASE_URL/);
+});
+
+test('Message Central with no host named is refused', () => {
+  // The default is production, which sends real OTP SMS to real phones.
+  assert.throws(() => checkEnv(env(PROD.filter((k) => k !== 'MC_BASE_URL'))), /MC_BASE_URL/);
+});
+
+test('a clean environment produces no warnings at all', () => {
+  assert.deepEqual(checkEnv(env(PROD)), []);
 });

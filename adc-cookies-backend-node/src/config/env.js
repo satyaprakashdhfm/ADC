@@ -41,22 +41,25 @@ function configured(env) {
  * MUST be explicit when the integration is live: the default points at the wrong environment, and
  * being wrong is silent in both directions.
  *
- * WARN when the integration is live but the host is implicit: the default is the right host today,
- * so this is not worth refusing to boot over — but it is the same shape of trap as the two above,
- * and neither Railway service sets them, which is why they cannot be promoted to errors without
- * taking both environments down on the next deploy.
+ * All four are errors. Shiprocket's and Message Central's defaults are production hosts too — the
+ * same trap, with a real wallet and real SMS behind them.
  */
 const MUST_BE_EXPLICIT = [
   { key: 'DELHIVERY_BASE_URL', when: 'delhivery',
     why: 'defaults to track.delhivery.com — PRODUCTION. On staging that books real shipments against the real wallet.' },
   { key: 'PETPOOJA_BASE_URL', when: 'petpooja',
     why: 'defaults to the sandbox. In production, paid orders relay to a sandbox that answers success:"1" and never reach the kitchen.' },
+  { key: 'SHIPROCKET_BASE_URL', when: 'shiprocket',
+    why: 'defaults to apiv2.shiprocket.in — PRODUCTION, and the same wallet staging would be spending.' },
+  { key: 'MC_BASE_URL', when: 'messageCentral',
+    why: 'defaults to cpaas.messagecentral.com — PRODUCTION, which sends real OTP SMS to real phones.' },
 ];
 
-const SHOULD_BE_EXPLICIT = [
-  { key: 'SHIPROCKET_BASE_URL', when: 'shiprocket', fallback: 'apiv2.shiprocket.in (production)' },
-  { key: 'MC_BASE_URL', when: 'messageCentral', fallback: 'cpaas.messagecentral.com (production)' },
-];
+/* Nothing is merely warned about any more. These last two were warnings only because neither
+   Railway service set them, and turning them into errors would have taken both environments down
+   on the next deploy. They are now set on adc-backend and adc-backend Copy, and in the local .env,
+   so the rule applies evenly: if an integration holds credentials, it names its host. */
+const SHOULD_BE_EXPLICIT = [];
 
 /**
  * Check the environment. Returns the warnings; throws with every problem listed if any outbound
