@@ -10,10 +10,16 @@ import { startStatusPoller } from './jobs/statusPoller.js';
 import { ensureStoreAccounts } from './services/storeAuth.service.js';
 import { ensureMediaBucket } from './services/storage.client.js';
 import { getOne } from './db/index.js';
+import { assertEnv } from './config/env.js';
 
 const PORT = Number(process.env.PORT || 8080);
 
 (async () => {
+  /* Before anything opens a connection or books anything: refuse to start if an outbound host is
+     ambiguous. A wrong host is silent in both directions — staging booking real Delhivery parcels,
+     production relaying to a Petpooja sandbox that answers success:"1" — so this is checked once,
+     here, rather than discovered from a customer's missing order. See config/env.js. */
+  assertEnv();
   await initSchema();
   // SKIP_SEED=true disables the auto-seed entirely — used by the isolated final_deploy test
   // environment, whose DB is provisioned separately (schema + curated reference data) and must
