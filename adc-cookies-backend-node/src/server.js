@@ -1,179 +1,53 @@
+/*
+ * Starting the server: listen, plus the one-time boot work that a long-lived process does and a
+ * serverless invocation must not. The app itself is built in app.js.
+ */
 import 'dotenv/config';
-import 'express-async-errors';
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-
-import { initSchema, getOne } from './db.js';
-import { seedIfEmpty } from './seed.js';
-import { startStatusPoller } from './statusPoller.js';
-import { parseAuth } from './middleware.js';
-
-import authRoutes from './routes/auth.js';
-import productRoutes from './routes/products.js';
-import cartRoutes from './routes/cart.js';
-import orderRoutes from './routes/orders.js';
-import addressRoutes from './routes/addresses.js';
-import couponRoutes from './routes/coupons.js';
-import adminRoutes from './routes/admin/index.js';
-import adminAuthRoutes from './routes/adminAuth.js';
-import contactRoutes from './routes/contact.js';
-import deliveryRoutes from './routes/delivery.js';
-import petpoojaRoutes from './routes/petpooja.js';
-import hyperlocalRoutes from './routes/hyperlocal.js';
-import geoRoutes from './routes/geo.js';
-import storeRoutes from './routes/store.js';
-import { ensureStoreAccounts } from './storeAuth.js';
-import { ensureMediaBucket } from './storage.js';
-import { paymentWebhook } from './routes/paymentsWebhook.js';
-import { paymentCallback } from './routes/orders.js';
+import app from './app.js';
+import { initSchema } from './db/initSchema.js';
+import { seedIfEmpty } from './db/seed.js';
+import { startStatusPoller } from './jobs/statusPoller.js';
+import { ensureStoreAccounts } from './services/storeAuth.service.js';
+import { ensureMediaBucket } from './services/storage.client.js';
+import { getOne } from './db/index.js';
 
 const PORT = Number(process.env.PORT || 8080);
 
-const app = express();
-
-// Behind Railway's proxy — trust the first hop so req.ip is the real client IP
-// (required for accurate per-IP rate limiting).
-app.set('trust proxy', 1);
-
-// Security headers. CSP is disabled (this is a JSON API, not HTML) and CORP is set to
-// cross-origin so the browser frontend on another domain can read responses.
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-}));
-
-// CORS: if ALLOWED_ORIGINS is set (comma-separated), lock to those (plus localhost for dev);
-// otherwise reflect the request origin (open) so nothing breaks before it's configured.
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
-  .split(',').map((s) => s.trim()).filter(Boolean);
-const corsOrigin = ALLOWED_ORIGINS.length
-  ? (origin, cb) => {
-      const ok = !origin || ALLOWED_ORIGINS.includes(origin) || /^http:\/\/localhost(:\d+)?$/.test(origin);
-      cb(null, ok);
-    }
-  : true;
-app.use(cors({
-  origin: corsOrigin,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Authorization', 'Content-Type'],
-}));
-
-// Razorpay webhook needs the RAW body for signature verification, so mount it with a raw
-// parser BEFORE the JSON parser (and before parseAuth — it's authenticated by signature).
-app.post('/api/payments/webhook', express.raw({ type: '*/*' }), paymentWebhook);
-
-// Razorpay's redirect callback (browser form POST, not server-to-server) — for in-app browsers
-// (Instagram/FB Messenger, Opera Mini, UC) that can't run the normal iframe/popup Checkout.
-// Public by design: mounted directly here, NOT through the auth-gated /api/orders router.
-app.post('/api/payment-callback/:orderId', express.urlencoded({ extended: false }), paymentCallback);
-
-// Petpooja pushes an ENTIRE restaurant menu — every item, variation, add-on group and tax — in one
-// POST. A real menu runs to hundreds of KB, so the 64kb cap below rejected it with a 413 before our
-// handler ever saw it, which the dashboard reports only as "Menu trigger failed". Give that one
-// router the headroom it needs and leave the rest of the API on the tight default: no storefront
-// request has any business being megabytes long.
-// Scoped to /pushmenu ALONE, not the whole router. The other Petpooja endpoints take tiny bodies,
-// and a 12mb ceiling on a public endpoint is a cheap memory-exhaustion target.
-app.use('/api/petpooja/pushmenu', express.json({ limit: '12mb' }));
-
-app.use(express.json({ limit: '64kb' }));
-
-// Baseline per-IP rate limit on the whole API — generous for real browsing, blunts abuse/scraping.
-// Runs before parseAuth so floods can't trigger a DB upsert on every request.
-app.use('/api', rateLimit({
-  windowMs: 60_000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests', message: 'Too many requests — please slow down.' },
-}));
-
-app.use(parseAuth);
-
-app.get('/', (_req, res) => res.json({ status: 'ok', service: 'adc-cookies-backend (node/pg)' }));
-
-app.use('/api/auth', authRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/coupons', couponRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/addresses', addressRoutes);
-// Outside /api/admin on purpose: everything under that prefix requires an admin session, and the
-// endpoints that issue one cannot require it.
-app.use('/api/admin-auth', adminAuthRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/contact', contactRoutes);
-app.use('/api/delivery', deliveryRoutes);
-app.use('/api/petpooja', petpoojaRoutes);
-// Store staff portal. Its own auth scheme (see storeAuth.js), NOT a Supabase role — counter staff
-// must never hold a token that /api/admin or a customer's account would also accept.
-app.use('/api/store', storeRoutes);
-// Shiprocket Hyperlocal tracking. NOT /api/shiprocket — their panel rejects webhook URLs
-// containing shiprocket / kartrocket / sr / kr / localhost.
-app.use('/api/hyperlocal', hyperlocalRoutes);
-// Address search and reverse geocoding — the browser's only route to a geocoder. See routes/geo.js.
-app.use('/api/geo', geoRoutes);
-
-app.use((_req, res) => res.status(404).json({ error: 'Not found', message: 'Resource not found' }));
-
-// eslint-disable-next-line no-unused-vars
-app.use((err, _req, res, _next) => {
-  if (err.code === '23505') { // unique_violation
-    return res.status(400).json({ error: 'Already exists', message: 'A record with this value already exists' });
+(async () => {
+  await initSchema();
+  // SKIP_SEED=true disables the auto-seed entirely — used by the isolated final_deploy test
+  // environment, whose DB is provisioned separately (schema + curated reference data) and must
+  // NOT be auto-seeded (the seed keys off an empty users table and would clash with pre-loaded
+  // reference data / omit the warehouse row Delhivery needs).
+  if (process.env.SKIP_SEED === 'true') {
+    console.log('[CONFIG] SKIP_SEED=true — auto-seed disabled');
+  } else {
+    await seedIfEmpty();
   }
-  if (err.code === '23503') { // foreign_key_violation
-    return res.status(400).json({ error: 'Cannot delete', message: 'This record is referenced by existing orders and cannot be deleted' });
-  }
-  const status = err.status || 500;
-  const message = err.message || 'Something went wrong';
-  if (status >= 500) console.error(err);
-  res.status(status).json({ error: message, message });
-});
-
-// Export the configured app so Vercel can use it as a serverless function (see api/index.js).
-export default app;
-
-// Only run a long-lived server when started directly (local dev) — not on Vercel serverless.
-if (!process.env.VERCEL) {
-  (async () => {
-    await initSchema();
-    // SKIP_SEED=true disables the auto-seed entirely — used by the isolated final_deploy test
-    // environment, whose DB is provisioned separately (schema + curated reference data) and must
-    // NOT be auto-seeded (the seed keys off an empty users table and would clash with pre-loaded
-    // reference data / omit the warehouse row Delhivery needs).
-    if (process.env.SKIP_SEED === 'true') {
-      console.log('[CONFIG] SKIP_SEED=true — auto-seed disabled');
-    } else {
-      await seedIfEmpty();
-    }
-    // Give any store that has no staff login one. Idempotent — an existing account is never
-    // touched, so a password someone changed cannot be reset by a redeploy.
-    await ensureStoreAccounts().catch((e) => console.error('[STORE] account seed failed:', e?.message || e));
-    /* The private media bucket, created here rather than by hand so staging and production cannot
-       drift into one having it and the other not. Never fatal: no bucket means image uploads report
-       themselves unavailable, which is a great deal better than the API refusing to start. */
-    await ensureMediaBucket().catch((e) => console.error('[STORAGE] bucket check failed:', e?.message || e));
-    /* Carrier status refresh. The store tablet polls and so stays current, but the admin list and
-       the customer's account render the stored value — which went stale the moment nobody was
-       looking at a portal. The webhook was meant to cover this and has not fired once. */
-    startStatusPoller();
-    app.listen(PORT, () => {
-      console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
-      console.log(`[CONFIG] DB=${process.env.DATABASE_URL ? 'supabase-pooler' : 'local-pg'}`);
-      console.log(`[CONFIG] SUPABASE=${process.env.SUPABASE_URL ? 'yes' : 'MISSING'}`);
-      console.log(`[CONFIG] DELHIVERY_TOKEN=${process.env.DELIVERY_API_TOKEN || process.env.DELHIVERY_API_TOKEN ? 'set' : 'MISSING'}`);
-      console.log(`[CONFIG] DELHIVERY_BASE_URL=${process.env.DELHIVERY_BASE_URL || '(default: track.delhivery.com)'}`);
-      console.log(`[CONFIG] RESEND=${process.env.RESEND_API_KEY ? 'set' : 'MISSING'}`);
-      /* The admin allowlist, which is admin_accounts — NOT users.role.
-         This counted users WHERE role = 'ADMIN' long after that column was retired, and initSchema
-         itself sets every such row to CUSTOMER. So it printed 0 on every boot of every environment
-         and read like "nobody can sign in to the dashboard", which was never true and sent somebody
-         looking for a seeding bug that did not exist. */
-      getOne('SELECT count(*)::int AS n FROM admin_accounts WHERE is_active = TRUE')
-        .then((r) => console.log(`[CONFIG] ADMIN phone allowlist=${r?.n ?? '?'} active`)).catch(() => {});
-    });
-  })().catch(err => { console.error('Startup failed:', err); process.exit(1); });
-}
+  // Give any store that has no staff login one. Idempotent — an existing account is never
+  // touched, so a password someone changed cannot be reset by a redeploy.
+  await ensureStoreAccounts().catch((e) => console.error('[STORE] account seed failed:', e?.message || e));
+  /* The private media bucket, created here rather than by hand so staging and production cannot
+     drift into one having it and the other not. Never fatal: no bucket means image uploads report
+     themselves unavailable, which is a great deal better than the API refusing to start. */
+  await ensureMediaBucket().catch((e) => console.error('[STORAGE] bucket check failed:', e?.message || e));
+  /* Carrier status refresh. The store tablet polls and so stays current, but the admin list and
+     the customer's account render the stored value — which went stale the moment nobody was
+     looking at a portal. The webhook was meant to cover this and has not fired once. */
+  startStatusPoller();
+  app.listen(PORT, () => {
+    console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
+    console.log(`[CONFIG] DB=${process.env.DATABASE_URL ? 'supabase-pooler' : 'local-pg'}`);
+    console.log(`[CONFIG] SUPABASE=${process.env.SUPABASE_URL ? 'yes' : 'MISSING'}`);
+    console.log(`[CONFIG] DELHIVERY_TOKEN=${process.env.DELIVERY_API_TOKEN || process.env.DELHIVERY_API_TOKEN ? 'set' : 'MISSING'}`);
+    console.log(`[CONFIG] DELHIVERY_BASE_URL=${process.env.DELHIVERY_BASE_URL || '(default: track.delhivery.com)'}`);
+    console.log(`[CONFIG] RESEND=${process.env.RESEND_API_KEY ? 'set' : 'MISSING'}`);
+    /* The admin allowlist, which is admin_accounts — NOT users.role.
+       This counted users WHERE role = 'ADMIN' long after that column was retired, and initSchema
+       itself sets every such row to CUSTOMER. So it printed 0 on every boot of every environment
+       and read like "nobody can sign in to the dashboard", which was never true and sent somebody
+       looking for a seeding bug that did not exist. */
+    getOne('SELECT count(*)::int AS n FROM admin_accounts WHERE is_active = TRUE')
+      .then((r) => console.log(`[CONFIG] ADMIN phone allowlist=${r?.n ?? '?'} active`)).catch(() => {});
+  });
+})().catch(err => { console.error('Startup failed:', err); process.exit(1); });
