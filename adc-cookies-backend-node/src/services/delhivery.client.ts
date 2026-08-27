@@ -30,11 +30,22 @@ function log(label, extra = '') {
   console.log(`[DELHIVERY] ${label}${extra ? ' | ' + extra : ''}`);
 }
 
-function authHeaders(extra = {}) {
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   return { Authorization: `Token ${TOKEN}`, Accept: 'application/json', ...extra };
 }
 
-async function dhRequest(path, { method = 'GET', query, body, headers = {}, timeoutMs = 15_000 } = {}) {
+/** Query values are stringified below, so anything printable is accepted. */
+type QueryValue = string | number | boolean | null | undefined;
+
+interface DhRequestOptions {
+  method?: string;
+  query?: Record<string, QueryValue>;
+  body?: unknown;
+  headers?: Record<string, string>;
+  timeoutMs?: number;
+}
+
+async function dhRequest(path: string, { method = 'GET', query, body, headers = {}, timeoutMs = 15_000 }: DhRequestOptions = {}) {
   const url = new URL(BASE_URL + path);
   if (query) for (const [k, v] of Object.entries(query)) if (v != null && v !== '') url.searchParams.set(k, String(v));
 
@@ -43,7 +54,8 @@ async function dhRequest(path, { method = 'GET', query, body, headers = {}, time
   const t0 = Date.now();
   const requestLog = { query, body: typeof body === 'string' ? tryParseJson(body) : body };
   try {
-    const res = await fetch(url, { method, headers: authHeaders(headers), body, signal: ctrl.signal });
+    // Callers pass either a prepared string (their form-encoded endpoints) or an object to encode.
+    const res = await fetch(url, { method, headers: authHeaders(headers), body: body as any, signal: ctrl.signal });
     const text = await res.text();
     let data;
     try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -55,7 +67,7 @@ async function dhRequest(path, { method = 'GET', query, body, headers = {}, time
     }
     logApiCall({ service: 'delhivery', method, endpoint: path, request: requestLog, response: data, status: res.status, ok: res.ok, durationMs: ms });
     return { ok: res.ok, status: res.status, data };
-  } catch (err) {
+  } catch (err: any) {
     log(`${method} ${path} TIMEOUT/NET`, `err=${err.message} | ${Date.now() - t0}ms`);
     logApiCall({ service: 'delhivery', method, endpoint: path, request: requestLog, ok: false, durationMs: Date.now() - t0, error: err.message });
     throw err;
@@ -102,7 +114,7 @@ export async function checkServiceability(pincode) {
     };
     log('serviceability', `pin=${pin} | ${result.serviceable ? '✓ serviceable' : `✗ ${result.reason}`} | cod=${result.cod}`);
     return result;
-  } catch (err) {
+  } catch (err: any) {
     log('serviceability', `pin=${pin} | ✗ network_error: ${err.message}`);
     return { serviceable: false, reason: 'network_error', pincode: pin };
   }
@@ -112,7 +124,15 @@ export async function checkServiceability(pincode) {
 /* 4 — TAT (Expected Delivery)                                          */
 /* GET /api/dc/expected_tat                                            */
 /* ------------------------------------------------------------------ */
-export async function expectedTat({ originPin, destinationPin, mot = 'E', pdt = 'B2C', pickupDate } = {}) {
+export interface ExpectedTatInput {
+  originPin?: string | number;
+  destinationPin?: string | number;
+  mot?: string;
+  pdt?: string;
+  pickupDate?: string;
+}
+
+export async function expectedTat({ originPin, destinationPin, mot = 'E', pdt = 'B2C', pickupDate }: ExpectedTatInput = {}) {
   const o = String(originPin || '').replace(/\D/g, '');
   const d = String(destinationPin || '').replace(/\D/g, '');
   if (!/^\d{6}$/.test(o) || !/^\d{6}$/.test(d)) {
@@ -120,7 +140,7 @@ export async function expectedTat({ originPin, destinationPin, mot = 'E', pdt = 
     return { ok: false, reason: 'invalid_pincode' };
   }
   try {
-    const query = { origin_pin: o, destination_pin: d, mot, pdt };
+    const query: Record<string, QueryValue> = { origin_pin: o, destination_pin: d, mot, pdt };
     if (pickupDate) query.expected_pickup_date = pickupDate;
     const { ok, status, data } = await dhRequest('/api/dc/expected_tat', { query });
     if (ok && data?.success) {
@@ -132,7 +152,7 @@ export async function expectedTat({ originPin, destinationPin, mot = 'E', pdt = 
     const reason = data?.msg || data?.detail || `api_error_${status}`;
     log('TAT', `${o}→${d} | ✗ ${reason}`);
     return { ok: false, reason };
-  } catch (err) {
+  } catch (err: any) {
     log('TAT', `${o}→${d} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
@@ -153,7 +173,7 @@ export async function fetchWaybill(count = 1) {
       : Array.isArray(data) ? data : [data].filter(Boolean);
     log('waybill-fetch', `count=${count} | ✓ waybills=[${waybills.slice(0, 3).join(', ')}]`);
     return { ok: true, waybills };
-  } catch (err) {
+  } catch (err: any) {
     log('waybill-fetch', `count=${count} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
@@ -215,7 +235,7 @@ export async function createWarehouseOnDelhivery(w) {
     }
     log('warehouse-create', `"${w.name}" pin=${w.pincode} | ✓`);
     return { ok: true, data };
-  } catch (err) {
+  } catch (err: any) {
     log('warehouse-create', `"${w.name}" | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
@@ -251,7 +271,7 @@ export async function updateWarehouseOnDelhivery(w) {
     }
     log('warehouse-update', `"${w.name}" pin=${w.pincode} | ✓`);
     return { ok: true, data };
-  } catch (err) {
+  } catch (err: any) {
     log('warehouse-update', `"${w.name}" | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
@@ -261,7 +281,12 @@ export async function updateWarehouseOnDelhivery(w) {
 /* 6 — Shipping Cost                                                    */
 /* GET /api/kinko/v1/invoice/charges/.json                             */
 /* ------------------------------------------------------------------ */
-export async function getShippingCost({ originPin, destPin, weight = 0.5, cod = 0, mode = 'S' } = {}) {
+export interface ShippingCostInput {
+  originPin?: string | number; destPin?: string | number;
+  weight?: number; cod?: number; mode?: string;
+}
+
+export async function getShippingCost({ originPin, destPin, weight = 0.5, cod = 0, mode = 'S' }: ShippingCostInput = {}) {
   const o = String(originPin || '').replace(/\D/g, '');
   const d = String(destPin || '').replace(/\D/g, '');
   if (!/^\d{6}$/.test(o) || !/^\d{6}$/.test(d)) {
@@ -279,7 +304,7 @@ export async function getShippingCost({ originPin, destPin, weight = 0.5, cod = 
     const row = Array.isArray(data) ? data[0] : data?.[0];
     log('shipping-cost', `${o}→${d} ${weight}kg | ✓ total=₹${row?.total_amount ?? '?'} zone=${row?.zone ?? '?'} charged=${row?.charged_weight ?? '?'}kg`);
     return { ok: true, data };
-  } catch (err) {
+  } catch (err: any) {
     log('shipping-cost', `${o}→${d} ${weight}kg | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
@@ -325,7 +350,7 @@ export async function createShipment(shipmentData, pickupLocation) {
     }
     log('shipment-create', `waybill=${pkg.waybill} ref=${ref} | ✓ sort=${pkg.sort_code}`);
     return { ok: true, waybill: pkg.waybill, sortCode: pkg.sort_code, data };
-  } catch (err) {
+  } catch (err: any) {
     log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
@@ -355,7 +380,7 @@ export async function cancelShipment(waybill) {
     }
     log('shipment-cancel', `waybill=${waybill} | ✓ ${data.remark || 'cancelled'}`);
     return { ok: true, data };
-  } catch (err) {
+  } catch (err: any) {
     log('shipment-cancel', `waybill=${waybill} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
@@ -365,7 +390,11 @@ export async function cancelShipment(waybill) {
 /* 8 — Pickup Request (PUR)                                            */
 /* POST /fm/request/new/                                               */
 /* ------------------------------------------------------------------ */
-export async function createPickupRequest({ pickupDate, pickupTime, pickupLocation, packageCount } = {}) {
+export interface PickupRequestInput {
+  pickupDate?: string; pickupTime?: string; pickupLocation?: string; packageCount?: number;
+}
+
+export async function createPickupRequest({ pickupDate, pickupTime, pickupLocation, packageCount }: PickupRequestInput = {}) {
   try {
     const { ok, status, data } = await dhRequest('/fm/request/new/', {
       method: 'POST',
@@ -383,7 +412,7 @@ export async function createPickupRequest({ pickupDate, pickupTime, pickupLocati
     }
     log('pickup-request', `${pickupDate} ${pickupTime} count=${packageCount || 1} | ✓`);
     return { ok: true, data };
-  } catch (err) {
+  } catch (err: any) {
     log('pickup-request', `${pickupDate} ${pickupTime} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
@@ -419,7 +448,7 @@ export async function trackShipment(waybill) {
     const status_str = pkg?.Status?.Status || pkg?.status || '?';
     log('track', `waybill=${waybill} | ✓ status=${status_str}`);
     return { ok: true, data };
-  } catch (err) {
+  } catch (err: any) {
     log('track', `waybill=${waybill} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
@@ -433,7 +462,9 @@ export async function trackShipment(waybill) {
 /* ------------------------------------------------------------------ */
 export const DELHIVERY_DOC_TYPES = ['SIGNATURE_URL', 'RVP_QC_IMAGE', 'EPOD', 'SELLER_RETURN_IMAGE'];
 
-export async function fetchDocument({ docType, waybill } = {}) {
+export interface FetchDocumentInput { docType?: string; waybill?: string }
+
+export async function fetchDocument({ docType, waybill }: FetchDocumentInput = {}) {
   const type = String(docType || '').toUpperCase();
   const wbn = String(waybill || '').replace(/\s/g, '');
   if (!DELHIVERY_DOC_TYPES.includes(type)) return { ok: false, reason: 'invalid_doc_type' };
@@ -446,7 +477,7 @@ export async function fetchDocument({ docType, waybill } = {}) {
     }
     log('document', `waybill=${wbn} | type=${type} | ✓`);
     return { ok: true, data };
-  } catch (err) {
+  } catch (err: any) {
     log('document', `waybill=${wbn} | type=${type} | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }

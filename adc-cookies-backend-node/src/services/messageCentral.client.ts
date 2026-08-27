@@ -55,7 +55,7 @@ async function getAuthToken() {
     method: 'GET',
     headers: { accept: '*/*' },
   });
-  const body = await res.json().catch(() => ({}));
+  const body: any = await res.json().catch(() => ({}));
   const token = body.token || body.authToken || body?.data?.token || body?.data?.authToken;
   if (!res.ok || !token) {
     throw new Error(body?.message || `Message Central token request failed (${res.status})`);
@@ -85,13 +85,13 @@ export async function sendOtp(national, otpLength = 4) {
       method: 'POST',
       headers: { authToken: token, accept: '*/*' },
     });
-    const body = await res.json().catch(() => ({}));
+    const body: any = await res.json().catch(() => ({}));
     const data = body?.data || {};
     if (res.ok && (body.responseCode === 200 || String(data.responseCode) === '200') && data.verificationId) {
       return { ok: true, verificationId: String(data.verificationId), timeout: data.timeout || 60 };
     }
     return { ok: false, message: data.errorMessage || body.message || 'Could not send the OTP. Please try again.' };
-  } catch (e) {
+  } catch (e: any) {
     return { ok: false, message: e.message || 'Could not send the OTP. Please try again.' };
   }
 }
@@ -107,7 +107,7 @@ export async function validateOtp(verificationId, code) {
       method: 'GET',
       headers: { authToken: token, accept: '*/*' },
     });
-    const body = await res.json().catch(() => ({}));
+    const body: any = await res.json().catch(() => ({}));
     const data = body?.data || {};
     const completed =
       (body.responseCode === 200 || String(data.responseCode) === '200') &&
@@ -119,7 +119,7 @@ export async function validateOtp(verificationId, code) {
     const code2 = String(data.responseCode || body.responseCode || '');
     const friendly = { 702: 'Incorrect OTP. Please try again.', 705: 'This OTP has expired. Request a new one.', 800: 'Too many attempts. Please try again later.' }[code2];
     return { ok: false, message: friendly || data.errorMessage || body.message || 'OTP verification failed.' };
-  } catch (e) {
+  } catch (e: any) {
     return { ok: false, message: e.message || 'OTP verification failed.' };
   }
 }

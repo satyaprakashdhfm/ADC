@@ -63,13 +63,13 @@ if (PROXY_URL) {
   try {
     proxyAgent = new ProxyAgent(PROXY_URL);
     console.log(`[PETPOOJA] outbound via proxy ${PROXY_URL.replace(/(:\/\/)[^@]*@/, '$1***@')}`);
-  } catch (e) {
+  } catch (e: any) {
     // A malformed proxy URL must not take the POS integration down with it — go direct and say so.
     console.warn(`[PETPOOJA] proxy url unusable (${e.message}) — calling Petpooja directly`);
   }
 }
 
-export async function ppRequest(path, body, { timeoutMs = 20_000 } = {}) {
+export async function ppRequest(path: string, body: unknown, { timeoutMs = 20_000 }: { timeoutMs?: number } = {}): Promise<any> {
   const url = `${BASE}${path}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -99,7 +99,7 @@ export async function ppRequest(path, body, { timeoutMs = 20_000 } = {}) {
     const ok = res.ok && String(data?.success ?? '') === '1';
     logApiCall({ service: 'petpooja', method: 'POST', endpoint: path, request: body, response: data, status: res.status, ok, durationMs });
     return { ok, status: res.status, data, reason: ok ? null : (data?.message || `http_${res.status}`) };
-  } catch (err) {
+  } catch (err: any) {
     logApiCall({ service: 'petpooja', method: 'POST', endpoint: path, request: body, ok: false, durationMs: Date.now() - t0, error: err.message });
     return { ok: false, status: 0, data: null, reason: `network_error: ${err.message}` };
   } finally {

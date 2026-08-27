@@ -73,7 +73,7 @@ export async function ingestMenu(payload, { restId = REST_ID, source = 'push' } 
     ['rest_id', 'tax_id', 'name', 'percentage', 'tax_type', 'raw', 'updated_at'],
     ['rest_id', 'tax_id'], ['name', 'percentage', 'tax_type', 'raw', 'updated_at'], taxRows);
 
-  const addonRows = [];
+  const addonRows: any[] = [];
   for (const g of groups) {
     const groupId = String(g.addongroupid ?? g.id ?? '').trim();
     const groupName = String(g.addongroup_name ?? g.name ?? '');
@@ -88,7 +88,7 @@ export async function ingestMenu(payload, { restId = REST_ID, source = 'push' } 
     ['rest_id', 'addon_id', 'group_id', 'group_name', 'name', 'price', 'in_stock', 'raw', 'updated_at'],
     ['rest_id', 'addon_id'], ['group_id', 'group_name', 'name', 'price', 'in_stock', 'raw', 'updated_at'], addonRows);
 
-  const itemRows = [];
+  const itemRows: any[] = [];
   for (const it of items) {
     const itemId = String(it.itemid ?? it.id ?? '').trim();
     if (!itemId) continue;
@@ -134,7 +134,7 @@ async function upsertMany(table, cols, conflictCols, updateCols, rows, chunkSize
   const setList = updateCols.map(c => `${c}=EXCLUDED.${c}`).join(', ');
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    const params = [];
+    const params: any[] = [];
     const tuples = chunk.map(r => {
       const ph = r.map(v => { params.push(v); return `$${params.length}`; });
       return `(${ph.join(',')})`;
@@ -219,7 +219,9 @@ function callbackBase() {
  * Delivery is a third-party courier (enable_delivery 0) and the fee is fixed and untaxed, hence
  * dc_/pc_tax_percentage 0 and gst_details that are zero on both sides.
  */
-export function buildOrderPayload({ order, items, customer, address, taxIds = [] }) {
+export function buildOrderPayload({ order, items, customer, address, taxIds = [] }: {
+  order: any; items: any[]; customer: any; address: any; taxIds?: any[];
+}) {
   const now = new Date();
   const p2 = (n) => String(n).padStart(2, '0');
   const date = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`;
@@ -427,7 +429,7 @@ export async function relayOrder(orderId, { force = false } = {}) {
 
     const taxRows = await getAll(
       `SELECT tax_id, name FROM petpooja_taxes WHERE rest_id = $1 ORDER BY tax_id`, [REST_ID]);
-    const taxIds = taxRows.map((t) => t.tax_id);
+    const taxIds: any[] = (taxRows as any[]).map((t: any) => t.tax_id);
 
     const payload = buildOrderPayload({ order, items, customer, address, taxIds });
     const r = await saveOrder(payload);
@@ -444,7 +446,7 @@ export async function relayOrder(orderId, { force = false } = {}) {
     );
     log('relay', `order=${order.order_number} | ${r.ok ? '✓ saved' : `✗ ${r.reason}`}`);
     return r.ok ? { ok: true } : { ok: false, reason: r.reason };
-  } catch (err) {
+  } catch (err: any) {
     return await fail(`exception: ${err.message}`);
   }
 }
@@ -485,5 +487,12 @@ export async function fetchMenu(restId = REST_ID) {
     return { ok: false, reason: r.reason, hint: hint.trim() || undefined };
   }
   const ingest = await ingestMenu(r.data, { restId, source: 'fetch' });
-  return { ok: true, ...ingest };
+  /*
+   * ingestMenu reports its own ok, and it WINS — a menu that arrived but could not be stored is
+   * not a successful fetch. That was already the behaviour, because the spread in
+   * `{ ok: true, ...ingest }` overwrote the literal; it simply read as though it forced success,
+   * and every return path of ingestMenu sets ok. Written plainly so nobody "fixes" it by moving
+   * the spread first and silently starts reporting failed ingests as successes.
+   */
+  return { ...ingest };
 }

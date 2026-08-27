@@ -23,7 +23,7 @@ async function refreshJwks() {
   // surface only as "no matching JWKS key", i.e. as if the token were from the wrong project.
   const res = await fetch(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`);
   if (!res.ok) throw new Error(`JWKS fetch failed (${res.status})`);
-  const body = await res.json();
+  const body: any = await res.json();
   const keys = new Map();
   for (const jwk of body.keys || []) {
     try { keys.set(jwk.kid, crypto.createPublicKey({ key: jwk, format: 'jwk' })); } catch { /* skip bad key */ }
@@ -51,7 +51,9 @@ export async function verifySupabaseToken(token) {
   if (!key) {
     // Name both sides: the token's issuer/kid and what we actually hold. A project mismatch and an
     // empty cache both produced the same message before, and they need opposite fixes.
-    const iss = decoded.payload?.iss || 'unknown';
+    /* jwt.decode can hand back a bare string for a non-JSON payload; only an object has iss. */
+    const payload = decoded.payload;
+    const iss = (typeof payload === 'object' && payload ? payload.iss : null) || 'unknown';
     throw new Error(`no matching JWKS key — token kid=${kid} iss=${iss}; cached kids=[${[...cache.keys.keys()].join(', ') || 'EMPTY'}]`);
   }
   return jwt.verify(token, key, { algorithms: ['ES256', 'RS256'] });

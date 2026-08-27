@@ -30,7 +30,13 @@ const safeEqual = (a, b) => {
 };
 
 // Create a Razorpay order. amountPaise must be an integer in paise (₹249 → 24900).
-export async function createRazorpayOrder({ amountPaise, receipt, notes } = {}) {
+export interface RazorpayOrderInput {
+  amountPaise?: number;
+  receipt?: string;
+  notes?: Record<string, string>;
+}
+
+export async function createRazorpayOrder({ amountPaise, receipt, notes }: RazorpayOrderInput = {}) {
   const requestBody = { amount: amountPaise, currency: 'INR', receipt, notes, payment_capture: 1 };
   const t0 = Date.now();
   try {
@@ -39,7 +45,7 @@ export async function createRazorpayOrder({ amountPaise, receipt, notes } = {}) 
       headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
     });
-    const data = await res.json().catch(() => null);
+    const data: any = await res.json().catch(() => null);
     const durationMs = Date.now() - t0;
     if (!res.ok) {
       console.log(`[RAZORPAY] order-create | ✗ status=${res.status} | ${JSON.stringify(data).slice(0, 200)}`);
@@ -49,7 +55,7 @@ export async function createRazorpayOrder({ amountPaise, receipt, notes } = {}) 
     console.log(`[RAZORPAY] order-create | ✓ ${data.id} | amount=${data.amount} ${data.currency}`);
     logApiCall({ service: 'razorpay', method: 'POST', endpoint: '/v1/orders', request: requestBody, response: data, status: res.status, ok: true, durationMs });
     return { ok: true, order: data };
-  } catch (err) {
+  } catch (err: any) {
     console.log(`[RAZORPAY] order-create | ✗ network_error: ${err.message}`);
     logApiCall({ service: 'razorpay', method: 'POST', endpoint: '/v1/orders', request: requestBody, ok: false, durationMs: Date.now() - t0, error: err.message });
     return { ok: false, reason: 'network_error' };
@@ -60,7 +66,13 @@ export async function createRazorpayOrder({ amountPaise, receipt, notes } = {}) 
 // mode — no real money moves. Used by the admin "refund" action; the actual confirmation of
 // a refund completing comes back later via the refund.processed webhook (Razorpay processes
 // refunds async), not from this call's response alone.
-export async function createRefund(paymentId, { amountPaise, notes, speed = 'normal' } = {}) {
+export interface RefundInput {
+  amountPaise?: number;
+  notes?: Record<string, string>;
+  speed?: string;
+}
+
+export async function createRefund(paymentId, { amountPaise, notes, speed = 'normal' }: RefundInput = {}) {
   const requestBody = { speed, ...(amountPaise != null ? { amount: amountPaise } : {}), ...(notes ? { notes } : {}) };
   const t0 = Date.now();
   try {
@@ -69,7 +81,7 @@ export async function createRefund(paymentId, { amountPaise, notes, speed = 'nor
       headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
     });
-    const data = await res.json().catch(() => null);
+    const data: any = await res.json().catch(() => null);
     const durationMs = Date.now() - t0;
     if (!res.ok) {
       console.log(`[RAZORPAY] refund-create | ✗ payment=${paymentId} | status=${res.status} | ${JSON.stringify(data).slice(0, 200)}`);
@@ -79,7 +91,7 @@ export async function createRefund(paymentId, { amountPaise, notes, speed = 'nor
     console.log(`[RAZORPAY] refund-create | ✓ payment=${paymentId} | refund=${data.id} | amount=${data.amount}`);
     logApiCall({ service: 'razorpay', method: 'POST', endpoint: `/v1/payments/${paymentId}/refund`, request: requestBody, response: data, status: res.status, ok: true, durationMs });
     return { ok: true, refund: data };
-  } catch (err) {
+  } catch (err: any) {
     console.log(`[RAZORPAY] refund-create | ✗ network_error: ${err.message}`);
     logApiCall({ service: 'razorpay', method: 'POST', endpoint: `/v1/payments/${paymentId}/refund`, request: requestBody, ok: false, durationMs: Date.now() - t0, error: err.message });
     return { ok: false, reason: 'network_error' };
@@ -98,7 +110,7 @@ export async function fetchPayment(paymentId) {
       method: 'GET',
       headers: { Authorization: authHeader() },
     });
-    const data = await res.json().catch(() => null);
+    const data: any = await res.json().catch(() => null);
     const durationMs = Date.now() - t0;
     if (!res.ok) {
       console.log(`[RAZORPAY] payment-fetch | ✗ payment=${paymentId} | status=${res.status}`);
@@ -108,7 +120,7 @@ export async function fetchPayment(paymentId) {
     console.log(`[RAZORPAY] payment-fetch | ✓ payment=${paymentId} | status=${data.status} | amount=${data.amount}`);
     logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/payments/${paymentId}`, response: data, status: res.status, ok: true, durationMs });
     return { ok: true, payment: data };
-  } catch (err) {
+  } catch (err: any) {
     console.log(`[RAZORPAY] payment-fetch | ✗ network_error: ${err.message}`);
     logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/payments/${paymentId}`, ok: false, durationMs: Date.now() - t0, error: err.message });
     return { ok: false, reason: 'network_error' };
@@ -126,7 +138,7 @@ export async function fetchOrderPayments(razorpayOrderId) {
       method: 'GET',
       headers: { Authorization: authHeader() },
     });
-    const data = await res.json().catch(() => null);
+    const data: any = await res.json().catch(() => null);
     const durationMs = Date.now() - t0;
     if (!res.ok) {
       console.log(`[RAZORPAY] order-payments-fetch | ✗ order=${razorpayOrderId} | status=${res.status}`);
@@ -136,7 +148,7 @@ export async function fetchOrderPayments(razorpayOrderId) {
     console.log(`[RAZORPAY] order-payments-fetch | ✓ order=${razorpayOrderId} | count=${data.count}`);
     logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/orders/${razorpayOrderId}/payments`, response: data, status: res.status, ok: true, durationMs });
     return { ok: true, count: data.count, items: data.items || [] };
-  } catch (err) {
+  } catch (err: any) {
     console.log(`[RAZORPAY] order-payments-fetch | ✗ network_error: ${err.message}`);
     logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/orders/${razorpayOrderId}/payments`, ok: false, durationMs: Date.now() - t0, error: err.message });
     return { ok: false, reason: 'network_error' };

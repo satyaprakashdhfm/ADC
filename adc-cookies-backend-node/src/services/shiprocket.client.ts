@@ -19,6 +19,7 @@
  *     missing lat/long is a hard failure here rather than something to paper over.
  */
 import { logApiCall } from '../utils/logger.js';
+import type { ClientResult } from '../utils/result.js';
 
 const BASE = (process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external').replace(/\/+$/, '');
 const EMAIL = (process.env.SHIPROCKET_EMAIL || '').trim();
@@ -35,9 +36,9 @@ export const SHIPROCKET_ORIGIN = {
   long: Number(process.env.SHIPROCKET_PICKUP_LONG || 77.7070),
 };
 
-export const shiprocketConfigured = () => !!(EMAIL && PASSWORD);
+export const shiprocketConfigured = (): boolean => !!(EMAIL && PASSWORD);
 
-const log = (op, msg) => console.log(`[SHIPROCKET] ${op} | ${msg}`);
+const log = (op: string, msg: string) => console.log(`[SHIPROCKET] ${op} | ${msg}`);
 
 console.log(`[SHIPROCKET] config | base=${BASE} | email=${EMAIL ? 'set' : 'MISSING'} | password=${PASSWORD ? 'set' : 'MISSING'} | pickup=${SHIPROCKET_PICKUP}`);
 
@@ -45,15 +46,15 @@ console.log(`[SHIPROCKET] config | base=${BASE} | email=${EMAIL ? 'set' : 'MISSI
 /* Auth — token cached until shortly before it expires                 */
 /* ------------------------------------------------------------------ */
 
-let cachedToken = null;
+let cachedToken: string | null = null;
 let tokenExpiry = 0;
-let inFlight = null;          // collapses concurrent logins into one
+let inFlight: Promise<string | null> | null = null;   // collapses concurrent logins into one
 
 /**
  * Their token lasts 10 days. We refresh a day early: a token that expires mid-checkout would fail
  * an order the customer has already paid for, and one wasted login a day is a trivial price.
  */
-async function getToken(force = false) {
+async function getToken(force = false): Promise<string | null> {
   if (!force && cachedToken && Date.now() < tokenExpiry) return cachedToken;
   if (inFlight) return inFlight;
 
@@ -65,7 +66,7 @@ async function getToken(force = false) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
       });
-      const data = await res.json().catch(() => null);
+      const data: any = await res.json().catch(() => null);
       logApiCall({ service: 'shiprocket', method: 'POST', endpoint: '/auth/login',
         request: { email: EMAIL, password: '***' }, response: data ? { ...data, token: data.token ? '***' : undefined } : null,
         status: res.status, ok: !!data?.token, durationMs: Date.now() - t0 });
@@ -74,7 +75,7 @@ async function getToken(force = false) {
       tokenExpiry = Date.now() + 9 * 24 * 60 * 60 * 1000;   // 9 of their 10 days
       log('auth', `✓ token acquired | company_id=${data.company_id} | valid 9 days`);
       return cachedToken;
-    } catch (err) {
+    } catch (err: any) {
       log('auth', `✗ ${err.message}`);
       return null;
     } finally {
@@ -88,12 +89,27 @@ async function getToken(force = false) {
  * Authenticated request. A 401 means the token died early, so retry once with a fresh one rather
  * than surfacing an auth error for something we can fix ourselves.
  */
-async function srRequest(method, path, { query: qs, body, retry = true } = {}) {
+interface SrRequestOptions {
+  query?: Record<string, string | number | undefined | null>;
+  body?: unknown;
+  retry?: boolean;
+}
+
+async function srRequest(
+  method: string,
+  path: string,
+  { query: qs, body, retry = true }: SrRequestOptions = {},
+): Promise<ClientResult> {
   if (!shiprocketConfigured()) return { ok: false, reason: 'not_configured' };
   const token = await getToken();
   if (!token) return { ok: false, reason: 'auth_failed' };
 
-  const url = `${BASE}${path}${qs ? `?${new URLSearchParams(qs)}` : ''}`;
+  const url = `${BASE}${path}${qs ? `?${new URLSearchParams(
+    /* URLSearchParams takes strings only; the callers pass numbers and the odd undefined.
+       Stringifying and dropping the empties is what the JavaScript already did implicitly. */
+    Object.entries(qs).filter(([, v]) => v !== undefined && v !== null)
+      .map(([k, v]) => [k, String(v)] as [string, string]),
+  )}` : ''}`;
   const t0 = Date.now();
   try {
     const res = await fetch(url, {
@@ -114,7 +130,7 @@ async function srRequest(method, path, { query: qs, body, retry = true } = {}) {
     logApiCall({ service: 'shiprocket', method, endpoint: path, request: body ?? qs, response: data,
       status: res.status, ok, durationMs: Date.now() - t0 });
     return { ok, status: res.status, data, reason: ok ? null : (data?.message || data?.errors || `http_${res.status}`) };
-  } catch (err) {
+  } catch (err: any) {
     logApiCall({ service: 'shiprocket', method, endpoint: path, request: body ?? qs, ok: false,
       durationMs: Date.now() - t0, error: err.message });
     return { ok: false, status: 0, data: null, reason: `network_error: ${err.message}` };
@@ -131,11 +147,23 @@ async function srRequest(method, path, { query: qs, body, retry = true } = {}) {
  * Coordinates are mandatory — `is_new_hyperlocal=1` with only pincodes returns nothing, so we fail
  * fast and say why instead of reporting the lane unserviceable.
  */
-export async function checkServiceability({ pickupPin, deliveryPin, latFrom, longFrom, latTo, longTo, modeOfTransport }) {
+export interface ServiceabilityQuery {
+  pickupPin: string | number;
+  deliveryPin: string | number;
+  latFrom?: string | number;
+  longFrom?: string | number;
+  latTo?: string | number;
+  longTo?: string | number;
+  modeOfTransport?: string;
+}
+
+export async function checkServiceability(
+  { pickupPin, deliveryPin, latFrom, longFrom, latTo, longTo, modeOfTransport }: ServiceabilityQuery,
+): Promise<ClientResult> {
   if (![latFrom, longFrom, latTo, longTo].every((v) => v != null && v !== '')) {
     return { ok: false, reason: 'missing_coordinates', serviceable: false };
   }
-  const q = {
+  const q: Record<string, string> = {
     pickup_postcode: String(pickupPin), delivery_postcode: String(deliveryPin),
     lat_from: String(latFrom), long_from: String(longFrom),
     lat_to: String(latTo), long_to: String(longTo),
@@ -184,7 +212,7 @@ export async function checkServiceability({ pickupPin, deliveryPin, latFrom, lon
  *
  * Cached for 30 minutes: this sits in the checkout path and the list changes at human speed.
  */
-let pickupCache = null;
+let pickupCache: Set<string> | null = null;
 let pickupExpiry = 0;
 
 /**
@@ -192,13 +220,13 @@ let pickupExpiry = 0;
  * needs to show WHY a store cannot dispatch, not merely that it can't. Uncached: this is an
  * operator pressing refresh, and a stale answer is exactly what makes this screen useless.
  */
-export async function listPickups() {
+export async function listPickups(): Promise<ClientResult> {
   const r = await srRequest('GET', '/settings/company/pickup');
   if (!r.ok) return { ok: false, reason: r.reason, pickups: [] };
   const list = r.data?.data?.shipping_address || r.data?.shipping_address || [];
   return {
     ok: true,
-    pickups: list.map((p) => ({
+    pickups: list.map((p: any) => ({
       id: p.id,
       nickname: String(p.pickup_location || '').trim(),
       verified: Number(p.status) === 2,
@@ -211,7 +239,7 @@ export async function listPickups() {
   };
 }
 
-export async function registeredPickups({ force = false } = {}) {
+export async function registeredPickups({ force = false }: { force?: boolean } = {}): Promise<Set<string>> {
   if (!force && pickupCache && Date.now() < pickupExpiry) return pickupCache;
   const r = await srRequest('GET', '/settings/company/pickup');
   if (!r.ok) {
@@ -221,13 +249,16 @@ export async function registeredPickups({ force = false } = {}) {
     return pickupCache || new Set();
   }
   const list = r.data?.data?.shipping_address || r.data?.shipping_address || [];
-  pickupCache = new Set(list.map((p) => String(p.pickup_location).trim().toLowerCase()));
+  pickupCache = new Set<string>(list.map((p: any) => String(p.pickup_location).trim().toLowerCase()));
   pickupExpiry = Date.now() + 30 * 60_000;
   log('pickups', `${pickupCache.size} registered: ${[...pickupCache].join(', ')}`);
   return pickupCache;
 }
 
-export async function pickServiceableStore(stores, { pin, lat, lng }) {
+export async function pickServiceableStore(
+  stores: any[],
+  { pin, lat, lng }: { pin?: string | number; lat?: string | number; lng?: string | number },
+): Promise<any> {
   const registered = await registeredPickups();
   for (const s of stores) {
     if (s.latitude == null || s.longitude == null) continue;
@@ -256,14 +287,21 @@ export async function pickServiceableStore(stores, { pin, lat, lng }) {
 
 // Their category_name is a CLOSED list — anything outside it is rejected outright.
 const CATEGORIES = ['Electronics', 'Clothes', 'Medicines', 'Food', 'Documents', 'Groceries', 'Others'];
-const CATEGORY = CATEGORIES.includes(process.env.SHIPROCKET_CATEGORY) ? process.env.SHIPROCKET_CATEGORY : 'Food';
+const CATEGORY = CATEGORIES.includes(process.env.SHIPROCKET_CATEGORY ?? '') ? String(process.env.SHIPROCKET_CATEGORY) : 'Food';
 
 /**
  * Create a hyperlocal order. Returns { shipment_id, order_id } — no rider yet; that needs the AWB
  * assignment below. Two steps rather than one, so a serviceable-but-unassignable lane fails at a
  * point where we still know what happened.
  */
-export async function createHyperlocalOrder({ order, items, customer, address, pickupLocation = SHIPROCKET_PICKUP, dims, category = CATEGORY }) {
+export interface HyperlocalOrderInput {
+  order: any; items: any[]; customer: any; address: any;
+  pickupLocation?: string; dims?: any; category?: string;
+}
+
+export async function createHyperlocalOrder(
+  { order, items, customer, address, pickupLocation = SHIPROCKET_PICKUP, dims, category = CATEGORY }: HyperlocalOrderInput,
+): Promise<ClientResult> {
   const now = new Date();
   const p2 = (n) => String(n).padStart(2, '0');
   const orderDate = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())} ${p2(now.getHours())}:${p2(now.getMinutes())}`;
@@ -321,8 +359,11 @@ export async function createHyperlocalOrder({ order, items, customer, address, p
  * Assign a courier and get the AWB. This is what actually dispatches a rider.
  * vehicleType 2 (default) / 3 / 4 wheeler.
  */
-export async function assignAwb(shipmentId, { courierId, vehicleType, futurePickupScheduled } = {}) {
-  const body = { shipment_id: String(shipmentId) };
+export async function assignAwb(
+  shipmentId: string | number,
+  { courierId, vehicleType, futurePickupScheduled }: { courierId?: string | number; vehicleType?: string | number; futurePickupScheduled?: string } = {},
+): Promise<ClientResult> {
+  const body: Record<string, string> = { shipment_id: String(shipmentId) };
   if (courierId) body.courier_id = String(courierId);
   if (vehicleType) body.vehicle_type = String(vehicleType);
   if (futurePickupScheduled) body.future_pickup_scheduled = futurePickupScheduled;
@@ -358,7 +399,7 @@ export async function assignAwb(shipmentId, { courierId, vehicleType, futurePick
  * Returns null rather than throwing on any failure. This is advisory: nothing should refuse to sell
  * a cookie because a balance lookup timed out.
  */
-export async function getWalletBalance() {
+export async function getWalletBalance(): Promise<number | null> {
   // Relative to BASE, which already ends in /v1/external — spelling the prefix out here again
   // produced .../v1/external/v1/external/... and a 404 that read exactly like "no such endpoint".
   const r = await srRequest('GET', '/account/details/wallet-balance');
@@ -379,9 +420,9 @@ export async function getWalletBalance() {
  * wallet and accepts an order in the same sixty seconds.
  */
 const WALLET_TTL_MS = 60_000;
-let walletCache = { at: 0, balance: null };
+let walletCache: { at: number; balance: number | null } = { at: 0, balance: null };
 
-export async function getWalletBalanceCached() {
+export async function getWalletBalanceCached(): Promise<number | null> {
   if (Date.now() - walletCache.at < WALLET_TTL_MS) return walletCache.balance;
   const balance = await getWalletBalance().catch(() => null);
   // A failed lookup is cached too, briefly. Otherwise every poll retries a carrier that is down.
@@ -396,7 +437,7 @@ export async function getWalletBalanceCached() {
  */
 export const WALLET_LOW_WATERMARK = 300;
 
-export async function walletStatus() {
+export async function walletStatus(): Promise<ClientResult> {
   if (!shiprocketConfigured()) return { ok: false, reason: 'not_configured' };
   const balance = await getWalletBalanceCached();
   if (balance == null) return { ok: false, reason: 'lookup_failed' };
@@ -417,7 +458,7 @@ export async function walletStatus() {
  * coordinates in the same second. Because that lookup is best-effort and swallows its own errors
  * so it can never break a webhook, the 404 never surfaced: the rider simply never had a name.
  */
-export async function trackByAwb(awb) {
+export async function trackByAwb(awb: string): Promise<ClientResult> {
   const r = await srRequest('GET', `/courier/track/awb/${encodeURIComponent(awb)}`);
   if (!r.ok) return r;
   const td = r.data?.tracking_data ?? r.data;
@@ -447,7 +488,7 @@ export async function trackByAwb(awb) {
 }
 
 // Kept for the webhook's rider->POS relay. Now sourced from the call that actually answers.
-export async function getRiderData(awb) {
+export async function getRiderData(awb: string): Promise<any> {
   const r = await trackByAwb(awb);
   if (!r.ok) return r;
   if (!r.rider) return { ok: false, reason: 'no rider assigned yet' };
@@ -464,7 +505,11 @@ export async function getRiderData(awb) {
  *
  * The awb is NOT available at assignment time (that call is async), so this is also how we learn it.
  */
-export async function trackShiprocket(shipmentId, srOrderId, awb = null) {
+export async function trackShiprocket(
+  shipmentId: string | number | null | undefined,
+  srOrderId?: string | number | null,
+  awb: string | null = null,
+): Promise<ClientResult> {
   /* Once an AWB exists, ask about the parcel rather than the booking: same status, plus the rider
      and their position. Before one exists there is nothing to ask about, so the booking and then
      the order answer instead — see the fallbacks below. */
@@ -472,7 +517,7 @@ export async function trackShiprocket(shipmentId, srOrderId, awb = null) {
     const byAwb = await trackByAwb(awb);
     if (byAwb.ok && byAwb.status) return { ...byAwb, statusFrom: 'awb' };
   }
-  const r = await srRequest('GET', `/courier/track/shipment/${encodeURIComponent(shipmentId)}`);
+  const r = await srRequest('GET', `/courier/track/shipment/${encodeURIComponent(String(shipmentId ?? ''))}`);
   if (!r.ok) return r;
   const td = r.data?.tracking_data ?? r.data;
   const t = td?.shipment_track?.[0] ?? {};
@@ -507,7 +552,7 @@ export async function trackShiprocket(shipmentId, srOrderId, awb = null) {
   return { ...out, status, statusFrom: status ? 'order' : 'shipment' };
 }
 
-export async function cancelShiprocketOrder(srOrderIds) {
+export async function cancelShiprocketOrder(srOrderIds: Array<string | number> | string | number): Promise<ClientResult> {
   const ids = (Array.isArray(srOrderIds) ? srOrderIds : [srOrderIds]).map(Number);
   const r = await srRequest('POST', '/orders/cancel', { body: { ids } });
   log('cancel', r.ok ? `✓ ${ids.join(',')}` : `✗ ${JSON.stringify(r.reason).slice(0, 120)}`);
@@ -520,7 +565,7 @@ export async function cancelShiprocketOrder(srOrderIds) {
  * Deliberately conservative on the early ones: "RIDER ASSIGNED" means a rider was allocated, not
  * that anything left the store, so it must not read as shipped to the customer.
  */
-export function shiprocketStatusToOrderStatus(status) {
+export function shiprocketStatusToOrderStatus(status: string | null | undefined): string | null {
   const s = String(status || '').toUpperCase();
 
   /* ORDER MATTERS HERE, and it did not used to.

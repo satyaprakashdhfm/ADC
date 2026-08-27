@@ -96,7 +96,7 @@ export async function requireAdminSession(req, res, next) {
        WHERE s.token_hash = $1`,
       [hashToken(raw)],
     );
-  } catch (e) {
+  } catch (e: any) {
     return next(e);
   }
   if (!row) {

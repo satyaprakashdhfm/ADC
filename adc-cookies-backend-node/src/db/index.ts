@@ -68,7 +68,7 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
     const result = await fn(client);
     await client.query('COMMIT');
     return result;
-  } catch (e) {
+  } catch (e: any) {
     await client.query('ROLLBACK');
     throw e;
   } finally {

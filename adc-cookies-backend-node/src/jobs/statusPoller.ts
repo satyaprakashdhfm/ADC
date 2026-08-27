@@ -166,7 +166,7 @@ async function sweep() {
     for (const o of orders) {
       await refreshOne(o).catch((e) => console.log(`[POLL] ${o.order_number} | ✗ ${e?.message || e}`));
     }
-  } catch (e) {
+  } catch (e: any) {
     // Never let a sweep failure take the process down; the next one is five minutes away.
     console.log(`[POLL] sweep failed: ${e?.message || e}`);
   }

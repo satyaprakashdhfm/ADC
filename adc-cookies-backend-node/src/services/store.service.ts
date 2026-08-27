@@ -299,7 +299,7 @@ export function nearestStoreToCoords(lat, lng, city) {
   if (lat == null || lng == null) return null;
   const inCity = city ? ADC_STORES.filter((s) => s.city.toLowerCase() === String(city).toLowerCase()) : ADC_STORES;
   const pool = inCity.length ? inCity : ADC_STORES;
-  let best = null;
+  let best: any = null;
   for (const s of pool) {
     const km = distanceKm(s, lat, lng);
     if (!best || km < best.km) best = { ...s, km: Math.round(km * 100) / 100 };
@@ -349,7 +349,7 @@ export async function intercityStoreForAddress() {
   const capable = await intercityCapableStores();
   if (!capable.length) return storeByCode(WAREHOUSE_CODE);
   // Prefer the warehouse when it qualifies: it is the one with a proven Delhivery pickup history.
-  return capable.find((s) => s.code === WAREHOUSE_CODE) || capable[0];
+  return capable.find((s: any) => s?.code === WAREHOUSE_CODE) || capable[0];
 }
 
 export function storeForAddress(address) {

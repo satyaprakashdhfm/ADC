@@ -28,7 +28,15 @@ function cfg() {
   };
 }
 
-async function send({ to, subject, html, replyTo }) {
+interface OutgoingMail {
+  to?: string | null;
+  subject: string;
+  html: string;
+  /** Optional: only the contact form sets it, so the customer's address is what Reply hits. */
+  replyTo?: string | null;
+}
+
+async function send({ to, subject, html, replyTo }: OutgoingMail) {
   if (!to) return;
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) { console.warn('[mailer] disabled (set RESEND_API_KEY). Skipped:', subject); return; }
@@ -54,19 +62,19 @@ async function send({ to, subject, html, replyTo }) {
         ...(replyTo ? { reply_to: replyTo } : {}),
       }),
     });
-    const body = await res.json().catch(() => null);
+    const body: any = await res.json().catch(() => null);
     if (!res.ok) {
       console.error('[mailer] send failed:', subject, '-', body?.message || `HTTP ${res.status}`);
       return;
     }
     console.log('[mailer] sent:', subject, '→', to, '(id:', (body?.id || '?') + ')');
-  } catch (e) {
+  } catch (e: any) {
     console.error('[mailer] send failed:', subject, '-', e.message);
   }
 }
 
 const rupee = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
-const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => (({ '<': '&lt;', '>': '&gt;', '&': '&amp;' } as Record<string, string>)[c] ?? c));
 
 /*
  * The logo, as an absolute public URL. An email is rendered outside our site, so a relative path
@@ -257,7 +265,7 @@ async function sendSmtp({ to, subject, html, replyTo }) {
   try {
     await t.sendMail({ from: `"a dough cookie" <${cfgSmtp().user}>`, to, subject, html, replyTo });
     console.log('[mailer] sent:', subject, '→', to);
-  } catch (e) {
+  } catch (e: any) {
     console.error('[mailer] send failed:', subject, '-', e.message);
   }
 }

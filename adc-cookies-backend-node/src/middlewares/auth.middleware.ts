@@ -71,13 +71,15 @@ async function syncUser({ email, phone, name }) {
       );
     }
 
+    /* INSERT ... RETURNING * above always yields a row, so user is non-null from here. Asserted
+       rather than restructured: a thrown guard would change the error a caller sees. */
     // If this Google/email user has a phone number in their token metadata, and there's a
     // separate phone-OTP account for that number, silently absorb it so the person has one account.
-    if (phone && !user.phone) {
-      const phoneAcct = await getOne('SELECT * FROM users WHERE phone = $1 AND id <> $2', [phone, user.id]);
+    if (phone && !user!.phone) {
+      const phoneAcct = await getOne('SELECT * FROM users WHERE phone = $1 AND id <> $2', [phone, user!.id]);
       if (phoneAcct) {
-        await absorbAccount(user.id, phoneAcct.id);
-        user = await getOne('UPDATE users SET phone = $1, updated_at = $2 WHERE id = $3 RETURNING *', [phone, nowIso(), user.id]);
+        await absorbAccount(user!.id, phoneAcct.id);
+        user = await getOne('UPDATE users SET phone = $1, updated_at = $2 WHERE id = $3 RETURNING *', [phone, nowIso(), user!.id]);
       }
     }
 
@@ -116,9 +118,12 @@ export async function parseAuth(req, _res, next) {
   if (header && header.startsWith('Bearer ')) {
     try {
       const payload = await verifySupabaseToken(header.substring(7));
-      const meta = payload.user_metadata || {};
-      const rawEmail = String(payload.email || meta.email || '').toLowerCase();
-      const phone = String(payload.phone || meta.phone || '').replace(/\D/g, '');
+      /* verifySupabaseToken can hand back a bare string for a non-JSON payload; only an
+         object carries the claims we read. */
+      const claims: any = typeof payload === 'object' && payload ? payload : {};
+      const meta = claims.user_metadata || {};
+      const rawEmail = String(claims.email || meta.email || '').toLowerCase();
+      const phone = String(claims.phone || meta.phone || '').replace(/\D/g, '');
       // A synthetic phone-login email is NOT a real email — drop it so the phone branch handles it.
       const email = SYNTHETIC_EMAIL.test(rawEmail) ? '' : rawEmail;
       if (email || phone) {
@@ -131,7 +136,7 @@ export async function parseAuth(req, _res, next) {
         // only its synthetic email and no phone claim — the account then silently cannot act.
         authLog(req, `token has no usable identity (email=${rawEmail ? 'synthetic' : 'none'}, phone=none)`);
       }
-    } catch (e) {
+    } catch (e: any) {
       // Still anonymous — but say WHY. This was a bare `catch {}`, which made an expired token, a
       // Supabase project mismatch and a database failure all look identical from outside: a bald
       // 401 "Authentication required" with nothing to diagnose from. The token itself is never

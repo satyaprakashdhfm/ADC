@@ -35,13 +35,13 @@ export function geoProvider() { return olaConfigured() ? 'olamaps' : 'nominatim'
 
 const digits = (s) => String(s ?? '').replace(/\D/g, '');
 
-async function getJson(url, opts = {}, ms = 7000) {
+async function getJson(url: string, opts: any = {}, ms = 7000): Promise<any> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   try {
     const r = await fetch(url, { ...opts, signal: ctrl.signal, headers: { Accept: 'application/json', ...(opts.headers || {}) } });
     if (!r.ok) return null;
-    return await r.json();
+    return await r.json() as any;
   } catch { return null; } finally { clearTimeout(timer); }
 }
 

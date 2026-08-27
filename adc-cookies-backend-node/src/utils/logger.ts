@@ -64,7 +64,7 @@ export function logApiCall({ service, method, endpoint, request, response, statu
   };
   try {
     fs.appendFileSync(fileFor(service), JSON.stringify(entry) + '\n');
-  } catch (e) {
+  } catch (e: any) {
     console.error(`[apiLogger] failed to write ${service} log: ${(e as Error)?.message ?? e}`);
   }
 }

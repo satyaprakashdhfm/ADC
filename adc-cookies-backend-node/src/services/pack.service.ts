@@ -131,7 +131,7 @@ export async function validatePackPicks(product, rawPicks) {
     : [];
   const byId = new Map(rows.map((r) => [r.id, r]));
 
-  const out = [];
+  const out: any[] = [];
   for (const slot of def.slots) {
     const forSlot = picks.filter((p) => p.slot === slot.key);
     const total = forSlot.reduce((n, p) => n + (Number(p.quantity) || 0), 0);

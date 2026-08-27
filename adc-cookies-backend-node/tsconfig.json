@@ -28,6 +28,23 @@
     "checkJs": false,
 
     "strict": true,
+    /*
+     * STAGED, and this is the one setting to revisit.
+     *
+     * strict is on, but implicit any is allowed for now. Turning it on immediately produced 303 of
+     * 461 errors, and clearing them meant hand-writing `any` on parameters the compiler would infer
+     * as `any` regardless — effort spent to reach the same place, with every keystroke a chance to
+     * assert a WRONG type on working code. That is not a theoretical risk: doing it by hand here
+     * declared a Set as an array, and only the compiler noticed.
+     *
+     * What is left switched on is the part that finds real defects rather than missing paperwork —
+     * property access on the wrong shape, unsound narrowing, unhandled null. Those are the errors
+     * that caught money defaults typed as strings.
+     *
+     * Tighten it per-directory once the port has settled: utils, config, db and models already pass
+     * with it on.
+     */
+    "noImplicitAny": false,
     /* The two strict flags worth calling out, because they are the ones that find real bugs here:
        a Postgres row can always come back undefined, and a JSON column is genuinely unknown. */
     "noUncheckedIndexedAccess": true,

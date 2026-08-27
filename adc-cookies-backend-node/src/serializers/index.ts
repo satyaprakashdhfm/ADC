@@ -121,7 +121,7 @@ export function serializeCoupon(c) {
 }
 
 // product is pre-loaded by the caller
-export function serializeCartItem(ci, product = null) {
+export function serializeCartItem(ci, product: any = null) {
   if (!ci) return null;
   return {
     id: ci.id, product: serializeProduct(product), productId: ci.product_id,
@@ -131,7 +131,7 @@ export function serializeCartItem(ci, product = null) {
 }
 
 // items are already serialized by the caller
-export function serializeCart(cart, items = []) {
+export function serializeCart(cart, items: any[] = []) {
   if (!cart) return null;
   return { id: cart.id, items, createdAt: cart.created_at, updatedAt: cart.updated_at };
 }
@@ -149,7 +149,7 @@ export function serializeOrderItem(oi) {
 // of short codes (e.g. 'DUPLICATE_CHARGE') the caller pre-computed from order_tracking rows —
 // admin-facing alerts that don't affect order/payment status itself. `pos` is the petpooja_orders
 // row for this order (admin views only) — whether the kitchen actually received the ticket.
-export function serializeOrder(order, items = [], address = null, payment = null, warningFlags = [], pos = null) {
+export function serializeOrder(order, items: any[] = [], address: any = null, payment: any = null, warningFlags: any[] = [], pos: any = null) {
   if (!order) return null;
   return {
     pos: pos ? { relayed: !!pos.relay_ok, petpoojaOrderId: pos.petpooja_order_id ?? null, attempts: pos.attempts, lastError: pos.last_error ?? null } : null,

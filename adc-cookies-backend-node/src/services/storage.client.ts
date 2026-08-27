@@ -148,7 +148,7 @@ function remember(path, url) {
 export async function signMediaRefs(refs) {
   const out = new Map();
   const unique = [...new Set((refs || []).filter(Boolean).map(String))];
-  const needed = [];
+  const needed: any[] = [];
 
   for (const ref of unique) {
     if (!isMediaRef(ref)) { out.set(ref, ref); continue; }
@@ -174,7 +174,7 @@ export async function signMediaRefs(refs) {
       if (url) { remember(path, url); out.set(ref, url); }
       else out.set(ref, ref);
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn(`[STORAGE] could not sign ${needed.length} object(s): ${err?.message || err}`);
     for (const { ref } of needed) out.set(ref, ref);
   }

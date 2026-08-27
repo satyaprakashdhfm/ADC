@@ -35,13 +35,16 @@ export const storeAuthConfigured = () => !!signingKey();
 export function signStoreToken(user) {
   return jwt.sign(
     { sub: String(user.id), store: user.store_code, username: user.username, kind: 'store' },
-    signingKey(),
-    { algorithm: 'HS256', issuer: ISSUER, audience: ISSUER, expiresIn: TOKEN_TTL_SECONDS }
+    /* signingKey returns a string OR the ArrayBuffer from hkdfSync. Cast rather than convert:
+       changing the key's runtime type could change the bytes jsonwebtoken signs with, which
+       would invalidate every store session in flight. */
+    signingKey() as jwt.Secret,
+    { algorithm: 'HS256', issuer: ISSUER, audience: ISSUER, expiresIn: TOKEN_TTL_SECONDS } as jwt.SignOptions
   );
 }
 
 function verifyStoreToken(token) {
-  const payload = jwt.verify(token, signingKey(), { algorithms: ['HS256'], issuer: ISSUER, audience: ISSUER });
+  const payload: any = jwt.verify(token, signingKey() as jwt.Secret, { algorithms: ['HS256'], issuer: ISSUER, audience: ISSUER });
   if (payload.kind !== 'store') throw new Error('not a store token');
   return payload;
 }

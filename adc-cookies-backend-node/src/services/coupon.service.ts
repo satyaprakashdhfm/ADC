@@ -123,7 +123,8 @@ export async function validateCoupon(code, orderAmount, userId = null) {
   }
   if (coupon.usage_limit != null) {
     const row = await getOne('SELECT COUNT(*) AS c FROM coupon_usage WHERE coupon_id = $1', [coupon.id]);
-    if (Number(row.c) >= coupon.usage_limit) throw new ApiError('Coupon usage limit reached');
+    // COUNT(*) always returns a row; the ?? keeps the compiler honest without changing behaviour.
+    if (Number(row?.c ?? 0) >= coupon.usage_limit) throw new ApiError('Coupon usage limit reached');
   }
   if (coupon.minimum_order_amount != null && Number(orderAmount) < coupon.minimum_order_amount) {
     throw new ApiError('Order amount below minimum for this coupon');

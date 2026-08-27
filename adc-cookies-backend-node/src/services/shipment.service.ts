@@ -29,7 +29,7 @@ export const SHIPROCKET_DISABLED = process.env.SHIPROCKET_DISABLED === 'true';
 // Every failure is PERSISTED (orders.shipment_error + a SHIPMENT_FAILED tracking row), not just
 // logged. The money is already taken by the time this runs, so "paid but never shipped" has to be
 // visible in the admin dashboard rather than buried in a Railway log line nobody reads.
-export async function autoCreateShipment(orderId, addressArg) {
+export async function autoCreateShipment(orderId, addressArg?) {
   const r = await attemptShipment(orderId, addressArg);
   if (r.ok) {
     // Clear any error left from an earlier failed attempt — this one succeeded.
@@ -44,7 +44,7 @@ export async function autoCreateShipment(orderId, addressArg) {
 }
 
 
-async function attemptShipment(orderId, addressArg) {
+async function attemptShipment(orderId, addressArg?) {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
   if (!order) { console.log(`[SHIPMENT] auto | order=${orderId} | skip=order_not_found`); return { ok: false, reason: 'order_not_found' }; }
   if (order.delhivery_waybill) { console.log(`[SHIPMENT] auto | order=${order.order_number} | skip=already_created (waybill=${order.delhivery_waybill})`); return { ok: true, waybill: order.delhivery_waybill }; }
@@ -142,7 +142,7 @@ async function attemptShipment(orderId, addressArg) {
          * common reason for a refusal — but the carrier's own message rarely says so plainly. Whoever
          * reads this later needs to know whether to top up or to investigate, and that difference is
          * one number. Looked up only on the failure path, so the happy path costs nothing. */
-        let assignError = null;
+        let assignError: string | null = null;
         if (!assigned.ok) {
           const reason = String(typeof assigned.reason === 'string' ? assigned.reason : JSON.stringify(assigned.reason ?? 'Carrier refused the booking'));
           const balance = await getWalletBalance().catch(() => null);
