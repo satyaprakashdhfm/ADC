@@ -1,6 +1,0 @@
-{
-  "enabledPlugins": {
-    "railway@claude-plugins-official": true,
-    "supabase@claude-plugins-official": true
-  }
-}
