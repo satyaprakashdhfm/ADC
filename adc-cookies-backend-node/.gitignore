@@ -5,3 +5,6 @@ node_modules/
 .env
 .vercel
 logs/
+
+# Build output — tsc emits this from src/, so it is never committed.
+dist/

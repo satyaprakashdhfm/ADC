@@ -4,6 +4,9 @@
 // It imports app.js, not server.js: server.js listens on a port, seeds and starts a poller, none
 // of which a serverless invocation should do. That separation is what removed the
 // `if (!process.env.VERCEL)` guard that used to wrap the whole of server.js.
-import app from '../src/app.js';
+//
+// It points at dist/ and not src/ because the source is TypeScript now. Whatever runs this has to
+// build first; Railway does (railway.toml buildCommand), and Railway is the live deployment.
+import app from '../dist/app.js';
 
 export default app;

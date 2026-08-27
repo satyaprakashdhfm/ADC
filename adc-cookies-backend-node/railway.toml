@@ -1,8 +1,12 @@
 [build]
 builder = "nixpacks"
+# TypeScript is compiled to dist/ before the container starts. Stated explicitly rather than left
+# to nixpacks inferring it from the package.json "build" script, because the start command below
+# depends on it having run — a silent skip would fail at boot with "cannot find dist/server.js".
+buildCommand = "npm run build"
 
 [deploy]
-startCommand = "node src/server.js"
+startCommand = "node dist/server.js"
 healthcheckPath = "/"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"

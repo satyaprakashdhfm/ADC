@@ -1,0 +1,48 @@
+{
+  /* Node 24 on Railway, ESM throughout ("type": "module").
+   *
+   * We COMPILE with tsc rather than leaning on Node's native type stripping. Stripping needs Node
+   * >= 22.18 and a developer machine here is on 22.16, so it would break local dev — and more to
+   * the point it only ERASES types, it never checks them, which is the entire reason for moving to
+   * TypeScript in the first place.
+   *
+   * module/moduleResolution NodeNext is what lets every existing import keep its ".js" extension
+   * while the file next to it is called ".ts". That is why this migration needs no import rewriting:
+   * under NodeNext, "./db/index.js" resolves to db/index.ts at compile time and to the emitted
+   * db/index.js at run time, which is correct in both worlds.
+   */
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true,
+
+    /* allowJs while the migration is in progress: a .ts file may import a .js one and vice versa,
+       so files convert one at a time instead of in a single flag day. checkJs stays OFF — type
+       errors in a file nobody has converted yet are noise, not signal. */
+    "allowJs": true,
+    "checkJs": false,
+
+    "strict": true,
+    /* The two strict flags worth calling out, because they are the ones that find real bugs here:
+       a Postgres row can always come back undefined, and a JSON column is genuinely unknown. */
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false
+  },
+  "include": ["src/**/*.ts", "src/**/*.js"],
+  "exclude": ["node_modules", "dist", "tests", "scripts", "drizzle"]
+}
