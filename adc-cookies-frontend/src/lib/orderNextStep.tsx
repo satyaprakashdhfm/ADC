@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react';
-import { shipStage, isCancelledStatus, isDeadShipment } from './orderFormat';
+import { shipStage, isCancelledStatus, isDeadShipment, formatMoney } from './orderFormat';
 
 /**
  * A single source of truth for the "What happens next" line shown across the
@@ -29,20 +29,47 @@ type NextStepSignals = {
    *  signal that read as generic "preparing" instead of "we're confirming this with the store". */
   hasStore?: boolean;
   storeAccepted?: boolean;
+  /** How much has actually gone back, in rupees. Lets a cancelled order name the figure instead of
+   *  saying "any payment", which is what it said when the API sent no number to say. */
+  amountRefunded?: number;
+  /** When the refund was raised, so the 5-7 working days can be counted from something real. */
+  refundedAt?: string | null;
 };
 
 /** Baked and boxed, but nobody has collected it yet — the gap between our kitchen and the carrier. */
 const isPacked = (s?: string | null) => /packed|ready for pickup|manifest/i.test(s || '');
 
-export function orderNextStep({ orderStatus, shipmentStatus, bookingStatus, carrier, paymentStatus, hasStore, storeAccepted }: NextStepSignals): string {
+/** "21 Aug" — short, because this sits inside a sentence. */
+function shortDate(v: string): string {
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? v : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
+export function orderNextStep({ orderStatus, shipmentStatus, bookingStatus, carrier, paymentStatus, hasStore, storeAccepted, amountRefunded, refundedAt }: NextStepSignals): string {
   const os = (orderStatus || '').toUpperCase();
   const paid = (paymentStatus || '').toUpperCase() === 'PAID';
   const intracity = (carrier || '').toUpperCase() === 'SHIPROCKET';
   const delhivery = (carrier || '').toUpperCase() === 'DELHIVERY';
+  const refunded = (amountRefunded ?? 0) > 0;
 
   // Terminal states first.
-  if (os === 'CANCELLED' || isCancelledStatus(orderStatus) || isDeadShipment(shipmentStatus))
-    return 'This order was cancelled. Any payment is refunded to source.';
+  if (os === 'CANCELLED' || isCancelledStatus(orderStatus) || isDeadShipment(shipmentStatus)) {
+    /*
+     * Name the amount when we know it.
+     *
+     * "Any payment is refunded to source" was all this could say while the API sent no refund
+     * figure — vague on the one screen where somebody wants a number, and it left people asking
+     * whether anything had happened at all. When a refund exists we say what went back and roughly
+     * when their bank will show it; the banks, not us, are what the remaining wait is.
+     */
+    if (refunded) {
+      const when = refundedAt ? ` on ${shortDate(refundedAt)}` : '';
+      return `Cancelled. ${formatMoney(amountRefunded)} was refunded${when} — banks usually take 5-7 working days to show it.`;
+    }
+    return paid
+      ? 'Cancelled. Your refund is on its way back to the account you paid from.'
+      : 'This order was cancelled. Nothing was charged.';
+  }
 
   const stage = Math.max(shipStage(shipmentStatus), shipStage(orderStatus));
   if (os === 'DELIVERED' || stage >= 3)

@@ -323,7 +323,12 @@ export async function claimEmailSpin(code: string, email: string, name: string):
 }
 
 /* ---- Orders ---- */
-export interface OrderPayment { provider: string; transactionId: string | null; status: string; paidAt: string | null; }
+export interface OrderPayment {
+  provider: string; transactionId: string | null; status: string; paidAt: string | null;
+  /** What has actually gone back, in rupees. 0 when nothing has been refunded. */
+  amountRefunded?: number;
+  refunded?: boolean;
+}
 
 export interface Order {
   id: number; orderNumber: string; totalAmount: number;

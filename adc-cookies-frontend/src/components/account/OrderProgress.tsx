@@ -102,9 +102,13 @@ export default function OrderProgress({ events, cancelled, eta }: {
 
   if (cancelled) {
     return (
+      /* Just the headline. The sentence underneath used to live here too, which meant a cancelled
+         order said "Any payment is refunded to source" twice on one screen — once in this box and
+         again in the OrderNextStep line directly below it. That line now names the actual amount
+         and date, so this box says what it is and leaves the explaining to the one place that can
+         do it properly. */
       <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-card)', background: 'var(--red-wash)', border: '1px solid var(--status-error)' }}>
         <strong style={{ color: 'var(--status-error)', fontSize: 'var(--text-sm)' }}>Cancelled</strong>
-        <p style={{ margin: '2px 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Any payment is refunded to source.</p>
       </div>
     );
   }

@@ -59,6 +59,14 @@ function ShipmentTracker({ order }: { order: Order }) {
 
   const cancelled = isCancelledStatus(order.orderStatus) || isDeadShipment(order.shipmentStatus);
 
+  /* When the refund was raised. The timeline already carries it — REFUNDED is written when Razorpay
+     confirms `refund.processed`, REFUND_INITIATED when it is first accepted — so no extra field is
+     needed on the order itself. Prefer the confirmed one; fall back to when it was raised. */
+  const refundedAt =
+    ourEvents.find((e) => e.status === 'REFUNDED')?.createdAt
+    ?? ourEvents.find((e) => e.status === 'REFUND_INITIATED')?.createdAt
+    ?? null;
+
   return (
     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 14, marginTop: 10 }}>
       {/* The stepper first — "where is it" is the question people open this page to ask, and a
@@ -69,7 +77,7 @@ function ShipmentTracker({ order }: { order: Order }) {
         cancelled={cancelled}
         eta={order.estimatedDelivery ? `Arriving by ${friendlyDate(order.estimatedDelivery)}` : null}
       />
-      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={order.shipmentStatus} bookingStatus={order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} style={{ margin: '12px 0' }} />
+      <OrderNextStep orderStatus={order.orderStatus} shipmentStatus={order.shipmentStatus} bookingStatus={order.shipmentStatus} carrier={order.carrier} paymentStatus={order.paymentStatus} hasStore={!!order.store} storeAccepted={!!order.store?.acceptedAt} amountRefunded={order.payment?.amountRefunded} refundedAt={refundedAt} style={{ margin: '12px 0' }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {order.delhiveryWaybill && (
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 700 }}>

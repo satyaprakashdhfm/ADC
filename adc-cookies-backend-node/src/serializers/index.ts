@@ -187,7 +187,14 @@ export function serializeOrder(order, items: any[] = [], address: any = null, pa
       : null,
     labelGenerated: !!order.label_generated,
     payment: payment
-      ? { provider: payment.provider, transactionId: payment.transaction_id, status: payment.status, paidAt: payment.paid_at }
+      ? {
+          provider: payment.provider, transactionId: payment.transaction_id,
+          status: payment.status, paidAt: payment.paid_at,
+          /* Number, not string: the money type parser hands these back as numbers, and the
+             storefront formats them as currency. 0 means nothing has been refunded. */
+          amountRefunded: Number(payment.amount_refunded) || 0,
+          refunded: (Number(payment.amount_refunded) || 0) > 0,
+        }
       : null,
     address: serializeAddress(address), items: items.map(serializeOrderItem),
     warningFlags,
@@ -196,7 +203,15 @@ export function serializeOrder(order, items: any[] = [], address: any = null, pa
 }
 
 // Latest payment row for an order (most recent first). Returns null if none.
-export const PAYMENT_SELECT = 'SELECT provider, transaction_id, status, paid_at FROM payments WHERE order_id = $1 ORDER BY id DESC LIMIT 1';
+/*
+ * amount_refunded comes with the payment now.
+ *
+ * Without it the storefront could only manage "Any payment is refunded to source" — vague on the
+ * one screen where a customer wants a number, because the number was never sent. It is stored on
+ * every refund and costs nothing to include.
+ */
+export const PAYMENT_SELECT =
+  'SELECT provider, transaction_id, status, paid_at, amount, amount_refunded FROM payments WHERE order_id = $1 ORDER BY id DESC LIMIT 1';
 
 export function serializeTracking(t) {
   if (!t) return null;

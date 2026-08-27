@@ -98,6 +98,42 @@ export async function createRefund(paymentId, { amountPaise, notes, speed = 'nor
   }
 }
 
+/*
+ * A refund's live state, straight from Razorpay.
+ *
+ * We create refunds and then learn what became of them only from webhooks. That is fine until a
+ * webhook is missed or someone asks "did this actually go through?" three days later — at which
+ * point our row says whatever the last event said and there is no way to confirm it without opening
+ * their dashboard.
+ *
+ * `status` is the answer to that question: `pending` (still moving), `processed` (money has left
+ * Razorpay), or `failed`. On a processed refund `acquirer_data.rrn` is the bank reference the
+ * customer's bank can be given if they say they cannot see it.
+ */
+export async function fetchRefund(refundId) {
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${BASE}/refunds/${refundId}`, {
+      method: 'GET',
+      headers: { Authorization: authHeader() },
+    });
+    const data: any = await res.json().catch(() => null);
+    const durationMs = Date.now() - t0;
+    if (!res.ok) {
+      console.log(`[RAZORPAY] refund-fetch | ✗ refund=${refundId} | status=${res.status}`);
+      logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/refunds/${refundId}`, response: data, status: res.status, ok: false, durationMs });
+      return { ok: false, reason: data?.error?.description || `api_error_${res.status}` };
+    }
+    console.log(`[RAZORPAY] refund-fetch | ✓ refund=${refundId} | status=${data.status} | amount=${data.amount}`);
+    logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/refunds/${refundId}`, response: data, status: res.status, ok: true, durationMs });
+    return { ok: true, refund: data };
+  } catch (err: any) {
+    console.log(`[RAZORPAY] refund-fetch | ✗ network_error: ${err.message}`);
+    logApiCall({ service: 'razorpay', method: 'GET', endpoint: `/v1/refunds/${refundId}`, ok: false, durationMs: Date.now() - t0, error: err.message });
+    return { ok: false, reason: 'network_error' };
+  }
+}
+
 // Fetch a payment's actual server-side status/amount directly from Razorpay — per Razorpay's
 // own Third Party Validation best-practices doc: "Check Payment/Order Status Before Providing
 // Services". Signature verification proves the data wasn't tampered with in transit, but this
