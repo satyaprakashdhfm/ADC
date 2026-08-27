@@ -24,7 +24,7 @@ export const payments = pgTable("payments", {
 	cardLast4: text("card_last4"),
 	vpa: text(),
 	bank: text(),
-	amountRefunded: money("amount_refunded", { precision: 12, scale:  2 }).default('0').notNull(),
+	amountRefunded: money("amount_refunded", { precision: 12, scale:  2 }).default(0).notNull(),
 }, (table) => [
 	index("payments_order_id_idx").using("btree", table.orderId.asc().nullsLast().op("int4_ops")),
 	foreignKey({

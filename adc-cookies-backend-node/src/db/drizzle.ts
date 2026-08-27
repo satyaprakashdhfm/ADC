@@ -25,12 +25,13 @@
  * porting one service at a time safe rather than a flag day.
  */
 import { drizzle } from 'drizzle-orm/node-postgres';
+import type { PoolClient } from 'pg';
 import { pool } from './index.js';
 import * as schema from '../models/index.js';
 
 export const db = drizzle(pool, { schema });
 
 /** Run Drizzle work inside an existing node-postgres client (i.e. inside withTransaction). */
-export const dbFor = (client) => drizzle(client, { schema });
+export const dbFor = (client: PoolClient) => drizzle(client, { schema });
 
 export { schema };

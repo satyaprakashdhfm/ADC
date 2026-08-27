@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bannerIsLive } from '../src/services/siteContent.service.js';
+import { bannerIsLive } from '../dist/services/siteContent.service.js';
 
 const at = (s) => new Date(s);
 const base = { enabled: true, desktopRef: 'media/hero.jpg' };

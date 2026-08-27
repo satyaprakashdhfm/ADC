@@ -1,8 +1,10 @@
 // One-time: normalize existing addresses' city (canonical + Title Case) and state (Title Case),
 // so analytics group cleanly without waiting for rows to be re-saved. Idempotent.
+// Imports from dist/, not src/: the source is TypeScript now, so run `npm run build`
+// before this script.
 import 'dotenv/config';
-const db = await import('../src/db/index.js');
-const { canonicalCity, titleCase } = await import('../src/routes/addresses.routes.js');
+const db = await import('../dist/db/index.js');
+const { canonicalCity, titleCase } = await import('../dist/routes/addresses.routes.js');
 
 const rows = await db.getAll('SELECT id, city, state FROM addresses');
 let changed = 0;

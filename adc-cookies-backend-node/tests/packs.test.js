@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { packFor, isPackProduct, packSize, describePicks, summarisePicks } from '../src/services/pack.service.js';
+import { packFor, isPackProduct, packSize, describePicks, summarisePicks } from '../dist/services/pack.service.js';
 
 const eightPack = { id: 39, name: '8 Pack Cookies', category: 'COMBOS' };
 

@@ -14,7 +14,7 @@ import path from 'node:path';
 const LOG_DIR = path.join(process.cwd(), 'logs');
 try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch { /* best-effort */ }
 
-function fileFor(service) {
+function fileFor(service: string): string {
   const day = new Date().toISOString().slice(0, 10);
   return path.join(LOG_DIR, `${service}-${day}.log`);
 }
@@ -24,18 +24,32 @@ const REDACT_KEYS = new Set([
   'razorpaysignature', 'signature', 'jwt_secret', 'service_role_key',
 ]);
 
-function redact(value) {
+function redact(value: unknown): unknown {
   if (value == null || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map(redact);
-  const out = {};
-  for (const [k, v] of Object.entries(value)) {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
     out[k] = REDACT_KEYS.has(k.toLowerCase()) ? '[redacted]' : redact(v);
   }
   return out;
 }
 
-// service: 'razorpay' | 'delhivery' | 'shadowfax'
-export function logApiCall({ service, method, endpoint, request, response, status, ok, durationMs, error }) {
+/** Which outbound integration a log line belongs to. */
+export type ApiLogService = 'razorpay' | 'delhivery' | 'shadowfax' | 'shiprocket' | 'petpooja' | 'messagecentral';
+
+export interface ApiLogEntry {
+  service: ApiLogService | string;
+  method: string;
+  endpoint: string;
+  request?: unknown;
+  response?: unknown;
+  status?: number | null;
+  ok?: boolean | null;
+  durationMs?: number | null;
+  error?: string | null;
+}
+
+export function logApiCall({ service, method, endpoint, request, response, status, ok, durationMs, error }: ApiLogEntry): void {
   const entry = {
     ts: new Date().toISOString(),
     service,
@@ -51,6 +65,6 @@ export function logApiCall({ service, method, endpoint, request, response, statu
   try {
     fs.appendFileSync(fileFor(service), JSON.stringify(entry) + '\n');
   } catch (e) {
-    console.error(`[apiLogger] failed to write ${service} log: ${e.message}`);
+    console.error(`[apiLogger] failed to write ${service} log: ${(e as Error)?.message ?? e}`);
   }
 }

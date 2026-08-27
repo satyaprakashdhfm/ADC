@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkEnv } from '../src/config/env.js';
+import { checkEnv } from '../dist/config/env.js';
 
 const env = (keys) => Object.fromEntries(keys.map((k) => [k, 'x']));
 

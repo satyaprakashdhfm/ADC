@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateDiscount } from '../src/services/coupon.service.js';
+import { calculateDiscount } from '../dist/services/coupon.service.js';
 
 const pct = (v, cap = null) => ({ discount_type: 'PERCENTAGE', discount_value: v, maximum_discount: cap });
 const flat = (v, cap = null) => ({ discount_type: 'FLAT', discount_value: v, maximum_discount: cap });

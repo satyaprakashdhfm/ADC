@@ -10,15 +10,17 @@ export async function seedIfEmpty() {
   console.log('Seeding dummy data...');
 
   const ts = nowIso();
-  const hash = (pw) => bcrypt.hash(pw, 10);
+  const hash = (pw: string) => bcrypt.hash(pw, 10);
 
-  const dateOffset = (days) => {
+  const dateOffset = (days: number) => {
     const d = new Date();
     d.setDate(d.getDate() + days);
     return d.toISOString().slice(0, 10);
   };
 
-  const q = (sql, p = []) => pool.query(sql, p);
+  /* Untyped params on purpose: this is a seed script full of literal tuples, and every one of
+     them would otherwise need widening. The `any[]` is the honest description of what it takes. */
+  const q = (sql: string, p: any[] = []) => pool.query(sql, p);
 
   /* No seeded admin user. Admin is an allowlisted phone number in admin_accounts with its own
      OTP sign-in, so a role on a users row grants nothing — and a default admin email/password in a
@@ -45,7 +47,12 @@ export async function seedIfEmpty() {
   );
   console.log('Addresses created');
 
-  const ins = async (o) => {
+  /** One seeded product. Loose on purpose — these are literals in this file and nowhere else. */
+  const ins = async (o: {
+    name: string; category: string; description?: string | null; price: number;
+    stock?: number | null; images?: string | null; options?: string | null;
+    menuGroup?: string | null; tag?: string | null; featured?: boolean;
+  }): Promise<number> => {
     const { rows: [r] } = await q(
       `INSERT INTO products (name, category, description, price, stock_quantity, images, options,
                              is_available, menu_group, tag, featured, created_at, updated_at)
@@ -53,10 +60,10 @@ export async function seedIfEmpty() {
       [o.name, o.category, o.description, o.price, o.stock, o.images, o.options,
        o.menuGroup, o.tag, !!o.featured, ts, ts]
     );
-    return r.id;
+    return r!.id as number;
   };
 
-  const img = (file) => JSON.stringify([`/assets/products/${file}`]);
+  const img = (file: string) => JSON.stringify([`/assets/products/${file}`]);
 
   // --- Cookies (the real ADC menu) ---
   const p1 = await ins({ name: 'Chocolate Chip', category: 'COOKIES', price: 60, stock: 150,

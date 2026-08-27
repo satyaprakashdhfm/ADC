@@ -2,8 +2,10 @@
 // and its seed customer "Priya Sharma" / priya@example.com, user id 2) — confirmed via seed.js
 // lines 29/130/138 to be fabricated demo content from initial project setup, not a real customer
 // or a product of any current-code bug. Zero other real activity found under this user.
+// Imports from dist/, not src/: the source is TypeScript now, so run `npm run build`
+// before this script.
 import 'dotenv/config';
-import { query } from '../src/db/index.js';
+import { query } from '../dist/db/index.js';
 
 async function main() {
   await query('DELETE FROM payments WHERE order_id = 1');

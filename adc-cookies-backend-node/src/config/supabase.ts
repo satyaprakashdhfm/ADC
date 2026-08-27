@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient, SupabaseClientOptions } from '@supabase/supabase-js';
 import ws from 'ws';
 
 /*
@@ -15,17 +16,23 @@ const URL = process.env.SUPABASE_URL || '';
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const ANON_KEY = process.env.ANON_KEY || '';
 
-export const supabaseConfigured = () => !!(URL && SERVICE_ROLE_KEY && ANON_KEY);
+export const supabaseConfigured = (): boolean => !!(URL && SERVICE_ROLE_KEY && ANON_KEY);
 
-let _admin = null;
-let _anon = null;
+let _admin: SupabaseClient | null = null;
+let _anon: SupabaseClient | null = null;
 
-const serverClientOptions = {
+const serverClientOptions: SupabaseClientOptions<'public'> = {
   auth: { autoRefreshToken: false, persistSession: false },
-  realtime: { transport: ws },
+  /*
+   * Node has no global WebSocket on the versions we support, so supabase-js is handed `ws`.
+   * Cast because their RealtimeClientOptions types `transport` as a narrower constructor than the
+   * `ws` class declares — a types-only disagreement. This is the documented Node workaround and
+   * has been running in production; nothing about the value changes here.
+   */
+  realtime: { transport: ws as unknown as NonNullable<SupabaseClientOptions<'public'>['realtime']>['transport'] },
 };
 
-export function adminClient() {
+export function adminClient(): SupabaseClient {
   if (!URL || !SERVICE_ROLE_KEY) {
     throw new Error('Supabase admin is not configured (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).');
   }
@@ -35,7 +42,7 @@ export function adminClient() {
   return _admin;
 }
 
-export function anonClient() {
+export function anonClient(): SupabaseClient {
   if (!URL || !ANON_KEY) {
     throw new Error('Supabase is not configured (set SUPABASE_URL and ANON_KEY).');
   }

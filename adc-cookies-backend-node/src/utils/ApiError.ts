@@ -8,7 +8,9 @@
  * to get at an error class. The dependency pointed the wrong way round.
  */
 export class ApiError extends Error {
-  constructor(message, status = 400) {
+  readonly status: number;
+
+  constructor(message: string, status = 400) {
     super(message);
     this.status = status;
   }

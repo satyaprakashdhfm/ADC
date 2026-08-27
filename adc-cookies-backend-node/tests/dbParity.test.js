@@ -21,8 +21,8 @@ let db, schema, getOne, reachable = false;
 
 before(async () => {
   try {
-    ({ getOne } = await import('../src/db/index.js'));
-    ({ db, schema } = await import('../src/db/drizzle.js'));
+    ({ getOne } = await import('../dist/db/index.js'));
+    ({ db, schema } = await import('../dist/db/drizzle.js'));
     await getOne('SELECT 1');
     reachable = true;
   } catch { reachable = false; }

@@ -9,7 +9,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shiprocketStatusToOrderStatus as map } from '../src/services/shiprocket.client.js';
+import { shiprocketStatusToOrderStatus as map } from '../dist/services/shiprocket.client.js';
 
 test('a delivered parcel is DELIVERED', () => {
   assert.equal(map('DELIVERED'), 'DELIVERED');

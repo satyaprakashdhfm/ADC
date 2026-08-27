@@ -1,4 +1,5 @@
 import pg from 'pg';
+import type { PoolClient, QueryResult } from 'pg';
 
 const { Pool } = pg;
 
@@ -36,12 +37,31 @@ export const pool = new Pool(
     : { max: 10 }
 );
 
-export const query  = (sql, p = []) => pool.query(sql, p);
-export const getOne = async (sql, p = []) => (await pool.query(sql, p)).rows[0] ?? null;
-export const getAll = async (sql, p = []) => (await pool.query(sql, p)).rows;
-export const nowIso = () => new Date().toISOString();
+/*
+ * A row, as far as the raw helpers are concerned.
+ *
+ * Deliberately loose. These three run arbitrary SQL, so there is no honest way to know the shape
+ * of what comes back — pretending otherwise would be a type that lies. Callers that want a real
+ * shape should either say so (`getOne<Order>(...)`) or, better, query through Drizzle, where the
+ * shape is derived from the schema rather than asserted.
+ */
+export type Row = Record<string, any>;
 
-export async function withTransaction(fn) {
+/** A parameter Postgres can bind. */
+export type Param = unknown;
+
+export const query = <T extends Row = Row>(sql: string, p: Param[] = []): Promise<QueryResult<T>> =>
+  pool.query<T>(sql, p as any[]);
+
+export const getOne = async <T extends Row = Row>(sql: string, p: Param[] = []): Promise<T | null> =>
+  (await pool.query<T>(sql, p as any[])).rows[0] ?? null;
+
+export const getAll = async <T extends Row = Row>(sql: string, p: Param[] = []): Promise<T[]> =>
+  (await pool.query<T>(sql, p as any[])).rows;
+
+export const nowIso = (): string => new Date().toISOString();
+
+export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

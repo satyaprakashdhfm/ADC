@@ -24,15 +24,19 @@
 import { customType } from 'drizzle-orm/pg-core';
 
 /** NUMERIC -> JS number. Mirrors setTypeParser(1700, parseFloat). */
-export const money = customType({
+export const money = customType<{
+  data: number;
+  driverData: string;
+  config: { precision?: number; scale?: number };
+}>({
   dataType: (c) => `numeric(${c?.precision ?? 12}, ${c?.scale ?? 2})`,
-  fromDriver: (v) => (v === null || v === undefined ? v : Number.parseFloat(v)),
+  fromDriver: (v) => (v === null || v === undefined ? (v as unknown as number) : Number.parseFloat(v)),
 });
 
 /** TIMESTAMPTZ -> ISO string. Mirrors setTypeParser(1184, v => new Date(v).toISOString()). */
-export const tstz = customType({
+export const tstz = customType<{ data: string; driverData: string }>({
   dataType: () => 'timestamp with time zone',
-  fromDriver: (v) => (v === null || v === undefined ? v : new Date(v).toISOString()),
+  fromDriver: (v) => (v === null || v === undefined ? (v as unknown as string) : new Date(v).toISOString()),
 });
 
 /*
@@ -40,7 +44,7 @@ export const tstz = customType({
  * Load-bearing: coupon expiry is compared directly against a 'YYYY-MM-DD' string, and a Date would
  * stringify as "Mon Aug 11 2026 …" and expire coupons a day early.
  */
-export const dateOnly = customType({
+export const dateOnly = customType<{ data: string; driverData: string }>({
   dataType: () => 'date',
   fromDriver: (v) => v,
 });

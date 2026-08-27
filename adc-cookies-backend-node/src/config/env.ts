@@ -22,10 +22,22 @@
  * one deploy, not four.
  */
 
-const present = (v) => typeof v === 'string' && v.trim() !== '';
+/** The environment as we read it — process.env's own shape, or a stand-in for it in a test. */
+export type Env = Record<string, string | undefined>;
+
+/** Which integration a rule is about. Keyed so a typo in `when` is a compile error, not a no-op. */
+type Integration = 'delhivery' | 'petpooja' | 'shiprocket' | 'messageCentral';
+
+interface HostRule {
+  key: string;
+  when: Integration;
+  why: string;
+}
+
+const present = (v: string | undefined): boolean => typeof v === 'string' && v.trim() !== '';
 
 /** Which integrations hold credentials, and are therefore going to make real calls. */
-function configured(env) {
+function configured(env: Env): Record<Integration, boolean> {
   return {
     delhivery: present(env.DELIVERY_API_TOKEN) || present(env.DELHIVERY_API_TOKEN),
     petpooja: present(env.PETPOOJA_APP_KEY || env.PETPOOJA_API)
@@ -44,7 +56,7 @@ function configured(env) {
  * All four are errors. Shiprocket's and Message Central's defaults are production hosts too — the
  * same trap, with a real wallet and real SMS behind them.
  */
-const MUST_BE_EXPLICIT = [
+const MUST_BE_EXPLICIT: HostRule[] = [
   { key: 'DELHIVERY_BASE_URL', when: 'delhivery',
     why: 'defaults to track.delhivery.com — PRODUCTION. On staging that books real shipments against the real wallet.' },
   { key: 'PETPOOJA_BASE_URL', when: 'petpooja',
@@ -59,16 +71,16 @@ const MUST_BE_EXPLICIT = [
    Railway service set them, and turning them into errors would have taken both environments down
    on the next deploy. They are now set on adc-backend and adc-backend Copy, and in the local .env,
    so the rule applies evenly: if an integration holds credentials, it names its host. */
-const SHOULD_BE_EXPLICIT = [];
+const SHOULD_BE_EXPLICIT: { key: string; when: Integration; fallback: string }[] = [];
 
 /**
  * Check the environment. Returns the warnings; throws with every problem listed if any outbound
  * host that must be explicit is missing.
  */
-export function checkEnv(env = process.env) {
+export function checkEnv(env: Env = process.env): string[] {
   const on = configured(env);
-  const errors = [];
-  const warnings = [];
+  const errors: string[] = [];
+  const warnings: string[] = [];
 
   for (const { key, when, why } of MUST_BE_EXPLICIT) {
     if (on[when] && !present(env[key])) {
@@ -93,7 +105,7 @@ export function checkEnv(env = process.env) {
 }
 
 /** Run the check and report. Called once, from server.js, before anything opens a connection. */
-export function assertEnv(env = process.env) {
+export function assertEnv(env: Env = process.env): string[] {
   const warnings = checkEnv(env);
   for (const w of warnings) console.warn(`[CONFIG] ⚠ ${w}`);
   return warnings;
