@@ -1,4 +1,6 @@
-import { getOne, query } from '../db/index.js';
+import { eq } from 'drizzle-orm';
+import { db } from '../db/drizzle.js';
+import { siteSettings } from '../models/siteSetting.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { isMediaRef, signMediaRefs } from './storage.client.js';
 
@@ -125,12 +127,25 @@ export function bannerIsLive(b, now = new Date()) {
   return true;
 }
 
+/** One site_settings value, or null. The whole table is key/value, so this is every read here. */
+async function setting(key) {
+  const [row] = await db.select({ value: siteSettings.value })
+    .from(siteSettings).where(eq(siteSettings.key, key)).limit(1);
+  return row?.value ?? null;
+}
+
+/** Upsert one site_settings value. */
+async function putSetting(key, value) {
+  await db.insert(siteSettings).values({ key, value })
+    .onConflictDoUpdate({ target: siteSettings.key, set: { value } });
+}
+
 /** The stored settings, unresolved. Never throws — a corrupt row must not take the home page down. */
 export async function readHeroBanner() {
-  const row = await getOne('SELECT value FROM site_settings WHERE key = $1', [KEY]);
-  if (!row?.value) return { ...EMPTY };
+  const value = await setting(KEY);
+  if (!value) return { ...EMPTY };
   try {
-    const saved = JSON.parse(row.value);
+    const saved = JSON.parse(value);
     return {
       desktopRef: saved.desktopRef || null,
       mobileRef: saved.mobileRef || null,
@@ -149,11 +164,7 @@ export async function readHeroBanner() {
 
 export async function writeHeroBanner(input) {
   const clean = normaliseHeroBanner(input);
-  await query(
-    `INSERT INTO site_settings (key, value) VALUES ($1, $2)
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-    [KEY, JSON.stringify(clean)]
-  );
+  await putSetting(KEY, JSON.stringify(clean));
   return clean;
 }
 
@@ -233,10 +244,10 @@ export function normaliseBannerMessages(list) {
 }
 
 export async function readBannerMessages() {
-  const row = await getOne("SELECT value FROM site_settings WHERE key = 'banner_messages'");
-  if (row?.value) {
+  const value = await setting('banner_messages');
+  if (value) {
     try {
-      const saved = normaliseBannerMessages(JSON.parse(row.value));
+      const saved = normaliseBannerMessages(JSON.parse(value));
       if (saved.length) return saved;
     } catch {
       // Corrupt JSON should show the defaults, not take the ribbon down with it.
@@ -247,21 +258,17 @@ export async function readBannerMessages() {
    * first read seeds the editable list with exactly what was already on screen — the offer first,
    * where it was — rather than dropping it the moment this panel replaces the old one.
    */
-  const legacy = await getOne("SELECT value FROM site_settings WHERE key = 'header_offer'");
-  const offer = legacy?.value ? String(legacy.value).trim() : '';
+  const legacy = await setting('header_offer');
+  const offer = legacy ? String(legacy).trim() : '';
   return offer ? [offer, ...DEFAULT_BANNER_MESSAGES] : [...DEFAULT_BANNER_MESSAGES];
 }
 
 export async function writeBannerMessages(list) {
   const clean = normaliseBannerMessages(list);
   if (!clean.length) throw new ApiError('Keep at least one banner message — the ribbon is part of the page layout.');
-  await query(
-    `INSERT INTO site_settings (key, value) VALUES ('banner_messages', $1)
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-    [JSON.stringify(clean)]
-  );
+  await putSetting('banner_messages', JSON.stringify(clean));
   // The seed above reads header_offer only until something is saved here. Once it is, that key is
   // stale data that would reappear if this row were ever deleted — so retire it on first save.
-  await query("DELETE FROM site_settings WHERE key = 'header_offer'");
+  await db.delete(siteSettings).where(eq(siteSettings.key, 'header_offer'));
   return clean;
 }
