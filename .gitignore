@@ -40,4 +40,4 @@ postman/ADC-ALL-INTEGRATIONS.postman_collection.json
 # Runtime logs
 logs/
 *.log
-./claude
+.claude/
