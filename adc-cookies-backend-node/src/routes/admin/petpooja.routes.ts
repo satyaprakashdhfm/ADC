@@ -230,10 +230,23 @@ router.get('/attention', async (_req, res) => {
                   WHERE d.order_id = o.id AND d.created_at > t.created_at
                     AND d.status = replace(t.status, '_CANCEL_FAILED', '_CANCELLED'))
              ORDER BY t.created_at DESC LIMIT 100`),
-    // Money reversed or contested after the fact.
+    /*
+     * Money reversed or contested after the fact — and only where somebody still has to DO
+     * something.
+     *
+     * 'REFUNDED' used to be in this list, which meant every refund that worked sat here forever.
+     * That is the successful end of the refund path, written when Razorpay confirms
+     * refund.processed; there is nothing to act on. This panel's whole contract is "each list is
+     * something a human has to act on", and a list that fills up with completed work is a list
+     * people stop opening — which defeats the three that genuinely need a person:
+     *
+     *   DISPUTE_OPENED          a chargeback; somebody must respond to the bank
+     *   REFUND_FAILED           the money did NOT move and must be issued by hand
+     *   FULFILLED_THEN_REFUNDED refunded while still live downstream — decide whether to cancel
+     */
     getAll(`SELECT DISTINCT o.id, o.order_number, t.status, t.remarks, t.created_at
               FROM orders o JOIN order_tracking t ON t.order_id = o.id
-             WHERE t.status IN ('DISPUTE_OPENED','REFUNDED','REFUND_FAILED','FULFILLED_THEN_REFUNDED')
+             WHERE t.status IN ('DISPUTE_OPENED','REFUND_FAILED','FULFILLED_THEN_REFUNDED')
              ORDER BY t.created_at DESC LIMIT 100`),
     /*
      * Same-day orders the carrier has now been asked to ship three times without finding a rider.

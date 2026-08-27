@@ -1,4 +1,5 @@
 import { type Order } from '@/lib/api';
+import { money } from '../shared/format';
 
 /** Every state an order can be put into, for the per-row status dropdown. */
 export const ORDER_STATUSES = ['PLACED', 'CONFIRMED', 'PREPARING', 'PACKED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
@@ -24,11 +25,23 @@ export const isDeadOrder = (o: Order): boolean => o.orderStatus === 'CANCELLED';
 /**
  * Why this order is in the dead list, in the words an admin needs.
  *
- * The distinction that matters is whether money changed hands: an unpaid abandoned checkout is
- * housekeeping, whereas a cancelled order that was PAID is a refund somebody still owes.
+ * The distinction that matters is whether money is still OUT: an unpaid abandoned checkout is
+ * housekeeping, a paid order awaiting a refund is work, and a refunded one is finished.
+ *
+ * That last case used to be indistinguishable from the second. This read orders.paymentStatus,
+ * which stays 'PAID' for the life of the order — refunding does not change it, because it records
+ * that the order WAS paid. The refund lives on the payment row instead. So a fully refunded order
+ * kept saying "check the refund" and wearing a "refund owed" badge forever, and an admin had no way
+ * to tell it from one where the money genuinely had not gone back.
+ *
+ * Now it reads the refund itself, and says the same thing the customer is being told.
  */
 export function deadOrderReason(o: Order): { text: string; owed: boolean } {
-  if (o.paymentStatus === 'PAID') return { text: 'Cancelled after payment — check the refund', owed: true };
+  const refunded = (o.payment?.amountRefunded ?? 0) > 0;
+  if (refunded) {
+    return { text: `Cancelled — ${money(o.payment?.amountRefunded ?? 0)} refunded`, owed: false };
+  }
+  if (o.paymentStatus === 'PAID') return { text: 'Cancelled after payment — refund still owed', owed: true };
   if (o.paymentStatus === 'CANCELLED') return { text: 'Payment not completed — checkout closed before paying', owed: false };
   return { text: 'Cancelled before payment', owed: false };
 }
