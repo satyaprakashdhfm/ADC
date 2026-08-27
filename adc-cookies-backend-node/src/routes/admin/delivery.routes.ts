@@ -28,10 +28,10 @@ router.get('/delivery/stores', async (_req, res) => {
     return res.json({ configured: false, stores: ADC_STORES.map((s) => ({ ...s, verified: null })), verifiedCount: 0 });
   }
   const { ok, reason, pickups } = await listPickups();
-  const byNick = new Map(pickups.map((p) => [p.nickname.toLowerCase(), p]));
+  const byNick = new Map(pickups.map((p): [any, any] => [p.nickname.toLowerCase(), p]));
   const stores = ADC_STORES.map((s) => {
     const nick = String(s.pickupName || '').trim().toLowerCase();
-    const p = nick ? byNick.get(nick) : null;
+    const p: any = nick ? byNick.get(nick) : null;
     return {
       name: s.name, city: s.city, state: s.state, pincode: s.pincode,
       latitude: s.latitude, longitude: s.longitude,
@@ -130,7 +130,10 @@ router.get('/delivery/shipping-cost', async (req, res) => {
   const originPin = wh?.pincode || process.env.ORIGIN_PINCODE || '';
   if (!originPin) throw new ApiError('No default warehouse / origin pincode configured', 400);
   if (!destPin) throw new ApiError('destPin is required', 400);
-  const result = await getShippingCost({ originPin, destPin, weight: Number(weight), cod: Number(cod), mode });
+  const result = await getShippingCost({
+    originPin: String(originPin ?? ''), destPin: String(destPin ?? ''),
+    weight: Number(weight), cod: Number(cod), mode: String(mode ?? 'S'),
+  });
   res.json(result);
 });
 

@@ -398,7 +398,7 @@ router.get('/delivery/label', async (req, res) => {
     }
 
     // JSON response: pull the pre-signed PDF link and stream that.
-    const data = await upstream.json().catch(() => null);
+    const data: any = await upstream.json().catch(() => null);
     const pkg = Array.isArray(data?.packages) ? data.packages[0] : null;
     const pdfUrl = pkg?.pdf_download_link || pkg?.pdf_download_url || data?.pdf_download_link || null;
     if (!pdfUrl) {
@@ -407,7 +407,7 @@ router.get('/delivery/label', async (req, res) => {
     }
     const pdfRes = await fetch(pdfUrl);
     return sendPdf(await pdfRes.arrayBuffer(), 'via link');
-  } catch (e) {
+  } catch (e: any) {
     console.log(`[ADMIN-LABEL] wbns=${waybills} | ✗ ${e.message}`);
     throw new ApiError('Could not fetch label from Delhivery', 502);
   }
@@ -434,7 +434,7 @@ router.post('/delivery/pickup-request', async (req, res) => {
    */
   if (!result.ok) {
     const raw = JSON.stringify(result.reason ?? result.detail ?? '').toLowerCase();
-    let hint = null;
+    let hint: any = null;
     if (/balance|wallet|insufficient|recharge|fund/.test(raw)) {
       hint = 'Your Delhivery wallet is below the ₹500 minimum needed to book a pickup. Top it up in the Delhivery panel and try again. (Prepaid and COD both require this.)';
     } else if (/already|exist|duplicate|open|pending/.test(raw)) {

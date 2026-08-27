@@ -50,10 +50,10 @@ router.get('/area', async (req, res) => {
     const open = await activeZoneStores(pin);
     return res.json({
       pincode: pin, mode: 'intracity', open: open.length > 0,
-      city: zone[0].city,
+      city: zone![0]!.city,
       reason: open.length ? null : 'stores_closed',
       message: open.length ? null
-        : `Same-day delivery around ${zone[0].city} is paused right now. Please try again shortly.`,
+        : `Same-day delivery around ${zone![0]!.city} is paused right now. Please try again shortly.`,
     });
   }
 
@@ -77,7 +77,7 @@ router.get('/tat', async (req, res) => {
   if (!delhiveryConfigured()) throw new ApiError('Delivery checks are not configured yet.', 503);
   const origin = req.query.origin || (await getOriginPin());
   if (!origin) return res.json({ ok: false, reason: 'origin_not_set' });
-  res.json(await expectedTat({ originPin: origin, destinationPin: req.query.destination, mot: req.query.mot || 'S' }));
+  res.json(await expectedTat({ originPin: origin, destinationPin: String(req.query.destination ?? ''), mot: String(req.query.mot || 'S') }));
 });
 
 // GET /api/delivery/check?pincode=560001
@@ -221,7 +221,7 @@ router.get('/check', async (req, res) => {
            stand behind, printed on the screen where somebody decides to pay. Same-day is the thing
            that is actually true, and it is what the footer and the store copy already say. */
         etaLabel: 'Same-day', tat: null, expectedDeliveryDate: null, pincode: pin });
-    } catch (e) {
+    } catch (e: any) {
       // A carrier outage must not silently become a Delhivery quote — say we cannot confirm.
       console.log(`[DELIVERY] check | pin=${pin} | hyperlocal quote errored (${e?.message || e})`);
       return unavailable('same_day_unavailable', 'We could not confirm same-day delivery just now. Please try again in a moment.');

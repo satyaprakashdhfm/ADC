@@ -84,7 +84,24 @@ function tryParseJson(text) {
 /* 3 — Pincode Serviceability                                           */
 /* GET /c/api/pin-codes/json/?filter_codes=<pin>                       */
 /* ------------------------------------------------------------------ */
-export async function checkServiceability(pincode) {
+/**
+ * What Delhivery says about a pincode.
+ *
+ * embargo / cod / prepaid are present only when the lookup actually succeeded — the early returns
+ * for an invalid pincode or an API error carry serviceable:false and a reason and nothing else.
+ * Declared as one optional-tailed shape rather than a union so callers can read `.cod` after
+ * checking `.serviceable`, which is how every one of them already reads it.
+ */
+export interface ServiceabilityResult {
+  serviceable: boolean;
+  reason: string;
+  pincode?: string;
+  embargo?: boolean;
+  cod?: boolean;
+  prepaid?: boolean;
+}
+
+export async function checkServiceability(pincode): Promise<ServiceabilityResult> {
   const pin = String(pincode || '').replace(/\D/g, '');
   if (!/^\d{6}$/.test(pin)) {
     log('serviceability | SKIP', `pin=${pin} | ✗ invalid_pincode`);

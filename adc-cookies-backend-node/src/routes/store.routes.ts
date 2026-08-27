@@ -1,3 +1,7 @@
+/*
+ * req.storeUser is asserted non-null throughout this file: every route sits behind
+ * router.use(requireStoreUser), which 401s before a handler runs.
+ */
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { getOne, getAll, query, nowIso } from '../db/index.js';
@@ -68,7 +72,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 router.use(requireStoreUser);
 
 router.get('/me', (req, res) => {
-  const { store, ...u } = req.storeUser;
+  const { store, ...u } = req.storeUser!;
   res.json({
     ...u,
     store: {
@@ -85,11 +89,11 @@ router.post('/password', async (req, res) => {
   const current = String(req.body?.currentPassword || '');
   const next = String(req.body?.newPassword || '');
   if (next.length < 8) throw new ApiError('Choose a password of at least 8 characters');
-  const user = await getOne('SELECT * FROM store_users WHERE id = $1', [req.storeUser.id]);
-  if (!await checkPassword(current, user.password_hash)) throw new ApiError('Your current password is wrong');
+  const user = await getOne('SELECT * FROM store_users WHERE id = $1', [req.storeUser!.id]);
+  if (!await checkPassword(current, user!.password_hash)) throw new ApiError('Your current password is wrong');
   const ts = nowIso();
   await query('UPDATE store_users SET password_hash = $1, password_set_at = $2, updated_at = $2 WHERE id = $3',
-    [await hashPassword(next), ts, user.id]);
+    [await hashPassword(next), ts, user!.id]);
   res.json({ ok: true });
 });
 
@@ -192,7 +196,7 @@ async function itemsForOrders(orderIds, restId) {
  * one person has already accepted must not keep alarming at everyone else.
  */
 router.get('/orders', async (req, res) => {
-  const { storeCode, store } = req.storeUser;
+  const { storeCode, store } = req.storeUser!;
   const restId = process.env.PETPOOJA_REST_ID || '';
   const relays = storeRelaysToPos(storeCode);
 
@@ -214,8 +218,8 @@ router.get('/orders', async (req, res) => {
     addrIds.length ? getAll('SELECT * FROM addresses WHERE id = ANY($1)', [addrIds]) : [],
     ids.length ? getAll('SELECT order_id, relay_ok, petpooja_order_id, last_error FROM petpooja_orders WHERE order_id = ANY($1)', [ids]) : [],
   ]);
-  const addrById = new Map(addresses.map((a) => [a.id, a]));
-  const posByOrder = new Map(posRows.map((p) => [p.order_id, p]));
+  const addrById = new Map(addresses.map((a): [any, any] => [a.id, a]));
+  const posByOrder = new Map(posRows.map((p): [any, any] => [p.order_id, p]));
 
   const serialized = orders.map((o) => serializeStoreOrder(
     o, itemsByOrder.get(o.id) || [], o.address_id ? addrById.get(o.address_id) || null : null,
@@ -247,7 +251,7 @@ router.get('/orders', async (req, res) => {
  *  so this cannot be used to probe which order numbers exist elsewhere. */
 async function loadStoreOrder(req) {
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND store_code = $2',
-    [Number(req.params.id), req.storeUser.storeCode]);
+    [Number(req.params.id), req.storeUser!.storeCode]);
   if (!order) throw new ApiError('Order not found', 404);
   return order;
 }
@@ -260,7 +264,7 @@ router.get('/orders/:id', async (req, res) => {
   const pos = await getOne('SELECT relay_ok, petpooja_order_id, last_error FROM petpooja_orders WHERE order_id = $1', [order.id]);
   const timeline = await getAll('SELECT status, remarks, created_at FROM order_tracking WHERE order_id = $1 ORDER BY id', [order.id]);
   res.json({
-    ...serializeStoreOrder(order, items, address, pos, storeRelaysToPos(req.storeUser.storeCode)),
+    ...serializeStoreOrder(order, items, address, pos, storeRelaysToPos(req.storeUser!.storeCode)),
     timeline,
   });
 });
@@ -278,13 +282,13 @@ router.post('/orders/:id/accept', async (req, res) => {
 
   const ts = nowIso();
   await query('UPDATE orders SET store_accepted_at = $1, store_accepted_by = $2, updated_at = $1 WHERE id = $3',
-    [ts, req.storeUser.id, order.id]);
+    [ts, req.storeUser!.id, order.id]);
   // PREPARING is the truthful status here and it is what the customer's order page shows.
   if (order.order_status === 'CONFIRMED' || order.order_status === 'PLACED') {
     await query('UPDATE orders SET order_status = $1 WHERE id = $2', ['PREPARING', order.id]);
   }
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-    [order.id, 'PREPARING', `Accepted at ${req.storeUser.store.name} by ${req.storeUser.username}`, ts]);
+    [order.id, 'PREPARING', `Accepted at ${req.storeUser!.store.name} by ${req.storeUser!.username}`, ts]);
   // NOW book the same-day rider — a manual store's order was deliberately left unbooked at payment
   // time until a real person here confirmed it (see finalizePaidOrder). Idempotent/no-op if this
   // store happens to be AUTO (Begur never reaches this screen, but nothing breaks if it somehow did).
@@ -307,7 +311,7 @@ router.post('/orders/:id/ready', async (req, res) => {
   await query('UPDATE orders SET store_ready_at = $1, order_status = $2, updated_at = $1 WHERE id = $3',
     [ts, 'PACKED', order.id]);
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-    [order.id, 'PACKED', `Ready for pickup at ${req.storeUser.store.name}`, ts]);
+    [order.id, 'PACKED', `Ready for pickup at ${req.storeUser!.store.name}`, ts]);
   res.json({ ok: true, readyAt: ts });
 });
 
@@ -325,7 +329,7 @@ router.post('/orders/:id/pos-bill', async (req, res) => {
   const ts = nowIso();
   await query('UPDATE orders SET store_pos_bill_no = $1, updated_at = $2 WHERE id = $3', [billNo, ts, order.id]);
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-    [order.id, 'POS_BILLED_MANUALLY', `Billed on the ${req.storeUser.store.name} Petpooja terminal — bill ${billNo} (entered by ${req.storeUser.username})`, ts]);
+    [order.id, 'POS_BILLED_MANUALLY', `Billed on the ${req.storeUser!.store.name} Petpooja terminal — bill ${billNo} (entered by ${req.storeUser!.username})`, ts]);
   res.json({ ok: true, billNo });
 });
 
@@ -392,9 +396,9 @@ router.get('/menu', async (req, res) => {
       ORDER BY p.menu_group NULLS LAST, p.name`,
     [restId]
   );
-  const code = req.storeUser.storeCode;
+  const code = req.storeUser!.storeCode;
   const overrides = await getAll('SELECT product_id, is_available FROM store_product_overrides WHERE store_code = $1', [code]);
-  const overrideBy = new Map(overrides.map((o) => [o.product_id, o.is_available]));
+  const overrideBy = new Map(overrides.map((o): [any, any] => [o.product_id, o.is_available]));
 
   res.json(rows.map((r) => {
     const override = overrideBy.has(r.id) ? overrideBy.get(r.id) : null;
@@ -428,7 +432,7 @@ router.get('/menu', async (req, res) => {
  * oven is down, the shutter is closed, nobody is in) and turn one item off (the cream cheese ran
  * out). Both used to be admin-only, so the alternative was a store taking orders it could not bake.
  *
- * Everything here is scoped to req.storeUser.storeCode, which comes from the signed token and never
+ * Everything here is scoped to req.storeUser!.storeCode, which comes from the signed token and never
  * from the request. There is deliberately no :code parameter to get wrong — a store cannot address
  * another store's row even by trying, which is the same rule the orders endpoints above follow.
  *
@@ -436,7 +440,7 @@ router.get('/menu', async (req, res) => {
  * for anyone but itself, or cancel anything. Those move money or affect other shops.
  */
 router.get('/availability', async (req, res) => {
-  const code = req.storeUser.storeCode;
+  const code = req.storeUser!.storeCode;
   const row = await getOne('SELECT is_active FROM store_status WHERE store_code = $1', [code]);
   // No row at all means open — the same reading isStoreActive() in stores.js takes, which is what
   // the checkout quote and order creation both consult.
@@ -444,7 +448,7 @@ router.get('/availability', async (req, res) => {
 });
 
 router.patch('/availability', async (req, res) => {
-  const code = req.storeUser.storeCode;
+  const code = req.storeUser!.storeCode;
   const isActive = req.body?.isActive;
   if (typeof isActive !== 'boolean') throw new ApiError('Say whether the store is open: isActive must be true or false.');
   await query(
@@ -452,7 +456,7 @@ router.patch('/availability', async (req, res) => {
      ON CONFLICT (store_code) DO UPDATE SET is_active = EXCLUDED.is_active, updated_at = EXCLUDED.updated_at`,
     [code, isActive, nowIso()]
   );
-  console.log(`[STORE] ${code} | ${req.storeUser.username} turned the store ${isActive ? 'ON' : 'OFF'}`);
+  console.log(`[STORE] ${code} | ${req.storeUser!.username} turned the store ${isActive ? 'ON' : 'OFF'}`);
   res.json({ ok: true, code, isActive });
 });
 
@@ -465,7 +469,7 @@ router.patch('/availability', async (req, res) => {
  * and a store that has the ingredient today should be able to sell it.
  */
 router.put('/menu/:productId/availability', async (req, res) => {
-  const code = req.storeUser.storeCode;
+  const code = req.storeUser!.storeCode;
   const productId = Number(req.params.productId);
   const product = await getOne('SELECT id, name FROM products WHERE id = $1', [productId]);
   if (!product) throw new ApiError('No such product');
@@ -482,7 +486,7 @@ router.put('/menu/:productId/availability', async (req, res) => {
   } else {
     throw new ApiError('available must be true, false, or null to go back to the default.');
   }
-  console.log(`[STORE] ${code} | ${req.storeUser.username} set ${product.name} to ${available === null ? 'default' : available ? 'ON' : 'OFF'}`);
+  console.log(`[STORE] ${code} | ${req.storeUser!.username} set ${product.name} to ${available === null ? 'default' : available ? 'ON' : 'OFF'}`);
   res.json({ ok: true });
 });
 

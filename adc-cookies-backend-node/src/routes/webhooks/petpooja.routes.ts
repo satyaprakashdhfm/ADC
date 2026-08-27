@@ -88,7 +88,7 @@ router.post('/pushmenu', async (req, res) => {
       return res.json({ success: '0', message: r.reason });
     }
     return res.json({ success: '1', message: `Menu saved (${r.items} items, ${r.addons} addons)` });
-  } catch (err) {
+  } catch (err: any) {
     // Store nothing rather than retry-loop: log loudly, answer 200 so they stop resending.
     console.log(`[PETPOOJA] pushmenu | ✗ ${err.message}`);
     return res.json({ success: '0', message: 'menu could not be stored' });
@@ -143,7 +143,7 @@ router.post('/callback', async (req, res) => {
       );
     }
     return res.json({ success: '1', message: 'received' });
-  } catch (err) {
+  } catch (err: any) {
     console.log(`[PETPOOJA] callback | ✗ ${err.message}`);
     return res.json({ success: '0', message: 'could not process' });
   }
@@ -179,7 +179,7 @@ router.post('/item-stock', async (req, res) => {
     }
     console.log(`[PETPOOJA] item-stock | ${type} | inStock=${inStock} | ids=${ids.join(',') || 'none'}`);
     return res.json({ code: '200', status: 'success', message: 'Stock status updated successfully' });
-  } catch (err) {
+  } catch (err: any) {
     console.log(`[PETPOOJA] item-stock | ✗ ${err.message}`);
     return res.json({ code: '400', status: 'failed', message: 'Stock status not updated successfully' });
   }
@@ -205,7 +205,7 @@ router.post('/update-store-status', async (req, res) => {
   try {
     await setStoreOpen(restId, open, { turnOnTime: b.turn_on_time || null, reason: b.reason || null });
     return res.json({ restID: restId, status: 'success', store_status: open ? '1' : '0', message: open ? 'Store turned on' : 'Store turned off' });
-  } catch (err) {
+  } catch (err: any) {
     console.log(`[PETPOOJA] update-store-status | ✗ ${err.message}`);
     return res.json({ restID: restId, status: 'failed', store_status: open ? '1' : '0', message: 'could not update store status' });
   }

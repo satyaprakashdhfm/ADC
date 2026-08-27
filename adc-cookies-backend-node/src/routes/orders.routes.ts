@@ -1,3 +1,9 @@
+/*
+ * req.user is asserted non-null throughout this file: every route in it sits behind
+ * router.use(requireAuth), which 401s before a handler runs. TypeScript cannot see through
+ * middleware, so it has to be told. Adding a route here WITHOUT that gate would make these
+ * assertions false — the gate is what makes them true.
+ */
 import { Router } from 'express';
 import { getOne, getAll, query, withTransaction, nowIso } from '../db/index.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
@@ -36,8 +42,8 @@ async function genOrderNumber() {
 async function fullOrder(orderId) {
   const order = await getOne('SELECT * FROM orders WHERE id = $1', [orderId]);
   const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [orderId]);
-  const address = order.address_id
-    ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id])
+  const address = order!.address_id
+    ? await getOne('SELECT * FROM addresses WHERE id = $1', [order!.address_id])
     : null;
   const payment = await getOne(PAYMENT_SELECT, [orderId]);
   return serializeOrder(order, items, address, payment);
@@ -58,9 +64,9 @@ async function assertOrderingOpen() {
 
 router.post('/', async (req, res) => {
   await assertOrderingOpen();
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   const { addressId, couponCode, items: bodyItems } = req.body || {};
-  console.log(`[ORDER] create | user=${user?.id}(${req.user.email}) | addressId=${addressId} | items=${JSON.stringify((bodyItems || []).map(i => ({ p: i.productId, q: i.quantity })))}`);
+  console.log(`[ORDER] create | user=${user?.id}(${req.user!.email}) | addressId=${addressId} | items=${JSON.stringify((bodyItems || []).map(i => ({ p: i.productId, q: i.quantity })))}`);
 
   let lineItems;
   if (Array.isArray(bodyItems) && bodyItems.length > 0) {
@@ -81,8 +87,8 @@ router.post('/', async (req, res) => {
        */
       if (isPackProduct(product)) {
         const checked = await validatePackPicks(product, selectedOptions?.packPicks);
-        selectedOptions = { ...(selectedOptions || {}), packPicks: checked.picks, addOns: checked.addOns };
-        console.log(`[ORDER] create | pack=${product.name} | ${checked.summary}`);
+        selectedOptions = { ...(selectedOptions || {}), packPicks: checked!.picks, addOns: checked!.addOns };
+        console.log(`[ORDER] create | pack=${product.name} | ${checked!.summary}`);
       }
 
       return { product, productName: product.name, quantity: it.quantity || 1, unitPrice: product.price,
@@ -90,7 +96,7 @@ router.post('/', async (req, res) => {
                specialNotes: it.specialNotes ?? null };
     }));
   } else {
-    const cart = await getCartRow(req.user.email);
+    const cart = await getCartRow(req.user!.email);
     const cartItems = await getAll('SELECT * FROM cart_items WHERE cart_id = $1', [cart.id]);
     if (cartItems.length === 0) { console.log(`[ORDER] create | ✗ cart_empty (no body items + empty server cart)`); throw new ApiError('Cart is empty'); }
     lineItems = await Promise.all(cartItems.map(async (ci) => {
@@ -121,14 +127,15 @@ router.post('/', async (req, res) => {
   if (failing.length) {
     const reasonFor = (p) => (zoneStores(destPin).length ? p.intracity_unavailable_reason : p.intercity_unavailable_reason)
       || 'not available for delivery to this address';
-    const lines = [...new Map(failing.map((li) => [li.productName, reasonFor(li.product)])).entries()]
+    const lines = [...new Map(failing.map((li): [any, any] => [li.productName, reasonFor(li.product)])).entries()]
       .map(([name, reason]) => `${name} — ${reason}`);
     console.log(`[ORDER] create | ✗ delivery_ineligible | pin=${destPin} | ${lines.join(' | ')}`);
     throw new ApiError(`${lines.join('. ')}. Remove ${failing.length === 1 ? 'it' : 'them'} to continue, or choose a different address.`);
   }
 
   const subtotal = lineItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-  let discount = 0, coupon = null;
+  let discount = 0;
+  let coupon: any = null;
   if (couponCode && String(couponCode).trim()) {
     const rawCoupon = await getCouponByCode(couponCode);
     const giftProduct = rawCoupon ? await resolveGiftProduct(rawCoupon, user.id) : null;
@@ -322,7 +329,7 @@ router.post('/', async (req, res) => {
  * genuinely needs to be visible.
  */
 router.get('/', async (req, res) => {
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   const rows = await getAll(
     `SELECT * FROM orders WHERE user_id = $1 AND payment_status = 'PAID'
       ORDER BY created_at DESC, id DESC`, [user.id]
@@ -337,7 +344,7 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   // Scope to the owner so one user can never read another's order.
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) throw new ApiError('Order not found');
@@ -345,7 +352,7 @@ router.get('/:id', async (req, res) => {
 });
 
 router.get('/:id/tracking', async (req, res) => {
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   // Only expose tracking for an order the caller owns.
   const order = await getOne('SELECT id FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) throw new ApiError('Order not found');
@@ -356,7 +363,7 @@ router.get('/:id/tracking', async (req, res) => {
 });
 
 router.get('/:id/delhivery-track', async (req, res) => {
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) throw new ApiError('Order not found');
   if (!order.delhivery_waybill) return res.json({ tracked: false, reason: 'no_waybill' });
@@ -442,7 +449,7 @@ router.get('/:id/delhivery-track', async (req, res) => {
  * tidy up behind them is ours to notice in the logs, not theirs to be told about.
  */
 router.post('/:id/abandon', async (req, res) => {
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   const order = await getOne(
     "SELECT * FROM orders WHERE id = $1 AND user_id = $2 AND payment_status = 'PENDING'",
     [req.params.id, user.id]
@@ -468,7 +475,7 @@ router.post('/:id/abandon', async (req, res) => {
 router.post('/:id/payment/razorpay-order', async (req, res) => {
   await assertOrderingOpen();   // an order created before the pause must not still open a payment
   if (!razorpayConfigured()) { console.log(`[PAYMENT] rzp-order | order=${req.params.id} | ✗ not_configured`); throw new ApiError('Payments are not configured', 503); }
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) { console.log(`[PAYMENT] rzp-order | order=${req.params.id} | ✗ order_not_found`); throw new ApiError('Order not found'); }
   if (order.payment_status === 'PAID') { console.log(`[PAYMENT] rzp-order | order=${order.order_number} | ✗ already_paid`); throw new ApiError('Order already paid', 409); }
@@ -501,7 +508,7 @@ router.post('/:id/payment/razorpay-order', async (req, res) => {
 // Step 2: verify the Checkout result and mark PAID. Razorpay must be configured and
 // the signature MUST verify server-side — the frontend's word alone is never trusted.
 router.post('/:id/payment/verify', async (req, res) => {
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   // Scope to the owner so one user can never mark another's order as paid.
   const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!order) { console.log(`[PAYMENT] verify | order=${req.params.id} | ✗ order_not_found`); throw new ApiError('Order not found'); }

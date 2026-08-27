@@ -1,3 +1,9 @@
+/*
+ * req.user is asserted non-null throughout this file: every route in it sits behind
+ * router.use(requireAuth), which 401s before a handler runs. TypeScript cannot see through
+ * middleware, so it has to be told. Adding a route here WITHOUT that gate would make these
+ * assertions false — the gate is what makes them true.
+ */
 import { Router } from 'express';
 import { getOne, query } from '../db/index.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
@@ -8,12 +14,12 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
-  const cart = await getCartRow(req.user.email);
+  const cart = await getCartRow(req.user!.email);
   res.json(await fullCart(cart));
 });
 
 router.post('/items', async (req, res) => {
-  const cart = await getCartRow(req.user.email);
+  const cart = await getCartRow(req.user!.email);
   const { productId, quantity, selectedOptions } = req.body || {};
   const product = await getOne('SELECT * FROM products WHERE id = $1', [productId]);
   if (!product) throw new ApiError('Product not found');
@@ -33,7 +39,7 @@ router.post('/items', async (req, res) => {
 });
 
 router.patch('/items/:itemId', async (req, res) => {
-  const cart = await getCartRow(req.user.email);
+  const cart = await getCartRow(req.user!.email);
   const quantity = Number(req.body?.quantity ?? req.query.quantity);
   const item = await getOne('SELECT * FROM cart_items WHERE id = $1 AND cart_id = $2', [req.params.itemId, cart.id]);
   if (item) {
@@ -48,14 +54,14 @@ router.patch('/items/:itemId', async (req, res) => {
 });
 
 router.delete('/items/:itemId', async (req, res) => {
-  const cart = await getCartRow(req.user.email);
+  const cart = await getCartRow(req.user!.email);
   await query('DELETE FROM cart_items WHERE id = $1 AND cart_id = $2', [req.params.itemId, cart.id]);
   await touchCart(cart.id);
   res.json(await fullCart(await cartById(cart.id)));
 });
 
 router.delete('/', async (req, res) => {
-  const cart = await getCartRow(req.user.email);
+  const cart = await getCartRow(req.user!.email);
   await query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
   await touchCart(cart.id);
   res.status(200).end();

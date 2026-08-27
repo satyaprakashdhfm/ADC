@@ -75,7 +75,7 @@ router.put('/products/:id', async (req, res) => {
 
   /* Tidy up an uploaded photo the edit just dropped. Done AFTER the row is saved, and only for refs
      the new row no longer names — deleting first would leave a broken image if the write failed. */
-  const kept = new Set(parseMediaList(row.images));
+  const kept = new Set(parseMediaList(row!.images));
   for (const ref of parseMediaList(existing.images)) {
     if (isMediaRef(ref) && !kept.has(ref)) await deleteMedia(ref);
   }

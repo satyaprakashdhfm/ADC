@@ -13,7 +13,13 @@ import { ApiError } from '../utils/ApiError.js';
  * by this point no row means the session outlived the account, and continuing with `undefined`
  * would write orphaned rows against user_id = undefined.
  */
-export async function userByEmail(email) {
+/*
+ * email is nullable on users — a phone-only account is possible, even though every production
+ * account today has the synthetic phone_…@phone.adccookies.app address the OTP login mints. So
+ * null is accepted rather than asserted away: it finds no row and throws the same 'User not
+ * found' the JavaScript already produced, instead of a 500 further down.
+ */
+export async function userByEmail(email: string | null | undefined) {
   const user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
   if (!user) throw new ApiError('User not found');
   return user;

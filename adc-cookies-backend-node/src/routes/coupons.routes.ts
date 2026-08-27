@@ -1,3 +1,11 @@
+/*
+ * req.user / req.storeUser / req.admin are asserted non-null in the handlers below.
+ *
+ * Every route that reads them carries a require* gate in its own registration, which 401s
+ * before the handler runs — verified route by route, not assumed. TypeScript cannot see
+ * through middleware, so it has to be told. A NEW route here that reads them without that
+ * gate would make the assertion false, and would be a 500 on an anonymous request.
+ */
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { getOne, getAll, query, withTransaction, nowIso } from '../db/index.js';
@@ -27,8 +35,8 @@ const couponLimiter = rateLimit({
 router.get('/validate', requireAuth, couponLimiter, async (req, res) => {
   const { code, orderAmount } = req.query;
   const raw = await getCouponByCode(String(code || ''));
-  const giftProduct = raw ? await resolveGiftProduct(raw, req.user.id) : null;
-  const coupon = await validateCoupon(String(code || ''), orderAmount ?? 0, req.user.id);
+  const giftProduct = raw ? await resolveGiftProduct(raw, req.user!.id) : null;
+  const coupon = await validateCoupon(String(code || ''), orderAmount ?? 0, req.user!.id);
   res.json({
     ...serializeCoupon(coupon),
     valid: true,
@@ -42,12 +50,12 @@ router.get('/validate', requireAuth, couponLimiter, async (req, res) => {
 async function getUsableSpinCoupons() {
   const today = new Date().toISOString().slice(0, 10);
   const rows = await getAll('SELECT * FROM coupons WHERE is_active = TRUE AND spin_weight IS NOT NULL ORDER BY spin_weight ASC');
-  const usable = [];
+  const usable: any[] = [];
   for (const c of rows) {
     if (c.expiry_date && c.expiry_date < today) continue;
     if (c.usage_limit != null) {
       const row = await getOne('SELECT COUNT(*) AS n FROM coupon_usage WHERE coupon_id = $1', [c.id]);
-      if (Number(row.n) >= c.usage_limit) continue;
+      if (Number(row!.n) >= c.usage_limit) continue;
     }
     usable.push(c);
   }
@@ -81,12 +89,12 @@ router.get('/active', couponLimiter, async (_req, res) => {
 async function getUsableGeneralCoupons() {
   const today = new Date().toISOString().slice(0, 10);
   const rows = await getAll('SELECT * FROM coupons WHERE is_active = TRUE AND spin_weight IS NULL ORDER BY id DESC');
-  const usable = [];
+  const usable: any[] = [];
   for (const c of rows) {
     if (c.expiry_date && c.expiry_date < today) continue;
     if (c.usage_limit != null) {
       const row = await getOne('SELECT COUNT(*) AS n FROM coupon_usage WHERE coupon_id = $1', [c.id]);
-      if (Number(row.n) >= c.usage_limit) continue;
+      if (Number(row!.n) >= c.usage_limit) continue;
     }
     usable.push(c);
   }
@@ -145,7 +153,7 @@ function shuffled(arr) {
 // absorbs whatever's left so the batch always totals exactly POOL_SIZE, then the whole thing is
 // shuffled once. Drawing tickets off the front in order is what makes the ratio exact per batch.
 function buildTickets(coupons) {
-  const tickets = [];
+  const tickets: any[] = [];
   for (const c of coupons) {
     const count = Math.round((Number(c.spin_weight) || 0) / 100 * POOL_SIZE);
     for (let i = 0; i < count; i++) tickets.push(c.code);
@@ -204,7 +212,7 @@ router.post('/spin', couponLimiter, async (req, res) => {
   const expiresAt = new Date(Date.now() + CLAIM_WINDOW_HOURS * 3600_000).toISOString();
 
   const code = await withTransaction(async (client) => {
-    let ticket = null;
+    let ticket: any = null;
     if (coupons.length) {
       const { rows } = await client.query('SELECT * FROM spin_ticket_pool WHERE id = 1 FOR UPDATE');
       const pool = rows[0];
@@ -260,7 +268,7 @@ router.get('/spin-status', requireAuth, async (req, res) => {
          SELECT 1 FROM coupon_usage cu WHERE cu.coupon_id = sc.coupon_id AND cu.user_id = sc.user_id
        )
      ORDER BY sc.id DESC LIMIT 1`,
-    [req.user.id, nowIsoStr]
+    [req.user!.id, nowIsoStr]
   );
   res.json({ active: claim ? serializeClaim(claim, claim) : null });
 });
@@ -290,13 +298,13 @@ router.post('/claim-spin', requireAuth, couponLimiter, async (req, res) => {
   // same win. The advisory lock makes the second call wait for the first to finish and commit,
   // so it then correctly finds and replays the first one's row instead of inserting again.
   const result = await withTransaction(async (client) => {
-    await client.query('SELECT pg_advisory_xact_lock($1)', [req.user.id]);
+    await client.query('SELECT pg_advisory_xact_lock($1)', [req.user!.id]);
 
     const { rows: existingRows } = await client.query(
       `SELECT sc.*, c.discount_type, c.discount_value, c.minimum_order_amount, c.maximum_discount, c.terms
        FROM spin_claims sc JOIN coupons c ON c.id = sc.coupon_id
        WHERE sc.user_id = $1 AND sc.expires_at > $2 ORDER BY sc.id DESC LIMIT 1`,
-      [req.user.id, nowIsoStr]
+      [req.user!.id, nowIsoStr]
     );
     if (existingRows[0]) return { row: existingRows[0], coupon: existingRows[0], isNew: false };
 
@@ -310,7 +318,7 @@ router.post('/claim-spin', requireAuth, couponLimiter, async (req, res) => {
     // The Mystery Cookie Gift is a surprise picked ONCE, right now — a random cookie priced at or
     // under this coupon's cap, so it's always genuinely free, never a partial discount. Storing
     // it on the claim (rather than re-rolling on every preview/checkout call) keeps it consistent.
-    let giftProductId = null;
+    let giftProductId: any = null;
     if (coupon.gift_kind === 'MYSTERY') {
       const { rows: pickRows } = await client.query(
         "SELECT id FROM products WHERE category = 'COOKIES' AND is_available = TRUE AND price <= $1 ORDER BY RANDOM() LIMIT 1",
@@ -323,7 +331,7 @@ router.post('/claim-spin', requireAuth, couponLimiter, async (req, res) => {
     const { rows: inserted } = await client.query(
       `INSERT INTO spin_claims (user_id, coupon_id, code, label, claimed_at, expires_at, gift_product_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [req.user.id, coupon.id, coupon.code, coupon.spin_label || coupon.code, nowIsoStr, expiresAt, giftProductId]
+      [req.user!.id, coupon.id, coupon.code, coupon.spin_label || coupon.code, nowIsoStr, expiresAt, giftProductId]
     );
     return { row: inserted[0], coupon, isNew: true };
   });
@@ -334,9 +342,9 @@ router.post('/claim-spin', requireAuth, couponLimiter, async (req, res) => {
   // Only on a genuinely new claim: the frontend calls this more than once per win on purpose — the
   // post-login resolver is a deliberate backstop for the in-popup claim — and the replay path
   // returns the original row, so mailing there would send a duplicate on every retry.
-  if (result.isNew && req.user.email) {
+  if (result.isNew && req.user!.email) {
     sendCouponEmail({
-      email: req.user.email, name: req.user.name, code: result.row.code, label: result.row.label,
+      email: req.user!.email, name: req.user!.name, code: result.row.code, label: result.row.label,
       offerText: offerTextFor(result.coupon), terms: result.coupon.terms || '',
       expiresAt: result.row.expires_at, alreadyInAccount: true,
     }).catch(() => {});
@@ -378,7 +386,7 @@ router.post('/claim-email', couponLimiter, async (req, res) => {
   if (!coupon) throw new ApiError('This reward is no longer available.');
 
   // Mystery gift: pick the surprise cookie once, now (same as the logged-in claim path).
-  let giftProductId = null;
+  let giftProductId: any = null;
   if (coupon.gift_kind === 'MYSTERY') {
     const pick = await getOne(
       "SELECT id FROM products WHERE category = 'COOKIES' AND is_available = TRUE AND price <= $1 ORDER BY RANDOM() LIMIT 1",
@@ -396,7 +404,7 @@ router.post('/claim-email', couponLimiter, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [email, name, coupon.id, coupon.code, label, nowIsoStr, expiresAt, giftProductId],
     );
-  } catch (e) {
+  } catch (e: any) {
     // Unique(email) race — someone claimed with this email a moment ago; return that one.
     const dupe = await getOne('SELECT * FROM spin_email_claims WHERE lower(email) = $1', [email]);
     if (dupe) return res.json(serialize(dupe, coupon, true));

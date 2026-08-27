@@ -1,3 +1,11 @@
+/*
+ * req.user / req.storeUser / req.admin are asserted non-null in the handlers below.
+ *
+ * Every route that reads them carries a require* gate in its own registration, which 401s
+ * before the handler runs — verified route by route, not assumed. TypeScript cannot see
+ * through middleware, so it has to be told. A NEW route here that reads them without that
+ * gate would make the assertion false, and would be a 500 on an anonymous request.
+ */
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
@@ -64,16 +72,16 @@ const verifyLimiter = rateLimit({
 router.get('/me', requireAuth, async (req, res) => {
   // Attach any email-subscribe spin reward won before this account existed (best-effort, never
   // blocks the profile response) — this is what makes an emailed coupon usable at checkout.
-  if (req.user.email) { try { await linkEmailClaimsToUser(req.user.id, req.user.email); } catch { /* ignore */ } }
-  res.json({ email: req.user.email, name: req.user.name, role: req.user.role, phone: req.user.phone ?? null });
+  if (req.user!.email) { try { await linkEmailClaimsToUser(req.user!.id, req.user!.email); } catch { /* ignore */ } }
+  res.json({ email: req.user!.email, name: req.user!.name, role: req.user!.role, phone: req.user!.phone ?? null });
 });
 
 // Update the signed-in user's profile. Phone-OTP users fill in their name here; Google /
 // email users add a phone. Persists to our users table (authoritative for the app) and
 // best-effort syncs the display name + phone into Supabase user_metadata.
 router.patch('/me', requireAuth, async (req, res) => {
-  const sets = [];
-  const params = [];
+  const sets: any[] = [];
+  const params: any[] = [];
   let i = 1;
 
   if (req.body?.name != null) {
@@ -82,16 +90,16 @@ router.patch('/me', requireAuth, async (req, res) => {
     sets.push(`name = $${i++}`); params.push(name);
   }
 
-  let normalizedPhone = null;
+  let normalizedPhone: any = null;
   if (req.body?.phone != null && String(req.body.phone).trim() !== '') {
     const p = normalizePhone(req.body.phone);
     if (!p) throw new ApiError('Enter a valid 10-digit mobile number.');
     normalizedPhone = p.digits;
     // If the phone belongs to another account (phone-OTP), merge that account into this one
     // instead of rejecting. The user can then log in either way.
-    const taken = await getOne('SELECT * FROM users WHERE phone = $1 AND id <> $2', [normalizedPhone, req.user.id]);
+    const taken = await getOne('SELECT * FROM users WHERE phone = $1 AND id <> $2', [normalizedPhone, req.user!.id]);
     if (taken) {
-      await mergeAccounts(req.user.id, taken.id);
+      await mergeAccounts(req.user!.id, taken.id);
       // Fall through — we still set the phone on the current account below.
     }
     sets.push(`phone = $${i++}`); params.push(normalizedPhone);
@@ -102,7 +110,7 @@ router.patch('/me', requireAuth, async (req, res) => {
   if (req.body?.email != null && String(req.body.email).trim() !== '') {
     const email = String(req.body.email).trim().toLowerCase();
     if (!EMAIL_RE.test(email)) throw new ApiError('Enter a proper email address.');
-    const taken = await getOne('SELECT id FROM users WHERE email = $1 AND id <> $2', [email, req.user.id]);
+    const taken = await getOne('SELECT id FROM users WHERE email = $1 AND id <> $2', [email, req.user!.id]);
     if (taken) throw new ApiError('That email is already linked to another account.');
     sets.push(`email = $${i++}`); params.push(email);
   }
@@ -110,27 +118,27 @@ router.patch('/me', requireAuth, async (req, res) => {
   if (!sets.length) throw new ApiError('Nothing to update.');
 
   sets.push(`updated_at = $${i++}`); params.push(nowIso());
-  params.push(req.user.id);
+  params.push(req.user!.id);
   const row = await getOne(`UPDATE users SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, params);
 
   // Best-effort mirror into Supabase (never blocks the response). CRITICAL for phone-OTP users:
-  // they have no real email, so looking up auth.users by req.user.email found nothing and the
+  // they have no real email, so looking up auth.users by req.user!.email found nothing and the
   // name never synced — which made the client fall back to a generic name on the next load and
   // re-show the "add your name" prompt forever. Resolve their auth row by the synthetic phone
   // email (or the current email for email/Google users) so the name actually persists.
   try {
     if (supabaseConfigured()) {
-      const meta = {};
+      const meta: Record<string, any> = {};
       if (req.body?.name != null) meta.full_name = String(req.body.name).trim();
       if (normalizedPhone) meta.phone = normalizedPhone;
-      const effectivePhone = normalizedPhone || row.phone;
-      const lookupEmail = req.user.email || (effectivePhone ? `phone_${effectivePhone}@phone.adccookies.app` : null);
+      const effectivePhone = normalizedPhone || row!.phone;
+      const lookupEmail = req.user!.email || (effectivePhone ? `phone_${effectivePhone}@phone.adccookies.app` : null);
       const su = lookupEmail ? await getOne('SELECT id FROM auth.users WHERE email = $1', [lookupEmail]).catch(() => null) : null;
       if (su) await adminClient().auth.admin.updateUserById(su.id, { user_metadata: meta });
     }
   } catch { /* metadata sync is non-critical */ }
 
-  res.json({ email: row.email, name: row.name, role: row.role, phone: row.phone ?? null });
+  res.json({ email: row!.email, name: row!.name, role: row!.role, phone: row!.phone ?? null });
 });
 
 // Best-effort city/region for wherever this login is coming from (IP-based — no browser
@@ -146,26 +154,26 @@ router.post('/log-location', requireAuth, async (req, res) => {
     // limiting (trusting too many hops there would let X-Forwarded-For be spoofed to bypass it).
     const xff = String(req.headers['x-forwarded-for'] || '');
     const ip = (xff.split(',')[0] || req.ip || '').trim().replace(/^::ffff:/, '');
-    console.log(`[AUTH] log-location | user=${req.user.id} | xff="${xff}" | resolved_ip=${ip || 'none'}`);
+    console.log(`[AUTH] log-location | user=${req.user!.id} | xff="${xff}" | resolved_ip=${ip || 'none'}`);
 
     if (ip && ip !== '127.0.0.1' && ip !== '::1') {
       const r = await fetch(`https://ipapi.co/${ip}/json/`);
-      const j = await r.json().catch(() => null);
+      const j: any = await r.json().catch(() => null);
       if (!r.ok) {
-        console.log(`[AUTH] log-location | user=${req.user.id} | ✗ ipapi.co status=${r.status} | ${JSON.stringify(j).slice(0, 200)}`);
+        console.log(`[AUTH] log-location | user=${req.user!.id} | ✗ ipapi.co status=${r.status} | ${JSON.stringify(j).slice(0, 200)}`);
       } else {
         const location = [j?.city, j?.region, j?.country_name].filter(Boolean).join(', ');
         if (location) {
-          await query('UPDATE users SET last_login_location = $1 WHERE id = $2', [location, req.user.id]);
-          console.log(`[AUTH] log-location | user=${req.user.id} | ✓ ${location}`);
+          await query('UPDATE users SET last_login_location = $1 WHERE id = $2', [location, req.user!.id]);
+          console.log(`[AUTH] log-location | user=${req.user!.id} | ✓ ${location}`);
         } else {
-          console.log(`[AUTH] log-location | user=${req.user.id} | ✗ no usable location in response | ${JSON.stringify(j).slice(0, 200)}`);
+          console.log(`[AUTH] log-location | user=${req.user!.id} | ✗ no usable location in response | ${JSON.stringify(j).slice(0, 200)}`);
         }
       }
     } else {
-      console.log(`[AUTH] log-location | user=${req.user.id} | skip — no usable ip`);
+      console.log(`[AUTH] log-location | user=${req.user!.id} | skip — no usable ip`);
     }
-  } catch (e) {
+  } catch (e: any) {
     console.log(`[AUTH] log-location | user=${req.user?.id} | ✗ ${e.message}`);
   }
   res.json({ ok: true });
@@ -232,8 +240,8 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
   const email = `phone_${phone.digits}@phone.adccookies.app`;
   const password = crypto.randomBytes(24).toString('base64url');
 
-  let supaUserId = null;
-  let existingName = null;
+  let supaUserId: any = null;
+  let existingName: any = null;
   try {
     const row = await getOne(
       "SELECT id, raw_user_meta_data->>'full_name' AS full_name FROM auth.users WHERE email = $1 OR phone = $2",
@@ -245,7 +253,7 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
   const needsName = supaUserId == null || !existingName || existingName === 'Guest';
 
   if (supaUserId) {
-    const fields = { password, email_confirm: true, phone_confirm: true };
+    const fields: Record<string, any> = { password, email_confirm: true, phone_confirm: true };
     if (name) fields.user_metadata = { phone: phone.digits, full_name: name };
     const { error } = await admin.auth.admin.updateUserById(supaUserId, fields);
     if (error) throw new ApiError(error.message, 502);

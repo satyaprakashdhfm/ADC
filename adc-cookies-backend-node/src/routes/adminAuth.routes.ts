@@ -1,3 +1,11 @@
+/*
+ * req.user / req.storeUser / req.admin are asserted non-null in the handlers below.
+ *
+ * Every route that reads them carries a require* gate in its own registration, which 401s
+ * before the handler runs — verified route by route, not assumed. TypeScript cannot see
+ * through middleware, so it has to be told. A NEW route here that reads them without that
+ * gate would make the assertion false, and would be a 500 on an anonymous request.
+ */
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { ApiError } from '../utils/ApiError.js';
@@ -93,7 +101,7 @@ router.post('/otp/verify', otpLimiter, async (req, res) => {
 
 /** Who is this token, and how long has it got? The dashboard calls this on load. */
 router.get('/me', requireAdminSession, (req, res) => {
-  res.json({ phone: req.admin.phone, name: req.admin.name, expiresAt: req.admin.expiresAt, sessionDays: ADMIN_SESSION_DAYS });
+  res.json({ phone: req.admin!.phone, name: req.admin!.name, expiresAt: req.admin!.expiresAt, sessionDays: ADMIN_SESSION_DAYS });
 });
 
 /** Sign out. Deletes the row, so the token is dead immediately rather than at its expiry. */

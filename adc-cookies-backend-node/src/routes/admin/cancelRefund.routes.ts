@@ -1,3 +1,7 @@
+/*
+ * req.admin is asserted non-null throughout this file: the whole admin router is mounted
+ * behind router.use(requireAdminSession) in admin.routes.ts, which 401s first.
+ */
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { getOne, query, nowIso } from '../../db/index.js';
@@ -70,7 +74,7 @@ async function adminPhone(req) {
   if (!phone) throw new ApiError('Your admin session has no valid mobile number, so a refund cannot be authorised.', 409);
   return {
     adminId: phone.national,                 // stable per admin; the challenge key needs no more
-    adminName: req.admin.name,
+    adminName: req.admin!.name,
     adminLabel: '****' + phone.national.slice(-4),
     phone,
   };
@@ -157,7 +161,7 @@ router.post('/orders/:id/cancel', async (req, res) => {
 async function performCancellation({ res, order, reason }) {
 
   const ts = nowIso();
-  const notes = [];
+  const notes: any[] = [];
 
   // ---- 1. carrier ----
   if (order.carrier === 'SHIPROCKET' && order.carrier_order_id) {
@@ -176,7 +180,7 @@ async function performCancellation({ res, order, reason }) {
   }
 
   // ---- 3. money ----
-  let refund = null;
+  let refund: any = null;
   if (order.payment_status === 'PAID') {
     /* Ask Razorpay what it actually captured rather than trusting our own row, and let Razorpay
        compute the amount: sending an explicit figure invites an off-by-one between our rupees and

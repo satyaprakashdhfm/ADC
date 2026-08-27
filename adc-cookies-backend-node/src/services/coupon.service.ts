@@ -93,7 +93,7 @@ export async function resolveGiftProduct(coupon, userId) {
 // userId is required to redeem a SPIN-WHEEL coupon: those are personal rewards, only valid for
 // the exact account that won them (has an unexpired spin_claims row). Regular admin coupons
 // ignore userId and work for anyone, as before.
-export async function validateCoupon(code, orderAmount, userId = null) {
+export async function validateCoupon(code, orderAmount, userId: number | null = null) {
   const coupon = await getCouponByCode(code);
   if (!coupon) throw new ApiError('Invalid or inactive coupon');
 

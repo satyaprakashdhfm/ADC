@@ -110,7 +110,7 @@ router.post('/webhook', async (req, res) => {
          * the customer and the shop want: "Ravi is bringing your order" beats "Quick-Rapido is".
          * Best-effort — a failure here must not stop the status itself being forwarded.
          */
-        let rider = null;
+        let rider: any = null;
         if (awb) rider = await getRiderData(awb).then((r) => (r.ok ? r.rider : null)).catch(() => null);
         const name = rider?.rider_name || rider?.name || b.courier_name || 'Shiprocket';
         const contact = String(rider?.rider_contact ?? rider?.contact ?? rider?.phone ?? b.rider_contact ?? '');
@@ -124,7 +124,7 @@ router.post('/webhook', async (req, res) => {
       })().catch((err) => console.log(`[HYPERLOCAL] rider->POS failed | order=${order.order_number} | ${err?.message || err}`));
     }
     return res.json({ ok: true, matched: true });
-  } catch (err) {
+  } catch (err: any) {
     console.log(`[HYPERLOCAL] webhook | ✗ ${err.message}`);
     return res.json({ ok: false, error: 'could not process' });
   }

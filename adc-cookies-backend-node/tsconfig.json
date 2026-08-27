@@ -60,6 +60,6 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": false
   },
-  "include": ["src/**/*.ts", "src/**/*.js"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.js"],
   "exclude": ["node_modules", "dist", "tests", "scripts", "drizzle"]
 }

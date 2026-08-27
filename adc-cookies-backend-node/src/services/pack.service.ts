@@ -129,7 +129,7 @@ export async function validatePackPicks(product, rawPicks) {
   const rows = ids.length
     ? await getAll(`SELECT id, name, price, menu_group, category, is_available FROM products WHERE id = ANY($1::int[])`, [ids])
     : [];
-  const byId = new Map(rows.map((r) => [r.id, r]));
+  const byId = new Map(rows.map((r): [any, any] => [r.id, r]));
 
   const out: any[] = [];
   for (const slot of def.slots) {

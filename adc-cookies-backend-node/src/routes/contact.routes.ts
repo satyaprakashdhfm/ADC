@@ -39,7 +39,7 @@ router.post('/', contactLimiter, async (req, res) => {
   // Notify the business by email (best-effort — never blocks the response on failure).
   await sendContactEmail({ name, email, phone, message });
 
-  res.status(201).json({ ok: true, id: row.id });
+  res.status(201).json({ ok: true, id: row!.id });
 });
 
 export default router;

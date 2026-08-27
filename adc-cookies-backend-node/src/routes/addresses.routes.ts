@@ -1,3 +1,9 @@
+/*
+ * req.user is asserted non-null throughout this file: every route in it sits behind
+ * router.use(requireAuth), which 401s before a handler runs. TypeScript cannot see through
+ * middleware, so it has to be told. Adding a route here WITHOUT that gate would make these
+ * assertions false — the gate is what makes them true.
+ */
 import { Router } from 'express';
 import { getOne, getAll, query } from '../db/index.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
@@ -42,13 +48,13 @@ function validateAddressInput(b) {
 }
 
 router.get('/', async (req, res) => {
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   const rows = await getAll('SELECT * FROM addresses WHERE user_id = $1 ORDER BY id', [user.id]);
   res.json(rows.map(serializeAddress));
 });
 
 router.post('/', async (req, res) => {
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   const b = req.body || {};
   const v = validateAddressInput(b);
 
@@ -78,7 +84,7 @@ function logAddress(verb, row) {
 }
 
 router.put('/:id', async (req, res) => {
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   const existing = await getOne('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   if (!existing) throw new ApiError('Address not found', 404);
   const b = req.body || {};
@@ -116,7 +122,7 @@ router.put('/:id', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-  const user = await userByEmail(req.user.email);
+  const user = await userByEmail(req.user!.email);
   await query('DELETE FROM addresses WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
   res.status(200).end();
 });

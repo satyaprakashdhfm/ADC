@@ -59,15 +59,15 @@ router.get('/dashboard', async (_req, res) => {
   const cancelledUnpaid = dead.filter((o) => o.payment_status !== 'PAID').length;
   const cancelledAfterPayment = dead.length - cancelledUnpaid;
 
-  const { c: totalProducts } = await getOne('SELECT COUNT(*) AS c FROM products');
-  const { c: unavailableProducts } = await getOne('SELECT COUNT(*) AS c FROM products WHERE is_available = FALSE');
-  const { c: totalUsers } = await getOne("SELECT COUNT(*) AS c FROM users WHERE role = 'CUSTOMER'");
+  const { c: totalProducts } = (await getOne('SELECT COUNT(*) AS c FROM products'))!;
+  const { c: unavailableProducts } = (await getOne('SELECT COUNT(*) AS c FROM products WHERE is_available = FALSE'))!;
+  const { c: totalUsers } = (await getOne("SELECT COUNT(*) AS c FROM users WHERE role = 'CUSTOMER'"))!;
   /* Admins live in admin_accounts now, not users.role — that column was retired when the dashboard
      moved to its own phone-allowlist login, so counting 'ADMIN' rows in users always returned 0. */
   let totalAdmins = 0;
-  try { const r = await getOne('SELECT COUNT(*) AS c FROM admin_accounts WHERE is_active = TRUE'); totalAdmins = Number(r.c); } catch { /* table arrives on first boot */ }
+  try { const r = await getOne('SELECT COUNT(*) AS c FROM admin_accounts WHERE is_active = TRUE'); totalAdmins = Number(r!.c); } catch { /* table arrives on first boot */ }
   let newMessages = 0;
-  try { const r = await getOne('SELECT COUNT(*) AS c FROM contact_messages WHERE handled = FALSE'); newMessages = Number(r.c); } catch { /* older schema */ }
+  try { const r = await getOne('SELECT COUNT(*) AS c FROM contact_messages WHERE handled = FALSE'); newMessages = Number(r!.c); } catch { /* older schema */ }
 
   /* Orders grouped by status (PLACED / PREPARING / DELIVERED …). CANCELLED is deliberately absent:
      it has its own number above rather than a bar competing with the live ones. */
@@ -138,7 +138,7 @@ router.get('/analytics', async (req, res) => {
   const okDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
   let from = okDate(req.query.from) ? req.query.from : def;
   let to = okDate(req.query.to) ? req.query.to : today;
-  if (from > to) [from, to] = [to, from];
+  if (from! > to!) [from, to] = [to, from];
   const p = [from, to];
   const inRange = `${IST_DAY} BETWEEN $1::date AND $2::date`;
 

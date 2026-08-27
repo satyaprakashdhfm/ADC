@@ -12,8 +12,8 @@ const router = Router();
 router.get('/orders', async (req, res) => {
   const { search, status } = req.query;
   let sql = 'SELECT o.* FROM orders o';
-  const params = [];
-  const where = [];
+  const params: any[] = [];
+  const where: any[] = [];
   if (status) { params.push(status); where.push(`o.order_status = $${params.length}`); }
   if (search) {
     params.push(`%${search}%`);
@@ -42,10 +42,10 @@ router.get('/orders', async (req, res) => {
     if (!itemsByOrder.has(it.order_id)) itemsByOrder.set(it.order_id, []);
     itemsByOrder.get(it.order_id).push(it);
   }
-  const payByOrder = new Map(payments.map((p) => [p.order_id, p]));
-  const addrById = new Map(addresses.map((a) => [a.id, a]));
+  const payByOrder = new Map(payments.map((p): [any, any] => [p.order_id, p]));
+  const addrById = new Map(addresses.map((a): [any, any] => [a.id, a]));
   const duplicateChargeOrderIds = new Set(warnings.map((w) => w.order_id));
-  const posByOrder = new Map(posRows.map((p) => [p.order_id, p]));
+  const posByOrder = new Map(posRows.map((p): [any, any] => [p.order_id, p]));
   const serialized = rows.map((o) =>
     serializeOrder(o, itemsByOrder.get(o.id) || [], o.address_id ? addrById.get(o.address_id) || null : null, payByOrder.get(o.id) || null,
       duplicateChargeOrderIds.has(o.id) ? ['DUPLICATE_CHARGE'] : [], posByOrder.get(o.id) || null)
@@ -87,7 +87,7 @@ async function cancelDownstream(order, reason) {
       const r = await petpoojaCancelOrder(order.order_number, reason);
       await note(r.ok ? 'POS_CANCELLED' : 'POS_CANCEL_FAILED',
         r.ok ? 'Petpooja ticket cancelled' : `⚠ Petpooja would not cancel: ${JSON.stringify(r.reason).slice(0, 300)} — cancel it in the Petpooja dashboard`);
-    } catch (err) {
+    } catch (err: any) {
       await note('POS_CANCEL_FAILED', `⚠ Petpooja cancel threw: ${err?.message || err} — cancel it in the Petpooja dashboard`);
     }
   }
@@ -117,7 +117,7 @@ async function cancelDownstream(order, reason) {
       await note('SHIPMENT_CANCEL_FAILED',
         `⚠ ${order.carrier || 'DELHIVERY'} would not cancel ${order.delhivery_waybill || order.carrier_order_id}: ${JSON.stringify(r.reason).slice(0, 300)} — cancel it in their dashboard`);
     }
-  } catch (err) {
+  } catch (err: any) {
     await note('SHIPMENT_CANCEL_FAILED', `⚠ Courier cancel threw: ${err?.message || err} — cancel it in their dashboard`);
   }
 }
@@ -140,7 +140,7 @@ router.patch('/orders/:id/status', async (req, res) => {
   }
   const updated = await getOne('SELECT * FROM orders WHERE id = $1', [order.id]);
   const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order.id]);
-  const address = updated.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [updated.address_id]) : null;
+  const address = updated!.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [updated!.address_id]) : null;
   // Surface anything the downstream cancel could NOT do, so the admin is told to finish it by hand
   // instead of assuming a green tick meant the rider was called off.
   const failures = await getAll(

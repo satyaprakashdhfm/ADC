@@ -10,7 +10,7 @@ router.get('/coupons', async (_req, res) => {
   const rows = await getAll('SELECT * FROM coupons ORDER BY id');
   // Attach live redemption counts so the UI can show Active / Expired / Limit-reached at a glance.
   const withUsage = await Promise.all(rows.map(async (c) => {
-    const { n } = await getOne('SELECT COUNT(*) AS n FROM coupon_usage WHERE coupon_id = $1', [c.id]);
+    const { n } = (await getOne('SELECT COUNT(*) AS n FROM coupon_usage WHERE coupon_id = $1', [c.id]))!;
     return { ...serializeCoupon(c), timesUsed: Number(n) };
   }));
   res.json(withUsage);

@@ -35,7 +35,8 @@ router.post('/uploads', rawImage, async (req, res) => {
   const prefix = PREFIXES[String(req.query.kind || '').toLowerCase()];
   if (!prefix) throw new ApiError(`Unknown upload kind. Use one of: ${Object.keys(PREFIXES).join(', ')}.`);
 
-  const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  // split always yields at least one element for a string, so [0] is never actually undefined.
+  const contentType = String(req.headers['content-type'] || '').split(';')[0]!.trim().toLowerCase();
   if (!ALLOWED_TYPES[contentType]) {
     throw new ApiError(`${contentType || 'That file type'} cannot be uploaded. Use JPG, PNG, WebP, AVIF or GIF.`);
   }
@@ -54,7 +55,7 @@ router.post('/uploads', rawImage, async (req, res) => {
     // The signed URL comes back with it so the form can show a preview at once, without a second
     // round trip. Only `ref` is ever stored.
     res.json({ ...saved, url: await signMediaRef(saved.ref) });
-  } catch (err) {
+  } catch (err: any) {
     throw new ApiError(err?.message || 'Upload failed', 502);
   }
 });

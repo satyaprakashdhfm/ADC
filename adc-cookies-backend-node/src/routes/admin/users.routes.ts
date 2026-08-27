@@ -12,7 +12,7 @@ router.get('/users', async (_req, res) => {
   // Customers only — admin accounts are separated out and never listed here.
   const rows = await getAll("SELECT * FROM users WHERE role <> 'ADMIN' ORDER BY id DESC");
   const withCounts = await Promise.all(rows.map(async (u) => {
-    const { c } = await getOne('SELECT COUNT(*) AS c FROM orders WHERE user_id = $1', [u.id]);
+    const { c } = (await getOne('SELECT COUNT(*) AS c FROM orders WHERE user_id = $1', [u.id]))!;
     // Their saved delivery addresses (default first) so the Customers tab can show where they order from.
     const addrs = await getAll('SELECT * FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, id DESC', [u.id]);
     return { ...serializeUser(u), orderCount: Number(c), addresses: addrs.map(serializeAddress) };
@@ -38,10 +38,10 @@ router.put('/users/:id', async (req, res) => {
   const user = await getOne("SELECT * FROM users WHERE id = $1 AND role <> 'ADMIN'", [id]);
   if (!user) throw new ApiError('Customer not found');
 
-  const sets = [];
-  const params = [];
+  const sets: any[] = [];
+  const params: any[] = [];
   let i = 1;
-  let newPhone = null;
+  let newPhone: any = null;
 
   if (req.body?.name !== undefined) {
     const name = String(req.body.name || '').trim();
@@ -76,23 +76,23 @@ router.put('/users/:id', async (req, res) => {
   params.push(id);
   const row = await getOne(`UPDATE users SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, params);
   console.log(`[ADMIN] customer updated | id=${id} | ${[
-    req.body?.name !== undefined ? `name="${row.name}"` : null,
-    req.body?.phone !== undefined ? `phone=${row.phone || 'cleared'}` : null,
+    req.body?.name !== undefined ? `name="${row!.name}"` : null,
+    req.body?.phone !== undefined ? `phone=${row!.phone || 'cleared'}` : null,
   ].filter(Boolean).join(' | ')}`);
 
   // Mirror into Supabase so the customer's own account page shows the correction too. Best-effort,
   // exactly as the self-serve profile update does — never block the response on it.
   try {
     if (supabaseConfigured()) {
-      const meta = {};
-      if (req.body?.name !== undefined) meta.full_name = row.name;
+      const meta: Record<string, any> = {};
+      if (req.body?.name !== undefined) meta.full_name = row!.name;
       if (newPhone) meta.phone = newPhone;
-      const su = row.email ? await getOne('SELECT id FROM auth.users WHERE email = $1', [row.email]).catch(() => null) : null;
+      const su = row!.email ? await getOne('SELECT id FROM auth.users WHERE email = $1', [row!.email]).catch(() => null) : null;
       if (su && Object.keys(meta).length) await adminClient().auth.admin.updateUserById(su.id, { user_metadata: meta });
     }
   } catch { /* metadata sync is non-critical */ }
 
-  const { c } = await getOne('SELECT COUNT(*) AS c FROM orders WHERE user_id = $1', [id]);
+  const { c } = (await getOne('SELECT COUNT(*) AS c FROM orders WHERE user_id = $1', [id]))!;
   const addrs = await getAll('SELECT * FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, id DESC', [id]);
   res.json({ ...serializeUser(row), orderCount: Number(c), addresses: addrs.map(serializeAddress) });
 });

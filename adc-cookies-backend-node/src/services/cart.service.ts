@@ -1,4 +1,5 @@
 import { getOne, getAll, query, nowIso } from '../db/index.js';
+import type { Row } from '../db/index.js';
 import { serializeCart, serializeCartItem, withImageUrls } from '../serializers/index.js';
 import { userByEmail } from './user.service.js';
 
@@ -17,7 +18,7 @@ import { userByEmail } from './user.service.js';
  * Every cart operation starts here, including the ones that only read, so a customer who has never
  * added anything still gets a real row to attach items to instead of a null the caller must handle.
  */
-export async function getCartRow(email) {
+export async function getCartRow(email: string | null | undefined): Promise<Row> {
   const user = await userByEmail(email);
   let cart = await getOne('SELECT * FROM cart WHERE user_id = $1', [user.id]);
   if (!cart) {
@@ -27,7 +28,9 @@ export async function getCartRow(email) {
       [user.id, ts, ts]
     );
   }
-  return cart;
+  /* Either the SELECT found one or the INSERT ... RETURNING made one, so this is never null —
+     which is the whole contract of this function and why no caller checks. */
+  return cart!;
 }
 
 export async function touchCart(cartId) {
@@ -35,7 +38,9 @@ export async function touchCart(cartId) {
 }
 
 /** Re-read a cart by id — what the write endpoints return once they have changed something. */
-export const cartById = (id) => getOne('SELECT * FROM cart WHERE id = $1', [id]);
+/* Non-null by the same contract: callers only ask for a cart they have just written to. */
+export const cartById = async (id: number): Promise<Row> =>
+  (await getOne('SELECT * FROM cart WHERE id = $1', [id]))!;
 
 /** A cart with its items and their products, serialized for the API. */
 export async function fullCart(cart) {

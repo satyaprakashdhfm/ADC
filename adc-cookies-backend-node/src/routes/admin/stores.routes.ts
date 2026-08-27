@@ -30,7 +30,7 @@ router.get('/stores', async (_req, res) => {
     getAll(`SELECT id, name, intracity_available, restrict_cities FROM products
              WHERE is_available = TRUE AND (intracity_available = FALSE OR restrict_cities IS NOT NULL)`),
   ]);
-  const countBy = new Map(counts.map((c) => [c.store_code, c]));
+  const countBy = new Map(counts.map((c): [any, any] => [c.store_code, c]));
   res.json({
     // Begur is AUTO — we relay it ourselves and it has no accept/bill step, so there is nothing for
     // a staff portal to do there. It never appears here; a login for it can't be created either
@@ -69,7 +69,7 @@ router.get('/stores', async (_req, res) => {
  */
 router.get('/store-status', async (_req, res) => {
   const rows = await getAll('SELECT store_code, is_active, service_mode FROM store_status');
-  const byCode = new Map(rows.map((r) => [r.store_code, r]));
+  const byCode = new Map(rows.map((r): [any, any] => [r.store_code, r]));
   res.json({
     /*
      * Whether outstation delivery is open, reported alongside the stores rather than left for the UI
@@ -145,7 +145,7 @@ router.get('/store-products/:code', async (req, res) => {
     getAll('SELECT id, name, intracity_available, restrict_cities FROM products WHERE is_available = TRUE ORDER BY name'),
     getAll('SELECT product_id, is_available FROM store_product_overrides WHERE store_code = $1', [code]),
   ]);
-  const overrideBy = new Map(overrides.map((o) => [o.product_id, o.is_available]));
+  const overrideBy = new Map(overrides.map((o): [any, any] => [o.product_id, o.is_available]));
   res.json({
     products: products.map((p) => {
       const override = overrideBy.has(p.id) ? overrideBy.get(p.id) : null;
@@ -193,7 +193,7 @@ router.post('/stores/:code/staff', async (req, res) => {
      VALUES ($1,$2,$3,$4,$5,$5,$5) RETURNING id, username`,
     [store.code, username, await hashPassword(password), String(req.body?.name || '').trim() || null, ts]
   );
-  res.json({ ok: true, id: row.id, username: row.username });
+  res.json({ ok: true, id: row!.id, username: row!.username });
 });
 
 // Set a staff password to something the admin types. There is no "email them a reset link" here —

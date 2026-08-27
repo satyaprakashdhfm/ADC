@@ -93,7 +93,7 @@ router.post('/petpooja/mapping/create-product', async (req, res) => {
                              is_available, menu_group, tag, featured, created_at, updated_at)
        VALUES ($1,'COOKIES',$2,$3,NULL,NULL,$4,NULL,NULL,FALSE,$5,$5) RETURNING id`,
       [name, `Imported from Petpooja (item ${item.item_id})`, Number(item.price) || 0, !!item.in_stock, ts]);
-    productId = row.id;
+    productId = row!.id;
   }
 
   await query(
