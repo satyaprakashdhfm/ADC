@@ -1,0 +1,13 @@
+-- No statements, on purpose.
+--
+-- This migration exists to record WHERE THE SCHEMA ACTUALLY IS, not to change it. The 0000
+-- snapshot had drifted badly from the live database — 26 tables against 30, and orders missing
+-- rider_retry_count and rider_retry_at — because those columns arrived through initSchema()'s
+-- ALTER ... ADD COLUMN IF NOT EXISTS rather than through a migration.
+--
+-- drizzle-kit produces the next migration by diffing src/models against the LATEST snapshot in
+-- meta/. With a stale one, `npm run db:generate` would have emitted a migration creating four
+-- tables and two columns that already exist — and someone would have run it.
+--
+-- The accompanying 0004_snapshot.json is generated from src/models, which was itself pulled from
+-- the live schema, so the database and the snapshot now agree and this file has nothing to do.
