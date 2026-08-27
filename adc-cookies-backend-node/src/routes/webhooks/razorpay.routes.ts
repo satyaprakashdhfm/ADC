@@ -33,8 +33,33 @@ async function flagIfStillLive(orderId, what) {
     [orderId]
   );
   if (!order) return;
-  const posLive = await getOne('SELECT 1 FROM petpooja_orders WHERE order_id = $1 AND relay_ok = TRUE', [orderId]);
-  const courierLive = !!order.delhivery_waybill && order.shipment_status !== 'CANCELLED' && order.shipment_status !== 'DELIVERED';
+
+  /*
+   * An order we already cancelled is not live, whatever the other columns say.
+   *
+   * This check was missing, and its absence made the warning fire on EVERY admin Cancel & Refund —
+   * which is the ordinary way a refund happens. Cancel & Refund cancels the courier and the POS
+   * ticket, writes "Delhivery booking cancelled. Petpooja ticket cancelled." into the history, and
+   * then this webhook arrived seconds later and contradicted it in the same timeline.
+   *
+   * The two signals it was reading cannot answer the question:
+   *   relay_ok        records that the relay SUCCEEDED, not that the ticket is open. Cancelling at
+   *                   the POS never changes it, so it stays true forever after the first relay.
+   *   shipment_status is the CARRIER's word, and Delhivery's word for a cancelled manifest is
+   *                   "Not Picked", never "CANCELLED" — so that comparison could never match.
+   *                   Confirmed on waybill 57064410000195: "Not Picked / Shipment not received
+   *                   from client".
+   *
+   * Our own cancellation is the authoritative fact, so it is what we check.
+   */
+  if (String(order.order_status || '').toUpperCase() === 'CANCELLED') return;
+
+  const posLive = await getOne(
+    "SELECT 1 FROM petpooja_orders WHERE order_id = $1 AND relay_ok = TRUE AND coalesce(petpooja_status,'') <> 'CANCELLED'",
+    [orderId]
+  );
+  const shipped = String(order.shipment_status || '').toUpperCase();
+  const courierLive = !!order.delhivery_waybill && shipped !== 'CANCELLED' && shipped !== 'DELIVERED';
   if (!posLive && !courierLive) return;
 
   const live = [posLive ? 'a live Petpooja ticket' : null, courierLive ? `a live ${order.carrier || 'courier'} booking (${order.delhivery_waybill})` : null]

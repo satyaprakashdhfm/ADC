@@ -163,12 +163,26 @@ async function performCancellation({ res, order, reason }) {
   const ts = nowIso();
   const notes: any[] = [];
 
+  /*
+   * Whether each downstream cancel actually SUCCEEDED, so step 4 can record it.
+   *
+   * This used to be written only into a sentence in the history. Nothing updated the columns other
+   * screens read, so shipment_status stayed on the carrier's last word and relay_ok stayed true —
+   * and the Razorpay refund webhook, which reads exactly those, then announced the order still had
+   * a live courier booking and a live POS ticket. It said so on the same order, in the same
+   * timeline, seconds after this function wrote that both were cancelled.
+   */
+  let carrierCancelled = false;
+  let posCancelled = false;
+
   // ---- 1. carrier ----
   if (order.carrier === 'SHIPROCKET' && order.carrier_order_id) {
     const r = await cancelShiprocketOrder(order.carrier_order_id).catch((e) => ({ ok: false, reason: e?.message }));
+    carrierCancelled = !!r.ok;
     notes.push(r.ok ? 'Shiprocket booking cancelled.' : `⚠ Shiprocket refused to cancel: ${String(r.reason).slice(0, 160)}`);
   } else if (order.delhivery_waybill && delhiveryConfigured()) {
     const r = await cancelShipment(order.delhivery_waybill).catch((e) => ({ ok: false, reason: e?.message }));
+    carrierCancelled = !!r.ok;
     notes.push(r.ok ? 'Delhivery booking cancelled.' : `⚠ Delhivery refused to cancel: ${String(r.reason).slice(0, 160)}`);
   }
 
@@ -176,6 +190,7 @@ async function performCancellation({ res, order, reason }) {
   const posRow = await getOne('SELECT 1 FROM petpooja_orders WHERE order_id = $1 AND relay_ok = TRUE', [order.id]);
   if (posRow) {
     const r = await petpoojaCancelOrder(order.order_number, reason).catch((e) => ({ ok: false, reason: e?.message }));
+    posCancelled = !!r?.ok;
     notes.push(r?.ok ? 'Petpooja ticket cancelled.' : '⚠ Petpooja ticket may still be open — check their dashboard.');
   }
 
@@ -223,6 +238,25 @@ async function performCancellation({ res, order, reason }) {
 
   // ---- 4. our own state, last: it is what every other screen reads ----
   await query("UPDATE orders SET order_status='CANCELLED', updated_at=$1 WHERE id=$2", [ts, order.id]);
+
+  /*
+   * Record the downstream outcomes in the COLUMNS, not only in the sentence above.
+   *
+   * Only when the cancel actually succeeded — a carrier that refused must keep its real status, or
+   * this would paper over a booking that is genuinely still live, which is the one thing the
+   * warning exists to catch.
+   *
+   * Note the carrier's own vocabulary is no use here: Delhivery reports a cancelled manifest as
+   * "Not Picked", never "CANCELLED", so the only reliable record is ours.
+   */
+  if (carrierCancelled) {
+    await query("UPDATE orders SET shipment_status='CANCELLED', updated_at=$1 WHERE id=$2", [ts, order.id])
+      .catch(() => {});
+  }
+  if (posCancelled) {
+    await query("UPDATE petpooja_orders SET petpooja_status='CANCELLED', updated_at=$1 WHERE order_id=$2", [ts, order.id])
+      .catch(() => {});
+  }
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [order.id, 'CANCELLED', `Cancelled by admin — ${reason}`, ts]);
   if (notes.length) {
