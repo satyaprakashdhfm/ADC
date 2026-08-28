@@ -1,11 +1,12 @@
 'use client';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { X, Send, ArrowUp } from 'lucide-react';
+import { X, Send, ArrowUp, RotateCcw } from 'lucide-react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { whatsappLink } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 
 /*
  * Doughie — the support assistant.
@@ -46,19 +47,17 @@ const GREETING =
   + 'or your orders — I’m here to help.';
 
 export default function Chatbot({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  /*
+   * authId, not `user` — the Supabase auth id is the only stable answer to "which account is this".
+   * `user`'s phone and email arrive at different moments and each can be the first one present, so
+   * keying on those reads as "somebody else signed in" moments after the SAME person did. This is
+   * the identity CartContext scopes on for the same reason.
+   */
+  const { authId } = useAuth();
+  const signedIn = !!authId;
   const [input, setInput] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Which assistant the user is talking to depends on this, so it is read before the first send.
-  useEffect(() => {
-    let alive = true;
-    supabase.auth.getSession()
-      .then(({ data }) => { if (alive) setSignedIn(!!data.session); })
-      .catch(() => { if (alive) setSignedIn(false); });
-    return () => { alive = false; };
-  }, [open]);
 
   /*
    * headers is a FUNCTION, not an object: a Supabase access token is refreshed in the background,
@@ -75,7 +74,33 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
     },
   }), []);
 
-  const { messages, sendMessage, status, error } = useChat({ transport });
+  const { messages, sendMessage, status, error, setMessages, stop } = useChat({ transport });
+
+  /*
+   * A conversation belongs to whoever was signed in when it happened. Start a fresh one the moment
+   * that changes.
+   *
+   * Without this the transcript outlived the session. FloatingDock keeps this component mounted
+   * across a logout, so signing out left the previous customer's thread on screen — their name,
+   * their orders — and the next person to open the panel could read it. Worse, those turns are sent
+   * back as context, so the assistant kept answering "You are Satya Prakash" from the transcript
+   * even though the server had correctly dropped it to the anonymous agent with no account tools.
+   * The server-side isolation was intact; the leak was the history the browser was still holding.
+   *
+   * Cleared on ANY change of identity, including signing IN — unlike the cart, which deliberately
+   * survives that. A guest thread carries no personal data, but it does carry "you'll need to sign
+   * in first" advice that is wrong the moment they have.
+   */
+  const prevAuthId = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (prevAuthId.current === undefined) { prevAuthId.current = authId; return; } // first resolve is not a change
+    if (prevAuthId.current !== authId) {
+      stop();                 // abandon a reply that is mid-flight for the old identity
+      setMessages([]);
+      setInput('');
+    }
+    prevAuthId.current = authId;
+  }, [authId, setMessages, stop]);
 
   const busy = status === 'submitted' || status === 'streaming';
   const exchanges = messages.filter((m) => m.role === 'user').length;
@@ -147,6 +172,15 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green-500)', display: 'inline-block' }} /> Online · replies instantly
           </div>
         </div>
+        {/* Only once there is something to clear. A reset button on an empty thread is a control
+            that does nothing, and it invites the question of what it would have done. */}
+        {messages.length > 0 && (
+          <button onClick={() => { stop(); setMessages([]); setInput(''); inputRef.current?.focus(); }}
+            aria-label="Start a new conversation" title="Start a new conversation"
+            style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--white-16)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}>
+            <RotateCcw size={15} />
+          </button>
+        )}
         <button onClick={onClose} aria-label="Close chat" style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--white-16)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}><X size={17} /></button>
       </div>
 
