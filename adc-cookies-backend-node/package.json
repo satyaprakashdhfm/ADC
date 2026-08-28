@@ -16,7 +16,9 @@
     "typecheck": "tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.56",
     "@supabase/supabase-js": "^2.108.2",
+    "ai": "^7.0.83",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -29,7 +31,8 @@
     "nodemailer": "^9.0.1",
     "pg": "^8.13.3",
     "undici": "^7.29.0",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

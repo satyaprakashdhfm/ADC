@@ -122,6 +122,47 @@ export async function sendContactEmail({ name, email, phone, message }) {
   await send({ to: cfg().business, replyTo: email, subject: `New enquiry from ${name}`, html: shell('New website enquiry', body) });
 }
 
+/*
+ * A support ticket the chatbot raised, emailed to the business.
+ *
+ * The assistant cannot cancel, refund or change anything, so a ticket IS the action for every
+ * request of that kind — which makes this mail the thing that turns "the bot could not help" into
+ * somebody actually picking it up. Best-effort like every other mail here: a send failure must not
+ * lose the ticket, which is already committed to the database before this is called.
+ */
+export interface TicketMailTurn { role: 'user' | 'assistant'; text: string }
+
+export async function sendSupportTicketEmail({ id, subject, details, category, orderNumber, customerName, customerEmail, transcript = [] }: {
+  id: number; subject: string; details: string; category: string;
+  orderNumber?: string | null; customerName?: string | null; customerEmail?: string | null;
+  transcript?: TicketMailTurn[];
+}) {
+  const rows = [
+    ['Ticket', `#${id}`],
+    ['Category', category],
+    ['Order', orderNumber || '—'],
+    ['Customer', `${customerName || '—'}${customerEmail ? ` (${customerEmail})` : ''}`],
+  ].map(([k, v]) => `<tr><td style="padding:6px 0;width:90px;color:#7A6353">${esc(k)}</td><td style="padding:6px 0;font-weight:700">${esc(String(v))}</td></tr>`).join('');
+
+  const convo = (transcript || []).slice(-6)
+    .map((m) => `<p style="margin:0 0 8px"><span style="color:#7A6353;font-weight:700">${esc(m.role === 'user' ? 'Customer' : 'Doughie')}:</span> ${esc(String(m.text || '').slice(0, 500))}</p>`)
+    .join('');
+
+  const body = `
+    <p style="color:#5C4636">A customer raised this through the support chat.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;color:#2B1D12">${rows}</table>
+    <p style="margin:14px 0 4px;color:#7A6353;font-size:13px">What they need</p>
+    <p style="margin:0;color:#2B1D12;line-height:1.6;white-space:pre-wrap">${esc(details)}</p>
+    ${convo ? `<p style="margin:18px 0 6px;color:#7A6353;font-size:13px">How the conversation went</p><div style="font-size:13px;color:#2B1D12;line-height:1.5">${convo}</div>` : ''}`;
+
+  await send({
+    to: cfg().business,
+    replyTo: customerEmail || null,
+    subject: `Support ticket #${id} — ${subject}`,
+    html: shell('New support ticket', body),
+  });
+}
+
 // Spin & Win — emails the won coupon to a guest who subscribed with their email to claim it.
 // The code becomes usable once they sign in with this same email (it's attached to their account).
 export async function sendCouponEmail({ email, name, code, label, offerText, terms, expiresAt, alreadyInAccount = false }) {

@@ -312,6 +312,35 @@ export async function initSchema() {
       created_at TIMESTAMPTZ NOT NULL
     );
 
+    /*
+     * Support tickets raised from the chatbot.
+     *
+     * The bot has NO authority to change an order — it cannot cancel, refund or reschedule, because
+     * no such tool exists for it to call. When a customer asks for one of those, the only thing it
+     * can do is record the request here for a person, which is what this table is.
+     *
+     * user_id is NOT NULL on purpose: a ticket always belongs to the signed-in customer whose
+     * session raised it. There is no path that lets anyone file a ticket against another account.
+     * order_id is nullable — plenty of questions are not about a specific order.
+     *
+     * transcript keeps the few turns that led to the ticket, so whoever picks it up can see what
+     * was actually asked rather than only the one-line summary the model wrote.
+     */
+    CREATE TABLE IF NOT EXISTS support_tickets (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+      subject TEXT NOT NULL,
+      details TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'GENERAL',
+      status TEXT NOT NULL DEFAULT 'OPEN',
+      transcript JSONB,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets (status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets (user_id);
+
     CREATE TABLE IF NOT EXISTS warehouses (
       id SERIAL PRIMARY KEY,
       name VARCHAR(255) NOT NULL,

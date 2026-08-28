@@ -22,3 +22,4 @@ export * from './spin.model.js';
 export * from './store.model.js';
 export * from './user.model.js';
 export * from './warehouse.model.js';
+export * from './supportTicket.model.js';

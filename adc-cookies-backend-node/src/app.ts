@@ -30,6 +30,7 @@ import couponRoutes from './routes/coupons.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import adminAuthRoutes from './routes/adminAuth.routes.js';
 import contactRoutes from './routes/contact.routes.js';
+import chatRoutes from './routes/chat.routes.js';
 import deliveryRoutes from './routes/delivery.routes.js';
 import petpoojaRoutes from './routes/webhooks/petpooja.routes.js';
 import hyperlocalRoutes from './routes/webhooks/hyperlocal.routes.js';
@@ -114,6 +115,9 @@ app.use('/api/addresses', addressRoutes);
 app.use('/api/admin-auth', adminAuthRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/contact', contactRoutes);
+/* Not behind requireAuth on purpose — a signed-out visitor gets a smaller assistant, not a 401.
+   See chat.routes.ts. */
+app.use('/api/chat', chatRoutes);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api/petpooja', petpoojaRoutes);
 // Store staff portal. Its own auth scheme (see storeAuth.js), NOT a Supabase role — counter staff

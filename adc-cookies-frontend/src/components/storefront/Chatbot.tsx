@@ -1,217 +1,128 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { X, Send } from 'lucide-react';
+import { X, Send, ArrowUp } from 'lucide-react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 import { whatsappLink } from '@/lib/site';
-import { FAQ_CATEGORIES, type FaqCategory, type FaqItem } from '@/lib/faqData';
+import { supabase } from '@/lib/supabase';
 
 /*
- * Doughie — the categorized FAQ support bot. Flow: greet -> pick a category -> pick a question
- * -> get the answer -> "anything else?" -> yes loops back to the OTHER categories (the one just
- * used drops off the list), no ends the chat. No free-text input; every step is a tap.
+ * Doughie — the support assistant.
  *
- * The current set of options (categories / questions / yes-no / closed) renders as its own
- * "message" attached at the bottom of the scrolling thread — like a real chat's quick-reply
- * buttons — rather than in a separate fixed panel. Only the LATEST message is ever interactive;
- * once acted on, it's replaced by a plain text bubble recording what was picked, and the next
- * options message (if any) is appended after the bot's reply. Each options message carries its
- * own `usedKeys` snapshot so "back"/"yes" always know exactly which categories are already spent,
- * without reaching outside the message list for state.
+ * This used to be a tap-only FAQ tree: pick a category, pick a question, read the canned answer.
+ * It could only ever say the things somebody had written down in advance, which meant the one
+ * question people actually open a support chat to ask — "where is my order" — was the one it could
+ * not answer.
+ *
+ * It is now a real conversation against our own /api/chat, which can read THIS customer's orders
+ * and raise a ticket when the answer is "a person needs to do that".
+ *
+ * The FAQ tree is kept in lib/faqData.ts, unused, rather than deleted — the copy in it is good and
+ * is the obvious place to look when tuning the assistant's answers.
+ *
+ * WHAT THIS COMPONENT DOES NOT DO is decide what the assistant may see. There is no API key here
+ * and no order data fetched here; the browser sends the conversation and the session token, and the
+ * server decides which tools exist for that caller. See chatTools.service.ts.
  */
-type Msg =
-  | { kind: 'text'; from: 'bot' | 'user'; text: string }
-  | { kind: 'categories'; usedKeys: string[] }
-  | { kind: 'questions'; categoryKey: string; usedKeys: string[] }
-  | { kind: 'yesno'; usedKeys: string[] }
-  | { kind: 'closed' };
 
-const GREETING = 'Hey there! I’m Doughie, your friendly ADC support cookie. Whether you have a question, need help with an order, or just want to know more about our cookies, I’m here to help. What can I do for you today?';
-const WELCOME_BACK = 'Welcome back! 👋 What can I help you with now?';
-const ANYTHING_ELSE = 'Anything else I can help with?';
-const GOODBYE = 'Glad I could help! Have a sweet day 👋';
+/*
+ * Openers. Two, deliberately — a wall of suggestions is a menu, and a menu is what this replaced.
+ * They differ by sign-in state because the signed-out assistant genuinely cannot answer the second
+ * one, and offering a question it must refuse is a worse start than not offering it.
+ */
+const OPENERS_SIGNED_IN = ['Where is my order?', 'What are your bestsellers?'];
+const OPENERS_SIGNED_OUT = ['What cookies do you sell?', 'Do you deliver to my area?'];
 
-// Versioned: a returning visitor's saved transcript is replayed on open, which meant everyone who
-// had ever opened the bot kept seeing the OLD greeting even after we changed it. Bumping the key
-// retires those transcripts so the current welcome is what people actually get.
-const HISTORY_KEY = 'adc_chat_history_v2';
-const HISTORY_MAX = 60; // keep the transcript bounded so localStorage can't grow forever
+/* Offered once the conversation has run a little, so there is a way onward that is not typing. */
+const FOLLOW_UPS_SIGNED_IN = ['Track my latest order', 'I need help with an order'];
+const FOLLOW_UPS_SIGNED_OUT = ['How long does delivery take?', 'Are your cookies eggless?'];
 
-const initialMsgs = (): Msg[] => [
-  { kind: 'text', from: 'bot', text: GREETING },
-  { kind: 'categories', usedKeys: [] },
-];
+/** After this many exchanges we start offering the follow-ups. */
+const FOLLOW_UP_AFTER = 3;
 
-// A finished conversation is reopened as: the old transcript (read-only), then a fresh
-// welcome-back + topic menu. Anything still mid-flow is resumed exactly where it was left.
-function restore(saved: Msg[]): Msg[] {
-  const ended = saved[saved.length - 1]?.kind === 'closed';
-  if (!ended) return saved;
-  return [
-    ...saved.slice(0, -1),
-    { kind: 'text', from: 'bot', text: WELCOME_BACK },
-    { kind: 'categories', usedKeys: [] },
-  ];
-}
+const GREETING =
+  'Hey there! I’m Doughie, your ADC support cookie. Ask me about our cookies, delivery, '
+  + 'or your orders — I’m here to help.';
 
 export default function Chatbot({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [msgs, setMsgs] = useState<Msg[]>(initialMsgs);
-  const [loaded, setLoaded] = useState(false);
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [input, setInput] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load the saved transcript once, on the client only (localStorage doesn't exist during SSR).
+  // Which assistant the user is talking to depends on this, so it is read before the first send.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(HISTORY_KEY);
-      const saved = raw ? JSON.parse(raw) : null;
-      if (Array.isArray(saved) && saved.length) setMsgs(restore(saved));
-    } catch { /* corrupt or unavailable — just start fresh */ }
-    setLoaded(true);
-  }, []);
+    let alive = true;
+    supabase.auth.getSession()
+      .then(({ data }) => { if (alive) setSignedIn(!!data.session); })
+      .catch(() => { if (alive) setSignedIn(false); });
+    return () => { alive = false; };
+  }, [open]);
 
-  // Persist after every turn, but never before the initial load or we'd overwrite the history
-  // with the default greeting.
-  useEffect(() => {
-    if (!loaded) return;
-    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(msgs.slice(-HISTORY_MAX))); } catch { /* quota/private mode */ }
-  }, [msgs, loaded]);
+  /*
+   * headers is a FUNCTION, not an object: a Supabase access token is refreshed in the background,
+   * and a token captured once at mount would be stale by the time somebody sends their third
+   * message. Resolving it per request means the server sees a live session or none at all — and
+   * "none at all" is a smaller assistant, not an error.
+   */
+  const transport = useMemo(() => new DefaultChatTransport({
+    api: '/api/chat',
+    headers: async (): Promise<Record<string, string>> => {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    },
+  }), []);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs]);
+  const { messages, sendMessage, status, error } = useChat({ transport });
+
+  const busy = status === 'submitted' || status === 'streaming';
+  const exchanges = messages.filter((m) => m.role === 'user').length;
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, busy]);
+  useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
 
   if (!open) return null;
 
-  const isLast = (i: number) => i === msgs.length - 1;
-
-  // Replaces the current (last) options message with a plain-text record of what was picked,
-  // then appends whatever comes next — same shape a real chat uses for a resolved quick-reply.
-  const resolve = (pickedText: string, ...next: Msg[]) => {
-    setMsgs(m => [...m.slice(0, -1), { kind: 'text', from: 'user', text: pickedText }, ...next]);
+  const send = (text: string) => {
+    const t = text.trim();
+    if (!t || busy) return;
+    setInput('');
+    sendMessage({ text: t });
   };
 
-  const pickCategory = (cat: FaqCategory, usedKeys: string[]) => {
-    resolve(`${cat.emoji} ${cat.label}`, { kind: 'questions', categoryKey: cat.key, usedKeys });
-  };
+  /* Openers before anything is said; follow-ups once the conversation has actually run. Nothing in
+     between, so the panel is not permanently half-menu. */
+  const suggestions = messages.length === 0
+    ? (signedIn ? OPENERS_SIGNED_IN : OPENERS_SIGNED_OUT)
+    : (!busy && exchanges >= FOLLOW_UP_AFTER
+        ? (signedIn ? FOLLOW_UPS_SIGNED_IN : FOLLOW_UPS_SIGNED_OUT)
+        : []);
 
-  const pickQuestion = (cat: FaqCategory, item: FaqItem, usedKeys: string[]) => {
-    const nextUsed = usedKeys.includes(cat.key) ? usedKeys : [...usedKeys, cat.key];
-    resolve(item.q,
-      { kind: 'text', from: 'bot', text: item.a },
-      { kind: 'text', from: 'bot', text: ANYTHING_ELSE },
-      { kind: 'yesno', usedKeys: nextUsed },
-    );
-  };
+  const bubble = (from: 'bot' | 'user', text: string, key: string) => (
+    <div key={key} style={{ alignSelf: from === 'bot' ? 'flex-start' : 'flex-end', maxWidth: '82%' }}>
+      <div style={{
+        padding: '10px 13px', borderRadius: 14,
+        borderBottomLeftRadius: from === 'bot' ? 4 : 14,
+        borderBottomRightRadius: from === 'user' ? 4 : 14,
+        background: from === 'bot' ? 'var(--surface-card)' : 'var(--gradient-warm)',
+        color: from === 'bot' ? 'var(--text-body)' : 'var(--white)',
+        border: from === 'bot' ? '1px solid var(--border-default)' : 'none',
+        fontSize: 'var(--text-sm)', lineHeight: 1.5, boxShadow: 'var(--shadow-xs)',
+        whiteSpace: 'pre-wrap',
+      }}>
+        {text}
+      </div>
+    </div>
+  );
 
-  const backToCategories = (usedKeys: string[]) => {
-    setMsgs(m => [...m.slice(0, -1), { kind: 'categories', usedKeys }]);
-  };
-
-  const answerYes = (usedKeys: string[]) => {
-    resolve('Yes', { kind: 'categories', usedKeys });
-  };
-  const answerNo = () => {
-    resolve('No', { kind: 'text', from: 'bot', text: GOODBYE }, { kind: 'closed' });
-  };
-  // A deliberate fresh start wipes the saved transcript too — otherwise the next open would
-  // resurrect the very conversation the user just cleared.
-  const startOver = () => {
-    try { localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
-    setMsgs(initialMsgs());
-  };
-
-  const chip = (label: string, onClick: () => void, key?: string) => (
-    <button key={key ?? label} onClick={onClick}
-      style={{ padding: '7px 12px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 'var(--text-xs)', cursor: 'pointer', textAlign: 'left' }}>
+  const chip = (label: string) => (
+    <button key={label} onClick={() => send(label)} disabled={busy}
+      style={{ padding: '7px 12px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 'var(--text-xs)', cursor: busy ? 'default' : 'pointer', textAlign: 'left', opacity: busy ? 0.6 : 1 }}>
       {label}
     </button>
   );
-
-  // Renders one message — either a plain bubble, or (only when it's the latest message) the
-  // live set of tappable options for that step.
-  const renderMsg = (m: Msg, i: number) => {
-    if (m.kind === 'text') {
-      return (
-        <div key={i} style={{ alignSelf: m.from === 'bot' ? 'flex-start' : 'flex-end', maxWidth: '82%' }}>
-          <div style={{
-            padding: '10px 13px', borderRadius: 14,
-            borderBottomLeftRadius: m.from === 'bot' ? 4 : 14,
-            borderBottomRightRadius: m.from === 'user' ? 4 : 14,
-            background: m.from === 'bot' ? 'var(--surface-card)' : 'var(--gradient-warm)',
-            color: m.from === 'bot' ? 'var(--text-body)' : 'var(--white)',
-            border: m.from === 'bot' ? '1px solid var(--border-default)' : 'none',
-            fontSize: 'var(--text-sm)', lineHeight: 1.5, boxShadow: 'var(--shadow-xs)',
-          }}>{m.text}</div>
-        </div>
-      );
-    }
-    if (!isLast(i)) return null; // an old, already-acted-on options message — nothing left to show
-
-    const optionsWrap: React.CSSProperties = { alignSelf: 'flex-start', maxWidth: '92%', background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 14, borderBottomLeftRadius: 4, padding: '10px 12px', boxShadow: 'var(--shadow-xs)' };
-
-    if (m.kind === 'categories') {
-      /*
-       * Every topic, every time — including ones already visited.
-       *
-       * A used topic used to be filtered out of this list entirely, on the reasoning that you had
-       * been there. But a topic holds several questions, so asking one of them silently cost you
-       * the rest: ask whether the cookies are eggless and the whole Ingredients topic disappeared,
-       * taking the allergens and the gluten-free answers with it. Nothing told you that had
-       * happened, and there was no way back to them short of starting a new conversation.
-       *
-       * Every topic simply stays listed, unmarked. Re-reading an answer is not a wrong turn worth
-       * guarding against, and a menu that quietly rearranges itself as you use it is harder to
-       * navigate than one that always looks the same.
-       *
-       * `usedKeys` is still carried on the message — it is part of the persisted transcript shape,
-       * so dropping it would break saved conversations — it just no longer decides what is shown.
-       */
-      return (
-        <div key={i} style={optionsWrap}>
-          <div style={{ fontSize: 'var(--text-2xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>WHAT WOULD YOU LIKE TO KNOW?</div>
-          <div className="hide-sb" style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {FAQ_CATEGORIES.map(cat => chip(`${cat.emoji} ${cat.label}`, () => pickCategory(cat, m.usedKeys), cat.key))}
-          </div>
-          {/* Always reachable now that the list never empties — a bot that cannot answer something
-              should still be one tap from a person who can. */}
-          <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10, fontSize: 'var(--text-2xs)', color: 'var(--brand-secondary)', fontWeight: 700, textDecoration: 'none' }}>
-            <Send size={13} /> Not listed? Message us on WhatsApp
-          </a>
-        </div>
-      );
-    }
-    if (m.kind === 'questions') {
-      const cat = FAQ_CATEGORIES.find(c => c.key === m.categoryKey);
-      if (!cat) return null;
-      return (
-        <div key={i} style={optionsWrap}>
-          <button onClick={() => backToCategories(m.usedKeys)} style={{ background: 'none', border: 'none', padding: 0, marginBottom: 8, color: 'var(--brand-secondary)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-2xs)', cursor: 'pointer' }}>
-            ← Back to topics
-          </button>
-          <div style={{ fontSize: 'var(--text-2xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>{cat.emoji} {cat.label.toUpperCase()}</div>
-          <div className="hide-sb" style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {cat.items.map(item => chip(item.q, () => pickQuestion(cat, item, m.usedKeys), item.q))}
-          </div>
-        </div>
-      );
-    }
-    if (m.kind === 'yesno') {
-      return (
-        <div key={i} style={{ ...optionsWrap, display: 'flex', gap: 8 }}>
-          <button onClick={() => answerYes(m.usedKeys)} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>Yes</button>
-          <button onClick={answerNo} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', color: 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>No</button>
-        </div>
-      );
-    }
-    // closed
-    return (
-      <div key={i} style={{ ...optionsWrap, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)', color: 'var(--brand-secondary)', fontWeight: 700, textDecoration: 'none' }}>
-          <Send size={14} /> Need something else? Message us on WhatsApp
-        </a>
-        <button onClick={startOver} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-xs)', cursor: 'pointer', textDecoration: 'underline' }}>
-          Start a new conversation
-        </button>
-      </div>
-    );
-  };
 
   return (
     <div
@@ -239,12 +150,68 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
         <button onClick={onClose} aria-label="Close chat" style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--white-16)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}><X size={17} /></button>
       </div>
 
-      {/* Messages — including the current step's tappable options, attached at the bottom like
-          any other chat bubble, rather than in a separate control strip. */}
+      {/* Thread */}
       <div className="hide-sb" style={{ flex: 1, overflowY: 'auto', padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--surface-sunken)' }}>
-        {msgs.map((m, i) => renderMsg(m, i))}
+        {bubble('bot', GREETING, 'greeting')}
+
+        {messages.map((m) => {
+          /* A message is a list of parts; only the text ones are shown. Tool calls are how the
+             answer was found, not part of the answer, and narrating them to a customer would be
+             noise — the reply already contains what they came for. */
+          const text = m.parts
+            .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+            .map((p) => p.text).join('');
+          if (!text) return null;
+          return bubble(m.role === 'user' ? 'user' : 'bot', text, m.id);
+        })}
+
+        {busy && (
+          <div style={{ alignSelf: 'flex-start', padding: '10px 13px', borderRadius: 14, borderBottomLeftRadius: 4, background: 'var(--surface-card)', border: '1px solid var(--border-default)', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+            Doughie is typing…
+          </div>
+        )}
+
+        {error && (
+          <div style={{ alignSelf: 'flex-start', maxWidth: '82%', padding: '10px 13px', borderRadius: 14, background: 'var(--red-wash)', border: '1px solid var(--status-error)', color: 'var(--text-body)', fontSize: 'var(--text-sm)' }}>
+            Sorry — I couldn’t reach support just then. Try again, or{' '}
+            <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-secondary)', fontWeight: 700 }}>message us on WhatsApp</a>.
+          </div>
+        )}
+
+        {suggestions.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 2 }}>
+            {suggestions.map(chip)}
+          </div>
+        )}
+
         <div ref={endRef} />
       </div>
+
+      {/* Composer */}
+      <form
+        onSubmit={(e) => { e.preventDefault(); send(input); }}
+        style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderTop: '1px solid var(--border-default)', background: 'var(--surface-page)' }}
+      >
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={signedIn ? 'Ask about your order or our cookies…' : 'Ask about our cookies…'}
+          aria-label="Message"
+          style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--text-body)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', outline: 'none' }}
+        />
+        <button type="submit" disabled={busy || !input.trim()} aria-label="Send"
+          style={{ width: 38, height: 38, flex: 'none', borderRadius: '50%', border: 'none', background: busy || !input.trim() ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', display: 'grid', placeItems: 'center', cursor: busy || !input.trim() ? 'default' : 'pointer' }}>
+          <ArrowUp size={17} />
+        </button>
+      </form>
+
+      {/* A human, always one tap away. The assistant cannot cancel or refund anything, so the route
+          to somebody who can must never be buried. */}
+      <a href={whatsappLink()} target="_blank" rel="noopener noreferrer"
+        style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '8px 12px 11px', fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700, textDecoration: 'none', background: 'var(--surface-page)' }}>
+        <Send size={12} /> Prefer a person? Message us on WhatsApp
+      </a>
     </div>
   );
 }
