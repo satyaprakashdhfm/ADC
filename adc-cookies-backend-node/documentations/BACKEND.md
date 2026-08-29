@@ -153,6 +153,17 @@ an order parks at `NEW`, retry with `{ order_id }` before assuming anything is c
 that is confirmed, `statusPoller.retryRiderSearch` burns all three attempts on a call that cannot
 succeed.
 
+**We hunt for a rider while the cookies are still in the oven.** `autoCreateShipment` runs when the
+store *accepts* the order, not when it is packed. On ADC20260829055951 the store accepted at
+08:41:48, the hunt began at 08:41:53, gave up at 09:11:55 — and the order was only PACKED at
+09:12:56. **The rider search expired 61 seconds before the food was ready**, and had it succeeded,
+a rider would have been standing at the counter for half an hour.
+
+This is the real cause of that day's failure; the retry only looked broken because it was cleaning
+up after a hunt that ran at the wrong time. Two ways out: send `search_rider_for` with roughly the
+prep time so the hunt starts when the order is nearly ready, or move booking from store-accept to
+PACKED. The first is one field; the second is a flow change.
+
 **Rate limit** is a real `429`. The poller is deliberately sequential for this reason.
 
 ### Hyperlocal (Quick) — the parameters that make it hyperlocal
@@ -177,7 +188,7 @@ Serviceability also returns `distance` alongside `rates`, which is where our km 
 
 | field | what it does | worth it? |
 |---|---|---|
-| `search_rider_for` | how long they hunt for a rider, in **seconds, max 1800**. Unset appears to default to the maximum — our observed hunt was ~30 min, exactly 1800s | **yes.** A shorter window would surface a doomed order to staff in 10 minutes instead of 30 |
+| `search_rider_for` | **a delay before the hunt starts**, in seconds, max 1800 — *not* a cap on how long it runs. Unset = start immediately, confirmed by ADC20260829055951 searching 1s after creation | **yes — see the timing note below** |
 | `pickup_otp`, `drop_otp`, `rto_otp` | 4-digit codes the rider must enter in their app at each handover | plausible anti-mix-up measure for multi-order pickups |
 | `future_pickup_scheduled` | schedule the assignment up to 48h ahead | would let us take genuine pre-orders |
 | `quick_drop_addresses[]` | **SPMD — Single Pickup, Multiple Drops.** One rider, several orders from one store. Serviceability takes comma-separated `lat_to`/`long_to` for this | **the interesting one.** Two Bengaluru orders from the same store in the same window are two riders and two fees today |
