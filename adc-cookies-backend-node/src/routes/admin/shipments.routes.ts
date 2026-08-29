@@ -222,20 +222,31 @@ router.post('/orders/:id/rebook', async (req, res) => {
    * An intracity order that is already booked needs a RIDER, not another booking.
    *
    * When nobody accepts, Shiprocket abandons the hunt and puts the order back to NEW — their own
-   * panel then offers "Ship Now" again. The order is still there; only the assignment is gone. Ours
-   * has no waybill in that state (an AWB only exists once a rider is found), and the retry below
-   * skips solely on the waybill — so it would have created a SECOND Shiprocket order for the same
-   * cookies, leaving the first live. Two bookings, and if both eventually find riders, two riders at
-   * the store.
+   * panel then offers "Ship Now" again. Ours has no waybill in that state (an AWB only exists once
+   * a rider is found), and the create path below skips solely on the waybill — so it would have
+   * created a SECOND Shiprocket order for the same cookies, leaving the first live. Two bookings,
+   * and if both eventually find riders, two riders at the store.
    *
-   * So: re-run the assignment against the shipment we already have, which is exactly what their
-   * "Ship Now" does. Only a booking that never existed falls through to creating one.
+   * So: re-run the assignment, which is what their "Ship Now" does. Only a booking that never
+   * existed falls through to creating one.
+   *
+   * BY ORDER ID, not shipment id — the same distinction the poller makes, for the same reason. What
+   * Shiprocket cancels when a hunt lapses is the SHIPMENT; the ORDER stays at NEW. Assigning against
+   * the shipment answers "order is in cancelled state", which is exactly what this button used to do
+   * on the one kind of order it exists to rescue. Falls back to the shipment so a booking that never
+   * lapsed behaves as before.
    */
   const wasIntracity = order.carrier === 'SHIPROCKET' || !!order.carrier_order_id;
-  if (wasIntracity && order.delhivery_shipment_id) {
+  if (wasIntracity && (order.carrier_order_id || order.delhivery_shipment_id)) {
     if (!shiprocketConfigured()) throw new ApiError('Shiprocket is not configured on this environment.', 503);
-    console.log(`[ADMIN-SHIPMENT] rebook | order=${order.order_number} | re-assigning rider on shipment=${order.delhivery_shipment_id}`);
-    const assigned = await assignAwb(order.delhivery_shipment_id, { vehicleType: 2 });
+    console.log(`[ADMIN-SHIPMENT] rebook | order=${order.order_number} | re-assigning rider on order=${order.carrier_order_id ?? '-'} shipment=${order.delhivery_shipment_id ?? '-'}`);
+    let assigned = order.carrier_order_id
+      ? await assignAwb({ orderId: order.carrier_order_id }, { vehicleType: 2 })
+      : { ok: false, reason: 'no carrier_order_id' } as any;
+    if (!assigned.ok && order.delhivery_shipment_id) {
+      console.log(`[ADMIN-SHIPMENT] rebook | order=${order.order_number} | order-keyed assign refused, trying shipment`);
+      assigned = await assignAwb({ shipmentId: order.delhivery_shipment_id }, { vehicleType: 2 });
+    }
     if (!assigned.ok) {
       const reason = String(typeof assigned.reason === 'string' ? assigned.reason : JSON.stringify(assigned.reason ?? 'Carrier refused'));
       const balance = await getWalletBalance().catch(() => null);
@@ -245,12 +256,15 @@ router.post('/orders/:id/rebook', async (req, res) => {
       return res.status(502).json({ ok: false, reason: detail, error: `Shiprocket would not assign a rider: ${detail}`, message: `Shiprocket would not assign a rider: ${detail}` });
     }
     // Assignment is asynchronous — a pending search is a success, so read back whatever exists now.
-    const track = await trackShiprocket(order.delhivery_shipment_id, order.carrier_order_id).catch(() => null);
+    /* An order-keyed assign can attach a NEW shipment; track and store that one, or every later
+       poll asks about the cancelled shipment and gets silence. */
+    const shipmentNow = assigned.shipmentId ? String(assigned.shipmentId) : order.delhivery_shipment_id;
+    const track = await trackShiprocket(shipmentNow, order.carrier_order_id).catch(() => null);
     const awb = assigned.awb || track?.awb || null;
     await query(
       `UPDATE orders SET delhivery_waybill = COALESCE($1, delhivery_waybill), shipment_status = $2,
-              shipment_error = NULL, updated_at = $3 WHERE id = $4`,
-      [awb, track?.status || 'SEARCHING FOR RIDER', nowIso(), order.id]
+              shipment_error = NULL, delhivery_shipment_id = $3, updated_at = $4 WHERE id = $5`,
+      [awb, track?.status || 'SEARCHING FOR RIDER', shipmentNow, nowIso(), order.id]
     );
     await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
       [order.id, 'SHIPMENT_CREATED', bookingNote('SHIPROCKET', awb, ' (rider search restarted)'), nowIso()]).catch(() => {});

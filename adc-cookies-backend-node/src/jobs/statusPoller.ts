@@ -1,5 +1,6 @@
-import { getAll, query, nowIso } from '../db/index.js';
+import { getAll, getOne, query, nowIso } from '../db/index.js';
 import { trackShiprocket, shiprocketConfigured, assignAwb, getWalletBalance } from '../services/shiprocket.client.js';
+import type { ClientResult } from '../utils/result.js';
 import { trackShipment, delhiveryConfigured } from '../services/delhivery.client.js';
 import { applyCarrierTerminalStatus } from '../services/orderProgress.service.js';
 
@@ -29,25 +30,40 @@ const MAX_AGE_DAYS = 3;
 /*
  * Automatic "Ship Now" after Shiprocket abandons a rider search.
  *
- * Their hunt runs about an hour; if nobody accepts they drop the ASSIGNMENT and put the order back
- * to NEW. The shipment is untouched - only the rider is gone - which is why this re-assigns against
- * the shipment we already have rather than booking again. Booking again would leave two live
- * bookings for one lot of cookies, and two riders at the store if both eventually found one.
+ * Their hunt runs about half an hour; if nobody accepts, Shiprocket CANCELS THE SHIPMENT and puts
+ * the ORDER back to NEW.
  *
- * Three goes, then it stops and the admin's Needs-attention list owns it: past that it is not a
- * rider-availability problem any more and another identical call will not discover otherwise.
+ * That distinction is the whole fix. We used to re-assign against the shipment, on the belief that
+ * only the assignment had been dropped - so every retry hit a cancelled object and came back
+ * "order is in cancelled state", instantly, three times, while /orders/show reported the order as
+ * a healthy NEW. Verified on ADC20260829055951 (2026-08-29): eighteen minutes at NEW, two retries
+ * refused 300ms apart, then a human clicked Ship Now in their panel and it worked on the same ids.
+ *
+ * So we assign against the ORDER and let them attach a fresh shipment - which is what their panel
+ * does, and what their docs allow (assignment takes shipment_id OR order_id). Re-CREATING the order
+ * would be the wrong fix: that is what risks two live bookings and two riders at the store.
+ *
+ * Three goes, each buying a real ~30 minute search, then the admin's Needs-attention list owns it.
  */
 export const RIDER_RETRY_MAX = Number(process.env.RIDER_RETRY_MAX || 3);
-/* Minimum gap between attempts. A REFUSED assign (an empty wallet is much the commonest) leaves
-   the status sitting at NEW, so without this the whole allowance would be spent inside one
-   quarter of an hour on something no retry can fix. */
+/*
+ * The gap now applies ONLY after a refusal, and this is the whole reason it still exists.
+ *
+ * A successful assign moves the order off NEW for the length of Shiprocket's own hunt — about half
+ * an hour — and our gate only fires on NEW. Their hunt IS the spacing, so a timer on top of a
+ * success does nothing. A REFUSED assign is the opposite: nothing was booked, the status sits at
+ * NEW, and the five-minute sweep would fire again immediately.
+ */
 const RIDER_RETRY_GAP_MIN = Number(process.env.RIDER_RETRY_GAP_MIN || 10);
+/* Refusals are bounded separately, only so an unfixable order stops polling for three days. It is
+   deliberately generous: a wallet topped up an hour later should still get its three real hunts. */
+const RIDER_REFUSAL_MAX = Number(process.env.RIDER_REFUSAL_MAX || 8);
 
 async function dueOrders() {
   return getAll(
     `SELECT id, order_number, order_status, carrier, carrier_order_id,
             delhivery_shipment_id, delhivery_waybill, shipment_status,
-            rider_retry_count, rider_retry_at
+            rider_retry_count, rider_retry_at, rider_refusal_count
        FROM orders
       WHERE payment_status = 'PAID'
         AND order_status NOT IN ('DELIVERED','CANCELLED')
@@ -111,49 +127,104 @@ async function refreshOne(o) {
  * gets the order in front of a person, with the balance written next to it so they top up rather
  * than cancel.
  */
+/*
+ * The one customer-facing line for an order we have stopped searching for.
+ *
+ * It belongs here rather than on a failed attempt, because hunts are only counted when the assign
+ * SUCCEEDED - so the third search ends by lapsing back to NEW, silently, with no error to hang a
+ * message off. Written once: the sweep keeps seeing this order until it is delivered or cancelled,
+ * and a tracking page repeating the same line every five minutes reads as a system in a loop.
+ */
+const EXHAUSTED_REMARK = 'We are arranging your delivery — our team is on it.';
+
+async function noteExhausted(o) {
+  const already = await getOne(
+    `SELECT 1 AS x FROM order_tracking WHERE order_id = $1 AND remarks = $2 LIMIT 1`,
+    [o.id, EXHAUSTED_REMARK],
+  ).catch(() => ({ x: 1 }));   // on a read failure, say nothing rather than risk repeating it
+  if (already) return;
+  await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
+    [o.id, 'AWAITING_COURIER', EXHAUSTED_REMARK, nowIso()]).catch(() => {});
+  console.log(`[POLL] ${o.order_number} | ship-now exhausted ${RIDER_RETRY_MAX}/${RIDER_RETRY_MAX} — needs a person`);
+}
+
 async function retryRiderSearch(o, tracked) {
   if (String(tracked.status || '').trim().toUpperCase() !== 'NEW') return;   // only the lapsed state
   if (tracked.awb || o.delhivery_waybill) return;         // a rider exists; there is nothing to re-search
   if (['DELIVERED', 'CANCELLED'].includes(o.order_status)) return;
 
-  const tries = Number(o.rider_retry_count) || 0;
-  if (tries >= RIDER_RETRY_MAX) return;                   // spent - the attention panel owns it now
+  const hunts = Number(o.rider_retry_count) || 0;
+  if (hunts >= RIDER_RETRY_MAX) { await noteExhausted(o); return; }  // spent - attention panel owns it
+  const refusals = Number(o.rider_refusal_count) || 0;
+  if (refusals >= RIDER_REFUSAL_MAX) return;              // not a rider problem; stop asking
+
+  /* The debounce applies to REFUSALS only. After a successful assign the order is not at NEW at
+     all - Shiprocket is hunting - so we could not get here anyway, and waiting would only delay the
+     next real search. See RIDER_RETRY_GAP_MIN. */
   const last = o.rider_retry_at ? new Date(o.rider_retry_at).getTime() : 0;
-  if (last && Date.now() - last < RIDER_RETRY_GAP_MIN * 60_000) return;
+  if (refusals > 0 && last && Date.now() - last < RIDER_RETRY_GAP_MIN * 60_000) return;
 
-  const attempt = tries + 1;
+  const attempt = hunts + 1;
   const ts = nowIso();
-  const assigned = await assignAwb(o.delhivery_shipment_id, { vehicleType: 2 })
-    .catch((e) => ({ ok: false, reason: e?.message || 'assign threw' }));
 
-  await query('UPDATE orders SET rider_retry_count=$1, rider_retry_at=$2, updated_at=$2 WHERE id=$3',
-    [attempt, ts, o.id]).catch(() => {});
+  /*
+   * By ORDER id. The shipment we hold was cancelled when their hunt lapsed; the order is the thing
+   * still alive at NEW. Falling back to the shipment keeps this no worse than the old behaviour if
+   * they ever reject an order-keyed assign, and logs which one actually worked.
+   */
+  const srOrderId = o.carrier_order_id;
+  let assigned: ClientResult = srOrderId
+    ? await assignAwb({ orderId: srOrderId }, { vehicleType: 2 }).catch((e): ClientResult => ({ ok: false, reason: e?.message || 'assign threw' }))
+    : { ok: false, reason: 'no carrier_order_id on this order' };
+  let via = 'order';
+
+  if (!assigned.ok && o.delhivery_shipment_id) {
+    console.log(`[POLL] ${o.order_number} | assign by order refused (${String(assigned.reason).slice(0, 80)}) — trying shipment`);
+    assigned = await assignAwb({ shipmentId: o.delhivery_shipment_id }, { vehicleType: 2 })
+      .catch((e): ClientResult => ({ ok: false, reason: e?.message || 'assign threw' }));
+    via = 'shipment';
+  }
 
   const note = (status, remarks) =>
     query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
       [o.id, status, remarks, nowIso()]).catch(() => {});
 
   if (assigned.ok) {
-    await query('UPDATE orders SET shipment_error = NULL WHERE id = $1', [o.id]).catch(() => {});
+    /* Assigning by order can attach a NEW shipment. Store it, or trackShiprocket spends the rest of
+       this order's life asking about the cancelled one and getting silence back. */
+    const fresh = assigned.shipmentId && String(assigned.shipmentId) !== String(o.delhivery_shipment_id)
+      ? String(assigned.shipmentId)
+      : null;
+    await query(
+      `UPDATE orders SET rider_retry_count=$1, rider_retry_at=$2, updated_at=$2, shipment_error=NULL,
+              delhivery_shipment_id = COALESCE($3, delhivery_shipment_id)
+        WHERE id=$4`,
+      [attempt, ts, fresh, o.id],
+    ).catch(() => {});
     /* Customer-facing: this row renders on their own account page, so it says what is true without
        narrating our retry machinery at them.
        The status deliberately avoids the word "rider": OrderProgress.stageOfEvent tests for it as a
        sign the parcel is moving, so "SEARCHING FOR RIDER" would advance the customer's tracker to
        "Order Shipped" at the exact moment we have established that nobody is carrying it. */
     await note('AWAITING_COURIER', 'Still finding a delivery partner — trying again.');
-    console.log(`[POLL] ${o.order_number} | ship-now retry ${attempt}/${RIDER_RETRY_MAX} | ✓ searching again`);
+    console.log(`[POLL] ${o.order_number} | ship-now retry ${attempt}/${RIDER_RETRY_MAX} via ${via} | ✓ searching again${fresh ? ` | new shipment=${fresh}` : ''}`);
     return;
   }
 
+  /*
+   * Refused. This never became a search, so it must not spend one of the three - an empty wallet
+   * topped up ten minutes later should still get every hunt it was owed.
+   */
   const reason = String(typeof assigned.reason === 'string' ? assigned.reason : JSON.stringify(assigned.reason ?? 'refused'));
   const balance = await getWalletBalance().catch(() => null);
   const detail = (balance == null ? reason : `${reason} (Shiprocket wallet: ₹${balance})`).slice(0, 500);
-  await query('UPDATE orders SET shipment_error=$1, updated_at=$2 WHERE id=$3', [detail, nowIso(), o.id]).catch(() => {});
-  console.log(`[POLL] ${o.order_number} | ship-now retry ${attempt}/${RIDER_RETRY_MAX} | ✗ ${detail}`);
+  await query('UPDATE orders SET rider_refusal_count=$1, rider_retry_at=$2, shipment_error=$3, updated_at=$2 WHERE id=$4',
+    [refusals + 1, ts, detail, o.id]).catch(() => {});
+  console.log(`[POLL] ${o.order_number} | ship-now refused ${refusals + 1}/${RIDER_REFUSAL_MAX} (hunts still ${hunts}/${RIDER_RETRY_MAX}) | ✗ ${detail}`);
 
-  if (attempt >= RIDER_RETRY_MAX) {
+  if (refusals + 1 >= RIDER_REFUSAL_MAX) {
     // Same status word, for the same stage-mapping reason; the remark is what differs.
-    await note('AWAITING_COURIER', 'We are arranging your delivery — our team is on it.');
+    await note('AWAITING_COURIER', EXHAUSTED_REMARK);
   }
 }
 

@@ -146,12 +146,22 @@ identifier — the 422 they document for a missing payload reads:
 "order_id":    ["The Order ID field is required when Shipment ID is not present."]
 ```
 
-We have only ever sent `shipment_id`. Assigning by `order_id` (their `sr_order_id`, our
+We had only ever sent `shipment_id`. Assigning by `order_id` (their `sr_order_id`, our
 `carrier_order_id`) is a different lookup and plausibly the path their panel takes — which would
-explain how a human revived the exact order our call had just refused. **Untested.** The next time
-an order parks at `NEW`, retry with `{ order_id }` before assuming anything is cancelled. Until
-that is confirmed, `statusPoller.retryRiderSearch` burns all three attempts on a call that cannot
-succeed.
+explain how a human revived the exact order our call had just refused.
+
+**Implemented 2026-08-29, unproven.** `retryRiderSearch` and the admin Rebook button both assign by
+`order_id` and fall back to `shipment_id`, logging `via order` or `via shipment` so the next lapsed
+order settles it. If the response carries a different `shipment_id`, it is stored — an order-keyed
+assign can attach a fresh shipment, and without that every later track call would follow the
+cancelled one.
+
+Retry accounting changed with it. `rider_retry_count` now counts only **hunts we actually bought**
+(an assign that succeeded and still found nobody), capped at `RIDER_RETRY_MAX`. Refusals go to
+`rider_refusal_count`, capped separately at `RIDER_REFUSAL_MAX`, because an empty wallet never
+became a search and must not consume one. `RIDER_RETRY_GAP_MIN` now applies **only after a
+refusal** — a successful assign leaves the order off `NEW` for the length of their own ~30 minute
+hunt, and that is the spacing.
 
 **We hunt for a rider while the cookies are still in the oven.** `autoCreateShipment` runs when the
 store *accepts* the order, not when it is packed. On ADC20260829055951 the store accepted at
@@ -373,11 +383,12 @@ Best-effort by design: it must never block or fail a login.
   triggers a push.
 - **Branded OTP sender** — not offered on Message Central's VerifyNow.
 - **Shiprocket rate comparison across couriers** — we take the serviceability quote as given.
-- **Re-ship a lapsed Shiprocket Quick order** — when their rider hunt expires the order parks at
-  `NEW` and their panel offers **Ship Now**, but `POST /courier/assign/awb` answers
-  `"order is in cancelled state."` for that same order. Their docs show assignment also accepts
-  `order_id` instead of `shipment_id`, which we have never tried and which may well be the fix.
-  Today this needs a human clicking Ship Now — see the Shiprocket quirks above.
+- **Re-ship a lapsed Shiprocket Quick order** — *attempted automatically since 2026-08-29, not yet
+  confirmed working.* The poller and the admin Rebook button now assign by `order_id` and fall back
+  to `shipment_id`. Whether the order-keyed call actually recovers a lapsed Quick order is unproven
+  — their docs show it is *accepted*, not that it revives. The `via order` / `via shipment` marker
+  in the `[POLL]` line says which one worked; until a real lapsed order proves it, a human clicking
+  Ship Now remains the fallback.
 
 ---
 

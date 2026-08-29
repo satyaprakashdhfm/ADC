@@ -42,6 +42,8 @@ export const orders = pgTable("orders", {
 	storePosBillNo: text("store_pos_bill_no"),
 	riderRetryCount: integer("rider_retry_count").default(0).notNull(),
 	riderRetryAt: tstz("rider_retry_at"),
+	/** Assigns Shiprocket refused outright — these never became a hunt, so they are counted apart. */
+	riderRefusalCount: integer("rider_refusal_count").default(0).notNull(),
 }, (table) => [
 	index("idx_orders_store_code").using("btree", table.storeCode.asc().nullsLast().op("text_ops")),
 	index("orders_user_id_idx").using("btree", table.userId.asc().nullsLast().op("int4_ops")),

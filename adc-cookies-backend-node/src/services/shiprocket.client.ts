@@ -359,17 +359,49 @@ export async function createHyperlocalOrder(
  * Assign a courier and get the AWB. This is what actually dispatches a rider.
  * vehicleType 2 (default) / 3 / 4 wheeler.
  */
-export async function assignAwb(
-  shipmentId: string | number,
+/*
+ * `shipment_id` OR `order_id` — their API takes either, and WHICH ONE MATTERS after a lapsed hunt.
+ *
+ * Their own validation error spells it out: "The shipment ID field is required when Order ID is not
+ * present" / "The Order ID field is required when Shipment ID is not present".
+ *
+ * A booking is two objects. When nobody accepts a Quick order, Shiprocket cancels the SHIPMENT and
+ * reverts the ORDER to NEW. Assigning against the dead shipment then answers "order is in cancelled
+ * state" — true of the shipment, deeply misleading about the order, and unfixable by retrying.
+ * Assigning against the order lets them attach a fresh shipment, which is what their panel's
+ * "Ship Now" appears to do. Hence a target, not a bare id.
+ */
+export type AssignTarget = { shipmentId: string | number } | { orderId: string | number };
+
+/**
+ * The request body, split out so the one thing that actually matters here — WHICH key we send — can
+ * be asserted without a network call. A bare id still means `shipment_id`, so every caller that
+ * predates the order-keyed form behaves exactly as it did.
+ */
+export function assignBody(
+  target: AssignTarget | string | number,
   { courierId, vehicleType, futurePickupScheduled }: { courierId?: string | number; vehicleType?: string | number; futurePickupScheduled?: string } = {},
-): Promise<ClientResult> {
-  const body: Record<string, string> = { shipment_id: String(shipmentId) };
+): { body: Record<string, string>; label: string } {
+  const t: AssignTarget = (typeof target === 'object' && target !== null) ? target : { shipmentId: target };
+  const byOrder = 'orderId' in t;
+  const body: Record<string, string> = byOrder
+    ? { order_id: String(t.orderId) }
+    : { shipment_id: String((t as { shipmentId: string | number }).shipmentId) };
   if (courierId) body.courier_id = String(courierId);
   if (vehicleType) body.vehicle_type = String(vehicleType);
   if (futurePickupScheduled) body.future_pickup_scheduled = futurePickupScheduled;
+  const label = byOrder ? `order=${t.orderId}` : `shipment=${(t as { shipmentId: string | number }).shipmentId}`;
+  return { body, label };
+}
+
+export async function assignAwb(
+  target: AssignTarget | string | number,
+  { courierId, vehicleType, futurePickupScheduled }: { courierId?: string | number; vehicleType?: string | number; futurePickupScheduled?: string } = {},
+): Promise<ClientResult> {
+  const { body, label } = assignBody(target, { courierId, vehicleType, futurePickupScheduled });
 
   const r = await srRequest('POST', '/courier/assign/awb', { body });
-  if (!r.ok) { log('assign-awb', `✗ shipment=${shipmentId} | ${JSON.stringify(r.reason).slice(0, 160)}`); return r; }
+  if (!r.ok) { log('assign-awb', `✗ ${label} | ${JSON.stringify(r.reason).slice(0, 160)}`); return r; }
 
   const d = r.data?.response?.data ?? r.data?.data ?? r.data;
   const awb = d?.awb_code ?? d?.awb ?? null;
@@ -381,12 +413,16 @@ export async function assignAwb(
    * (SEARCHING FOR RIDER -> RIDER ASSIGNED). Treating a missing awb as a failure would mark a
    * perfectly good dispatch as broken, so `pending` is a normal outcome here, not an error.
    */
+  /* Assigning by order can attach a NEW shipment, and the caller must store it or every later
+     track call follows the cancelled one. Surfaced here rather than left for them to dig out. */
+  const newShipmentId = d?.shipment_id ?? d?.shipmentId ?? null;
+
   if (!awb) {
-    log('assign-awb', `✓ shipment=${shipmentId} | accepted, searching for rider — awb will arrive by webhook`);
-    return { ok: true, pending: true, awb: null, message: d?.message || r.data?.message, data: d };
+    log('assign-awb', `✓ ${label} | accepted, searching for rider — awb will arrive by webhook${newShipmentId ? ` | shipment=${newShipmentId}` : ''}`);
+    return { ok: true, pending: true, awb: null, shipmentId: newShipmentId, message: d?.message || r.data?.message, data: d };
   }
-  log('assign-awb', `✓ shipment=${shipmentId} | awb=${awb} | courier=${d?.courier_name || '?'}`);
-  return { ok: true, pending: false, awb, courierName: d?.courier_name, data: d };
+  log('assign-awb', `✓ ${label} | awb=${awb} | courier=${d?.courier_name || '?'}${newShipmentId ? ` | shipment=${newShipmentId}` : ''}`);
+  return { ok: true, pending: false, awb, shipmentId: newShipmentId, courierName: d?.courier_name, data: d };
 }
 
 /**

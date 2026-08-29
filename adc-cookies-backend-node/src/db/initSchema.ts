@@ -236,13 +236,25 @@ export async function initSchema() {
     );
 
     /* Automatic "Ship Now" retries after Shiprocket abandons a rider search.
-       When nobody accepts, Shiprocket drops the ASSIGNMENT and puts the order back to NEW - the
-       shipment itself is still live, which is why the retry re-assigns rather than re-books.
-       rider_retry_at is the debounce: a refused assign (an empty wallet is the usual one) leaves
-       the status at NEW, so without it every retry would burn in one poll interval on a problem
-       that has nothing to do with whether a rider is available. */
+       When nobody accepts, Shiprocket CANCELS THE SHIPMENT and puts the ORDER back to NEW. Both
+       objects are real and they disagree: /orders/show reports the order (NEW, healthy) while
+       /courier/assign/awb keyed on the dead shipment answers "order is in cancelled state". So the
+       retry re-assigns against the ORDER id, and Shiprocket attaches a fresh shipment to it.
+
+       Two counters, because the two ways this fails are not the same event:
+         rider_retry_count   hunts we actually bought - an assign that SUCCEEDED and still found
+                             nobody. This is the one capped at RIDER_RETRY_MAX.
+         rider_refusal_count assigns Shiprocket would not even accept (an empty wallet is the usual
+                             one). These never became a hunt, so they must not consume one - a
+                             wallet that is topped up ten minutes later should still get its three
+                             searches. Capped separately, only to stop an unfixable order polling
+                             for three days.
+       rider_retry_at is the debounce, and it now only matters after a REFUSAL: a successful assign
+       moves the status off NEW for the length of Shiprocket's own hunt (~30 min), and that is the
+       spacing. A timer on top of it would do nothing. */
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_retry_count INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_retry_at TIMESTAMPTZ;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_refusal_count INTEGER NOT NULL DEFAULT 0;
 
     CREATE TABLE IF NOT EXISTS order_items (
       id SERIAL PRIMARY KEY,
