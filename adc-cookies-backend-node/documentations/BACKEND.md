@@ -135,12 +135,61 @@ reported `NEW` continuously for 18 minutes, while `POST /courier/assign/awb` rej
 order twice with `"order is in cancelled state."` — 300 ms apart. No status endpoint ever said
 cancelled. A human clicking **Ship Now** in their panel then revived it on the *same*
 `sr_order_id` and *same* `shipment_id`, so nothing had actually been cancelled and no re-create was
-needed. Conclusion: `/courier/assign/awb` is not what their panel's Ship Now calls for a lapsed
-Quick order, and its internal state check reads something stale. **The correct endpoint is still
-unidentified** — it most likely lives in their docs' *Hyperlocal* section (see below). Until it is
-found, `statusPoller.retryRiderSearch` will burn all three attempts on a call that cannot succeed.
+needed. Conclusion: `/courier/assign/awb` keyed on `shipment_id` is not what their panel's Ship Now does
+for a lapsed Quick order, and its state check reads something stale.
+
+**The lead, from their own validation-error documentation.** Assignment accepts **either**
+identifier — the 422 they document for a missing payload reads:
+
+```
+"shipment_id": ["The shipment ID field is required when Order ID is not present."]
+"order_id":    ["The Order ID field is required when Shipment ID is not present."]
+```
+
+We have only ever sent `shipment_id`. Assigning by `order_id` (their `sr_order_id`, our
+`carrier_order_id`) is a different lookup and plausibly the path their panel takes — which would
+explain how a human revived the exact order our call had just refused. **Untested.** The next time
+an order parks at `NEW`, retry with `{ order_id }` before assuming anything is cancelled. Until
+that is confirmed, `statusPoller.retryRiderSearch` burns all three attempts on a call that cannot
+succeed.
 
 **Rate limit** is a real `429`. The poller is deliberately sequential for this reason.
+
+### Hyperlocal (Quick) — the parameters that make it hyperlocal
+
+There is no separate hyperlocal API. It is the ordinary endpoints plus a handful of fields, and
+omitting any of them silently produces a normal courier booking instead of a Quick one. All of the
+following are **verified present in our client** as of 2026-08-29.
+
+| where | field | value we send |
+|---|---|---|
+| `GET /courier/serviceability` | `is_new_hyperlocal` | `1` — **mandatory**, without it Quick never appears |
+| | `lat_from`, `long_from`, `lat_to`, `long_to` | all four, **mandatory** for Quick; we refuse the call if any is missing |
+| | `mode_of_transport` | omitted (2-wheeler default); `3`/`4` for larger vehicles |
+| `POST /orders/create/adhoc` | `shipping_method` | `"HL"` — **mandatory**, this is what marks it hyperlocal |
+| | `latitude`, `longitude` | the **drop** coordinates, mandatory |
+| | `payment_method` | `Prepaid`. HL supports Prepaid and COD only; COD is capped at ₹2000 |
+| `POST /courier/assign/awb` | `vehicle_type` | `2` (their default anyway) |
+
+Serviceability also returns `distance` alongside `rates`, which is where our km figure comes from.
+
+**Hyperlocal fields we do NOT send, and could:**
+
+| field | what it does | worth it? |
+|---|---|---|
+| `search_rider_for` | how long they hunt for a rider, in **seconds, max 1800**. Unset appears to default to the maximum — our observed hunt was ~30 min, exactly 1800s | **yes.** A shorter window would surface a doomed order to staff in 10 minutes instead of 30 |
+| `pickup_otp`, `drop_otp`, `rto_otp` | 4-digit codes the rider must enter in their app at each handover | plausible anti-mix-up measure for multi-order pickups |
+| `future_pickup_scheduled` | schedule the assignment up to 48h ahead | would let us take genuine pre-orders |
+| `quick_drop_addresses[]` | **SPMD — Single Pickup, Multiple Drops.** One rider, several orders from one store. Serviceability takes comma-separated `lat_to`/`long_to` for this | **the interesting one.** Two Bengaluru orders from the same store in the same window are two riders and two fees today |
+| `pickup_address` (object) | pass a full pickup address inline instead of a registered `pickup_location` nickname | avoids pre-registering a store |
+| `is_insurance_opt` | shipment insurance | no — cookies |
+| `surge_type` / `surge_fees` | declare a rain/festive surcharge | only if we ever pass surge on to the customer |
+| `expected_edd` | expected delivery days | informational |
+| `collect_shipping_fees` | collect freight from the buyer on delivery | no — they already paid us |
+
+**`POST /settings/company/addpickup`** registers a pickup location, and needs `is_hyperlocal: 1`
+plus `lat`/`long` for Quick. We only ever *read* pickup locations; every store was added by hand in
+their panel. Worth knowing when store number six opens.
 
 ### Their full API surface
 
@@ -153,7 +202,7 @@ verified — the rest are recorded so nobody has to rediscover that the capabili
 | Create Or Update Order | `POST /orders/create/adhoc`, channel-specific create, bulk update, and a "Quick Order Creation" all-in-one that creates + ships + adds a pickup location + generates label and manifest in one call | partly LIVE |
 | Couriers | `POST /courier/assign/awb`, `GET /courier/serviceability`, `POST /courier/generate/pickup` | partly LIVE |
 | Orders | `GET /orders` (paginated), `GET /orders/show/{id}`, `POST /orders/cancel`, update pickup location | partly LIVE |
-| **Hyperlocal** | **the Quick / same-day section — almost certainly where the panel's "Ship Now" and any rider re-search endpoint live. Not yet read; the docs host is blocked from our CI sandbox. This is the first place to look when fixing the retry above.** | **UNUSED — and probably should not be** |
+| **Hyperlocal** | the Quick / same-day section. Not separate endpoints — the *same* paths as above plus hyperlocal-only parameters. See the subsection below | **LIVE**, parameters verified |
 | Tracking | by awb, by multiple awbs, by shipment id, by our order id | partly LIVE |
 | Shipments | list shipments, fetch one | UNUSED |
 | Return & Exchange Orders | create/update return orders | UNUSED |
@@ -315,9 +364,9 @@ Best-effort by design: it must never block or fail a login.
 - **Shiprocket rate comparison across couriers** — we take the serviceability quote as given.
 - **Re-ship a lapsed Shiprocket Quick order** — when their rider hunt expires the order parks at
   `NEW` and their panel offers **Ship Now**, but `POST /courier/assign/awb` answers
-  `"order is in cancelled state."` for that same order. Whatever their panel calls is not an
-  endpoint we have identified; their docs' *Hyperlocal* section is the place to look. Today this
-  needs a human clicking Ship Now — see the Shiprocket quirks above.
+  `"order is in cancelled state."` for that same order. Their docs show assignment also accepts
+  `order_id` instead of `shipment_id`, which we have never tried and which may well be the fix.
+  Today this needs a human clicking Ship Now — see the Shiprocket quirks above.
 
 ---
 
