@@ -72,25 +72,116 @@ by zone, LTL/B2B endpoints.
 
 - **Base** `https://apiv2.shiprocket.in/v1/external`
 - **Auth** an External API *user* — email + password, **not** an API key. Create at
-  `app.shiprocket.in/seller/settings/additional-settings/api-users`. Token lasts 10 days; we refresh
-  a day early, because a token expiring mid-checkout would fail an order already paid for.
+  Settings → API → Add New API User. The email must differ from the main Shiprocket login. Two
+  settings on that form matter to us: **Modules to Access** (must include Orders, Couriers and
+  Tracking) and **Buyer's Details Access** — set to *Not Allowed*, tracking responses come back
+  without the customer block. Token lasts 10 days; we refresh a day early, because a token expiring
+  mid-checkout would fail an order already paid for.
 - **Env** `SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_BASE_URL`, `SHIPROCKET_PICKUP_*`, `SHIPROCKET_WEBHOOK_TOKEN`, `SHIPROCKET_CATEGORY`
 - **Mode** one LIVE production account, shared by staging and production.
+- **Support** `integration@shiprocket.com` for API questions, `support@shiprocket.com` otherwise.
+
+### Four different ids, and they are easy to confuse
+
+One booking carries four identifiers. We store three of them, and the column names do not match
+Shiprocket's vocabulary — a leftover from Delhivery being the first carrier wired up.
+
+| theirs | what it is | our column |
+|---|---|---|
+| `order_id` (request) | **our** reference — we send `orders.order_number` | `orders.order_number` |
+| `order_id` (response) / `sr_order_id` | **their** order id | `orders.carrier_order_id` |
+| `shipment_id` | the shipment inside that order — what AWB assignment takes | `orders.delhivery_shipment_id` |
+| `awb` / `awb_code` | exists only once a rider is actually assigned | `orders.delhivery_waybill` |
+
+Their docs are explicit that every endpoint takes **their** order id, not ours, unless it says
+otherwise. Sending `order_number` where `sr_order_id` belongs is a silent 404.
 
 | status | theirs | what it does | ours |
 |---|---|---|---|
 | **LIVE** | `POST /auth/login` | bearer token, 10 days | internal |
 | **LIVE** | `GET /courier/serviceability` | serviceability **and live rate** — the only way to price an intracity leg | `GET /api/delivery/check` |
-| **LIVE** | `POST /orders/create/adhoc` | create the order. Returns `shipment_id`. No rider yet | internal |
+| **LIVE** | `POST /orders/create/adhoc` | create the order. Returns `shipment_id` + `order_id`. No rider yet | internal |
 | **LIVE** | `POST /courier/assign/awb` | **dispatches a real rider and bills the account** | internal |
-| **LIVE** | `GET /courier/track/shipment/{id}` | awb, live status, courier, activity trail | internal + admin |
-| **LIVE** | `POST /orders/cancel` | cancel the order | admin Cancel & Refund |
+| **LIVE** | `GET /courier/track/shipment/{shipment_id}` | awb, live status, courier, activity trail | internal + admin |
+| **LIVE** | `GET /courier/track/awb/{awb}` | same, but keyed on the awb — richer once a rider exists | internal |
+| **LIVE** | `GET /orders/show/{sr_order_id}` | order-level status. **The only endpoint that answers before an awb exists** — see the quirks below | internal |
+| **LIVE** | `POST /orders/cancel` | cancel the order (body: `{ ids: [sr_order_id] }`) | admin Cancel & Refund |
 | **LIVE** | `GET /settings/company/pickup` | pickup locations — admin readiness screen and the routing guard | `GET /api/admin/delivery/pickups` |
 | **LIVE** | `GET /account/details/wallet-balance` | wallet balance; gates whether a rider can still be booked | admin + store tablet |
-| **N/A** | inbound | tracking webhook. **Must be pointed at `/api/hyperlocal/webhook`** — their panel rejects `/api/shiprocket` | `POST /api/hyperlocal/webhook` |
+| **N/A** | inbound | tracking webhook | `POST /api/hyperlocal/webhook` |
 
-**Also offered, unused:** Return orders, pickup scheduling, NDR, label/manifest generation (we use
-Delhivery's), channel and inventory management, courier-rate comparison.
+### Webhook
+
+- **Method** `POST`, `Content-Type: application/json`, must answer **200 and nothing else**.
+- **Set up at** Settings → API → Webhooks. Security token arrives as `x-api-key`
+  (`SHIPROCKET_WEBHOOK_TOKEN`).
+- **The URL may not contain `shiprocket`, `kartrocket`, `sr`, or `kr`.** This is a documented
+  restriction, and it is why our endpoint is `/api/hyperlocal/webhook` rather than
+  `/api/shiprocket` — their panel silently rejects the latter. Do not "tidy" that path.
+- Body carries `awb`, `current_status`, `sr_order_id`, `order_id` (ours), `scans[]`, `is_return`.
+
+### Quirks that have already cost us a day
+
+**Shipment tracking is silent until a rider exists.** `GET /courier/track/shipment/{id}` answers
+about an *awb*, and an awb only appears once a rider accepts. Before that it returns
+`current_status: null` with no activities, and it stays that way forever if the order is cancelled
+before any rider is found. `GET /orders/show/{sr_order_id}` is the only endpoint that answers in
+that window, which is why `trackShiprocket` falls back to it. Verified live 2026-08-14 on three
+orders cancelled in their own panel.
+
+**`assign/awb` and `orders/show` can flatly contradict each other.** Observed on
+`ADC20260829055951` (2026-08-29): after Shiprocket abandoned a ~30 minute rider hunt, `orders/show`
+reported `NEW` continuously for 18 minutes, while `POST /courier/assign/awb` rejected the same
+order twice with `"order is in cancelled state."` — 300 ms apart. No status endpoint ever said
+cancelled. A human clicking **Ship Now** in their panel then revived it on the *same*
+`sr_order_id` and *same* `shipment_id`, so nothing had actually been cancelled and no re-create was
+needed. Conclusion: `/courier/assign/awb` is not what their panel's Ship Now calls for a lapsed
+Quick order, and its internal state check reads something stale. **The correct endpoint is still
+unidentified** — it most likely lives in their docs' *Hyperlocal* section (see below). Until it is
+found, `statusPoller.retryRiderSearch` will burn all three attempts on a call that cannot succeed.
+
+**Rate limit** is a real `429`. The poller is deliberately sequential for this reason.
+
+### Their full API surface
+
+Their docs are organised into the sections below. We touch four of them. Paths are given only where
+verified — the rest are recorded so nobody has to rediscover that the capability exists.
+
+| section | what is in it | us |
+|---|---|---|
+| Authentication | `POST /auth/login` | **LIVE** |
+| Create Or Update Order | `POST /orders/create/adhoc`, channel-specific create, bulk update, and a "Quick Order Creation" all-in-one that creates + ships + adds a pickup location + generates label and manifest in one call | partly LIVE |
+| Couriers | `POST /courier/assign/awb`, `GET /courier/serviceability`, `POST /courier/generate/pickup` | partly LIVE |
+| Orders | `GET /orders` (paginated), `GET /orders/show/{id}`, `POST /orders/cancel`, update pickup location | partly LIVE |
+| **Hyperlocal** | **the Quick / same-day section — almost certainly where the panel's "Ship Now" and any rider re-search endpoint live. Not yet read; the docs host is blocked from our CI sandbox. This is the first place to look when fixing the retry above.** | **UNUSED — and probably should not be** |
+| Tracking | by awb, by multiple awbs, by shipment id, by our order id | partly LIVE |
+| Shipments | list shipments, fetch one | UNUSED |
+| Return & Exchange Orders | create/update return orders | UNUSED |
+| Labels / Manifests / Invoice | generate + print label, manifest, invoice | UNUSED — we use Delhivery's |
+| NDR | `POST /ndr/reattempt` — retry a failed delivery | UNUSED |
+| Pickup Addresses | list and add pickup locations | read-only LIVE |
+| Wrapper API | combined convenience calls | UNUSED |
+| International | cross-border shipping | UNUSED — not applicable |
+| Account | `GET /account/details/wallet-balance` | **LIVE** |
+| Products / Listings / Channels / Inventory | catalogue and sales-channel sync | UNUSED — our catalogue is ours |
+| Countries / Statement Details / Discrepancy Details / File Imports | reference data, billing statements, weight-discrepancy disputes, bulk import | UNUSED — *Discrepancy Details* is worth knowing about if they ever bill us for a weight we dispute |
+
+**Sense** is a separate paid product (RTO-risk scoring, address validation) at
+`console.shiprocket.in`. Not part of this account.
+
+**Shiprocket also ships an MCP server** (`github.com/bfrs/shiprocket-mcp`, Node 22.x, seller email +
+password in env) exposing `shipping_rate_calculator`, `estimated_date_of_delivery`, `order_create`,
+`order_list`, `order_track`, `order_ship`, `order_pickup_schedule`, `generate_shipment_label`,
+`order_cancel`, `list_pickup_addresses`. Useful for ad-hoc operator questions from an AI client —
+**not** something to put in the request path of a checkout. Note `order_ship` is their name for
+assign-courier-and-generate-shipping, which is the operation failing above.
+
+### Response codes
+
+`200`/`202` fine · `400` bad request · `401` token or credentials · `404` unknown URI or resource ·
+`405` wrong method · `422` syntax or unfulfillable · `429` rate limited · `5xx` theirs. Note that
+some of their endpoints answer `200` with an error message in the body, so a status check alone is
+not enough — `srRequest` inspects the body too.
 
 ---
 
@@ -222,6 +313,11 @@ Best-effort by design: it must never block or fail a login.
   triggers a push.
 - **Branded OTP sender** — not offered on Message Central's VerifyNow.
 - **Shiprocket rate comparison across couriers** — we take the serviceability quote as given.
+- **Re-ship a lapsed Shiprocket Quick order** — when their rider hunt expires the order parks at
+  `NEW` and their panel offers **Ship Now**, but `POST /courier/assign/awb` answers
+  `"order is in cancelled state."` for that same order. Whatever their panel calls is not an
+  endpoint we have identified; their docs' *Hyperlocal* section is the place to look. Today this
+  needs a human clicking Ship Now — see the Shiprocket quirks above.
 
 ---
 
