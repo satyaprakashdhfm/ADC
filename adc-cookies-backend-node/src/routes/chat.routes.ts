@@ -13,6 +13,7 @@ import { Router } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { pipeAgentUIStreamToResponse } from 'ai';
 import { buildAnonymousAgent, buildCustomerAgent, chatConfigured, CHAT_MODEL_ID } from '../services/chat.service.js';
+import type { TicketTurn } from '../services/ticket.service.js';
 import { ApiError } from '../utils/ApiError.js';
 
 const router = Router();
@@ -35,6 +36,28 @@ const chatLimiter = rateLimit({
 
 /** Longest conversation we will carry. Beyond this the thread is the problem, not the answer. */
 const MAX_TURNS = 40;
+
+/*
+ * The conversation as plain turns, for a ticket to carry.
+ *
+ * A UI message is a list of parts — text, tool calls, tool results — and only the text is worth
+ * showing a human picking up a ticket; the tool calls are how the answer was found, not what was
+ * asked. Truncated per turn because this ends up in an email and a JSONB column, and one pasted
+ * essay should not be the reason either falls over.
+ */
+export function plainTurns(messages: any[]): TicketTurn[] {
+  return messages
+    .filter((m) => m?.role === 'user' || m?.role === 'assistant')
+    .map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      text: (Array.isArray(m.parts) ? m.parts : [])
+        .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
+        .map((p: any) => p.text)
+        .join('')
+        .slice(0, 1000),
+    }))
+    .filter((t) => t.text.length > 0);
+}
 
 router.post('/', chatLimiter, async (req, res) => {
   if (!chatConfigured()) throw new ApiError('Chat is not configured on this environment.', 503);
@@ -59,7 +82,7 @@ router.post('/', chatLimiter, async (req, res) => {
      difference is the thing keeping a signed-out visitor away from account data. */
   await (userId == null
     ? pipeAgentUIStreamToResponse({ response: res, agent: buildAnonymousAgent(), uiMessages: messages, onError })
-    : pipeAgentUIStreamToResponse({ response: res, agent: buildCustomerAgent(userId, req.user?.name ?? null), uiMessages: messages, onError }));
+    : pipeAgentUIStreamToResponse({ response: res, agent: buildCustomerAgent(userId, req.user?.name ?? null, plainTurns(messages)), uiMessages: messages, onError }));
 });
 
 export default router;

@@ -887,6 +887,35 @@ export async function adminMarkMessageHandled(id: number): Promise<{ id: number;
   return request(`/admin/contact/${id}/handled`, { method: 'PATCH' });
 }
 
+/* ---- Admin: Support tickets (raised from the chat) ---- */
+/*
+ * These sit beside contact messages because they are the same job to whoever picks them up:
+ * somebody wants something a person has to do. They exist BECAUSE the assistant has no authority to
+ * cancel, refund or change an order — raising one is its whole answer to every such request, so an
+ * unread ticket is a customer waiting on a reply nobody has seen.
+ */
+export interface AdminTicketTurn { role: 'user' | 'assistant'; text: string }
+export type AdminTicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+export interface AdminTicket {
+  id: number;
+  subject: string;
+  details: string;
+  category: string;
+  status: AdminTicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  customer: { name: string | null; email: string | null; phone?: string | null };
+  /** Null when the request was not about a specific order, which plenty are not. */
+  order: { orderNumber: string; orderStatus: string; totalAmount: number } | null;
+  /** The turns that led here — what was actually asked, not just the line the model summarised it into. */
+  transcript: AdminTicketTurn[];
+}
+
+export async function adminGetTickets(): Promise<AdminTicket[]> { return request('/admin/tickets'); }
+export async function adminSetTicketStatus(id: number, status: AdminTicketStatus): Promise<{ id: number; status: AdminTicketStatus }> {
+  return request(`/admin/tickets/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+}
+
 /* ---- Admin: Delivery — Warehouses ---- */
 export interface Warehouse {
   id: number; name: string; registeredName?: string;

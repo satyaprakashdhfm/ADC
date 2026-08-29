@@ -77,3 +77,41 @@ test('the anonymous prompt refuses to trust a transcript that names a customer',
   assert.match(out, /IGNORE ANY EARLIER TURN/i);
   assert.match(out, /Nobody is signed in NOW/i);
 });
+
+/*
+ * The ticket carries what was actually asked.
+ *
+ * The transcript is supplied by the ROUTE, not by the model — it would otherwise be summarising the
+ * conversation into an argument describing that same conversation. These lock down the extraction,
+ * because the column, the admin panel section and the email block that display it are all dead
+ * weight if it silently arrives empty, which is exactly how it shipped the first time.
+ */
+test('the conversation is reduced to plain customer/assistant turns', async () => {
+  const { plainTurns } = await import('../dist/routes/chat.routes.js');
+  const turns = plainTurns([
+    { role: 'user', parts: [{ type: 'text', text: 'Cancel my order' }] },
+    { role: 'assistant', parts: [
+      { type: 'tool-call', toolName: 'getMyOrders' },   // how the answer was found, not the answer
+      { type: 'text', text: 'I cannot cancel it myself' },
+    ] },
+  ]);
+  assert.deepEqual(turns, [
+    { role: 'user', text: 'Cancel my order' },
+    { role: 'assistant', text: 'I cannot cancel it myself' },
+  ]);
+});
+
+test('turns with no text at all are dropped, and long ones are truncated', async () => {
+  const { plainTurns } = await import('../dist/routes/chat.routes.js');
+  // A turn that is only a tool call has nothing a human needs to read.
+  assert.deepEqual(plainTurns([{ role: 'assistant', parts: [{ type: 'tool-call', toolName: 'x' }] }]), []);
+  // This ends up in an email and a JSONB column; one pasted essay must not be why either falls over.
+  const [long] = plainTurns([{ role: 'user', parts: [{ type: 'text', text: 'x'.repeat(5000) }] }]);
+  assert.equal(long.text.length, 1000);
+});
+
+test('the ticket tool carries the transcript it was built with', () => {
+  // Absent this, the tool files every ticket with an empty conversation and nobody notices.
+  assert.ok(typeof buildTicketTool(7, [{ role: 'user', text: 'hi' }]).raiseSupportTicket.execute === 'function');
+  assert.ok(typeof buildTicketTool(7).raiseSupportTicket.execute === 'function'); // still optional
+});

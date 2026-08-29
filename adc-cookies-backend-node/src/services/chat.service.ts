@@ -12,7 +12,7 @@
 import { ToolLoopAgent, isStepCount } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { buildTools } from './chatTools.service.js';
-import { buildTicketTool } from './ticket.service.js';
+import { buildTicketTool, type TicketTurn } from './ticket.service.js';
 
 const MODEL_ID = process.env.CHAT_MODEL || 'gemini-3.5-flash-lite';
 
@@ -153,10 +153,10 @@ export function buildAnonymousAgent() {
 }
 
 /** Signed in: the same public tools, plus read-only access to THIS customer's orders, plus tickets. */
-export function buildCustomerAgent(userId: number, customerName?: string | null) {
+export function buildCustomerAgent(userId: number, customerName?: string | null, transcript: TicketTurn[] = []) {
   return new ToolLoopAgent({
     ...common(userId, customerName),
-    tools: { ...buildTools({ userId }), ...buildTicketTool(userId) },
+    tools: { ...buildTools({ userId }), ...buildTicketTool(userId, transcript) },
   });
 }
 

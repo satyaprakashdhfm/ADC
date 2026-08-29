@@ -13,6 +13,7 @@ import { useAdminUsers } from '@/hooks/admin/useAdminUsers';
 import { useAdminStats } from '@/hooks/admin/useAdminStats';
 import { useAdminAnalytics } from '@/hooks/admin/useAdminAnalytics';
 import { useAdminMessages } from '@/hooks/admin/useAdminMessages';
+import { useAdminTickets } from '@/hooks/admin/useAdminTickets';
 import { useAdminStores } from '@/hooks/admin/useAdminStores';
 import { useAdminCoupons } from '@/hooks/admin/useAdminCoupons';
 import { useAdminProducts } from '@/hooks/admin/useAdminProducts';
@@ -88,6 +89,8 @@ export default function AdminDashboard() {
     changeOrderStatus, rebookShipment, retryPosRelay,
   } = useAdminOrders(isAdmin && (tab === 'orders' || tab === 'delivery'), { onError: setErr, onNotice: setNotice, refreshStats, refreshAttention });
   const { messages, search: messageSearch, setSearch: setMessageSearch, handledFilter: messageHandled, setHandledFilter: setMessageHandled, markHandled } = useAdminMessages(isAdmin && tab === 'messages', refreshStats);
+  /* Same tab, so same enable condition — both lists load when Messages is opened and not before. */
+  const { tickets, search: ticketSearch, setSearch: setTicketSearch, statusFilter: ticketStatus, setStatusFilter: setTicketStatus, setStatus: setTicketStatusFor } = useAdminTickets(isAdmin && tab === 'messages');
   const {
     warehouses, setWarehouses, whForm, setWhForm,
     purDate, setPurDate, purTime, setPurTime, purCount, setPurCount, purResult, setPurResult,
@@ -319,6 +322,14 @@ export default function AdminDashboard() {
             onMarkHandled={markHandled}
             page={pageOf('messages')}
             onPage={n => setPageOf('messages', n)}
+            tickets={tickets}
+            ticketSearch={ticketSearch}
+            onTicketSearch={setTicketSearch}
+            ticketStatusFilter={ticketStatus}
+            onTicketStatusFilter={setTicketStatus}
+            onSetTicketStatus={setTicketStatusFor}
+            ticketPage={pageOf('tickets')}
+            onTicketPage={n => setPageOf('tickets', n)}
           />
         )}
       </div>

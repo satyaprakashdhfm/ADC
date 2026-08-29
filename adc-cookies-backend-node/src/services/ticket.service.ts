@@ -76,11 +76,12 @@ export async function raiseTicket(
 }
 
 /**
- * The tool form. Takes a real user id, never null — a signed-out visitor has no account to file
+ * The tool form. `transcript` is the conversation so far, supplied by the route rather than by the
+ * model, so the ticket carries what was actually asked. Takes a real user id, never null — a signed-out visitor has no account to file
  * against, so the CALLER leaves this out of the tool set entirely rather than passing null and
  * having the tool refuse. Asking someone for details we cannot attach to anything would be theatre.
  */
-export function buildTicketTool(userId: number) {
+export function buildTicketTool(userId: number, transcript: TicketTurn[] = []) {
   return {
     raiseSupportTicket: tool({
       description:
@@ -94,7 +95,10 @@ export function buildTicketTool(userId: number) {
         orderNumber: z.string().default('').describe('The ADC order number if this is about one; empty otherwise'),
       }),
       execute: async ({ subject, details, category, orderNumber }) =>
-        raiseTicket({ userId, subject, details, category, orderNumber: orderNumber || null }),
+        /* The turns come from the CALLER, not the model: it would otherwise be summarising the
+           conversation into an argument describing that same conversation, and what a human needs
+           here is what was actually said, not a second summary of it. */
+        raiseTicket({ userId, subject, details, category, orderNumber: orderNumber || null, transcript }),
     }),
   };
 }
