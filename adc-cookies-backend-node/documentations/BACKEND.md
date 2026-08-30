@@ -55,7 +55,7 @@ payments), Invoices, QR codes.
 | **LIVE** | `GET /waybill/api/fetch/json/?count=1` | reserve a waybill before creating the shipment | internal |
 | **LIVE** | `POST /api/cmu/create.json` | create the shipment. Form-encoded: `format=json&data=<json>` | internal + admin manual |
 | **LIVE** | `POST /api/p/edit` | cancel. **Flat** body `{waybill, cancellation:'true'}` — not wrapped in `shipments:[…]` | `DELETE /api/admin/orders/:id/shipment` |
-| **LIVE** | `GET /api/p/packing_slip?wbns=…&pdf=true` | printable label PDF (pre-signed URL) | `GET /api/admin/delivery/label` |
+| **LIVE** | `GET /api/p/packing_slip?wbns=…&pdf=true&pdf_size=4R` | printable label PDF (pre-signed URL). **`pdf_size` is not optional in practice** — see below | `GET /api/admin/delivery/label` |
 | **LIVE** | `GET /api/v1/packages/json/?waybill=` | live tracking / current status | `GET /api/orders/:id/delhivery-track` |
 | **LIVE** | `POST /api/backend/clientwarehouse/create/` | register a pickup warehouse. Name must match `pickup_location` exactly. Edit: `/edit/` | `POST /api/admin/warehouses` |
 | **LIVE** | `GET /api/kinko/v1/invoice/charges/.json` | shipping cost estimate for a weight/route | `GET /api/admin/delivery/shipping-cost` |
@@ -65,6 +65,48 @@ payments), Invoices, QR codes.
 
 **Also offered, unused:** Reverse pickup (RVP), bulk waybill fetch, warehouse list, rate calculator
 by zone, LTL/B2B endpoints.
+
+### The label printed in the corner of the page — `pdf_size`, verified 2026-08-30
+
+The store's thermal printer was producing a 4x6 label block stranded in the corner of a large sheet.
+The cause is one absent query parameter, and their Generate Shipping Label reference states it
+outright:
+
+> If the `pdf_size` parameter is not provided, the label will default to **A4** size.
+
+We sent `?wbns=…&pdf=true` and nothing else, so every label we have ever fetched came back on an
+8x11 page. `shippingLabelUrl()` now sends `pdf_size` and defaults it to `4R`.
+
+**The One panel's Shipping Label Config does not govern this.** That screen configures labels
+downloaded from the panel; an API-manifested label takes the parameter on the call, and with no
+parameter it takes their A4 default no matter what the panel says. Setting the panel to Thermal 4x6
+changes nothing for us — which is why the panel preview looked correct while the print did not.
+
+| `pdf_size` | page | for |
+|---|---|---|
+| `4R` | 4x6 | thermal roll — **our default** |
+| `A4` | 8x11 | desktop printer — `GET /api/admin/delivery/label?size=A4` |
+| *(omitted)* | 8x11 | their default, and the bug |
+
+`DELHIVERY_LABEL_SIZE` moves the default without a deploy. An unrecognised value falls back to `4R`
+rather than being passed through, because an invalid size silently becomes A4 again at their end.
+
+`pdf=false` is the other half of that endpoint and we do not use it: it returns JSON instead of a
+PDF, to be rendered as HTML with **code-128** encoding for a fully custom label layout. Worth
+knowing if the label ever needs our own design rather than theirs.
+
+**Their published limits for this endpoint:** average latency 210 ms, **p99 61.78 s**, rate limit
+3000 requests / 5 min / IP. The p99 is the number to respect — the admin label route calls `fetch`
+directly rather than through `dhRequest`, so it has no timeout of its own and a slow label can hold
+the request open for a minute.
+
+### Download Document API — verified against their reference 2026-08-30
+
+`GET /api/rest/fetch/pkg/document/?doc_type=<type>&waybill=<wbn>`, for documents **not archived** in
+Delhivery. Both parameters mandatory. Exactly four `doc_type` values are allowed, and
+`DELHIVERY_DOC_TYPES` matches them: `SIGNATURE_URL`, `RVP_QC_IMAGE`, `EPOD`, `SELLER_RETURN_IMAGE`.
+Auth is the usual `Authorization: Token <token>`. Checked field by field against
+`fetchDocument()` — no discrepancy.
 
 ---
 

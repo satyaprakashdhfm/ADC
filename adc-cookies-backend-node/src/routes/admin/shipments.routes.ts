@@ -392,14 +392,15 @@ router.get('/orders/:id/document', async (req, res) => {
 // we stream the PDF through our server either way so the browser just downloads it.
 router.get('/delivery/label', async (req, res) => {
   if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
-  const { waybills } = req.query;
+  const { waybills, size } = req.query;
   if (!waybills) throw new ApiError('waybills param required', 400);
 
-  const { url, headers } = shippingLabelUrl(waybills);
+  // ?size=A4 for a desktop printer; omitted means 4R, the store's thermal roll.
+  const { url, headers } = shippingLabelUrl(waybills, { pdfSize: size as string });
   const sendPdf = (buf, via) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="label-${waybills}.pdf"`);
-    console.log(`[ADMIN-LABEL] wbns=${waybills} | ✓ ${via} | ${buf.byteLength}b`);
+    console.log(`[ADMIN-LABEL] wbns=${waybills} | size=${url.match(/pdf_size=(\w+)/)?.[1] || '?'} | ✓ ${via} | ${buf.byteLength}b`);
     res.send(Buffer.from(buf));
   };
 

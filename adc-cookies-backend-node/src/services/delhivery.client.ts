@@ -440,12 +440,27 @@ export async function createPickupRequest({ pickupDate, pickupTime, pickupLocati
 /* GET /api/p/packing_slip?wbns=<comma-sep waybills>                  */
 /* Returns a PDF — we build the authenticated URL and proxy it.       */
 /* ------------------------------------------------------------------ */
-export function shippingLabelUrl(waybills) {
+export const DELHIVERY_LABEL_SIZES = ['4R', 'A4'];
+
+export function shippingLabelUrl(waybills, { pdfSize }: { pdfSize?: string } = {}) {
   const wbns = Array.isArray(waybills) ? waybills.join(',') : String(waybills);
+  /*
+   * pdf_size is NOT optional in practice.
+   *
+   * Their docs: "If the pdf_size parameter is not provided, the label will default to A4 size."
+   * We omitted it, so every label came back on an 8x11 page with the 4x6 block in one corner —
+   * which is what the store's thermal printer was handed. The Shipping Label Config in the One
+   * panel does not govern this; it applies to labels downloaded from the panel, not to the API.
+   *
+   * 4R (4x6) is the default here because that is the printer the store actually has. A4 stays
+   * reachable for a desktop printer, and DELHIVERY_LABEL_SIZE moves the default without a deploy.
+   */
+  const want = String(pdfSize || process.env.DELHIVERY_LABEL_SIZE || '4R').toUpperCase();
+  const size = DELHIVERY_LABEL_SIZES.includes(want) ? want : '4R';
   return {
     // pdf=true → Delhivery returns JSON with a pre-signed PDF link (the label carries your
     // uploaded logo). Some accounts return the PDF bytes directly — the route handles both.
-    url: `${BASE_URL}/api/p/packing_slip?wbns=${encodeURIComponent(wbns)}&pdf=true`,
+    url: `${BASE_URL}/api/p/packing_slip?wbns=${encodeURIComponent(wbns)}&pdf=true&pdf_size=${size}`,
     headers: authHeaders(),
   };
 }
