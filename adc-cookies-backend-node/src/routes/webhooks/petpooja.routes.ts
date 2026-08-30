@@ -88,9 +88,13 @@ function callbackAuthed(req) {
     console.warn(`[PETPOOJA] ✗ callback rejected: no orderID in body to derive a token from`);
     return false;
   }
-  // Constant-time compare. Both sides are fixed-length hex, so a length check is safe first.
-  const ok = got.length === want.length &&
-    crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
+  /* Constant-time compare, guarded on BYTE length rather than string length. timingSafeEqual
+     throws RangeError on a length mismatch, and a 32-CHARACTER multi-byte value is not 32 BYTES —
+     so guarding on .length let a crafted ?k= throw out of here, past the handler's try, into a 500.
+     A 500 is the one answer this file must never give: their webhooks retry on it. */
+  const gotBuf = Buffer.from(got, 'utf8');
+  const wantBuf = Buffer.from(want, 'utf8');
+  const ok = gotBuf.length === wantBuf.length && crypto.timingSafeEqual(gotBuf, wantBuf);
   if (!ok) {
     // A header-authenticated call is still honoured: if Petpooja ever starts sending the
     // Client Authorization header on callbacks too, that must not begin failing.

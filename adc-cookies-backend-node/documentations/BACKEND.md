@@ -435,7 +435,7 @@ they ever expose it, mapping it back is trivial — the join column exists on th
 
 ### Four things on that bill that do not match what we charged
 
-**1. The bill is ₹13 higher than the customer paid. This is the serious one.**
+**1. The bill is ₹13 higher than the customer paid. INTENDED — confirmed 2026-08-30, do not "fix" it.**
 
 | | ours | their bill |
 |---|---|---|
@@ -451,11 +451,14 @@ order-level `Tax` object carrying `price: '2.5'` and the extracted amount. **The
 2.5% of 250 = 6.25 twice. Note our own extraction would have been 11.90 (250 − 250/1.05), so it is
 not simply that they recomputed ours; they treated a tax-inclusive price as exclusive.
 
-Consequence: the restaurant's books over-state every relayed order by the GST amount, and GST
-filed off the POS would be wrong. Unresolved — needs Petpooja to confirm how `tax_inclusive` is
-meant to be honoured on an aggregator order, or we stop sending the `Tax` object and send
-tax-exclusive prices instead. **Do not "fix" this by changing our prices**: what Razorpay charged
-is the truth, and the bill has to match it.
+**This is deliberate and was signed off on 2026-08-30.** The POS bill carries GST on top; the
+storefront price is inclusive. The difference is the GST the restaurant accounts for, and the
+divergence is expected rather than a defect.
+
+Recorded because it looks exactly like a bug from the data: the amount Razorpay settled and the
+amount the POS bill totals will never agree, and anyone reconciling the two — or reading this file
+after spotting the gap — needs to know it was a decision. Do not "correct" the payload to make the
+totals match without asking first.
 
 **2. `Payment Type` reads `A Dough Cookie Begur`**, the outlet name, not `ONLINE` — which is what
 `buildOrderPayload` sends. `Sub Order Type` shows the same string. Looks like their sub-order-type
