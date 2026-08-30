@@ -259,7 +259,9 @@ not enough — `srRequest` inspects the body too.
 
 - **Base** `PETPOOJA_BASE_URL` — sandbox `https://qle1yy2ydc.execute-api.ap-southeast-1.amazonaws.com/V1`, production `https://pponlineordercb.petpooja.com`
 - **Auth** `app_key` (32 chars) + `app_secret` (40) + `access_token` (40) go in **every outbound body, not headers**
-- **Env** `PETPOOJA_APP_KEY`/`PETPOOJA_API`, `_APP_SECRET`, `_ACCESS_TOKEN`, `_REST_ID`, `_BASE_URL`, `_WEBHOOK_SECRET`, `_PROXY_URL`
+- **Env** `PETPOOJA_APP_KEY`/`PETPOOJA_API`, `_APP_SECRET`, `_ACCESS_TOKEN`, `_REST_ID`, `_BASE_URL`, `_WEBHOOK_SECRET`, `_PROXY_URL`, `_CALLBACK_BASE`
+- `PETPOOJA_WEBHOOK_SECRET` does double duty: the Client Authorization header on the four
+  dashboard-configured endpoints, and the HMAC key behind the callback's `?k=` token.
 - **Not usable on staging** — no app keys there, so `petpoojaConfigured()` is false and relay no-ops.
 
 ### They call us (inbound)
@@ -267,7 +269,7 @@ not enough — `srRequest` inspects the body too.
 | status | ours | what it is |
 |---|---|---|
 | **LIVE** | `POST /api/petpooja/pushmenu` | the whole catalogue, pushed after every menu change. The only supported way to get the menu |
-| **WIRED** | `POST /api/petpooja/callback` | merchant accepted / rejected / progressed the order. **Currently 401s** — see below |
+| **WIRED** | `POST /api/petpooja/callback` | merchant accepted / rejected / progressed the order. Authenticates on `?k=` in the URL we send, **not** the header — see the root cause below |
 | **LIVE** | `POST /api/petpooja/item-stock` | item / add-on stock toggle. One endpoint for both on and off, as their docs advise |
 | **LIVE** | `POST /api/petpooja/get-store-status` | is the store open |
 | **LIVE** | `POST /api/petpooja/update-store-status` | set the store open/closed |
@@ -289,8 +291,191 @@ not enough — `srRequest` inspects the body too.
 - Outbound calls go through `PETPOOJA_PROXY_URL` for a static IP. The proxy is scoped to this client
   alone, so a wrong or unreachable proxy cannot affect any other integration.
 
-**Open blocker:** `/callback` returns 401. The dashboard's "Client Authorization" value is not the
-same string as `PETPOOJA_WEBHOOK_SECRET`.
+### The `/callback` 401 — root cause, verified 2026-08-30
+
+**The earlier diagnosis in this file was wrong.** It said the dashboard's "Client Authorization"
+value was not the same string as `PETPOOJA_WEBHOOK_SECRET`. It is. The secret is pasted correctly
+and it works. The callback fails for a different reason, and no amount of re-pasting will fix it.
+
+Petpooja reaches us from **one IP with two different clients**, and only one of them carries the
+header. Both rows below are from the Railway HTTP log for `adc-backend` production on 2026-08-30:
+
+| their call | client | our status |
+|---|---|---|
+| `POST /api/petpooja/get-store-status` (×3) | `axios/1.18.1` | **200** |
+| `POST /api/petpooja/callback` | `axios/**1.7.9**` | **401** |
+
+Same `srcIp` 35.154.180.221, different axios build, opposite outcomes. The four
+**dashboard-configured** endpoints (pushmenu, item-stock, get-store-status, update-store-status)
+are called by a service that sends the configured Client Authorization header, and they
+authenticate cleanly. `/callback` is called by a **separate, older service** that sends no
+credential of any kind.
+
+That is not a misconfiguration, it is the design. Per their Save Order guide, **`callback_url` is a
+required field in the `save_order` request body** — we hand them the URL per order, they POST
+results back to whatever we sent. There is no dashboard field for it and **the guide documents no
+authentication mechanism for the callback at all**: no header, no token, no signature. So a
+fail-closed check on `Authorization`/`x-api-key` can never pass, no matter what is configured
+where.
+
+**Confirmed never to have worked.** `petpooja_orders.petpooja_status` is written by the callback as
+a raw digit (`-1`/`1`/`5`/`10`). Across the whole production history exactly one row is non-null,
+order 76, and its value is the literal string `CANCELLED` — written by our own admin Cancel &
+Refund (`cancelRefund.routes.ts`), not by them. No callback has ever been processed.
+
+**The fix is NOT `PETPOOJA_WEBHOOK_ALLOW_UNAUTH=true.`** That flag is global: it opens all five
+inbound endpoints, and they are not read-only — `update-store-status` closes the shop,
+`item-stock` delists products, `callback` moves any order to DELIVERED or CANCELLED by an order
+number that is a guessable timestamp. It would also throw away authentication on the four
+endpoints that are *already working*, to fix the one that is not.
+
+**Fixed 2026-08-30, unproven against a live callback.** `/callback` now authenticates on **the one
+channel we control**: the `callback_url` we send them. `callbackToken()` derives
+`?k=<HMAC-SHA256(order_number, PETPOOJA_WEBHOOK_SECRET)>` truncated to 32 hex, and
+`callbackAuthed()` recomputes it from the `orderID` they echo back, comparing in constant time. Per
+order rather than one static token because the URL is recorded in full by every HTTP access log in
+the path — a leaked URL authenticates replays of one already-relayed order and nothing else.
+
+Still fail closed: no secret means no token to compare and the call is refused. A correct
+Client Authorization header is *also* accepted, so if their order service ever starts sending one
+this does not begin failing. The other four endpoints are untouched and keep the header check that
+is already working. `PETPOOJA_WEBHOOK_ALLOW_UNAUTH` remains the only escape hatch and remains
+global — it is not the fix for this, and it is not needed for it.
+
+The next real callback settles it. Watch for `[PETPOOJA] callback | order=…` following the `<-`
+line; a `✗ callback rejected: bad ?k=` line means they are not echoing the query string back.
+
+### The POS order number is not obtainable today
+
+Their portal shows a POS order number ("Order No. 2" for `ADC20260830105240`). We do not have it,
+and fixing the 401 alone will **not** get it:
+
+- `save_order` answers `"orderID": ""` — empty on every relay we have ever made. `relayOrder()`
+  stores `r.data?.orderID || null`, so `petpooja_orders.petpooja_order_id` is null on every row.
+  The number appears to be assigned when the merchant accepts and prints, not when the order saves.
+- The callback body does not contain it. The full key set, captured by the pre-auth request logger
+  on 2026-08-30, is: `restID, orderID, status, cancel_reason, is_modified, autoaccept,
+  minimum_delivery_time, minimum_prep_time`. `orderID` there is **ours**, echoed back.
+- Their Save Order guide documents no pull endpoint for order state, and Fetch Menu is deprecated.
+
+`orders.store_pos_bill_no` is written only by `POST /api/store/orders/:id/pos-bill` — staff typing
+the number off the store's own terminal. Begur is `posMode: 'AUTO'` and never passes through that
+screen, so **every warehouse order has a null bill number by construction**, and the day cannot be
+reconciled for them the way it can for the manual outlets.
+
+Getting it needs Petpooja to change something. Two specific asks for
+`malvi.vaghela@petpooja.com` / `rohan.sakhrani@petpooja.com`: populate `orderID` in the
+`save_order` response, or include the POS order/bill number in the callback body. Worth storing the
+raw callback body regardless — we currently keep only `orderID` and `status` and discard the rest,
+so if they ever start sending it we would not notice.
+
+### What their portal holds, and what we can actually reach
+
+Read off the Order Details screen for `ADC20260830105240` on 2026-08-30. This is the full picture
+of what Petpooja knows about one of our orders, and how much of it an API can give us.
+
+| their field | value | can we reach it? |
+|---|---|---|
+| Order No. | `2 [A Dough Cookie Begur-ADC20260830105240]` | **No.** Not in the `save_order` response, not in any callback key |
+| items, qty, unit price | Chocolate Chip ×2 @60, Double Choco ×2 @65 | **Yes** — ours, echoed back exactly |
+| customer name / phone / address | matches `addresses` row | **Yes** — ours |
+| Order Type | `Delivery` | **Yes** — our `order_type: 'H'` |
+| Order Status | `Printed` · Printed: Yes · 30 Aug 16:30:29 IST | **Doubt** — no numeric callback status is documented as "Printed"; our map has 1/2/3 = Accepted |
+| Billing User | `biller` | **No** — POS-local |
+| Server IP | `192.168.0.101` | **No** — the in-store terminal's LAN address |
+| Settlement Amount / Settled By / Counter | `₹0.00` / `-` / `-` | **No** |
+| Paid | `Yes` | **No** — not echoed anywhere we can read |
+
+The useful discovery is the bracket: **`[A Dough Cookie Begur-ADC20260830105240]`**. Their POS stores
+our `order_number` alongside its own counter, so their order number is already keyed to ours. If
+they ever expose it, mapping it back is trivial — the join column exists on their side today.
+"Order No. 2" is a per-outlet running count, not a global id.
+
+### Four things on that bill that do not match what we charged
+
+**1. The bill is ₹13 higher than the customer paid. This is the serious one.**
+
+| | ours | their bill |
+|---|---|---|
+| items | 250.00 | 250.00 |
+| delivery | 100.00 | 100.00 |
+| GST | 0.00 (inclusive) | CGST 6.25 + SGST 6.25 = **12.50** |
+| round off | — | 0.50 |
+| **total** | **350.00** | **363.00** |
+
+Razorpay settled ₹350.00. We send every line `tax_inclusive: true` with an empty `item_tax`, and an
+order-level `Tax` object carrying `price: '2.5'` and the extracted amount. **They ignore
+`tax_inclusive` and the amount, and apply the 2.5% + 2.5% additively to the item total** —
+2.5% of 250 = 6.25 twice. Note our own extraction would have been 11.90 (250 − 250/1.05), so it is
+not simply that they recomputed ours; they treated a tax-inclusive price as exclusive.
+
+Consequence: the restaurant's books over-state every relayed order by the GST amount, and GST
+filed off the POS would be wrong. Unresolved — needs Petpooja to confirm how `tax_inclusive` is
+meant to be honoured on an aggregator order, or we stop sending the `Tax` object and send
+tax-exclusive prices instead. **Do not "fix" this by changing our prices**: what Razorpay charged
+is the truth, and the bill has to match it.
+
+**2. `Payment Type` reads `A Dough Cookie Begur`**, the outlet name, not `ONLINE` — which is what
+`buildOrderPayload` sends. `Sub Order Type` shows the same string. Looks like their sub-order-type
+mapping is overwriting the payment type on the display.
+
+**3. `Settlement Amount: ₹0.00` although `Paid: Yes`.** Nothing in the guide says how a prepaid
+aggregator order settles, and we send no settlement field. Left as is; it means POS-side settlement
+reports will not reconcile against Razorpay.
+
+**4. `Coupon Code:` is blank** even when one was used. We put it in `description` because their
+guide documents no coupon field. Cosmetic, but worth knowing before anyone reads a POS discount
+report and believes it.
+
+### Save Order API — the payload contract
+
+From *API Guide for Placing Orders on Petpooja*, cross-checked against `buildOrderPayload()`.
+Required means required by them; ✅/❌ is their column, and the last column is what we actually send.
+
+**Authentication** — `app_key` (32), `app_secret` (40), `access_token` (40), all three required,
+all three in the **body**, from the sandbox account's Configuration section.
+
+**Restaurant** — `restID` ✅ required (the menu-sharing code from the menu payload, or the
+alphanumeric code they give you); `res_name`, `address`, `contact_information` all ❌ optional.
+
+**Customer** — `name` ✅ and `address` ✅ required; `phone`, `email`, `latitude`, `longitude`
+optional. We prefer the delivery address's recipient over the account holder, which is who the
+rider actually calls.
+
+| Order field | required | note / what we send |
+|---|---|---|
+| `orderID` | ✅ | our `order_number` |
+| `preorder_date` / `preorder_time` | ✅ | `YYYY-MM-DD` / `HH:MM:SS` |
+| `advanced_order` | ✅ | `"N"` |
+| `order_type` | ✅ | `H` = Home Delivery, `P` = Parcel, `D` = Dine-in. We send `H` |
+| `total` | ✅ | **restaurant's due only** — item final price − order discount + GST if the restaurant is liable + packing |
+| `tax_total` | ✅ | |
+| `created_on` | ✅ | `yyyy-mm-dd H:i:s` |
+| `dc_tax_percentage` | ✅ | tax % on delivery charges — we send `0`, flat untaxed pass-through |
+| `pc_tax_percentage` | ✅ | tax % on packing charge — `0` |
+| `payment_type` | ✅ | `COD` / `CARD` / `ONLINE`. We send `ONLINE` |
+| `enable_delivery` | ✅ | `0` = third-party rider, `1` = restaurant rider. We send `0` |
+| `callback_url` | ✅ | **per order, no dashboard field** — see the root cause above |
+| `discount_total` / `discount_type` | ❌ | `F` fixed or `P` percent |
+| `delivery_charges`, `packing_charges`, `service_charge` | ❌ | |
+| `urgent_order` / `urgent_time` | ❌ | prep time in minutes if urgent |
+| `description` | ❌ | special instructions; we put the coupon code here |
+| `OTP for Pickup` | ❌ | pickup verification code |
+
+**Discounts:** omit the `Discount` object entirely. Their guide is explicit — use `discount_total`
+and `discount_type` on the `Order` object instead. Our payload already has no `Discount`.
+
+**Order items** — required per line: item `id` (from the Menu Push payload), `name`, `price`
+(unit price **including add-ons**), `final_price` (price − item-level discount), `quantity`,
+`gst_liability` (`vendor` / `restaurant`), `item_tax`, `tax_inclusive`, `tax_percentage`.
+Optional: `AddonItem`, `variation_id`, `variation_name`. Because our lines are `tax_inclusive`
+with empty `item_tax`, the GST reaches the bill through the order-level `Tax` object instead.
+
+**Tax object** — every field required: `id`, `title` (CGST/SGST), `type` (`P`/`F`), `price` (the
+percentage), `tax` (the amount), `restaurant_liable_amt`. We send the full amount as
+restaurant-liable because we remit it.
+
+**Support:** `malvi.vaghela@petpooja.com`, `rohan.sakhrani@petpooja.com`.
 
 ---
 
@@ -381,6 +566,9 @@ Best-effort by design: it must never block or fail a login.
   calls it. Failed deliveries are handled in their panel.
 - **PetPooja menu pull** — Fetch Menu is deprecated. The menu only arrives when the merchant
   triggers a push.
+- **PetPooja POS order number** — `save_order` returns it empty, the callback does not carry it,
+  and there is no endpoint to pull it. Every Begur/AUTO order therefore has a null
+  `store_pos_bill_no`. Needs a change on their side; see the PetPooja section.
 - **Branded OTP sender** — not offered on Message Central's VerifyNow.
 - **Shiprocket rate comparison across couriers** — we take the serviceability quote as given.
 - **Re-ship a lapsed Shiprocket Quick order** — *attempted automatically since 2026-08-29, not yet

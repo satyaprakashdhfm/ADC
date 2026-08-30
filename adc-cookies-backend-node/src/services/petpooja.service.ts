@@ -11,6 +11,7 @@
  * The HTTP calls live in petpooja.client.js. This half decides WHEN to make them, refuses to relay
  * an order nobody has paid for, and records what came back.
  */
+import crypto from 'node:crypto';
 import { getAll, getOne, query, nowIso } from '../db/index.js';
 import { storeRelaysToPos } from './store.service.js';
 import { summarisePicks } from './pack.service.js';
@@ -198,6 +199,29 @@ function callbackBase() {
   return 'https://adc-backend-copy-production.up.railway.app';
 }
 
+/*
+ * The callback's ONLY credential.
+ *
+ * Petpooja authenticates the four dashboard-configured endpoints with the "Client Authorization"
+ * header and that works — but /callback is delivered by a different service of theirs (a distinct
+ * axios build, verified in the Railway HTTP log on 2026-08-30) which sends no header at all. Their
+ * Save Order guide confirms it: callback_url is a required field in the REQUEST BODY and no
+ * authentication is documented for it. So the header check can never pass on that route, and the
+ * one channel we control is the URL itself.
+ *
+ * Per order rather than one static token, because the URL travels in plain text and is recorded in
+ * full by every HTTP access log in the path. A static token leaked from a log would authenticate
+ * anything; this one authenticates callbacks for a single already-relayed order and nothing else.
+ *
+ * Truncated to 32 hex (128 bits) to keep the URL readable — far beyond guessing, and the secret is
+ * not recoverable from it.
+ */
+export function callbackToken(orderNumber) {
+  const secret = (process.env.PETPOOJA_WEBHOOK_SECRET || '').trim();
+  if (!secret) return '';
+  return crypto.createHmac('sha256', secret).update(String(orderNumber)).digest('hex').slice(0, 32);
+}
+
 /**
  * Build the Save Order body from one of our orders.
  *
@@ -300,7 +324,8 @@ export function buildOrderPayload({ order, items, customer, address, taxIds = []
           // Sent per order — there is no dashboard field for it. Railway injects
           // RAILWAY_PUBLIC_DOMAIN, so this is correct on deploy without extra configuration;
           // PETPOOJA_CALLBACK_BASE overrides it for local tunnels or a custom domain.
-          callback_url: `${callbackBase()}/api/petpooja/callback`,
+          // ?k= is the callback's only credential — see callbackToken() above.
+          callback_url: `${callbackBase()}/api/petpooja/callback?k=${callbackToken(order.order_number)}`,
           collect_cash: '', otp: '',
         } },
         OrderItem: { details: orderItems },

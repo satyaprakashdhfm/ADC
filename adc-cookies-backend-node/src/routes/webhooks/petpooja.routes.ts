@@ -1,6 +1,7 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
 import { getOne, query, nowIso } from '../../db/index.js';
-import { ingestMenu, setStoreOpen, getStoreOpen } from '../../services/petpooja.service.js';
+import { ingestMenu, setStoreOpen, getStoreOpen, callbackToken } from '../../services/petpooja.service.js';
 import { REST_ID } from '../../services/petpooja.client.js';
 
 /*
@@ -49,7 +50,55 @@ function authed(req) {
     return false;
   }
   const got = String(req.get('authorization') || req.get('x-api-key') || '').trim();
-  return got === secret || got.replace(/^(Bearer|Token)\s+/i, '') === secret;
+  if (got === secret || got.replace(/^(Bearer|Token)\s+/i, '') === secret) return true;
+  /* Describe the SHAPE of what arrived, never the value — a rejected call is otherwise invisible
+     and the last 401 cost a log excavation to explain. Lengths and presence are enough to tell
+     "sent nothing" from "sent something that differs". */
+  console.warn(
+    `[PETPOOJA] ✗ rejected: no matching credential | authorization=${req.get('authorization') ? `${String(req.get('authorization')).trim().length} chars` : 'absent'}` +
+    ` | x-api-key=${req.get('x-api-key') ? `${String(req.get('x-api-key')).trim().length} chars` : 'absent'}` +
+    ` | expected ${secret.length} chars`
+  );
+  return false;
+}
+
+/*
+ * The callback authenticates on ?k= instead of a header, because Petpooja's order service sends no
+ * header — see callbackToken() for the evidence. Everything else about the gate is unchanged, so
+ * the four dashboard-configured endpoints keep the header check that is already working.
+ *
+ * Still FAIL CLOSED: no secret configured means no token to compare, and the call is refused unless
+ * the same explicit escape hatch is set.
+ */
+function callbackAuthed(req) {
+  const secret = (process.env.PETPOOJA_WEBHOOK_SECRET || '').trim();
+  if (!secret) {
+    if (process.env.PETPOOJA_WEBHOOK_ALLOW_UNAUTH === 'true') {
+      console.warn('[PETPOOJA] ⚠ unauthenticated callback allowed — PETPOOJA_WEBHOOK_SECRET is not set');
+      return true;
+    }
+    console.warn('[PETPOOJA] ✗ callback rejected: PETPOOJA_WEBHOOK_SECRET not set');
+    return false;
+  }
+  // The token is derived from the order id they echo back, so it is verifiable without a lookup.
+  const orderNumber = String(req.body?.orderID || '').trim();
+  const got = String(req.query?.k || '').trim();
+  const want = callbackToken(orderNumber);
+  if (!orderNumber || !want) {
+    console.warn(`[PETPOOJA] ✗ callback rejected: no orderID in body to derive a token from`);
+    return false;
+  }
+  // Constant-time compare. Both sides are fixed-length hex, so a length check is safe first.
+  const ok = got.length === want.length &&
+    crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
+  if (!ok) {
+    // A header-authenticated call is still honoured: if Petpooja ever starts sending the
+    // Client Authorization header on callbacks too, that must not begin failing.
+    if (authed(req)) return true;
+    console.warn(`[PETPOOJA] ✗ callback rejected: bad ?k= for order=${orderNumber} (got ${got.length || 0} chars, expected ${want.length})`);
+    return false;
+  }
+  return true;
 }
 
 /*
@@ -109,7 +158,8 @@ const ORDER_STATUS_FOR = {
 };
 
 router.post('/callback', async (req, res) => {
-  if (blocked(req, res, { success: '0', message: 'unauthorized' })) return;
+  if (!callbackAuthed(req)) return res.status(401).json({ success: '0', message: 'unauthorized' });
+  if (!restIdOk(req.body)) return res.status(403).json({ success: '0', message: 'unauthorized' });
   const b = req.body || {};
   const clientOrderId = String(b.orderID || '').trim();     // our order_number, echoed back
   const status = String(b.status ?? '').trim();
@@ -126,9 +176,25 @@ router.post('/callback', async (req, res) => {
       return res.json({ success: '0', message: 'order not found' });
     }
 
+    /*
+     * Keep the WHOLE body, not just the two fields we act on.
+     *
+     * Their POS assigns an order number on accept ("Order No. 2" in the portal) and we have no way
+     * to read it — it is absent from the save_order response and from every callback key seen so
+     * far. If they ever start sending it, or any other field, this is what makes it visible without
+     * another log excavation. Merged rather than replaced so the save_order response survives.
+     */
     await query(
-      `UPDATE petpooja_orders SET petpooja_status=$1, updated_at=$2 WHERE order_id=$3`,
-      [status, ts, order.id]
+      `UPDATE petpooja_orders
+          SET petpooja_status = $1,
+              petpooja_order_id = COALESCE(petpooja_order_id, NULLIF($4, '')),
+              response = COALESCE(response, '{}'::jsonb) || jsonb_build_object('callbacks',
+                COALESCE(response->'callbacks', '[]'::jsonb) || jsonb_build_array($5::jsonb)),
+              updated_at = $2
+        WHERE order_id = $3`,
+      [status, ts, order.id,
+       String(b.posOrderID ?? b.pos_order_id ?? b.billNo ?? b.bill_no ?? '').trim(),
+       JSON.stringify({ at: ts, body: b })]
     );
 
     const next = ORDER_STATUS_FOR[status];
