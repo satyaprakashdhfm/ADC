@@ -105,10 +105,31 @@ So `pdf_size` is sent because it is the documented parameter and costs nothing i
 side — but it is **not** a working fix today, and the panel's Shipping Label Config does not reach
 this either. Do not conclude from the code that the label is correct; measure the PDF.
 
-**The documented way out is `pdf=false`**, which returns JSON instead of a PDF for us to render as
-HTML with code-128 barcodes. Their own guide offers it precisely for layout control. That means
-owning the label design, and it is the only route that gives a true 4x6 without depending on them
-fixing the composition above.
+**What we do instead: re-place their label rather than re-render it.** `labelPdf.ts` crops the A4
+page to the label and scales it, uniformly, onto a 288x432pt page — exactly 4x6in. Their form
+XObject is intact and their design is untouched; only the placement was wrong, so only the
+placement is redone. Measured on the real label for 57064410000206:
+
+| | page | ink fills | margins |
+|---|---|---|---|
+| theirs | 595x842pt (A4) | 41% w x 50% h | L23 **R328 T414** B9 |
+| ours | 288x432pt (4x6) | 86% w x 98% h | L20 R20 T3 B3 |
+
+Uniform scale only — stretching it to fill the roll edge to edge would distort the barcodes.
+
+**This is deliberately fragile and fails soft.** The crop is where their template puts the ink
+today, expressed as fractions of the page (so it survives a page-size change) and found by
+rasterising a real label, not by reading their code. If they change the template it will crop
+wrongly. `DELHIVERY_LABEL_CROP` ("x0,x1,y0,y1" as fractions) overrides it without a deploy, and
+**every failure path returns their original bytes untouched** — a badly placed label still prints,
+a 500 loses the parcel. `?size=A4` skips the transform entirely.
+
+The `[ADMIN-LABEL]` line reports what happened, e.g. `595x842 → crop 250x425 → 288x432 @1.016`.
+If it ever says `unchanged:` or `skipped:`, their template moved.
+
+**The other route, if this stops holding, is `pdf=false`** — JSON instead of a PDF, rendered as HTML
+with code-128 barcodes. Their guide offers it precisely for layout control. It is the only option
+that does not depend on their composition at all, and the cost is owning the label design.
 
 **The One panel's Shipping Label Config does not govern this.** That screen configures labels
 downloaded from the panel; an API-manifested label takes the parameter on the call, and with no

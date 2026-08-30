@@ -4,6 +4,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { serializeOrder } from '../../serializers/index.js';
 import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../services/delhivery.client.js';
 import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, walletStatus, assignAwb, shiprocketConfigured } from '../../services/shiprocket.client.js';
+import { to4x6 } from '../../services/labelPdf.js';
 import { autoCreateShipment } from '../../services/shipment.service.js';
 import { applyCarrierTerminalStatus, bookingNote } from '../../services/orderProgress.service.js';
 
@@ -397,11 +398,26 @@ router.get('/delivery/label', async (req, res) => {
 
   // ?size=A4 for a desktop printer; omitted means 4R, the store's thermal roll.
   const { url, headers } = shippingLabelUrl(waybills, { pdfSize: size as string });
-  const sendPdf = (buf, via) => {
+  const wantA4 = String(size || '').toUpperCase() === 'A4';
+
+  const sendPdf = async (buf, via) => {
+    /*
+     * Their pdf_size is ignored, so the bytes arriving here are A4 with the label stranded in one
+     * corner whatever we asked for. Re-stamp onto a real 4x6 unless A4 was explicitly requested.
+     * to4x6 never throws — on anything unexpected it hands back the original, because a badly
+     * placed label still prints and a failed download does not.
+     */
+    let out = Buffer.from(buf);
+    let note = 'A4 as requested';
+    if (!wantA4) {
+      const r = await to4x6(new Uint8Array(out));
+      out = Buffer.from(r.bytes);
+      note = r.note;
+    }
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="label-${waybills}.pdf"`);
-    console.log(`[ADMIN-LABEL] wbns=${waybills} | size=${url.match(/pdf_size=(\w+)/)?.[1] || '?'} | ✓ ${via} | ${buf.byteLength}b`);
-    res.send(Buffer.from(buf));
+    console.log(`[ADMIN-LABEL] wbns=${waybills} | ${note} | ✓ ${via} | ${out.byteLength}b`);
+    res.send(out);
   };
 
   try {
@@ -409,7 +425,7 @@ router.get('/delivery/label', async (req, res) => {
     const ct = upstream.headers.get('Content-Type') || '';
 
     if (ct.includes('application/pdf')) {
-      return sendPdf(await upstream.arrayBuffer(), 'direct pdf');
+      return await sendPdf(await upstream.arrayBuffer(), 'direct pdf');
     }
 
     // JSON response: pull the pre-signed PDF link and stream that.
@@ -421,7 +437,7 @@ router.get('/delivery/label', async (req, res) => {
       return res.status(502).json({ error: 'no_pdf_link', detail: data });
     }
     const pdfRes = await fetch(pdfUrl);
-    return sendPdf(await pdfRes.arrayBuffer(), 'via link');
+    return await sendPdf(await pdfRes.arrayBuffer(), 'via link');
   } catch (e: any) {
     console.log(`[ADMIN-LABEL] wbns=${waybills} | ✗ ${e.message}`);
     throw new ApiError('Could not fetch label from Delhivery', 502);
