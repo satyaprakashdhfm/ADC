@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { getOrders, getAddresses, addAddress, updateAddress, deleteAddress as apiDeleteAddress, getSpinStatus, getOrderTracking, type Address, type Order, type SpinClaim } from '@/lib/api';
+import { getOrders, getAddresses, addAddress, updateAddress, deleteAddress as apiDeleteAddress, getSpinStatus, getOrderTracking, getPendingFeedback, type Address, type Order, type SpinClaim, type PendingFeedback } from '@/lib/api';
 import dynamic from 'next/dynamic';
 
 // Leaflet needs a window, and this only renders inside an open address form.
@@ -18,6 +18,7 @@ import {
   friendlyDate, formatPhone, national10, isCancelledStatus, isDeadShipment, whenLabel,
 } from '@/lib/orderFormat';
 import LoginModal from '@/components/ordering/LoginModal';
+import FeedbackModal from './FeedbackModal';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import Footer from '@/components/storefront/Footer';
 import {
@@ -267,6 +268,7 @@ export default function AccountPage() {
   const [addrErr, setAddrErr] = useState('');
   const [spinClaim, setSpinClaim] = useState<SpinClaim | null | undefined>(undefined); // undefined = loading
   const [copiedSpin, setCopiedSpin] = useState(false);
+  const [feedback, setFeedback] = useState<PendingFeedback | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -275,6 +277,22 @@ export default function AccountPage() {
     getAddresses().then(a => setAddresses(a ?? [])).catch(() => setAddresses([]));
     // Any Spin & Win reward they claimed (still within its validity window) — see it here too.
     getSpinStatus().then(r => setSpinClaim(r.active)).catch(() => setSpinClaim(null));
+    /*
+     * Ask for feedback on a delivered order, once.
+     *
+     * The server decides what is outstanding — it knows what has been answered — but "Maybe later"
+     * is remembered HERE, per order, in localStorage. Declining is not an answer and must not be
+     * written to the feedback table, yet a popup that returns on every visit until it gets its way
+     * is the kind of thing people close the tab over. Cleared storage means it asks once more,
+     * which is the right way for that to fail.
+     */
+    getPendingFeedback()
+      .then((p) => {
+        if (!p) return;
+        try { if (localStorage.getItem(`adc_feedback_skip_${p.id}`)) return; } catch { /* private mode */ }
+        setFeedback(p);
+      })
+      .catch(() => { /* never let a feedback prompt break the account page */ });
   }, [user]);
 
   // The header's "Track" button links straight here (/account#orders) so tapping it lands on an
@@ -378,6 +396,17 @@ export default function AccountPage() {
 
   return (
     <main className="adc-pattern-page order-cards" style={{ minHeight: '100vh' }}>
+      {/* Asked once, after a delivered order, and only for a signed-in customer — this branch. */}
+      {feedback && (
+        <FeedbackModal
+          order={feedback}
+          onClose={() => {
+            try { localStorage.setItem(`adc_feedback_skip_${feedback.id}`, '1'); } catch { /* private mode */ }
+            setFeedback(null);
+          }}
+          onDone={() => setFeedback(null)}
+        />
+      )}
       {/* The shared navbar, not a bespoke one. This page used to carry its own header — back arrow,
           logo, "My Account" — which meant arriving here dropped the customer out of the site's
           navigation entirely. The <h1> in the profile card below already names the page. */}

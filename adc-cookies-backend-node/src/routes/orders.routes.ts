@@ -343,6 +343,97 @@ router.get('/', async (req, res) => {
   res.json(serialized);
 });
 
+/* ------------------------------------------------------------------ */
+/* Post-delivery feedback                                              */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Three questions, each a 1-5 rating and an optional comment. Asked once, after the parcel has
+ * actually arrived — intracity and intercity alike, since DELIVERED is written by the carrier
+ * webhook either way and this route does not care which carrier wrote it.
+ */
+const FEEDBACK_FIELDS = ['website', 'flow', 'delivery'] as const;
+const COMMENT_MAX = 1000;
+
+/** Reads one question's pair out of the body, or throws with the reason. Never trusts either. */
+function feedbackPair(body, key: string) {
+  const rating = Number(body?.[`${key}Rating`]);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new ApiError(`Please give a star rating for all three questions`);
+  }
+  const raw = body?.[`${key}Comment`];
+  // Empty string and whitespace both mean "no comment" — store NULL rather than '' so the
+  // difference between "said nothing" and "typed spaces" cannot show up in a report.
+  const comment = String(raw ?? '').trim().slice(0, COMMENT_MAX);
+  return { rating, comment: comment || null };
+}
+
+/*
+ * Which order, if any, should the popup ask about.
+ *
+ * Delivered, owned by the caller, not already answered, newest first. Returns null rather than
+ * 404ing when there is nothing to ask — "no feedback due" is the normal case, not an error.
+ */
+router.get('/feedback/pending', async (req, res) => {
+  const user = await userByEmail(req.user!.email);
+  /*
+   * Only recent orders. "How was the delivery?" asked about a parcel from two months ago gets a
+   * guess rather than an answer, and the point of collecting this is that it is reliable. The
+   * window is on created_at rather than the delivery time because an order is delivered within
+   * days of being placed, and created_at is on the row itself — the delivered timestamp lives in
+   * order_tracking and would cost a second join for a boundary that does not need to be exact.
+   */
+  const maxAgeDays = Number(process.env.FEEDBACK_MAX_AGE_DAYS || 30);
+  const order = await getOne(
+    `SELECT o.id, o.order_number, o.carrier
+       FROM orders o
+       LEFT JOIN website_feedback f ON f.order_id = o.id
+      WHERE o.user_id = $1 AND o.order_status = 'DELIVERED' AND f.id IS NULL
+        AND o.created_at > now() - ($2 || ' days')::interval
+      ORDER BY o.created_at DESC
+      LIMIT 1`,
+    [user.id, String(Number.isFinite(maxAgeDays) && maxAgeDays > 0 ? maxAgeDays : 30)]
+  );
+  if (!order) return res.json({ pending: null });
+  res.json({ pending: { id: order.id, orderNumber: order.order_number, carrier: order.carrier } });
+});
+
+router.post('/:id/feedback', async (req, res) => {
+  const user = await userByEmail(req.user!.email);
+  // Ownership and deliveredness are checked in one query: an order the caller does not own is
+  // indistinguishable from one that does not exist, which is what it should look like to them.
+  // Guard the cast: `id` lands in an integer comparison, and a non-numeric one would surface as a
+  // Postgres syntax error (a 500) rather than the 'not found' this should be.
+  const orderId = Number(req.params.id);
+  if (!Number.isInteger(orderId) || orderId <= 0) throw new ApiError('Order not found');
+  const order = await getOne(
+    'SELECT id, order_status FROM orders WHERE id = $1 AND user_id = $2', [orderId, user.id]
+  );
+  if (!order) throw new ApiError('Order not found');
+  if (order.order_status !== 'DELIVERED') {
+    throw new ApiError('Feedback opens once the order has been delivered');
+  }
+
+  const [website, flow, delivery] = FEEDBACK_FIELDS.map((k) => feedbackPair(req.body, k));
+
+  /*
+   * ON CONFLICT DO NOTHING, not an upsert: the popup asks once, and a second submission for the
+   * same order is a double-tap or a stale tab rather than a change of mind. Answering ok either way
+   * keeps the client simple — it has nothing useful to do with a "you already answered" error.
+   */
+  const { rows } = await query(
+    `INSERT INTO website_feedback
+       (order_id, user_id, website_rating, website_comment, flow_rating, flow_comment,
+        delivery_rating, delivery_comment, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (order_id) DO NOTHING
+     RETURNING id`,
+    [order.id, user.id, website!.rating, website!.comment, flow!.rating, flow!.comment,
+     delivery!.rating, delivery!.comment, nowIso()]
+  );
+  res.status(201).json({ ok: true, recorded: rows.length > 0 });
+});
+
 router.get('/:id', async (req, res) => {
   const user = await userByEmail(req.user!.email);
   // Scope to the owner so one user can never read another's order.

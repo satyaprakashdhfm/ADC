@@ -697,6 +697,38 @@ export async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_pos_bill_no TEXT;
     CREATE INDEX IF NOT EXISTS idx_orders_store_code ON orders(store_code);
 
+    /*
+     * Post-delivery feedback, three questions per order.
+     *
+     * Keyed on the ORDER, one row per order (UNIQUE), because that is what the customer is being
+     * asked about and it is what stops the popup asking twice. user_id is denormalised alongside so
+     * feedback survives as a record of who said it even if the order is later reshaped.
+     *
+     * Ratings are CHECKed 1..5 in the database as well as in the route. The popup is the only
+     * writer today, but a rating of 0 or 7 would quietly poison every average computed from this
+     * table, and an average is the entire point of collecting it.
+     *
+     * Comments are nullable: a customer who gives three stars and no words has still told us
+     * something, and demanding prose is how you get an empty table.
+     */
+    CREATE TABLE IF NOT EXISTS website_feedback (
+      id SERIAL PRIMARY KEY,
+      order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      -- 1: the website overall
+      website_rating INTEGER NOT NULL CHECK (website_rating BETWEEN 1 AND 5),
+      website_comment TEXT,
+      -- 2: paying, and understanding what had been ordered
+      flow_rating INTEGER NOT NULL CHECK (flow_rating BETWEEN 1 AND 5),
+      flow_comment TEXT,
+      -- 3: the delivery itself, intracity or intercity
+      delivery_rating INTEGER NOT NULL CHECK (delivery_rating BETWEEN 1 AND 5),
+      delivery_comment TEXT,
+      created_at TIMESTAMPTZ NOT NULL,
+      UNIQUE (order_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_website_feedback_user ON website_feedback(user_id);
+
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This
     -- backend connects as the table owner, which bypasses RLS, so the app is unaffected.

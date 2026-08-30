@@ -656,6 +656,25 @@ export async function getOrderTracking(orderId: number): Promise<OrderEvent[]> {
   return request(`/orders/${orderId}/tracking`);
 }
 
+/* ---- Post-delivery feedback ---- */
+
+export interface PendingFeedback { id: number; orderNumber: string; carrier: string | null }
+export interface FeedbackAnswers {
+  websiteRating: number; websiteComment: string;
+  flowRating: number; flowComment: string;
+  deliveryRating: number; deliveryComment: string;
+}
+
+/** The delivered order we still owe feedback on, or null when there is nothing to ask. */
+export async function getPendingFeedback(): Promise<PendingFeedback | null> {
+  const r = await request<{ pending: PendingFeedback | null }>('/orders/feedback/pending');
+  return r.pending;
+}
+
+export async function submitFeedback(orderId: number, answers: FeedbackAnswers): Promise<{ ok: boolean }> {
+  return request(`/orders/${orderId}/feedback`, { method: 'POST', body: JSON.stringify(answers) });
+}
+
 /** Is online ordering paused, and what do we tell the customer? Public — checkout reads it too. */
 export async function getOrderingStatus(): Promise<{ paused: boolean; message: string | null }> { return request('/products/ordering-status'); }
 export async function adminAnalytics(from?: string, to?: string): Promise<AdminAnalytics> {
