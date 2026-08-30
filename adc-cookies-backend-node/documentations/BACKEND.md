@@ -77,6 +77,39 @@ outright:
 We sent `?wbns=…&pdf=true` and nothing else, so every label we have ever fetched came back on an
 8x11 page. `shippingLabelUrl()` now sends `pdf_size` and defaults it to `4R`.
 
+**That did not fix it, and the parameter is not the whole story.** Measured on the real label for
+`57064410000206` after the change shipped — the log confirms the request went out as `size=4R`:
+
+```
+[ADMIN-LABEL] wbns=57064410000206 | size=4R | ✓ via link | 159291b
+```
+
+and the PDF still came back **595 x 842 pt — A4, exactly**. Their `pdf=true` path ignores
+`pdf_size`. Worse, the PDF it returns is mis-composed, which is visible in the page's entire
+content stream:
+
+```
+q 0 J 1 w 0 j 0 G 0 g q 0.9470 0 0 1.0131 -230.0000 217.0000 cm /GOFPDITPL0 Do Q Q
+```
+
+One form XObject, whose `/BBox` is `[0 0 792 612]` — **US Letter, landscape** — stamped onto an A4
+**portrait** page. Three separate faults in that one line:
+
+- **non-uniform scale**, 0.9470 across against 1.0131 down: the label is squashed ~6.5% horizontally
+  relative to vertically, so the barcodes are drawn stretched
+- **negative x offset**, −230 pt: the form's left edge is translated off the page and clipped
+- **Letter-landscape content on an A4-portrait page**, which is why it strands in a corner however
+  the printer is set
+
+So `pdf_size` is sent because it is the documented parameter and costs nothing if they fix their
+side — but it is **not** a working fix today, and the panel's Shipping Label Config does not reach
+this either. Do not conclude from the code that the label is correct; measure the PDF.
+
+**The documented way out is `pdf=false`**, which returns JSON instead of a PDF for us to render as
+HTML with code-128 barcodes. Their own guide offers it precisely for layout control. That means
+owning the label design, and it is the only route that gives a true 4x6 without depending on them
+fixing the composition above.
+
 **The One panel's Shipping Label Config does not govern this.** That screen configures labels
 downloaded from the panel; an API-manifested label takes the parameter on the call, and with no
 parameter it takes their A4 default no matter what the panel says. Setting the panel to Thermal 4x6
@@ -84,9 +117,9 @@ changes nothing for us — which is why the panel preview looked correct while t
 
 | `pdf_size` | page | for |
 |---|---|---|
-| `4R` | 4x6 | thermal roll — **our default** |
+| `4R` | **A4 anyway** — ignored on the `pdf=true` path, measured 2026-08-30 | thermal roll — our default |
 | `A4` | 8x11 | desktop printer — `GET /api/admin/delivery/label?size=A4` |
-| *(omitted)* | 8x11 | their default, and the bug |
+| *(omitted)* | 8x11 | their documented default |
 
 `DELHIVERY_LABEL_SIZE` moves the default without a deploy. An unrecognised value falls back to `4R`
 rather than being passed through, because an invalid size silently becomes A4 again at their end.
