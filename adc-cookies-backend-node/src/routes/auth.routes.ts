@@ -19,7 +19,18 @@ import { linkEmailClaimsToUser } from '../services/coupon.service.js';
 // Rejects junk like "123@gmail.com" (digits-only local part) — requires a real-looking local
 // part (at least one letter, 2+ characters) and a proper domain/TLD.
 const EMAIL_RE = /^(?=[^\s@]*[a-zA-Z])[^\s@]{2,}@[^\s@]+\.[a-zA-Z]{2,}$/;
-const MIN_NAME_LEN = 5;
+/*
+ * Two, not five — kept in step with the frontend's profileValidation.ts.
+ *
+ * Five turned away anybody called Ram, Raj, Anu, Om or Dev. It was standing in for "give us your
+ * full name", which it never enforced anyway: "Ramaa" passed and "Ram K" passed, so it rejected
+ * real single names while admitting the half-names it was meant to stop. If these two numbers ever
+ * drift apart the customer gets the worst of both — a form that accepts a name and an API that
+ * refuses it.
+ */
+const MIN_NAME_LEN = 2;
+/** Names are for addressing people, so they must contain letters. Mirrors HAS_LETTER on the client. */
+const NAME_HAS_LETTER = /\p{L}/u;
 
 // Merge `fromId` (phone-OTP account) into `intoId` (Google/email account).
 // Transfers all data, then deletes the phone account from our DB and Supabase.
@@ -86,7 +97,10 @@ router.patch('/me', requireAuth, async (req, res) => {
 
   if (req.body?.name != null) {
     const name = String(req.body.name).trim();
-    if (name.length < MIN_NAME_LEN) throw new ApiError(`Please enter your full name (at least ${MIN_NAME_LEN} characters).`);
+    /* Say which rule failed. "Invalid name" leaves somebody retyping the same thing. */
+    if (!NAME_HAS_LETTER.test(name)) throw new ApiError('Please enter your name using letters.');
+    if (name.length < MIN_NAME_LEN) throw new ApiError(`Please enter at least ${MIN_NAME_LEN} letters.`);
+    if (name.toLowerCase() === 'guest') throw new ApiError('Please enter your own name so we know who to hand the order to.');
     sets.push(`name = $${i++}`); params.push(name);
   }
 

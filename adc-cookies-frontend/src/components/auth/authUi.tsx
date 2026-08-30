@@ -56,6 +56,18 @@ export const authLinkBtn: React.CSSProperties = {
   fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)',
 };
 
+/*
+ * The reason a single field is not accepted, shown under that field.
+ *
+ * Deliberately quieter than authErrorBox: that one reports a failed REQUEST, which is a thing that
+ * went wrong. This is guidance while somebody is still typing, and shouting at a half-finished name
+ * would be worse than the silence it replaces.
+ */
+export const fieldHint: React.CSSProperties = {
+  margin: '0 0 10px 2px', fontSize: 'var(--text-xs)',
+  color: 'var(--status-error)', fontWeight: 600, lineHeight: 1.4,
+};
+
 export const authErrorBox: React.CSSProperties = {
   marginTop: 10, padding: '8px 12px', borderRadius: 'var(--radius-sm)',
   background: 'var(--status-error-bg)', color: 'var(--status-error)',

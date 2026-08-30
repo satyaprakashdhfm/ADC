@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronLeft, X, ShoppingBag, Check, ArrowRight, Gift, MapPin, Home, Briefcase, Lock, Tag, Receipt, Clock, Plus, Cookie, Navigation, Truck, Pencil, AlertTriangle } from 'lucide-react';
-import { productAvailableFor } from '@/lib/stores';
+import { deliveryEligibleFor } from '@/lib/stores';
 import { useLocation } from '@/context/LocationContext';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import Footer from '@/components/storefront/Footer';
@@ -387,15 +387,29 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                 };
                 /* The menu shows everything to everyone, but a SUGGESTION is different: offering
                    something that would be blacked out the moment it landed in the basket is just
-                   setting the shopper up. So once a real address has been checked, its own
-                   restriction list is the filter — the precise per-pincode answer, not the coarse
-                   nearest-store hint, which is all `productAvailableFor` can give before then. */
+                   setting the shopper up.
+
+                   TWO filters, because either one alone leaks.
+
+                   deliveryEligibleFor is the baseline, and it is the same function the menu itself
+                   filters on (HomeProducts) — so what we suggest can never be something the menu
+                   would have hidden. It works from the PINCODE, which means it is right for an
+                   outstation address the moment one is typed, before any round trip. The old
+                   fallback here was productAvailableFor, which only ever asks about intracity and
+                   the nearest store's city: it has no opinion on intercityAvailable at all, so a
+                   Noida or Delhi shopper was offered every same-day-only cookie in the catalogue
+                   while the menu three taps earlier had correctly hidden them.
+
+                   sameDayRestrictions is the precise layer on top: the server's real per-pincode
+                   answer once an address has actually been checked. It is optional in the response,
+                   which is the other half of why it cannot be the only filter — when it is absent,
+                   `delivCheck ? true` waved everything through. */
                 const undeliverable = new Set(
                   (delivCheck?.sameDayRestrictions || []).filter(r => !r.eligible).map(r => String(r.productId))
                 );
                 const pool = catalog.filter(p => p.isAvailable && !cart[String(p.id)]
                   && !undeliverable.has(String(p.id))
-                  && (delivCheck ? true : productAvailableFor(upsellCity, p)));
+                  && deliveryEligibleFor(chosen?.pincode, upsellCity, p));
                 if (pool.length === 0) return null;
                 /* Deal one product from each category in turn instead of listing a category at a
                    time. The grid is cut off wherever it runs out of height, and a category listed

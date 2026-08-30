@@ -2,9 +2,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowRight, Phone } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { isValidName, isValidEmail } from '@/lib/profileValidation';
+import { isValidName, isValidEmail, nameError, emailError } from '@/lib/profileValidation';
 import { useIsDesktop } from '@/lib/useIsDesktop';
-import { Divider, GoogleG, authInput, authLabel, authPrimaryBtn, authLinkBtn, authErrorBox } from './authUi';
+import { Divider, GoogleG, authInput, authLabel, authPrimaryBtn, authLinkBtn, authErrorBox, fieldHint } from './authUi';
 
 /*
  * Phone-OTP + Google sign-in, with no chrome of its own so it can be dropped into any host.
@@ -105,6 +105,9 @@ export default function AuthPanel({ onSuccess, onLockChange, resetKey, compact =
   };
 
   const profileValid = isValidName(profileName) && isValidEmail(profileEmail);
+  /* Null while a field is empty, so nobody is told their name is too short mid-typing. */
+  const nameMsg = nameError(profileName);
+  const emailMsg = emailError(profileEmail);
 
   const handleSaveProfile = async () => {
     if (!profileValid) return;
@@ -143,16 +146,20 @@ export default function AuthPanel({ onSuccess, onLockChange, resetKey, compact =
           value={profileName}
           onChange={e => setProfileName(e.target.value)}
           placeholder="Your name" autoComplete="name" autoFocus
-          style={{ ...inputStyle, marginBottom: 10 }}
+          style={{ ...inputStyle, marginBottom: nameMsg ? 4 : 10 }}
         />
+        {/* Say WHY. A disabled Continue button and no message is indistinguishable from a broken
+            page — which is exactly how it read to somebody called Ram. */}
+        {nameMsg && <div style={fieldHint}>{nameMsg}</div>}
         <label style={authLabel}>Email address</label>
         <input
           value={profileEmail}
           onChange={e => setProfileEmail(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && profileValid) handleSaveProfile(); }}
           placeholder="you@example.com" type="email" autoComplete="email"
-          style={{ ...inputStyle, marginBottom: 10 }}
+          style={{ ...inputStyle, marginBottom: emailMsg ? 4 : 10 }}
         />
+        {emailMsg && <div style={fieldHint}>{emailMsg}</div>}
         <button onClick={handleSaveProfile} disabled={loading || !profileValid} style={authPrimaryBtn(desktop, !loading && profileValid)}>
           {loading ? 'Saving…' : 'Continue'}{!loading && profileValid && <ArrowRight size={18} />}
         </button>

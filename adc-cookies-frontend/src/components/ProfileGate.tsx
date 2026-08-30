@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowRight, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { isValidName, isValidEmail } from '@/lib/profileValidation';
+import { isValidName, isValidEmail, nameError, emailError } from '@/lib/profileValidation';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 
 /*
@@ -64,6 +64,12 @@ export default function ProfileGate() {
     background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)',
     color: 'var(--text-strong)', outline: 'none',
   };
+  /* Same job as authUi's fieldHint; defined locally because this modal owns its own input styles
+     and pulling one style out of the auth kit while keeping the rest here would read as an accident. */
+  const hintStyle: React.CSSProperties = {
+    margin: '-4px 0 8px 2px', fontSize: 'var(--text-xs)',
+    color: 'var(--status-error)', fontWeight: 600, lineHeight: 1.4,
+  };
   const labelStyle: React.CSSProperties = {
     display: 'block', fontSize: 'var(--text-xs)', fontWeight: 700,
     color: 'var(--text-muted)', letterSpacing: '.02em', margin: '0 0 5px 2px',
@@ -86,12 +92,14 @@ export default function ProfileGate() {
           <>
             <label style={labelStyle}>Full name</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" autoComplete="name" autoFocus style={inputStyle} />
+            {nameError(name) && <div style={hintStyle}>{nameError(name)}</div>}
           </>
         )}
         {needs.email && (
           <>
             <label style={labelStyle}>Email address</label>
             <input value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" autoFocus={!needs.name} style={inputStyle} />
+            {emailError(email) && <div style={hintStyle}>{emailError(email)}</div>}
           </>
         )}
         {needs.phone && (

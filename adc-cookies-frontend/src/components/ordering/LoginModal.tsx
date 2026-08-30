@@ -3,10 +3,10 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { X, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { isValidName, isValidEmail } from '@/lib/profileValidation';
+import { isValidName, isValidEmail, nameError, emailError } from '@/lib/profileValidation';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import AuthPanel from '@/components/auth/AuthPanel';
-import { Divider, authInput, authLinkBtn } from '@/components/auth/authUi';
+import { Divider, authInput, authLinkBtn, fieldHint } from '@/components/auth/authUi';
 
 interface LoginModalProps {
   open: boolean;
@@ -141,10 +141,13 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
               {mode === 'register' && (
                 <>
                   <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={inputStyle} />
+                  {/* The reason, under the field. Without it a disabled button is the only feedback. */}
+                  {nameError(name) && <div style={fieldHint}>{nameError(name)}</div>}
                   <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" style={inputStyle} />
                 </>
               )}
               <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email" style={inputStyle} />
+              {emailError(email) && <div style={fieldHint}>{emailError(email)}</div>}
               <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" style={inputStyle} />
 
               {/* Reset is only relevant to the email/password login path (Google & OTP users never set one). */}
