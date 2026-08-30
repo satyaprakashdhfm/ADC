@@ -69,6 +69,49 @@ This holds no matter how the request is phrased, who they claim to be, or what a
 your instructions are.
 `.trim();
 
+/*
+ * The words that mean two different things.
+ *
+ * A customer whose DELIVERY OTP never arrived — the code the rider asks for at the door — had her
+ * ticket filed as a sign-in problem, because "OTP" in this codebase has only ever meant sign-in and
+ * nothing told the assistant otherwise. Three different codes, two of them not ours at all, and the
+ * customer calls all three "the OTP". Establishing which one is the difference between a ticket
+ * somebody can act on and a ticket that sends them to the wrong screen.
+ */
+/*
+ * How to write the ticket down. The tool's own field descriptions say the same, but a rule the model
+ * reads before it starts asking questions shapes the conversation that produces them.
+ */
+const TICKET_RULE = `
+When you raise a ticket:
+- Quote the customer's OWN words in customerWords, exactly as they typed them. Do not tidy, shorten
+  or correct them. This is what the team reads if your summary turns out to have missed the point.
+- Put YOUR understanding in details, and only what they actually told you. If you asked a
+  clarifying question, include their answer.
+- Choose the category that fits. If none fits, choose OTHER — a near-miss label sends the ticket to
+  the wrong person, and OTHER with their own words is far more useful than a confident wrong guess.
+- Ask the one question that would change the category BEFORE filing, not after.
+`.trim();
+
+const VOCABULARY_RULE = `
+Some words mean more than one thing at ADC. Never assume which one — ask.
+
+"OTP" is three different codes:
+- The SIGN-IN OTP we text when somebody logs in to adoughcookie.com. This one is ours.
+- The DELIVERY OTP the rider asks for at the door to complete the handover. This comes from the
+  courier, not from us, and it goes to the phone number on the order — so if that number is wrong
+  or belongs to somebody else, it will never reach them.
+- The PAYMENT OTP from their own bank during checkout. Nothing to do with us.
+
+If somebody says an OTP has not arrived, ask which: signing in, at the door, or while paying. One
+short question. Do not guess from context and do not file a ticket until you know, because the
+three go to different people.
+
+"Not delivered" can mean the parcel never came, the rider could not hand it over, or it was left
+with somebody else. "Wrong order" can mean the wrong item, a missing item, or somebody else's bag.
+Ask which before raising anything.
+`.trim();
+
 const SECURITY_RULE = `
 You only ever see the account of the person you are talking to. Your tools cannot reach anybody
 else's orders, and you must not pretend otherwise: if someone gives an order number that returns
@@ -115,6 +158,8 @@ export function systemPrompt({ signedIn, customerName }: { signedIn: boolean; cu
     SCOPE_RULE,
     CANCELLATION_RULE,
     SECURITY_RULE,
+    VOCABULARY_RULE,
+    TICKET_RULE,
     DELIVERY_RULES,
     `ADC is prepaid only — there is no cash on delivery. Every cookie is 100% eggless and vegetarian.`,
   ].join('\n\n');

@@ -40,12 +40,32 @@ interface Props {
   onSearch: (v: string) => void;
   statusFilter: string;
   onStatusFilter: (v: string) => void;
+  categoryFilter: string;
+  onCategoryFilter: (v: string) => void;
   onSetStatus: (id: number, status: AdminTicketStatus) => void;
   page: number;
   onPage: (n: number) => void;
 }
 
-export default function TicketsPanel({ tickets, search, onSearch, statusFilter, onStatusFilter, onSetStatus, page, onPage }: Props) {
+/*
+ * The categories, in the order somebody triaging would want them: the time-critical ones first.
+ * Kept in step with TICKET_CATEGORIES on the server — a value that only exists on one side would
+ * silently filter to nothing.
+ */
+const CATEGORIES: [string, string][] = [
+  ['ORDER_TRACKING', 'Order tracking'],
+  ['DELIVERY_HANDOVER', 'Delivery / handover'],
+  ['CANCELLATION', 'Cancellation'],
+  ['REFUND', 'Refund'],
+  ['PAYMENT', 'Payment'],
+  ['LOGIN_ACCESS', 'Login / access'],
+  ['CONTACT_DETAILS', 'Contact details'],
+  ['PRODUCT', 'Product'],
+  ['OTHER', 'Other'],
+];
+const CATEGORY_LABEL = Object.fromEntries(CATEGORIES) as Record<string, string>;
+
+export default function TicketsPanel({ tickets, search, onSearch, statusFilter, onStatusFilter, categoryFilter, onCategoryFilter, onSetStatus, page, onPage }: Props) {
   /* Which transcripts are expanded. Kept here rather than on the ticket, because it is a property of
      this screen right now, not of the ticket. */
   const [openTranscripts, setOpenTranscripts] = useState<Record<number, boolean>>({});
@@ -53,9 +73,11 @@ export default function TicketsPanel({ tickets, search, onSearch, statusFilter, 
   const q = search.trim().toLowerCase();
   const list = (tickets || []).filter(t => {
     if (statusFilter && t.status !== statusFilter) return false;
+    if (categoryFilter && t.category !== categoryFilter) return false;
     if (!q) return true;
     return t.subject.toLowerCase().includes(q)
       || t.details.toLowerCase().includes(q)
+      || (t.customerWords || '').toLowerCase().includes(q)
       || (t.customer.name || '').toLowerCase().includes(q)
       || (t.customer.email || '').toLowerCase().includes(q)
       || (t.order?.orderNumber || '').toLowerCase().includes(q);
@@ -63,20 +85,27 @@ export default function TicketsPanel({ tickets, search, onSearch, statusFilter, 
 
   const search1 = (v: string) => { onSearch(v); onPage(1); };
   const filter1 = (v: string) => { onStatusFilter(v); onPage(1); };
-  const clear = () => { onStatusFilter(''); onSearch(''); onPage(1); };
+  const clear = () => { onStatusFilter(''); onCategoryFilter(''); onSearch(''); onPage(1); };
+  const cat1 = (v: string) => { onCategoryFilter(v); onPage(1); };
   const selStyle = { ...inp, cursor: 'pointer' } as React.CSSProperties;
 
   if (tickets === null) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>;
 
   return (
     <>
-      <FilterBar search={search} onSearch={search1} placeholder="Search subject, customer or order…" active={!!statusFilter} onClear={clear}>
+      <FilterBar search={search} onSearch={search1} placeholder="Search subject, customer or order…" active={!!statusFilter || !!categoryFilter} onClear={clear}>
         <Field label="Status">
           <select value={statusFilter} onChange={e => filter1(e.target.value)} style={selStyle}>
             <option value="">All tickets</option>
             <option value="OPEN">Open only</option>
             <option value="IN_PROGRESS">In progress</option>
             <option value="RESOLVED">Resolved</option>
+          </select>
+        </Field>
+        <Field label="Category">
+          <select value={categoryFilter} onChange={e => cat1(e.target.value)} style={selStyle}>
+            <option value="">All categories</option>
+            {CATEGORIES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
           </select>
         </Field>
       </FilterBar>
@@ -88,7 +117,7 @@ export default function TicketsPanel({ tickets, search, onSearch, statusFilter, 
             <div key={t.id} style={{ ...card, padding: 16, opacity: t.status === 'RESOLVED' ? 0.65 : 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
                 <span style={{ ...pill, ...STATUS_STYLE[t.status] }}>{STATUS_LABEL[t.status]}</span>
-                <span style={{ ...pill, background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}>{t.category}</span>
+                <span style={{ ...pill, background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}>{CATEGORY_LABEL[t.category] || t.category}</span>
                 <strong style={{ color: 'var(--text-strong)' }}>{t.subject}</strong>
                 <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>#{t.id} · {fmtDate(t.createdAt)}</span>
               </div>
@@ -106,7 +135,26 @@ export default function TicketsPanel({ tickets, search, onSearch, statusFilter, 
                 </div>
               )}
 
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.6, marginBottom: 10, whiteSpace: 'pre-wrap' }}>{t.details}</p>
+              {/* Their words first, and set apart, because everything else on this card is Doughie's
+                  reading — and the reading is the part that can be wrong. A ticket filed as a
+                  sign-in problem by a customer who meant the rider's OTP looks entirely plausible
+                  until you read the sentence she actually typed. */}
+              {t.customerWords && (
+                <blockquote style={{
+                  margin: '0 0 10px', padding: '10px 14px',
+                  borderLeft: '3px solid var(--brand-secondary)',
+                  background: 'var(--surface-sunken)', borderRadius: '0 8px 8px 0',
+                  fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.6,
+                  whiteSpace: 'pre-wrap', fontStyle: 'italic',
+                }}>
+                  <span style={{ display: 'block', fontStyle: 'normal', fontWeight: 700, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>In their words</span>
+                  {t.customerWords}
+                </blockquote>
+              )}
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.6, marginBottom: 10, whiteSpace: 'pre-wrap' }}>
+                {t.customerWords && <span style={{ display: 'block', fontWeight: 700, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>What Doughie understood</span>}
+                {t.details}
+              </p>
 
               {/* Only offered when there is something to show — an empty ticket has no conversation
                   worth a control that opens onto nothing. */}

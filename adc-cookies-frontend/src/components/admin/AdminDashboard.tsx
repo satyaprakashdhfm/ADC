@@ -90,7 +90,7 @@ export default function AdminDashboard() {
   } = useAdminOrders(isAdmin && (tab === 'orders' || tab === 'delivery'), { onError: setErr, onNotice: setNotice, refreshStats, refreshAttention });
   const { messages, search: messageSearch, setSearch: setMessageSearch, handledFilter: messageHandled, setHandledFilter: setMessageHandled, markHandled } = useAdminMessages(isAdmin && tab === 'messages', refreshStats);
   /* Same tab, so same enable condition — both lists load when Messages is opened and not before. */
-  const { tickets, search: ticketSearch, setSearch: setTicketSearch, statusFilter: ticketStatus, setStatusFilter: setTicketStatus, setStatus: setTicketStatusFor } = useAdminTickets(isAdmin && tab === 'messages');
+  const { tickets, search: ticketSearch, setSearch: setTicketSearch, statusFilter: ticketStatus, setStatusFilter: setTicketStatus, categoryFilter: ticketCategory, setCategoryFilter: setTicketCategory, setStatus: setTicketStatusFor } = useAdminTickets(isAdmin && tab === 'messages');
   const {
     warehouses, setWarehouses, whForm, setWhForm,
     purDate, setPurDate, purTime, setPurTime, purCount, setPurCount, purResult, setPurResult,
@@ -327,6 +327,8 @@ export default function AdminDashboard() {
             onTicketSearch={setTicketSearch}
             ticketStatusFilter={ticketStatus}
             onTicketStatusFilter={setTicketStatus}
+            ticketCategoryFilter={ticketCategory}
+            onTicketCategoryFilter={setTicketCategory}
             onSetTicketStatus={setTicketStatusFor}
             ticketPage={pageOf('tickets')}
             onTicketPage={n => setPageOf('tickets', n)}

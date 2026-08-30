@@ -344,12 +344,22 @@ export async function initSchema() {
       order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
       subject TEXT NOT NULL,
       details TEXT NOT NULL,
-      category TEXT NOT NULL DEFAULT 'GENERAL',
+      category TEXT NOT NULL DEFAULT 'OTHER',
       status TEXT NOT NULL DEFAULT 'OPEN',
       transcript JSONB,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
     );
+    /*
+     * The customer's own sentences, unparaphrased.
+     *
+     * details is the assistant's READING of the problem, and a reading is what failed: "my OTP is
+     * not coming" was filed as a sign-in fault when the customer meant the courier's code at her
+     * door. Both OTPs are real, only one is ours, and nothing in the row said which she meant.
+     * This column is the sentence she actually typed, so a wrong reading is recoverable.
+     */
+    ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS customer_words TEXT;
+
     CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets (status, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets (user_id);
 

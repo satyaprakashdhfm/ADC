@@ -17,6 +17,7 @@ export function useAdminTickets(enabled: boolean) {
   const [tickets, setTickets] = useState<AdminTicket[] | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
 
   useEffect(() => {
     if (enabled && tickets === null) adminGetTickets().then(setTickets).catch(() => setTickets([]));
@@ -31,5 +32,5 @@ export function useAdminTickets(enabled: boolean) {
     }
   };
 
-  return { tickets, search, setSearch, statusFilter, setStatusFilter, setStatus };
+  return { tickets, search, setSearch, statusFilter, setStatusFilter, categoryFilter, setCategoryFilter, setStatus };
 }

@@ -115,3 +115,53 @@ test('the ticket tool carries the transcript it was built with', () => {
   assert.ok(typeof buildTicketTool(7, [{ role: 'user', text: 'hi' }]).raiseSupportTicket.execute === 'function');
   assert.ok(typeof buildTicketTool(7).raiseSupportTicket.execute === 'function'); // still optional
 });
+
+/*
+ * Capturing what the customer actually said.
+ *
+ * A customer whose DELIVERY OTP never arrived — the courier's code, at her door — had her ticket
+ * filed as a sign-in problem. Both OTPs are real, only one is ours, and the row carried nothing but
+ * the model's reading, so there was no way to tell it had guessed wrong. These cover the three
+ * things that make that recoverable: a closed category list with somewhere honest to put a
+ * misfit, a verbatim field, and a prompt that makes the assistant ask which OTP before filing.
+ */
+test('the category list is closed, and OTHER is a real destination', async () => {
+  const { TICKET_CATEGORIES, normaliseCategory } = await import('../dist/services/ticket.service.js');
+  assert.ok(TICKET_CATEGORIES.includes('OTHER'));
+  // The two OTP situations must be separately filable, or one word does double duty again.
+  assert.ok(TICKET_CATEGORIES.includes('DELIVERY_HANDOVER'));
+  assert.ok(TICKET_CATEGORIES.includes('LOGIN_ACCESS'));
+  // Anything invented lands in OTHER rather than being written to the row unchecked.
+  assert.equal(normaliseCategory('GENERAL'), 'OTHER');
+  assert.equal(normaliseCategory('nonsense'), 'OTHER');
+  assert.equal(normaliseCategory(undefined), 'OTHER');
+  assert.equal(normaliseCategory('delivery handover'), 'DELIVERY_HANDOVER');
+  assert.equal(normaliseCategory(' refund '), 'REFUND');
+});
+
+test('the ticket tool demands the customer\'s own words, and constrains the category', async () => {
+  const { buildTicketTool, TICKET_CATEGORIES } = await import('../dist/services/ticket.service.js');
+  const shape = buildTicketTool(7).raiseSupportTicket.inputSchema.shape;
+  // Required, not optional: a summary alone is what failed.
+  assert.ok(shape.customerWords, 'customerWords must exist');
+  assert.equal(shape.customerWords.isOptional?.() ?? false, false);
+  // A free-text category is how "OTP" became a login ticket.
+  const opts = shape.category?._def?.innerType?.options ?? shape.category?.options ?? [];
+  assert.deepEqual([...opts].sort(), [...TICKET_CATEGORIES].sort());
+});
+
+test('the prompt makes the assistant separate the three OTPs before filing', async () => {
+  const { systemPrompt } = await import('../dist/services/chat.service.js');
+  const p = systemPrompt({ signedIn: true, customerName: 'Priya' });
+  assert.match(p, /SIGN-IN OTP/i);
+  assert.match(p, /DELIVERY OTP/i);
+  assert.match(p, /PAYMENT OTP/i);
+  // The delivery one is the courier's and follows the phone number ON THE ORDER — the fact that
+  // explains the whole incident.
+  assert.match(p, /comes from the\s+courier/i);
+  assert.match(p, /phone number on the order/i);
+  // And it must ask rather than guess.
+  assert.match(p, /ask which/i);
+  assert.match(p, /customerWords/);
+  assert.match(p, /choose OTHER/i);
+});

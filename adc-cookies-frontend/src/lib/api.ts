@@ -899,7 +899,10 @@ export type AdminTicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
 export interface AdminTicket {
   id: number;
   subject: string;
+  /** The assistant's reading of the problem. Can be wrong — that is what customerWords is for. */
   details: string;
+  /** What the customer actually typed, unparaphrased. Null on tickets raised before 2026-08-30. */
+  customerWords: string | null;
   category: string;
   status: AdminTicketStatus;
   createdAt: string;

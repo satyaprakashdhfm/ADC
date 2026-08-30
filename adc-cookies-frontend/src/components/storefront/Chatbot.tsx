@@ -28,19 +28,90 @@ import { useAuth } from '@/context/AuthContext';
  */
 
 /*
- * Openers. Two, deliberately — a wall of suggestions is a menu, and a menu is what this replaced.
- * They differ by sign-in state because the signed-out assistant genuinely cannot answer the second
- * one, and offering a question it must refuse is a worse start than not offering it.
+ * Suggestions, chosen from what was just said rather than fixed in the file.
+ *
+ * These used to be four hardcoded pairs — two openers, two follow-ups — so every visitor saw the
+ * same two questions in the same order forever, and after a conversation about allergens the panel
+ * still offered "Track my latest order". A suggestion that ignores the last answer is worse than
+ * none: it reads as a menu, and a menu is exactly what this component replaced.
+ *
+ * So: pools by topic, the topic picked from the assistant's last reply, and anything already
+ * offered or already asked filtered out. No extra model call — the cost of a suggestion should not
+ * be a second round trip.
  */
-const OPENERS_SIGNED_IN = ['Where is my order?', 'What are your bestsellers?'];
-const OPENERS_SIGNED_OUT = ['What cookies do you sell?', 'Do you deliver to my area?'];
+type Topic = 'order' | 'delivery' | 'product' | 'payment' | 'help';
 
-/* Offered once the conversation has run a little, so there is a way onward that is not typing. */
-const FOLLOW_UPS_SIGNED_IN = ['Track my latest order', 'I need help with an order'];
-const FOLLOW_UPS_SIGNED_OUT = ['How long does delivery take?', 'Are your cookies eggless?'];
+const POOL: Record<Topic, string[]> = {
+  order: [
+    'Where is my order?',
+    'Track my latest order',
+    'Has my order been picked up?',
+    'When will it arrive?',
+    'My order is taking too long',
+  ],
+  delivery: [
+    'Do you deliver to my area?',
+    'How long does delivery take?',
+    'Do you deliver same day?',
+    'What are your delivery charges?',
+    'Can I get it delivered tomorrow morning?',
+  ],
+  product: [
+    'What cookies do you sell?',
+    'What are your bestsellers?',
+    'Are your cookies eggless?',
+    'What are the allergens?',
+    'What is in the Nutella filled cookie?',
+    'Do you have anything without nuts?',
+  ],
+  payment: [
+    'I was charged but there is no order',
+    'How long does a refund take?',
+    'Do you accept cash on delivery?',
+    'My payment failed',
+  ],
+  help: [
+    'I need help with an order',
+    'I want to cancel an order',
+    'Something was wrong with my order',
+    'I want to talk to someone',
+  ],
+};
 
-/** After this many exchanges we start offering the follow-ups. */
-const FOLLOW_UP_AFTER = 3;
+/* Reachable only once we know whose account it is — offering these to a signed-out visitor invites
+   a question the assistant is then obliged to refuse. */
+const ACCOUNT_TOPICS: Topic[] = ['order', 'payment'];
+
+/* Matched against the assistant's last reply, most specific first: "refund" should land on payment
+   even though the same sentence probably also says "order". */
+const TOPIC_HINTS: [Topic, RegExp][] = [
+  ['payment', /refund|payment|paid|charge|razorpay|money back/i],
+  ['help', /ticket|team will|cannot do that|get back to you|raised/i],
+  ['order', /order|delivered|rider|tracking|waybill|picked up|ADC\d/i],
+  ['delivery', /deliver|pincode|same.?day|outstation|address|area/i],
+  ['product', /cookie|flavour|flavor|eggless|allergen|price|₹|menu|bestseller/i],
+];
+
+/** After this many exchanges we start offering follow-ups. */
+const FOLLOW_UP_AFTER = 2;
+
+function topicOf(text: string): Topic | null {
+  for (const [topic, re] of TOPIC_HINTS) if (re.test(text)) return topic;
+  return null;
+}
+
+/* A stable shuffle: the same seed gives the same order, so chips do not rearrange themselves on
+   every keystroke while still differing between one conversation and the next. */
+function shuffled<T>(arr: T[], seed: number): T[] {
+  const out = [...arr];
+  let x = seed || 1;
+  for (let i = out.length - 1; i > 0; i--) {
+    x = (x * 1103515245 + 12345) & 0x7fffffff;
+    const j = x % (i + 1);
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
 
 const GREETING =
   'Hey there! I’m Doughie, your ADC support cookie. Ask me about our cookies, delivery, '
@@ -56,6 +127,9 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
   const { authId } = useAuth();
   const signedIn = !!authId;
   const [input, setInput] = useState('');
+  /* Re-rolled whenever a conversation starts, so the openers differ between visits rather than
+     being the same two lines for everybody, forever. */
+  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -98,12 +172,71 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
       stop();                 // abandon a reply that is mid-flight for the old identity
       setMessages([]);
       setInput('');
+      setSeed(Math.floor(Math.random() * 1e9));
     }
     prevAuthId.current = authId;
   }, [authId, setMessages, stop]);
 
   const busy = status === 'submitted' || status === 'streaming';
   const exchanges = messages.filter((m) => m.role === 'user').length;
+
+  /*
+   * What to offer next.
+   *
+   * Openers before anything is said, then follow-ups drawn from whatever the assistant just talked
+   * about. Nothing in between, so the panel is never permanently half-menu, and nothing that has
+   * already been offered or already asked — repeating a chip somebody just tapped is how a thread
+   * starts looking like it is going in circles.
+   */
+  const suggestions = useMemo(() => {
+    if (busy) return [];
+
+    const asked = new Set(
+      messages.filter((m) => m.role === 'user')
+        .map((m) => m.parts.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+          .map((p) => p.text).join('').trim().toLowerCase()),
+    );
+
+    const allowed = (t: Topic) => signedIn || !ACCOUNT_TOPICS.includes(t);
+
+    if (messages.length === 0) {
+      /* Openers: one product question and one about getting it to them, which is what people
+         actually open a chat to ask. Shuffled per conversation so two visitors do not see an
+         identical panel, and so the same person coming back gets a different way in. */
+      const first: Topic = signedIn ? 'order' : 'product';
+      const second: Topic = signedIn ? 'product' : 'delivery';
+      return [shuffled(POOL[first], seed)[0]!, shuffled(POOL[second], seed + 7)[0]!];
+    }
+
+    if (exchanges < FOLLOW_UP_AFTER) return [];
+
+    const lastBot = [...messages].reverse().find((m) => m.role === 'assistant');
+    const lastText = lastBot
+      ? lastBot.parts.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map((p) => p.text).join('')
+      : '';
+
+    /* The topic just discussed leads; `help` follows it, because the honest next step after most
+       support answers is a person. Everything else fills the remainder. */
+    const lead = topicOf(lastText);
+    const order: Topic[] = [
+      ...(lead ? [lead] : []),
+      'help',
+      ...(['order', 'delivery', 'product', 'payment'] as Topic[]),
+    ];
+
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const t of order) {
+      if (!allowed(t) || seen.has(t)) continue;
+      seen.add(t);
+      for (const q of shuffled(POOL[t], seed + t.length)) {
+        if (out.length >= 3) break;
+        if (!asked.has(q.toLowerCase()) && !out.includes(q)) { out.push(q); break; }
+      }
+      if (out.length >= 3) break;
+    }
+    return out;
+  }, [messages, busy, exchanges, signedIn, seed]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, busy]);
   useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
@@ -117,13 +250,6 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
     sendMessage({ text: t });
   };
 
-  /* Openers before anything is said; follow-ups once the conversation has actually run. Nothing in
-     between, so the panel is not permanently half-menu. */
-  const suggestions = messages.length === 0
-    ? (signedIn ? OPENERS_SIGNED_IN : OPENERS_SIGNED_OUT)
-    : (!busy && exchanges >= FOLLOW_UP_AFTER
-        ? (signedIn ? FOLLOW_UPS_SIGNED_IN : FOLLOW_UPS_SIGNED_OUT)
-        : []);
 
   const bubble = (from: 'bot' | 'user', text: string, key: string) => (
     <div key={key} style={{ alignSelf: from === 'bot' ? 'flex-start' : 'flex-end', maxWidth: '82%' }}>
@@ -175,7 +301,7 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
         {/* Only once there is something to clear. A reset button on an empty thread is a control
             that does nothing, and it invites the question of what it would have done. */}
         {messages.length > 0 && (
-          <button onClick={() => { stop(); setMessages([]); setInput(''); inputRef.current?.focus(); }}
+          <button onClick={() => { stop(); setMessages([]); setInput(''); setSeed(Math.floor(Math.random() * 1e9)); inputRef.current?.focus(); }}
             aria-label="Start a new conversation" title="Start a new conversation"
             style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--white-16)', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--white)', flex: 'none' }}>
             <RotateCcw size={15} />

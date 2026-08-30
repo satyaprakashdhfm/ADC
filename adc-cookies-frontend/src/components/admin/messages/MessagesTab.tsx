@@ -33,6 +33,8 @@ interface Props {
   onTicketSearch: (v: string) => void;
   ticketStatusFilter: string;
   onTicketStatusFilter: (v: string) => void;
+  ticketCategoryFilter: string;
+  onTicketCategoryFilter: (v: string) => void;
   onSetTicketStatus: (id: number, status: AdminTicketStatus) => void;
   ticketPage: number;
   onTicketPage: (n: number) => void;
@@ -40,7 +42,8 @@ interface Props {
 
 export default function MessagesTab({
   messages, search, onSearch, handledFilter, onHandledFilter, onMarkHandled, page, onPage,
-  tickets, ticketSearch, onTicketSearch, ticketStatusFilter, onTicketStatusFilter, onSetTicketStatus, ticketPage, onTicketPage,
+  tickets, ticketSearch, onTicketSearch, ticketStatusFilter, onTicketStatusFilter,
+  ticketCategoryFilter, onTicketCategoryFilter, onSetTicketStatus, ticketPage, onTicketPage,
 }: Props) {
   const [view, setView] = useState<'messages' | 'tickets'>('messages');
 
@@ -99,6 +102,8 @@ export default function MessagesTab({
           onSearch={onTicketSearch}
           statusFilter={ticketStatusFilter}
           onStatusFilter={onTicketStatusFilter}
+          categoryFilter={ticketCategoryFilter}
+          onCategoryFilter={onTicketCategoryFilter}
           onSetStatus={onSetTicketStatus}
           page={ticketPage}
           onPage={onTicketPage}

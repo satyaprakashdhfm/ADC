@@ -18,7 +18,9 @@ export const supportTickets = pgTable('support_tickets', {
   orderId: integer('order_id').references(() => orders.id, { onDelete: 'set null' }),
   subject: text().notNull(),
   details: text().notNull(),
-  category: text().default('GENERAL').notNull(),
+  /** What the customer actually typed, unparaphrased — `details` is the assistant's reading of it. */
+  customerWords: text('customer_words'),
+  category: text().default('OTHER').notNull(),
   status: text().default('OPEN').notNull(),
   /** The few turns that led here, so whoever picks it up sees what was actually asked. */
   transcript: jsonb(),

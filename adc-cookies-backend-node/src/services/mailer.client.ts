@@ -132,8 +132,8 @@ export async function sendContactEmail({ name, email, phone, message }) {
  */
 export interface TicketMailTurn { role: 'user' | 'assistant'; text: string }
 
-export async function sendSupportTicketEmail({ id, subject, details, category, orderNumber, customerName, customerEmail, transcript = [] }: {
-  id: number; subject: string; details: string; category: string;
+export async function sendSupportTicketEmail({ id, subject, details, customerWords, category, orderNumber, customerName, customerEmail, transcript = [] }: {
+  id: number; subject: string; details: string; customerWords?: string | null; category: string;
   orderNumber?: string | null; customerName?: string | null; customerEmail?: string | null;
   transcript?: TicketMailTurn[];
 }) {
@@ -148,10 +148,18 @@ export async function sendSupportTicketEmail({ id, subject, details, category, o
     .map((m) => `<p style="margin:0 0 8px"><span style="color:#7A6353;font-weight:700">${esc(m.role === 'user' ? 'Customer' : 'Doughie')}:</span> ${esc(String(m.text || '').slice(0, 500))}</p>`)
     .join('');
 
+  /* Their words first, and visually first, because the assistant's reading is the part that can be
+     wrong — and when it is, this is the block that tells you so at a glance. */
+  const verbatim = customerWords
+    ? `<p style="margin:14px 0 4px;color:#7A6353;font-size:13px">In their words</p>
+       <blockquote style="margin:0;padding:10px 14px;border-left:3px solid #EF7507;background:#FFF6E9;color:#2B1D12;line-height:1.6;white-space:pre-wrap;font-style:italic">${esc(customerWords)}</blockquote>`
+    : '';
+
   const body = `
     <p style="color:#5C4636">A customer raised this through the support chat.</p>
     <table style="width:100%;border-collapse:collapse;font-size:14px;color:#2B1D12">${rows}</table>
-    <p style="margin:14px 0 4px;color:#7A6353;font-size:13px">What they need</p>
+    ${verbatim}
+    <p style="margin:14px 0 4px;color:#7A6353;font-size:13px">What Doughie understood</p>
     <p style="margin:0;color:#2B1D12;line-height:1.6;white-space:pre-wrap">${esc(details)}</p>
     ${convo ? `<p style="margin:18px 0 6px;color:#7A6353;font-size:13px">How the conversation went</p><div style="font-size:13px;color:#2B1D12;line-height:1.5">${convo}</div>` : ''}`;
 

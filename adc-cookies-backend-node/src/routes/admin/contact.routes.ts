@@ -40,6 +40,9 @@ router.get('/tickets', async (req, res) => {
     id: t.id,
     subject: t.subject,
     details: t.details,
+    /* Shown ABOVE details in the panel: details is the assistant's reading, and the reading is the
+       part that can be wrong. */
+    customerWords: t.customer_words || null,
     category: t.category,
     status: t.status,
     createdAt: t.created_at,
