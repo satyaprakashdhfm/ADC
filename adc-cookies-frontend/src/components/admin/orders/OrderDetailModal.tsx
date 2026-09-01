@@ -155,7 +155,13 @@ export default function OrderDetailModal({ order: o, onClose, trackResult, setTr
              reconciles the order — the bill the staff typed in — was not shown at all. */
           o.store?.posManual ? (
             <div style={{ ...card, padding: 14, marginBottom: 14 }}>
-              <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Kitchen (billed at the store)</div>
+              {/* Name the kitchen. "Billed at the store" was true of four different outlets, so the
+                  one fact this panel exists to carry — WHICH kitchen made this order — was the one
+                  it did not say. */}
+              <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 2 }}>
+                Kitchen — {o.store.name || o.store.code}
+              </div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 8 }}>Billed at the store</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <Badge text={o.store.posBillNo ? `Billed — bill ${o.store.posBillNo}` : 'Not billed yet'} ok={!!o.store.posBillNo} />
               </div>
@@ -167,7 +173,10 @@ export default function OrderDetailModal({ order: o, onClose, trackResult, setTr
             </div>
           ) : (
           <div style={{ ...card, padding: 14, marginBottom: 14 }}>
-            <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Kitchen (Petpooja POS)</div>
+            <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 2 }}>
+              Kitchen{o.store?.name ? ` — ${o.store.name}` : ''}
+            </div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 8 }}>Relayed to the Petpooja POS</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <Badge text={o.pos?.relayed ? 'Ticket printed' : o.pos ? 'Relay failed' : 'Not sent'} ok={!!o.pos?.relayed} />
               {o.pos?.petpoojaOrderId && <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.pos.petpoojaOrderId}</span>}

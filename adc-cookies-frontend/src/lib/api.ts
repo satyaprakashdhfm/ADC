@@ -348,7 +348,7 @@ export interface Order {
   pos?: { relayed: boolean; petpoojaOrderId: string | null; attempts: number; lastError: string | null } | null;
   /** Which store is making it and how far they have got. `posBillNo` is the bill from that store's
    *  own Petpooja terminal — the only link to the POS for every outlet except Begur. */
-  store?: { code: string; acceptedAt: string | null; readyAt: string | null; posBillNo: string | null; posManual?: boolean } | null;
+  store?: { code: string; name?: string; acceptedAt: string | null; readyAt: string | null; posBillNo: string | null; posManual?: boolean } | null;
   address?: Address | null; items?: OrderItem[];
   warningFlags?: string[]; // e.g. 'DUPLICATE_CHARGE' — admin-facing alerts, doesn't affect order status
 }

@@ -134,7 +134,7 @@ export default function OrdersTab({
           <Field label="Carrier"><select value={carrierFilter} onChange={e => { onCarrierFilter(e.target.value); onPage(1); }} style={selStyle}><option value="">All carriers</option><option value="SHIPROCKET">Shiprocket (intracity)</option><option value="DELHIVERY">Delhivery (outstation)</option></select></Field>
           <Field label="Payment"><select value={paymentFilter} onChange={e => { onPaymentFilter(e.target.value); onPage(1); }} style={selStyle}><option value="">Any payment</option><option value="PAID">Paid</option><option value="PENDING">Pending</option></select></Field>
         </FilterBar>
-        <Table head={['Order', 'Customer', 'Total', 'Payment', 'Shipment', 'POS', 'Status', 'Date']}>
+        <Table head={['Order', 'Customer', 'Total', 'Payment', 'Shipment', 'Kitchen', 'Status', 'Date']}>
           {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(o => (
             <tr key={o.id} onClick={() => onOpenOrder(o)} style={{ cursor: 'pointer' }}>
               <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{(o.items || []).length} item{(o.items || []).length !== 1 ? 's' : ''} · tap for details</span></td>
@@ -158,17 +158,27 @@ export default function OrdersTab({
               {/* Did the kitchen actually get this ticket? Blank for unpaid orders, which are
                   never relayed by design, so a dash there is correct rather than a failure. */}
               <td style={td}>
-                {o.paymentStatus !== 'PAID' ? <span style={{ color: 'var(--text-subtle)' }}>—</span>
-                  /* A store that bills by hand has no ticket to send and never will, so "NOT SENT"
-                     was reporting a failure that cannot happen. The bill its staff typed is the
-                     POS link for these orders — the same thing the detail view shows, which is why
-                     the two disagreed until now. */
-                  : o.store?.posManual
-                    ? (o.store.posBillNo
-                        ? <span title={`Billed at the store — bill ${o.store.posBillNo}`}><Badge text={`Bill ${o.store.posBillNo}`} ok /></span>
-                        : <span title="This store bills on its own Petpooja terminal — staff enter the bill number when they accept."><Badge text="Not billed" /></span>)
-                  : o.pos?.relayed ? <Badge text="On POS" ok />
-                  : <span title={o.pos?.lastError || 'Not sent to the POS yet.'}><Badge text={o.pos ? 'FAILED' : 'NOT SENT'} /></span>}
+                {o.paymentStatus !== 'PAID' ? <span style={{ color: 'var(--text-subtle)' }}>—</span> : (
+                  <>
+                    {/* A store that bills by hand has no ticket to send and never will, so "NOT SENT"
+                        was reporting a failure that cannot happen. The bill its staff typed is the
+                        POS link for these orders — the same thing the detail view shows, which is why
+                        the two disagreed until now. */}
+                    {o.store?.posManual
+                      ? (o.store.posBillNo
+                          ? <span title={`Billed at ${o.store.name || o.store.code} — bill ${o.store.posBillNo}`}><Badge text={`Bill ${o.store.posBillNo}`} ok /></span>
+                          : <span title={`${o.store.name || o.store.code} bills on its own Petpooja terminal — staff enter the bill number when they accept.`}><Badge text="Not billed" /></span>)
+                      : o.pos?.relayed ? <Badge text="On POS" ok />
+                      : <span title={o.pos?.lastError || 'Not sent to the POS yet.'}><Badge text={o.pos ? 'FAILED' : 'NOT SENT'} /></span>}
+                    {/* Which kitchen, on the row itself. Five outlets share these badges, so the
+                        badge alone never said whose bill it was. */}
+                    {o.store?.name && (
+                      <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700, marginTop: 3, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={o.store.name}>
+                        {o.store.name}
+                      </div>
+                    )}
+                  </>
+                )}
               </td>
               <td style={td} onClick={e => e.stopPropagation()}>
                 <select value={o.orderStatus} onChange={e => onChangeStatus(o.id, e.target.value)} style={{ padding: '7px 10px', borderRadius: 10, border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', cursor: 'pointer' }}>

@@ -176,6 +176,11 @@ export function serializeOrder(order, items: any[] = [], address: any = null, pa
     store: order.store_code
       ? {
           code: order.store_code,
+          /* The kitchen's own name, so admin can say WHICH one billed the order rather than the
+             generic "at the store". Falls back to the code for an outlet that has been removed from
+             ADC_STORES since the order was placed — a historical order still has to name something,
+             and the raw code is more use than an empty panel. */
+          name: storeByCode(order.store_code)?.name ?? order.store_code,
           acceptedAt: order.store_accepted_at ?? null,
           readyAt: order.store_ready_at ?? null,
           posBillNo: order.store_pos_bill_no ?? null,
