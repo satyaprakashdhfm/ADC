@@ -6,6 +6,7 @@ import { Search, MapPin, Navigation, ChevronLeft, Loader2, X } from 'lucide-reac
 import { searchNearby, reverseGeocode, type PlaceSuggestion, type Place } from '@/lib/geocode';
 import type { Address } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { tenDigit, formatPhone, isMobile } from '@/lib/phone';
 
 /**
  * Adding an address, in the order that makes it correct.
@@ -86,9 +87,11 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
      Prefilled, not locked: an address can be for somebody else, which is what the Receiver's name
      field is for. Only ever seeds a new address; an existing one keeps whoever it was saved for. */
   const { user } = useAuth();
+  /* The number the customer proved they own at sign-in — known good, unlike anything retyped. */
+  const verifiedPhone = tenDigit(user?.phone ?? '');
   const [form, setForm] = useState({
     fullName: initial?.fullName ?? user?.name ?? '',
-    phone: initial?.phone ?? (user?.phone ? user.phone.replace(/\D/g, '').slice(-10) : ''),
+    phone: tenDigit(initial?.phone ?? user?.phone ?? ''),
     addressLine1: initial?.addressLine1 ?? '', addressLine2: initial?.addressLine2 ?? '',
     city: initial?.city ?? '', state: initial?.state ?? '', pincode: initial?.pincode ?? '',
     label: initial?.label ?? 'Home', isDefault: initial?.isDefault ?? false,
@@ -170,7 +173,7 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
     return () => clearTimeout(t);
   }, [step, pin, chosen, lookup]);
 
-  const valid = !!(form.fullName.trim() && /^[6-9]\d{9}$/.test(form.phone.replace(/\D/g, '').slice(-10))
+  const valid = !!(form.fullName.trim() && isMobile(form.phone)
     && form.addressLine1.trim() && form.city.trim() && /^[1-9]\d{5}$/.test(form.pincode.trim()) && pin);
 
   const back = () => {
@@ -308,8 +311,34 @@ export default function AddressWizard({ initial, onSave, onCancel, saving, error
               <div><label style={labelStyle}>Receiver&apos;s name*</label>
                 <input value={form.fullName} onChange={(e) => setForm(f => ({ ...f, fullName: e.target.value }))} style={inputStyle} /></div>
               <div><label style={labelStyle}>Phone*</label>
+                {/* Sanitised on every keystroke, not on submit. This field took the raw value, so a
+                    number typed with its country code stayed wrong all the way to the carrier — and
+                    the rider's call and the delivery OTP both come from here. */}
                 <input value={form.phone} inputMode="tel" placeholder="10-digit mobile"
-                  onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} style={inputStyle} /></div>
+                  onChange={(e) => setForm(f => ({ ...f, phone: tenDigit(e.target.value) }))} style={inputStyle} />
+                {form.phone.length === 10 && (
+                  <div style={{ marginTop: 4, fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{formatPhone(form.phone)}</div>
+                )}
+                {/* We already hold a number this customer proved they own, by OTP. Offering it is
+                    strictly better than asking them to retype it, which is where wrong digits come
+                    from. A chip rather than a lock: an address can be for somebody else. */}
+                {verifiedPhone && form.phone !== verifiedPhone && (
+                  <button type="button" onClick={() => setForm(f => ({ ...f, phone: verifiedPhone }))}
+                    style={{ marginTop: 6, border: '1px solid var(--border-default)', background: 'var(--surface-sunken)',
+                             borderRadius: 999, padding: '3px 10px', fontSize: 'var(--text-xs)', cursor: 'pointer',
+                             color: 'var(--text-strong)', fontFamily: 'inherit' }}>
+                    Use my number · {formatPhone(verifiedPhone)}
+                  </button>
+                )}
+                {/* A warning, never a block — gifting to someone else's number is a real thing
+                    people do. It just must not happen by accident. */}
+                {verifiedPhone && form.phone.length === 10 && form.phone !== verifiedPhone && (
+                  <div style={{ marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                    This is different from your verified number {formatPhone(verifiedPhone)}. The rider
+                    and the delivery OTP will use the number above.
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>

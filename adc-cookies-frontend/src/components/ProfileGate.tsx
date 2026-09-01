@@ -4,6 +4,7 @@ import { ArrowRight, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { isValidName, isValidEmail, nameError, emailError } from '@/lib/profileValidation';
 import { useIsDesktop } from '@/lib/useIsDesktop';
+import { tenDigit, formatPhone } from '@/lib/phone';
 
 /*
  * Catches everyone the OTP flow's own mandatory step doesn't: Google and email/password
@@ -110,12 +111,17 @@ export default function ProfileGate() {
               <span style={{ width: 1, height: 22, background: 'var(--border-default)' }} />
               <input
                 value={phone}
-                onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                onChange={e => setPhone(tenDigit(e.target.value))}
                 onKeyDown={e => { if (e.key === 'Enter' && valid) save(); }}
                 placeholder="Mobile number" inputMode="numeric" autoComplete="tel" autoFocus={!needs.name && !needs.email}
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', minWidth: 0, letterSpacing: '.04em' }}
               />
             </div>
+            {phone.length === 10 && (
+              <div style={{ marginTop: 6, marginBottom: 4, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+                {formatPhone(phone)}
+              </div>
+            )}
           </>
         )}
         {err && <div style={{ marginBottom: 10, fontSize: 'var(--text-sm)', color: 'var(--status-error)' }}>{err}</div>}

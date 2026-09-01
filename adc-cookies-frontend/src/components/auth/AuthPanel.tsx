@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { isValidName, isValidEmail, nameError, emailError } from '@/lib/profileValidation';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { Divider, GoogleG, authInput, authLabel, authPrimaryBtn, authLinkBtn, authErrorBox, fieldHint } from './authUi';
+import { tenDigit, formatPhone } from '@/lib/phone';
 
 /*
  * Phone-OTP + Google sign-in, with no chrome of its own so it can be dropped into any host.
@@ -180,12 +181,19 @@ export default function AuthPanel({ onSuccess, onLockChange, resetKey, compact =
             <span style={{ width: 1, height: 22, background: 'var(--border-default)' }} />
             <input
               value={otpPhone}
-              onChange={e => setOtpPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              onChange={e => setOtpPhone(tenDigit(e.target.value))}
               onKeyDown={e => { if (e.key === 'Enter' && otpPhone.length === 10) handleSendOtp(); }}
               placeholder="Mobile number" inputMode="numeric" autoComplete="tel" autoFocus={autoFocusPhone}
               style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', minWidth: 0, letterSpacing: '.04em' }}
             />
           </div>
+          {/* Read the number back, grouped. A number that lost its first digits to a country code
+              looks wrong here in a way it never does as ten unbroken characters. */}
+          {otpPhone.length === 10 && (
+            <div style={{ marginBottom: 8, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+              Sending to <strong style={{ color: 'var(--text-strong)' }}>{formatPhone(otpPhone)}</strong>
+            </div>
+          )}
           <button onClick={handleSendOtp} disabled={loading || otpPhone.length !== 10} style={authPrimaryBtn(desktop, !loading && otpPhone.length === 10)}>
             {loading ? 'Sending…' : 'Send OTP'}{!loading && otpPhone.length === 10 && <ArrowRight size={18} />}
           </button>

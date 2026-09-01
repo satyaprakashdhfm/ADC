@@ -4,6 +4,7 @@ import { ShieldCheck, ArrowRight, Phone } from 'lucide-react';
 import { adminOtpSend, adminOtpVerify, type AdminSession } from '@/lib/api';
 import { authInput, authLabel, authPrimaryBtn, authLinkBtn, authErrorBox } from '@/components/auth/authUi';
 import { card } from './shared/ui';
+import { tenDigit } from '@/lib/phone';
 
 /*
  * Admin sign-in. Phone OTP and nothing else.
@@ -86,7 +87,7 @@ export default function AdminLogin({ onSignedIn, notice }: { onSignedIn: (s: Adm
               <span style={{ width: 1, height: 22, background: 'var(--border-default)' }} />
               <input
                 value={phone}
-                onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setErr(''); }}
+                onChange={e => { setPhone(tenDigit(e.target.value)); setErr(''); }}
                 onKeyDown={e => { if (e.key === 'Enter' && phone.length === 10 && !busy) send(); }}
                 placeholder="Mobile number" inputMode="numeric" autoComplete="tel" autoFocus
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', minWidth: 0, letterSpacing: '.04em' }}
