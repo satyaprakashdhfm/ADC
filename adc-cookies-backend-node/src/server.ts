@@ -7,6 +7,7 @@ import app from './app.js';
 import { initSchema } from './db/initSchema.js';
 import { seedIfEmpty } from './db/seed.js';
 import { startStatusPoller } from './jobs/statusPoller.js';
+import { startLogRetention } from './jobs/logRetention.js';
 import { ensureStoreAccounts } from './services/storeAuth.service.js';
 import { ensureMediaBucket } from './services/storage.client.js';
 import { getOne } from './db/index.js';
@@ -41,6 +42,11 @@ const PORT = Number(process.env.PORT || 8080);
      the customer's account render the stored value — which went stale the moment nobody was
      looking at a portal. The webhook was meant to cover this and has not fired once. */
   startStatusPoller();
+  /* Trim the API log directory. It is a mounted volume, so it survives every deploy and nothing
+     had ever removed a file from it — and a full volume surfaces as appendFileSync throwing inside
+     logApiCall, which stops the record of what we sent Razorpay and Delhivery without stopping the
+     calls themselves. Swept on boot and daily; see jobs/logRetention.ts. */
+  startLogRetention();
   app.listen(PORT, () => {
     console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
     console.log(`[CONFIG] DB=${process.env.DATABASE_URL ? 'supabase-pooler' : 'local-pg'}`);

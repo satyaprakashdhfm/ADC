@@ -11,7 +11,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const LOG_DIR = path.join(process.cwd(), 'logs');
+/* Exported so jobs/logRetention.ts sweeps exactly where this writes. Two copies of this path
+   would eventually disagree, and the failure would be silent: a sweep tidying an empty directory
+   while the real one fills. */
+export const LOG_DIR = path.join(process.cwd(), 'logs');
 try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch { /* best-effort */ }
 
 function fileFor(service: string): string {
