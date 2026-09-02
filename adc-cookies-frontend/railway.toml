@@ -1,0 +1,18 @@
+# Railway config for the storefront, kept in the repo rather than clicked into a dashboard so the
+# deploy settings are reviewable and travel with the code — the same reason the backend has one.
+#
+# No [build] builder is pinned: Railway's default detects Next.js, runs `next build`, and caches
+# node_modules between deploys. Naming a builder here would freeze that choice for no gain.
+
+[deploy]
+# `next start` reads PORT from the environment and binds 0.0.0.0 in production, which is what
+# Railway needs — no flags required.
+startCommand = "npm run start"
+
+# The home page. A healthcheck is what makes a deploy zero-downtime: the old container keeps serving
+# until the new one answers, instead of traffic being cut over to a process that has not finished
+# booting. 60s because a cold Next.js start plus the first server render is slower than an API's.
+healthcheckPath = "/"
+healthcheckTimeout = 60
+
+restartPolicyType = "on_failure"
