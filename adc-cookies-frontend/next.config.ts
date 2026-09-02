@@ -1,13 +1,34 @@
 import type { NextConfig } from "next";
 import { cacheHeaders } from "./src/config/cacheHeaders";
 
-// In development, always proxy /api to the LOCAL backend so `next dev` (and phones on the LAN)
-// hit your running server — never the deployed one — no matter what NEXT_PUBLIC_API_URL is set to.
-// In production, /api rewrites to the configured backend (Railway).
+/*
+ * Where the /api rewrite sends requests.
+ *
+ * In development, always the LOCAL backend — `next dev` (and phones on the LAN) must hit your
+ * running server, never the deployed one, whatever NEXT_PUBLIC_API_URL happens to say.
+ *
+ * In production, BACKEND_INTERNAL_URL first. On Railway that is
+ * `http://adc-backend.railway.internal:8080`, which reaches the backend container directly over
+ * Railway's private network instead of leaving for the public edge and coming back — skipping a
+ * public DNS lookup, a TLS handshake and a proxy hop between two containers in the same datacentre,
+ * and costing no egress.
+ *
+ * Only this rewrite can use it. `railway.internal` does not resolve on the public internet, so a
+ * browser never can — which is exactly right, because the browser talks to THIS server, and this
+ * server is the one talking to the backend.
+ *
+ * http:// rather than https:// is deliberate and not a downgrade: the traffic never leaves the
+ * private network, so there is nothing in between to encrypt against, and skipping the handshake is
+ * part of the point.
+ *
+ * NEXT_PUBLIC_API_URL remains the fallback, so unsetting one variable puts the public route back.
+ */
 const BACKEND =
-  process.env.NODE_ENV === 'production'
-    ? (process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:8080')
-    : 'http://localhost:8080';
+  process.env.NODE_ENV !== 'production'
+    ? 'http://localhost:8080'
+    : (process.env.BACKEND_INTERNAL_URL
+      || process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '')
+      || 'http://localhost:8080');
 
 const nextConfig: NextConfig = {
   // Hide the floating Next.js dev indicator ("N" badge) — dev-only UI, never shipped to prod.
