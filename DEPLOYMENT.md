@@ -28,7 +28,10 @@ Rather than migrate to Infrastructure as Code (`.railway/railway.ts`), which is 
 where *omitting a resource deletes it*, the settings were moved onto the services. Three services and
 five settings do not justify that risk. Revisit IaC at roughly ten services or multiple environments.
 
-### adc-backend
+### adc-backend AND adc-backend Copy
+
+Both backend services, identically. They deploy the same code from different branches, so a setting
+that belongs on one belongs on the other.
 
 ```
 buildCommand        npm run build          # compiles TypeScript to dist/
@@ -38,6 +41,13 @@ healthcheckTimeout  30
 restartPolicyType   ON_FAILURE
 watchPatterns       adc-cookies-backend-node/**
 ```
+
+> **Set these on BOTH, always.** Removing `railway.toml` broke staging exactly here: the settings had
+> been copied onto production only, and staging still carried a pre-TypeScript
+> `startCommand = node src/server.js` in its dashboard that the file had been silently overriding.
+> With the file gone the stale value took over and the container died with
+> `Cannot find module '/app/src/server.js'`. Production was fine and staging was down, from one
+> change, because the shared file was the only thing keeping them in step.
 
 ### adc-frontend
 
