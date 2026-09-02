@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "./providers";
 import { INSTAGRAM_URL, YOUTUBE_URL, LINKEDIN_URL, SITE_PHONE, SITE_EMAIL } from "@/lib/site";
+import Analytics from '@/components/Analytics';
 
 const SITE_URL = "https://www.adoughcookie.com";
 const TITLE = "a dough cookie | Aroma of Freshness";
@@ -74,7 +75,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Cabin:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Hanken+Grotesk:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_JSON_LD) }} />
       </head>
-      <body><Providers>{children}</Providers></body>
+      <body><Providers>{children}</Providers><Analytics /></body>
     </html>
   );
 }

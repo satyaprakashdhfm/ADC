@@ -1,5 +1,7 @@
 'use client';
+import { useEffect, useRef } from 'react';
 import { PackageCheck, Check, Bike, Home, Tag } from 'lucide-react';
+import { trackPurchase } from '@/lib/analytics';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import Footer from '@/components/storefront/Footer';
 
@@ -9,6 +11,29 @@ export default function OrderSuccessPage({ show, total, orderId, eta, summary, p
   pendingPayment?: boolean;
   onBackToMenu: () => void; onViewOrder: () => void;
 }) {
+  /*
+   * The purchase conversion, fired once the order actually exists and is not awaiting payment.
+   *
+   * Guarded three ways, because over-counting revenue is worse than missing it: bidding trained on
+   * inflated conversions will pay proportionally too much for the next click.
+   *   • only when this screen is actually shown, so a mounted-but-hidden overlay never fires
+   *   • never for pendingPayment — nobody has paid us yet, and an order that is later abandoned
+   *     would otherwise be reported as revenue
+   *   • once per order number in this tab (the ref), and GA4 de-duplicates on transaction_id
+   *     across sessions, so a refresh or a back-button cannot count it twice
+   */
+  const reported = useRef<string | null>(null);
+  useEffect(() => {
+    if (!show || pendingPayment || !orderId || reported.current === orderId) return;
+    reported.current = orderId;
+    trackPurchase({
+      orderNumber: orderId,
+      value: Number(total) || 0,
+      items: summary?.items,
+      coupon: summary?.couponCode ?? null,
+    });
+  }, [show, pendingPayment, orderId, total, summary]);
+
   const steps = [
     { icon: <Check size={18} />, label: 'Placed', done: true },
     { icon: <span style={{ fontSize: 14 }}>🧑‍🍳</span>, label: 'Baking', done: false },
