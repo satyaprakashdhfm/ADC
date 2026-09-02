@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { cacheHeaders } from "./src/config/cacheHeaders";
 
 // In development, always proxy /api to the LOCAL backend so `next dev` (and phones on the LAN)
 // hit your running server — never the deployed one — no matter what NEXT_PUBLIC_API_URL is set to.
@@ -36,6 +37,11 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '*.supabase.co', pathname: '/storage/v1/object/**' },
     ],
   },
+  /* How long the CDN and browsers may keep the files in public/. Next serves those with
+     `max-age=0`, which stops any shared cache keeping them — see src/config/cacheHeaders.ts for
+     what that was costing and why the numbers are what they are. */
+  headers: cacheHeaders,
+
   async rewrites() {
     return [
       {
