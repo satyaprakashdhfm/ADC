@@ -28,15 +28,33 @@ router.use(requireAuth);
 // checkout /delivery/check so both use the same store-zone logic.
 
 function pad(n) { return String(n).padStart(2, '0'); }
-async function genOrderNumber() {
+/*
+ * The order number for one attempt.
+ *
+ * This used to SELECT for a free number and then insert it, which is a check-then-act race against
+ * a UNIQUE column. The number only has one-second resolution, so two orders placed in the same
+ * second both found nothing, both chose the same string, and the second INSERT died on the
+ * constraint — a 500 for a customer who did nothing wrong.
+ *
+ * With two orders a week that never fired. It fires constantly at the volume a promotion brings,
+ * and the failure looks like a random checkout error rather than a collision.
+ *
+ * So there is no lookup any more. The database decides, because the UNIQUE index is the only thing
+ * that can decide correctly under concurrency; the caller simply asks for the next candidate when
+ * the insert is refused. That also removes a query from every order.
+ */
+function orderNumberFor(attempt: number): string {
   const d = new Date();
   const base = 'ADC' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate())
     + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
-  let candidate = base, n = 0;
-  while (await getOne('SELECT 1 FROM orders WHERE order_number = $1', [candidate])) {
-    candidate = base + (++n);
-  }
-  return candidate;
+  return attempt === 0 ? base : base + attempt;
+}
+
+/** Postgres unique-violation on the order_number index, as opposed to any other constraint. */
+function isDuplicateOrderNumber(e: unknown): boolean {
+  const err = e as { code?: string; constraint?: string; detail?: string };
+  return err?.code === '23505'
+    && `${err.constraint ?? ''} ${err.detail ?? ''}`.includes('order_number');
 }
 
 async function fullOrder(orderId) {
@@ -260,16 +278,42 @@ router.post('/', async (req, res) => {
   }
   const total = subtotal - discount + deliveryFee;
   const ts = nowIso();
-  const orderNumber = await genOrderNumber();
+  /*
+   * Retry the whole insert on a duplicate number, rather than trying to pick a free one first.
+   *
+   * The transaction is rolled back on the collision, so a retry re-inserts cleanly; nothing
+   * half-written survives. Bounded, because a 23505 that keeps repeating is no longer a collision —
+   * it is a bug, and looping on it would turn one bad order into a hot loop against the database.
+   */
+  const MAX_NUMBER_ATTEMPTS = 5;
+  let orderNumber = '';
+  let orderId: number | undefined;
 
-  const orderId = await withTransaction(async (client) => {
+  /* `address` is proven non-null well above, but insertOrder below is a hoisted function
+     declaration, so TypeScript has to assume it could run before that check and drops the
+     narrowing. Capturing it here keeps the proof. */
+  const deliveryAddress = address;
+
+  for (let attempt = 0; attempt < MAX_NUMBER_ATTEMPTS; attempt++) {
+    orderNumber = orderNumberFor(attempt);
+    try {
+      orderId = await insertOrder();
+      break;
+    } catch (e) {
+      if (!isDuplicateOrderNumber(e) || attempt === MAX_NUMBER_ATTEMPTS - 1) throw e;
+      console.warn(`[ORDER] create | order number ${orderNumber} was taken — retrying`);
+    }
+  }
+
+  async function insertOrder() {
+    return withTransaction(async (client) => {
     const { rows: [order] } = await client.query(
       `INSERT INTO orders
          (order_number, user_id, address_id, subtotal, discount_amount, delivery_fee, tax_amount,
           total_amount, coupon_code, payment_status, order_status, shipment_status, label_generated,
           store_code, created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING','PLACED','NOT_CREATED',FALSE,$10,$11,$12) RETURNING id`,
-      [orderNumber, user.id, address.id, subtotal, discount, deliveryFee, 0, total,
+      [orderNumber, user.id, deliveryAddress.id, subtotal, discount, deliveryFee, 0, total,
        couponCode ?? null, fulfillingStore?.code ?? null, ts, ts]
     );
     const oid = order.id;
@@ -289,7 +333,8 @@ router.post('/', async (req, res) => {
     // NOTE: coupon redemption is recorded on PAYMENT success (finalizePaidOrder), not here —
     // an abandoned/unpaid order must not burn a coupon use.
     return oid;
-  });
+    });
+  }
 
   const cart = await getOne('SELECT * FROM cart WHERE user_id = $1', [user.id]);
   if (cart) await query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
