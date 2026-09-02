@@ -20,6 +20,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 
 import { parseAuth } from './middlewares/auth.middleware.js';
+import { noStore } from './middlewares/cache.middleware.js';
 
 import authRoutes from './routes/auth.routes.js';
 import productRoutes from './routes/products.routes.js';
@@ -53,6 +54,11 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
+/* Nothing is cacheable by a shared cache unless a route opts in. Mounted before everything that can
+   answer a request, so a handler added later inherits the safe default rather than the risky one —
+   see cache.middleware.ts for what this is protecting against. */
+app.use(noStore);
+
 // CORS: if ALLOWED_ORIGINS is set (comma-separated), lock to those (plus localhost for dev);
 // otherwise reflect the request origin (open) so nothing breaks before it's configured.
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
@@ -67,7 +73,12 @@ app.use(cors({
   origin: corsOrigin,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Authorization', 'Content-Type'],
+  /* X-Admin-Token belongs here: the dashboard authenticates with it, and a custom header on a
+     cross-origin request triggers a preflight that fails unless the header is named in the reply.
+     It has not bitten yet only because the browser talks to the frontend's own origin and Next
+     rewrites /api server-side, so these never leave as cross-origin requests. That stops being true
+     the moment anything calls the backend domain directly. */
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Admin-Token'],
 }));
 
 // Razorpay webhook needs the RAW body for signature verification, so mount it with a raw

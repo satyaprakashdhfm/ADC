@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { serializeProduct, withImageUrls } from '../serializers/index.js';
 import { readBannerMessages, resolveHeroBanner } from '../services/siteContent.service.js';
 import { resolvePackOptions } from '../services/pack.service.js';
+import { publicCache } from '../middlewares/cache.middleware.js';
 
 const router = Router();
 
@@ -17,6 +18,11 @@ router.get('/', async (req, res) => {
   } else {
     rows = await getAll('SELECT * FROM products WHERE is_available = TRUE ORDER BY id');
   }
+  /* The catalogue is identical for every visitor and is fetched on every page load, so it is worth
+     having at the edge. Sixty seconds: long enough to absorb a burst, short enough that switching a
+     product off in admin shows up almost at once, and far inside the life of the signed image URLs
+     this response carries. */
+  publicCache(res, 60);
   res.json(await withImageUrls(rows.map(serializeProduct)));
 });
 
@@ -28,6 +34,7 @@ router.get('/', async (req, res) => {
    asking for it. */
 router.get('/announcement', async (_req, res) => {
   const messages = await readBannerMessages();
+  publicCache(res, 60);
   res.json({ messages, text: messages[0] || null });
 });
 
@@ -39,6 +46,7 @@ router.get('/announcement', async (_req, res) => {
    on the first image every visitor sees. Nothing set here means the storefront keeps the file it
    ships, so this can never blank the hero. */
 router.get('/hero-banner', async (_req, res) => {
+  publicCache(res, 60);
   res.json(await resolveHeroBanner());
 });
 
@@ -48,6 +56,9 @@ router.get('/hero-banner', async (_req, res) => {
    long before anybody reaches the payment step. */
 router.get('/ordering-status', async (_req, res) => {
   const row = await getOne("SELECT value FROM site_settings WHERE key = 'ordering_paused'");
+  /* Deliberately NOT cached, alone among its neighbours. This is the switch that decides whether
+     the shop can take money, and checkout reads it immediately before placing an order — a stale
+     "we are open" served from an edge for even a minute is an order taken during a pause. */
   res.json({ paused: !!row?.value, message: row?.value || null });
 });
 
@@ -61,12 +72,14 @@ router.get('/ordering-status', async (_req, res) => {
 router.get('/packs', async (_req, res) => {
   const rows = await getAll("SELECT * FROM products WHERE is_available = TRUE AND category = 'COMBOS' ORDER BY id");
   const packs = (await Promise.all(rows.map(resolvePackOptions))).filter(Boolean);
+  publicCache(res, 60);
   res.json(packs);
 });
 
 router.get('/:id', async (req, res) => {
   const row = await getOne('SELECT * FROM products WHERE id = $1', [req.params.id]);
   if (!row) throw new ApiError('Product not found');
+  publicCache(res, 60);
   res.json(await withImageUrls(serializeProduct(row)));
 });
 
