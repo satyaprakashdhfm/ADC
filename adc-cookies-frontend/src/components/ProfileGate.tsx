@@ -63,8 +63,10 @@ export default function ProfileGate() {
       setNeeds(null);
     } catch (e) {
       if ((e as ApiRequestError)?.code === 'PHONE_VERIFICATION_REQUIRED') { setClaiming(true); setErr(''); }
-      else setErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
-      /* Rethrow so PhoneClaimVerify shows a wrong code in its own box rather than clearing it. */
+      /* Once the code box is up it owns every failure from that attempt — a wrong code comes back
+         as a plain 401, not as PHONE_VERIFICATION_REQUIRED, and putting it up here would print it
+         above a box still asking for the code. */
+      else if (!proof) setErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
       if (proof) throw e;
     } finally { setSaving(false); }
   };

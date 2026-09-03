@@ -349,12 +349,12 @@ export default function AccountPage() {
       await updateProfile({ name: name.trim() || user.name, phone: phone.trim() || undefined, ...proof });
       setEditing(false); setClaimingPhone(false);
     } catch (e) {
-      if ((e as ApiRequestError)?.code === 'PHONE_VERIFICATION_REQUIRED') {
-        setClaimingPhone(true); setSavingProfile(false); setProfileErr('');
-        if (proof) throw e;   // let the code box show its own error
-        return;
-      }
-      setProfileErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
+      if ((e as ApiRequestError)?.code === 'PHONE_VERIFICATION_REQUIRED') { setClaimingPhone(true); setProfileErr(''); }
+      /* Once the code box is up it owns every failure from that attempt — a wrong code comes back
+         as a plain 401, not as PHONE_VERIFICATION_REQUIRED, and putting it up here would print it
+         above a box still asking for the code. */
+      else if (!proof) setProfileErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
+      if (proof) throw e;
     } finally {
       setSavingProfile(false);
     }
