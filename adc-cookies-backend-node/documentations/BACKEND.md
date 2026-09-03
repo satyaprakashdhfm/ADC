@@ -578,6 +578,88 @@ restaurant-liable because we remit it.
 
 ---
 
+## WhatsApp Cloud API — customer messaging
+
+- **Base** `https://graph.facebook.com/v23.0` (`WHATSAPP_API_VERSION` moves the version)
+- **Auth** `Authorization: Bearer <token>` — a **System User** token, which never expires. The token
+  handed to you when you first add the WhatsApp product is a **24-hour test token** against a Meta
+  *test* number; it is for development only and must not go in Railway.
+- **Env** `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID`, `WHATSAPP_ACCESS_TOKEN`,
+  `WHATSAPP_APP_SECRET`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, `WHATSAPP_API_VERSION`
+- **Dormant until configured** — `whatsappConfigured()` is false without a phone number id and
+  token, and every send is a no-op, so this ships before the Meta app is live.
+
+### The rule that shapes the whole integration
+
+**Outside a 24-hour customer service window you may only send a PRE-APPROVED TEMPLATE.** The window
+opens when a user messages or calls *us* and resets on each further message. Every message we
+originate — order confirmation, cancellation, an abandoned-cart nudge — is business-initiated, so in
+practice we are always sending templates. Free-form text exists only to answer someone who wrote
+first.
+
+Templates are categorised **utility**, **marketing** or **authentication**, and the category sets
+the price. Order updates are utility; promotional nudges are marketing and cost more. Miscategorising
+to save money gets the template recategorised by Meta, not the bill reduced.
+
+| status | theirs | what it does | ours |
+|---|---|---|---|
+| **WIRED** | `POST /<PHONE_NUMBER_ID>/messages` | send a template, or free-form text inside the window | `sendTemplate()` / `sendText()` |
+| **WIRED** | `GET /<WABA_ID>/message_templates` | every template with status, category and quality | `listTemplates()` |
+| **WIRED** | inbound | webhook — delivery receipts, inbound messages, template status | `GET`+`POST /api/whatsapp/webhook` |
+
+**Also offered, unused:** Marketing Messages API (`/marketing_messages`, optimised delivery for
+marketing sends), Flows, catalogue/commerce messages, Groups, calling, interactive lists and reply
+buttons, media upload, typing indicators, read receipts.
+
+### The webhook, and why it is mounted the way it is
+
+**Two handlers, and the GET is not optional.** Meta will not save a callback URL until it has sent a
+`GET` with `hub.mode`, `hub.verify_token` and `hub.challenge`, and had the challenge echoed back as
+**plain text**. A JSON-wrapped body fails the check. That handshake is the "Verify and save" button.
+
+The `POST` is signed with **`X-Hub-Signature-256`** — an HMAC-SHA256 of the **raw bytes** with the
+app secret. So the router is mounted with `express.raw()` **before** the JSON parser, for exactly the
+reason the Razorpay webhook is: an HMAC computed over a re-serialised body fails every time and looks
+like a wrong secret. The compare is on **byte** length, not character length, because
+`timingSafeEqual` throws on a mismatch and 64 multi-byte characters are not 64 bytes.
+
+**It answers 200 first and never throws.** Meta retries a non-200 with decreasing frequency **for up
+to 7 days**, and sends those retries to *every* app subscribed to the account — so one unhandled
+error becomes days of duplicate deliveries. Payloads can be up to 3 MB.
+
+**Fields to subscribe to** (App Dashboard → WhatsApp → Configuration, or Use cases → Customize →
+Configuration): `messages` is the one that matters — it carries both inbound messages and the
+delivery status of ours. `message_template_status_update` is worth adding, because a paused or
+rejected template silently stops every message that uses it.
+
+Permissions: `whatsapp_business_messaging` for `messages`, `whatsapp_business_management` for the
+rest.
+
+### Delivery status, and what "sent" actually means
+
+A 200 from the send call means Meta **accepted the request**, not that anything reached a phone.
+Delivery is reported only by webhook: `sent` → `delivered` → `read`, or `failed`. The key those
+webhooks carry is Meta's **wamid**, which is why `whatsapp_messages.message_id` stores it — without
+it, `accepted` would be the last thing we ever knew.
+
+Undeliverable messages are retried for a **time-to-live** — 30 days by default, 10 minutes for
+authentication templates — and then dropped silently. No `delivered` webhook before the TTL expires
+means the message is gone.
+
+### Phone number format — a real hazard
+
+Send E.164 **with** the country code. Meta's documented behaviour for a missing one is to prepend
+**our** number's country code, so an 11-digit number silently becomes a different number in another
+country. `waNumber()` normalises before every send: strips non-digits, drops a leading `0`, and
+prefixes `91` for a bare 10-digit Indian mobile.
+
+### Delivery order is not guaranteed
+
+Messages are not necessarily delivered in the order they were sent. Where sequence matters, wait for
+a `delivered` status webhook before sending the next one.
+
+---
+
 ## Message Central — phone OTP
 
 - **Base** `https://cpaas.messagecentral.com` (`MC_BASE_URL`)
