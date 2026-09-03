@@ -12,6 +12,7 @@ import { ensureStoreAccounts } from './services/storeAuth.service.js';
 import { ensureMediaBucket } from './services/storage.client.js';
 import { getOne } from './db/index.js';
 import { assertEnv } from './config/env.js';
+import { listTemplates, whatsappConfigured } from './services/whatsapp.client.js';
 
 const PORT = Number(process.env.PORT || 8080);
 
@@ -61,5 +62,16 @@ const PORT = Number(process.env.PORT || 8080);
        looking for a seeding bug that did not exist. */
     getOne('SELECT count(*)::int AS n FROM admin_accounts WHERE is_active = TRUE')
       .then((r) => console.log(`[CONFIG] ADMIN phone allowlist=${r?.n ?? '?'} active`)).catch(() => {});
+
+    /* One read-only call to Meta on boot, so a broken WhatsApp setup says WHY in the logs.
+       The WhatsApp Manager UI reports "not allowed to manage templates" with no reason; the Graph
+       API returns a specific code and message for the same condition. One request per deploy. */
+    if (whatsappConfigured()) {
+      listTemplates()
+        .then((r: any) => console.log(r.ok
+          ? `[WHATSAPP] templates | ✓ ${r.templates.length} on the account`
+          : `[WHATSAPP] templates | ✗ ${r.reason}`))
+        .catch((e) => console.log(`[WHATSAPP] templates | ✗ ${e.message}`));
+    }
   });
 })().catch(err => { console.error('Startup failed:', err); process.exit(1); });
