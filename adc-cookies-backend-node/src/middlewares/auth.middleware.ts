@@ -1,6 +1,7 @@
 import { verifySupabaseToken } from '../services/auth.service.js';
 import { getOne, query, nowIso } from '../db/index.js';
 import { adminClient, supabaseConfigured } from '../config/supabase.js';
+import { normalizePhone } from '../services/messageCentral.client.js';
 
 /*
  * Auth now runs on Supabase. The frontend sends the Supabase session access token as
@@ -60,27 +61,47 @@ async function syncUser({ email, phone, name }) {
   // Email identity — keyed by email.
   if (email) {
     let user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
+
+    /*
+     * Who already holds this number, asked BEFORE the insert rather than after it.
+     *
+     * users.phone is UNIQUE. A row can already exist under a verified number — a phone-OTP
+     * account, or a customer seeded from the contact list kept before the site existed — and the
+     * insert below would then raise a constraint violation, which parseAuth catches as a rejected
+     * token. The customer would be signed in as far as Supabase is concerned and anonymous to us,
+     * on every request, with nothing on screen to explain it.
+     */
+    const phoneAcct = phone ? await getOne('SELECT * FROM users WHERE phone = $1', [phone]) : null;
+
     if (!user) {
       const ts = nowIso();
-      // `password` is NOT NULL but unused for Supabase logins — store a placeholder.
-      user = await getOne(
-        `INSERT INTO users (name, email, phone, password, role, created_at, updated_at)
-         VALUES ($1,$2,$3,'supabase-auth',$4,$5,$5)
-         ON CONFLICT (email) DO UPDATE SET updated_at = $5 RETURNING *`,
-        [name || email.split('@')[0], email, phone || null, 'CUSTOMER', ts]
-      );
-    }
-
-    /* INSERT ... RETURNING * above always yields a row, so user is non-null from here. Asserted
-       rather than restructured: a thrown guard would change the error a caller sees. */
-    // If this Google/email user has a phone number in their token metadata, and there's a
-    // separate phone-OTP account for that number, silently absorb it so the person has one account.
-    if (phone && !user!.phone) {
-      const phoneAcct = await getOne('SELECT * FROM users WHERE phone = $1 AND id <> $2', [phone, user!.id]);
       if (phoneAcct) {
-        await absorbAccount(user!.id, phoneAcct.id);
-        user = await getOne('UPDATE users SET phone = $1, updated_at = $2 WHERE id = $3 RETURNING *', [phone, nowIso(), user!.id]);
+        /* The same person, arriving by email for the first time: their row already exists under
+           the number they verified. Claim it rather than opening a second one, so the orders and
+           addresses already sitting on it stay theirs. A blank name does not overwrite a real one. */
+        user = await getOne(
+          `UPDATE users SET email = $1, name = COALESCE(NULLIF($2, ''), name), updated_at = $3
+           WHERE id = $4 RETURNING *`,
+          [email, name || '', ts, phoneAcct.id]
+        );
+      } else {
+        // `password` is NOT NULL but unused for Supabase logins — store a placeholder.
+        user = await getOne(
+          `INSERT INTO users (name, email, phone, password, role, created_at, updated_at)
+           VALUES ($1,$2,$3,'supabase-auth',$4,$5,$5)
+           ON CONFLICT (email) DO UPDATE SET updated_at = $5 RETURNING *`,
+          [name || email.split('@')[0], email, phone || null, 'CUSTOMER', ts]
+        );
       }
+    } else if (phone && !user.phone) {
+      /* Known by email, and now carrying a verified number they had not given us. If a separate
+         account already holds it, the two are one person — fold it in before taking the number,
+         or the UPDATE hits the same UNIQUE constraint. */
+      if (phoneAcct && phoneAcct.id !== user.id) await absorbAccount(user.id, phoneAcct.id);
+      user = await getOne(
+        'UPDATE users SET phone = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+        [phone, nowIso(), user.id]
+      );
     }
 
     return user;
@@ -123,7 +144,29 @@ export async function parseAuth(req, _res, next) {
       const claims: any = typeof payload === 'object' && payload ? payload : {};
       const meta = claims.user_metadata || {};
       const rawEmail = String(claims.email || meta.email || '').toLowerCase();
-      const phone = String(claims.phone || meta.phone || '').replace(/\D/g, '');
+      /*
+       * claims.phone ONLY, and normalized — two fixes to one line, for two different reasons.
+       *
+       * NOT user_metadata.phone. That field is writable by the account holder (supabase.auth
+       * .updateUser from the browser), which is the documented reason the admin gate refuses to
+       * trust a phone claim — see initSchema.ts and adminAuth.service.ts. syncUser below does not
+       * merely read this value: it resolves WHICH ACCOUNT the caller is and, on a match, absorbs
+       * the other one. Sourcing that from a field the caller can write meant anybody could sign up
+       * with their own email, set user_metadata.phone to somebody else's number, and have that
+       * person's orders and saved addresses transferred onto their account. claims.phone is set by
+       * Supabase from auth.users.phone, which only our OTP flow writes after Message Central has
+       * confirmed the code, so it is the one form of this number the caller cannot author.
+       *
+       * The sign-up form's number is not lost: AuthContext.register now sends it to PATCH /me,
+       * which validates it, and ProfileGate asks again if that did not land.
+       *
+       * Normalized because users.phone is the join key an OTP login is resolved by and it holds
+       * 91XXXXXXXXXX. A bare digit-strip stored whatever shape the value arrived in, so one number
+       * had two spellings and the ten-digit one matched no login and no merge ever again.
+       */
+      const claimed = claims.phone || '';
+      const phone = normalizePhone(claimed)?.digits || '';
+      if (claimed && !phone) authLog(req, `ignoring unusable phone claim (${String(claimed).replace(/\d/g, 'x')})`);
       // A synthetic phone-login email is NOT a real email — drop it so the phone branch handles it.
       const email = SYNTHETIC_EMAIL.test(rawEmail) ? '' : rawEmail;
       if (email || phone) {
