@@ -729,6 +729,32 @@ export async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_website_feedback_user ON website_feedback(user_id);
 
+    /*
+     * Every WhatsApp message we send, and what became of it.
+     *
+     * message_id is Meta's wamid and the ONLY key their delivery webhooks carry, so it is what the
+     * status updates join on — without storing it, "sent" is the last thing we would ever know.
+     *
+     * status moves accepted → sent → delivered → read, or failed. Accepted is ours: their send call
+     * returning 200 means the request was taken, not that anything reached a phone.
+     */
+    CREATE TABLE IF NOT EXISTS whatsapp_messages (
+      id SERIAL PRIMARY KEY,
+      order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      phone TEXT NOT NULL,
+      template TEXT,
+      kind TEXT,
+      message_id TEXT,
+      status TEXT NOT NULL DEFAULT 'accepted',
+      last_error TEXT,
+      payload JSONB,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_message_id ON whatsapp_messages(message_id);
+    CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_order ON whatsapp_messages(order_id);
+
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This
     -- backend connects as the table owner, which bypasses RLS, so the app is unaffected.

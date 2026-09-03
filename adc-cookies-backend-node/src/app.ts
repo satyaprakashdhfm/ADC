@@ -37,6 +37,7 @@ import petpoojaRoutes from './routes/webhooks/petpooja.routes.js';
 import hyperlocalRoutes from './routes/webhooks/hyperlocal.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import storeRoutes from './routes/store.routes.js';
+import whatsappRoutes from './routes/webhooks/whatsapp.routes.js';
 import { paymentWebhook } from './routes/webhooks/razorpay.routes.js';
 import { paymentCallback } from './routes/orders.routes.js';
 
@@ -84,6 +85,10 @@ app.use(cors({
 // Razorpay webhook needs the RAW body for signature verification, so mount it with a raw
 // parser BEFORE the JSON parser (and before parseAuth — it's authenticated by signature).
 app.post('/api/payments/webhook', express.raw({ type: '*/*' }), paymentWebhook);
+
+// WhatsApp's X-Hub-Signature-256 is an HMAC of the RAW BYTES, so this router mounts with a raw
+// parser before the JSON one for exactly the reason the Razorpay webhook above does.
+app.use('/api/whatsapp', express.raw({ type: '*/*' }), whatsappRoutes);
 
 // Razorpay's redirect callback (browser form POST, not server-to-server) — for in-app browsers
 // (Instagram/FB Messenger, Opera Mini, UC) that can't run the normal iframe/popup Checkout.
