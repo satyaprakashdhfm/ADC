@@ -156,12 +156,26 @@ router.patch('/me', requireAuth, async (req, res) => {
         /*
          * The verification has to be FOR THIS NUMBER. Without this check the gate is decorative:
          * anyone can request a code to their own phone, enter it correctly, and send that
-         * verificationId along with somebody else's number. Message Central returns the number it
-         * verified, so compare it — and refuse when it does not say, rather than assuming.
+         * verificationId along with somebody else's number.
+         *
+         * Compared on the last ten digits rather than through normalizePhone, because the exact
+         * shape Message Central echoes back is not documented and we have no recorded response to
+         * check against — they are sent `national`, but a reply of "+919876543210", "0091..." or
+         * "919876543210" would all be reasonable. Ten significant digits is what identifies an
+         * Indian mobile, so this is tolerant of the wrapper and still exact on the number.
+         *
+         * A reply naming no number, or a different one, is refused rather than assumed good: the
+         * whole point is that the caller does not get to assert this. If a legitimate merge ever
+         * fails here, the log line below is the answer — last four digits only, since the two
+         * numbers being compared are the sensitive part.
          */
-        const verified = normalizePhone(v.mobileNumber);
-        if (!verified || verified.digits !== normalizedPhone) {
-          console.warn(`[AUTH] phone claim refused | user=${req.user!.id} | code verified a different number`);
+        const ten = (x: unknown) => String(x ?? '').replace(/\D/g, '').slice(-10);
+        const verifiedTen = ten(v.mobileNumber);
+        if (verifiedTen.length !== 10 || verifiedTen !== ten(normalizedPhone)) {
+          console.warn(
+            `[AUTH] phone claim refused | user=${req.user!.id} | claimed=…${ten(normalizedPhone).slice(-4)} `
+            + `| provider verified=${verifiedTen ? `…${verifiedTen.slice(-4)}` : 'no number in response'}`,
+          );
           throw new ApiError('That code was not for this number. Request a new one.', 401);
         }
       }
