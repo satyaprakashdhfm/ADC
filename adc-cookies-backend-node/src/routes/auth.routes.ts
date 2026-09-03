@@ -109,11 +109,79 @@ router.patch('/me', requireAuth, async (req, res) => {
     const p = normalizePhone(req.body.phone);
     if (!p) throw new ApiError('Enter a valid 10-digit mobile number.');
     normalizedPhone = p.digits;
-    // If the phone belongs to another account (phone-OTP), merge that account into this one
-    // instead of rejecting. The user can then log in either way.
+    /*
+     * Claiming a number that belongs to another account.
+     *
+     * Merging is the RIGHT behaviour — it is how somebody who ordered by phone-OTP keeps their
+     * history when they later sign in with Google, and how a customer we knew before the website
+     * inherits the row seeded from the old contact list. But it moves orders, saved addresses,
+     * coupon usage and the cart onto the caller and DELETES the other row, and it used to do that
+     * on nothing more than the caller typing the number. Anyone could take a stranger's order
+     * history and home address by entering their mobile number here.
+     *
+     * So it now turns on what is actually at stake:
+     *
+     *   Nothing on the other row  → merge, no questions. A seeded contact or an account that never
+     *                               got past sign-in has nothing to steal, and this is the common
+     *                               case by a wide margin — gating it behind an SMS would charge us
+     *                               for every one of them and make people verify a number to claim
+     *                               an empty record.
+     *   Orders or addresses on it → prove the number is yours. The client sends the verificationId
+     *                               and code from /auth/otp/send, and Message Central has to agree.
+     *
+     * The email branch below refuses outright on a conflict rather than merging. That asymmetry is
+     * deliberate: an email is not something we can put an OTP through here.
+     */
     const taken = await getOne('SELECT * FROM users WHERE phone = $1 AND id <> $2', [normalizedPhone, req.user!.id]);
     if (taken) {
+      const { c: activity } = (await getOne(
+        `SELECT (SELECT COUNT(*) FROM orders    WHERE user_id = $1)
+              + (SELECT COUNT(*) FROM addresses WHERE user_id = $1) AS c`,
+        [taken.id]
+      ))!;
+
+      if (Number(activity) > 0) {
+        const { verificationId, code } = req.body || {};
+        if (!verificationId || !code) {
+          throw new ApiError(
+            'That number is already on an account with orders on it. Send yourself a code to confirm it is yours.',
+            409, 'PHONE_VERIFICATION_REQUIRED',
+          );
+        }
+        if (!messageCentralConfigured()) throw new ApiError('Phone verification is not configured yet.', 503);
+
+        const v = await validateOtp(verificationId, code);
+        if (!v.ok) throw new ApiError(v.message, 401);
+
+        /*
+         * The verification has to be FOR THIS NUMBER. Without this check the gate is decorative:
+         * anyone can request a code to their own phone, enter it correctly, and send that
+         * verificationId along with somebody else's number.
+         *
+         * Compared on the last ten digits rather than through normalizePhone, because the exact
+         * shape Message Central echoes back is not documented and we have no recorded response to
+         * check against — they are sent `national`, but a reply of "+919876543210", "0091..." or
+         * "919876543210" would all be reasonable. Ten significant digits is what identifies an
+         * Indian mobile, so this is tolerant of the wrapper and still exact on the number.
+         *
+         * A reply naming no number, or a different one, is refused rather than assumed good: the
+         * whole point is that the caller does not get to assert this. If a legitimate merge ever
+         * fails here, the log line below is the answer — last four digits only, since the two
+         * numbers being compared are the sensitive part.
+         */
+        const ten = (x: unknown) => String(x ?? '').replace(/\D/g, '').slice(-10);
+        const verifiedTen = ten(v.mobileNumber);
+        if (verifiedTen.length !== 10 || verifiedTen !== ten(normalizedPhone)) {
+          console.warn(
+            `[AUTH] phone claim refused | user=${req.user!.id} | claimed=…${ten(normalizedPhone).slice(-4)} `
+            + `| provider verified=${verifiedTen ? `…${verifiedTen.slice(-4)}` : 'no number in response'}`,
+          );
+          throw new ApiError('That code was not for this number. Request a new one.', 401);
+        }
+      }
+
       await mergeAccounts(req.user!.id, taken.id);
+      console.log(`[AUTH] accounts merged | into=${req.user!.id} | from=${taken.id} | activity=${activity} | verified=${Number(activity) > 0}`);
       // Fall through — we still set the phone on the current account below.
     }
     sets.push(`phone = $${i++}`); params.push(normalizedPhone);

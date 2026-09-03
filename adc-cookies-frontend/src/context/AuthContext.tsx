@@ -23,7 +23,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;                          // emails a reset link
   sendOtp: (phone: string) => Promise<{ verificationId: string; timeout: number }>;
   verifyOtp: (phone: string, verificationId: string, code: string) => Promise<{ role: string; needsName: boolean }>;
-  updateProfile: (patch: { name?: string; phone?: string; email?: string }) => Promise<void>; // persists to the backend
+  updateProfile: (patch: { name?: string; phone?: string; email?: string; verificationId?: string; code?: string }) => Promise<void>; // persists to the backend
   updateUser: (patch: Partial<Pick<User, 'name' | 'phone'>>) => void;
   logout: () => void;
 }
@@ -195,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // Persist name/phone to the backend (DB) and reflect it in the session.
-  const updateProfile = async (patch: { name?: string; phone?: string; email?: string }) => {
+  const updateProfile = async (patch: { name?: string; phone?: string; email?: string; verificationId?: string; code?: string }) => {
     const me = await updateMe(patch);
     setUser(userFromMe(me));
   };

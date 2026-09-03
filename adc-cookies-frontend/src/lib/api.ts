@@ -112,8 +112,14 @@ export async function getMe(): Promise<MeResponse> {
   return request('/auth/me');
 }
 
-/** Update the signed-in user's profile (name and/or phone). Persists to the DB. */
-export async function updateMe(patch: { name?: string; phone?: string; email?: string }): Promise<MeResponse> {
+/*
+ * Update the signed-in user's profile (name and/or phone). Persists to the DB.
+ *
+ * verificationId/code are the proof from /auth/otp/send, and are only needed when the number being
+ * claimed already belongs to an account with orders or addresses on it — the server answers
+ * PHONE_VERIFICATION_REQUIRED in that case and the caller replays the same patch with them.
+ */
+export async function updateMe(patch: { name?: string; phone?: string; email?: string; verificationId?: string; code?: string }): Promise<MeResponse> {
   return request('/auth/me', { method: 'PATCH', body: JSON.stringify(patch) });
 }
 

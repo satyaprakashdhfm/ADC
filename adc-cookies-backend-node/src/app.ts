@@ -158,7 +158,7 @@ app.use((err, _req, res, _next) => {
   const status = err.status || 500;
   const message = err.message || 'Something went wrong';
   if (status >= 500) console.error(err);
-  res.status(status).json({ error: message, message });
+  res.status(status).json(err.code ? { error: message, message, code: err.code } : { error: message, message });
 });
 
 // Export the configured app so Vercel can use it as a serverless function (see api/index.js).
