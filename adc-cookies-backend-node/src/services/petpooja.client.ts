@@ -41,28 +41,29 @@ const creds = () => ({ app_key: APP_KEY, app_secret: APP_SECRET, access_token: A
 
 /** POST JSON and normalise their "HTTP 200 + success:'0'" convention into a plain result. */
 /*
- * Petpooja is the ONE integration that has to leave from a fixed IP — they allowlist ours — so it,
- * and only it, goes through the egress proxy.
+ * Petpooja now leaves exactly the way every other integration does: a plain fetch, straight out of
+ * Railway. It is the one integration whose destination allowlists us by IP, and as of 2026-09-03
+ * the three static outbound IPs on this service are the ones on their allowlist, so there is
+ * nothing to route around. The boot probe in server.ts prints which path was taken; it reads
+ * DIRECT.
  *
- * This used to be arranged the other way round, with NODE_USE_ENV_PROXY sending EVERY outbound
- * request through the proxy and a NO_PROXY list naming the dozen hosts that should not. That list
- * can only ever contain hosts somebody thought of in advance, and the failures it produced were
- * silent and far from their cause: phone OTP died because messagecentral.com was missing from it,
- * and Delhivery labels died because the PDF arrives on a pre-signed link at a host nobody can
- * enumerate. Each one looked like a broken integration rather than a networking rule.
+ * PETPOOJA_PROXY_URL is the dormant way back. Set it and this client alone dials through that
+ * proxy; leave it unset and proxyAgent stays undefined, which is what `dispatcher` wants for a
+ * normal request. It is kept because the IP allowlist is a permanent constraint and Railway's
+ * egress addresses are not ours to guarantee forever — not because anything uses it today.
  *
- * Proxying the exception instead of the rule makes the blast radius exactly one file. Nothing else
- * in the app can be affected by the proxy being wrong, unreachable, or absent.
+ * Two things it is deliberately NOT:
  *
- * With no proxy configured this is undefined and fetch behaves normally, which is what staging
- * wants — it has no Petpooja credentials and needs the static IP for nothing.
+ *   Not HTTPS_PROXY. That variable belonged to an earlier arrangement where NODE_USE_ENV_PROXY put
+ *   EVERY outbound request through a proxy and a NO_PROXY list named the hosts that should not go.
+ *   Such a list can only hold hosts somebody thought of in advance, and what it produced was silent
+ *   failures far from their cause: phone OTP died because messagecentral.com was missing from it,
+ *   and Delhivery labels died because the PDF arrives on a pre-signed link at a host nobody can
+ *   enumerate. Both looked like broken integrations rather than a networking rule. Those four
+ *   variables are gone from the service.
  *
- * PETPOOJA_PROXY_URL and nothing else. It used to fall back to HTTPS_PROXY, which is the variable
- * left over from the abandoned proxy-everything setup this comment describes — so the one
- * integration that is supposed to opt IN to the proxy was in fact inheriting it from a general
- * setting, and the file contradicted its own rule. Now that Railway's own static egress IPs are
- * allowlisted by Petpooja, the proxy is not needed at all; naming it explicitly means the route is
- * whatever this one variable says, and putting the VM back is one variable, not four.
+ *   Not global. Scoping the dispatcher to this one client is what keeps the blast radius at one
+ *   file: a proxy that is wrong, unreachable or absent cannot reach any other integration.
  */
 const PROXY_URL = process.env.PETPOOJA_PROXY_URL || '';
 let proxyAgent;

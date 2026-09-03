@@ -384,8 +384,11 @@ not enough — `srRequest` inspects the body too.
 - `success` is the **string** `"1"` / `"0"`, never a boolean
 - Fetch Menu answers *"unable to fetch Object from s3 bucket"* until the merchant hits Menu Trigger
   once. That is an empty menu, not an auth error.
-- Outbound calls go through `PETPOOJA_PROXY_URL` for a static IP. The proxy is scoped to this client
-  alone, so a wrong or unreachable proxy cannot affect any other integration.
+- Outbound calls go **direct** since 2026-09-03. Petpooja allowlist this service's three static
+  Railway egress IPs, so the OCI proxy that used to carry them is gone and Petpooja leaves the same
+  way every other integration does. `PETPOOJA_PROXY_URL` still exists as the way back, scoped to
+  this client alone so a wrong or unreachable proxy cannot affect any other integration; it is
+  unset. The boot line `[PETPOOJA] reachability` names the path actually taken.
 
 ### The `/callback` 401 — root cause, verified 2026-08-30
 
