@@ -9,9 +9,18 @@
  */
 export class ApiError extends Error {
   readonly status: number;
+  /*
+   * An optional machine-readable reason, for the few cases where the client must DO something
+   * specific rather than just show the message — today, only "this number needs an OTP before we
+   * will move an account onto it". Left undefined everywhere else: a message is enough when the
+   * only correct response is to display it, and inventing a code per error invites the client to
+   * start switching on prose.
+   */
+  readonly code?: string;
 
-  constructor(message: string, status = 400) {
+  constructor(message: string, status = 400, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }

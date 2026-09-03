@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import { ArrowRight, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import PhoneClaimVerify from '@/components/auth/PhoneClaimVerify';
+import { type ApiRequestError } from '@/lib/api';
 import { isValidName, isValidEmail, nameError, emailError } from '@/lib/profileValidation';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import { tenDigit, formatPhone, isMobile, phoneError } from '@/lib/phone';
@@ -22,6 +24,10 @@ export default function ProfileGate() {
   const [phone, setPhone] = useState('');
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
+  /* Set when the number they gave belongs to an account with real history on it. The server will
+     not move that account without proof the number is theirs, so we ask for it here rather than
+     leaving them stuck on a mandatory form with an error they cannot clear. */
+  const [claiming, setClaiming] = useState(false);
   const [needs, setNeeds] = useState<{ name: boolean; email: boolean; phone: boolean } | null>(null);
 
   useEffect(() => {
@@ -44,18 +50,22 @@ export default function ProfileGate() {
   const phoneOk = !needs.phone || isMobile(phone);
   const valid = nameOk && emailOk && phoneOk;
 
-  const save = async () => {
+  const save = async (proof?: { verificationId: string; code: string }) => {
     if (!valid) return;
     setErr(''); setSaving(true);
     try {
-      const patch: { name?: string; email?: string; phone?: string } = {};
+      const patch: { name?: string; email?: string; phone?: string; verificationId?: string; code?: string } = {};
       if (needs.name) patch.name = name.trim();
       if (needs.email) patch.email = email.trim();
       if (needs.phone) patch.phone = phone;
+      if (proof) { patch.verificationId = proof.verificationId; patch.code = proof.code; }
       await updateProfile(patch);
       setNeeds(null);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
+      if ((e as ApiRequestError)?.code === 'PHONE_VERIFICATION_REQUIRED') { setClaiming(true); setErr(''); }
+      else setErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
+      /* Rethrow so PhoneClaimVerify shows a wrong code in its own box rather than clearing it. */
+      if (proof) throw e;
     } finally { setSaving(false); }
   };
 
@@ -112,7 +122,7 @@ export default function ProfileGate() {
               <input
                 value={phone}
                 onChange={e => setPhone(tenDigit(e.target.value))}
-                onKeyDown={e => { if (e.key === 'Enter' && valid) save(); }}
+                onKeyDown={e => { if (e.key === 'Enter' && valid) void save(); }}
                 placeholder="Mobile number" inputMode="numeric" autoComplete="tel" autoFocus={!needs.name && !needs.email}
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', minWidth: 0, letterSpacing: '.04em' }}
               />
@@ -131,10 +141,20 @@ export default function ProfileGate() {
         )}
         {err && <div style={{ marginBottom: 10, fontSize: 'var(--text-sm)', color: 'var(--status-error)' }}>{err}</div>}
 
-        <button onClick={save} disabled={saving || !valid}
-          style={{ width: '100%', padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: (saving || !valid) ? 'var(--border-default)' : 'var(--gradient-warm)', color: (saving || !valid) ? 'var(--text-subtle)' : 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: (saving || !valid) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          {saving ? 'Saving…' : 'Continue'}{!saving && valid && <ArrowRight size={18} />}
-        </button>
+        {claiming ? (
+          <PhoneClaimVerify
+            phone={phone}
+            onVerified={(verificationId, code) => save({ verificationId, code })}
+            /* Back to the form with the number still in the box, so they can correct a digit — the
+               usual reason for landing here is typing somebody else's number by mistake. */
+            onCancel={() => { setClaiming(false); setErr(''); }}
+          />
+        ) : (
+          <button onClick={() => void save()} disabled={saving || !valid}
+            style={{ width: '100%', padding: desktop ? '15px' : '12px', borderRadius: 'var(--radius-button)', border: 'none', background: (saving || !valid) ? 'var(--border-default)' : 'var(--gradient-warm)', color: (saving || !valid) ? 'var(--text-subtle)' : 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: (saving || !valid) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            {saving ? 'Saving…' : 'Continue'}{!saving && valid && <ArrowRight size={18} />}
+          </button>
+        )}
       </div>
     </div>
   );

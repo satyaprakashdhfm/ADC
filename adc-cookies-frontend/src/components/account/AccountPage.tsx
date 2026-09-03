@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { getOrders, getAddresses, addAddress, updateAddress, deleteAddress as apiDeleteAddress, getSpinStatus, getOrderTracking, getPendingFeedback, type Address, type Order, type SpinClaim, type PendingFeedback } from '@/lib/api';
+import { getOrders, getAddresses, addAddress, updateAddress, deleteAddress as apiDeleteAddress, getSpinStatus, getOrderTracking, getPendingFeedback, type Address, type Order, type SpinClaim, type PendingFeedback, type ApiRequestError } from '@/lib/api';
 import dynamic from 'next/dynamic';
 
 // Leaflet needs a window, and this only renders inside an open address form.
@@ -18,6 +18,8 @@ import {
   friendlyDate, formatPhone, national10, isCancelledStatus, isDeadShipment, whenLabel,
 } from '@/lib/orderFormat';
 import LoginModal from '@/components/ordering/LoginModal';
+import PhoneClaimVerify from '@/components/auth/PhoneClaimVerify';
+import { tenDigit } from '@/lib/phone';
 import FeedbackModal from './FeedbackModal';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import Footer from '@/components/storefront/Footer';
@@ -258,6 +260,9 @@ export default function AccountPage() {
   const [editing, setEditing] = useState(false);
   const [profileErr, setProfileErr] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+  /* The number entered belongs to an account with orders on it; the server wants proof before it
+     moves that history across. See PhoneClaimVerify. */
+  const [claimingPhone, setClaimingPhone] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [orders, setOrders] = useState<Order[] | null>(null);
@@ -337,13 +342,18 @@ export default function AccountPage() {
     );
   }
 
-  const startEdit = () => { setProfileErr(''); setName(user.name); setPhone(national10(user.phone)); setEditing(true); };
-  const saveProfile = async () => {
+  const startEdit = () => { setProfileErr(''); setClaimingPhone(false); setName(user.name); setPhone(national10(user.phone)); setEditing(true); };
+  const saveProfile = async (proof?: { verificationId: string; code: string }) => {
     setProfileErr(''); setSavingProfile(true);
     try {
-      await updateProfile({ name: name.trim() || user.name, phone: phone.trim() || undefined });
-      setEditing(false);
+      await updateProfile({ name: name.trim() || user.name, phone: phone.trim() || undefined, ...proof });
+      setEditing(false); setClaimingPhone(false);
     } catch (e) {
+      if ((e as ApiRequestError)?.code === 'PHONE_VERIFICATION_REQUIRED') {
+        setClaimingPhone(true); setSavingProfile(false); setProfileErr('');
+        if (proof) throw e;   // let the code box show its own error
+        return;
+      }
       setProfileErr(e instanceof Error ? e.message : 'Could not save. Please try again.');
     } finally {
       setSavingProfile(false);
@@ -433,12 +443,19 @@ export default function AccountPage() {
               {editing && (
                 <div style={{ marginTop: 15, display: 'grid', gap: 9 }}>
                   <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={{ width: '100%', padding: '11px 13px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
-                  <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" style={{ width: '100%', padding: '11px 13px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
+                  <input value={phone} onChange={e => setPhone(tenDigit(e.target.value))} placeholder="Mobile number" inputMode="numeric" autoComplete="tel" style={{ width: '100%', padding: '11px 13px', borderRadius: 'var(--radius-input)', border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-strong)', outline: 'none' }} />
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>Email cannot be changed from this page.</div>
                   {profileErr && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)' }}>{profileErr}</div>}
+                  {claimingPhone && (
+                    <PhoneClaimVerify
+                      phone={phone}
+                      onVerified={(verificationId, code) => saveProfile({ verificationId, code })}
+                      onCancel={() => { setClaimingPhone(false); setProfileErr(''); }}
+                    />
+                  )}
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={saveProfile} disabled={savingProfile} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: savingProfile ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: savingProfile ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Check size={15} /> {savingProfile ? 'Saving…' : 'Save'}</button>
-                    <button onClick={() => { setEditing(false); setProfileErr(''); setName(user.name); setPhone(national10(user.phone)); }} style={{ padding: '10px 14px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><X size={15} /> Cancel</button>
+                    <button onClick={() => void saveProfile()} disabled={savingProfile} style={{ flex: 1, padding: '10px', borderRadius: 'var(--radius-button)', border: 'none', background: savingProfile ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, cursor: savingProfile ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Check size={15} /> {savingProfile ? 'Saving…' : 'Save'}</button>
+                    <button onClick={() => { setEditing(false); setProfileErr(''); setClaimingPhone(false); setName(user.name); setPhone(national10(user.phone)); }} style={{ padding: '10px 14px', borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-default)', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-body)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><X size={15} /> Cancel</button>
                   </div>
                 </div>
               )}
