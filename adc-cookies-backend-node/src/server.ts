@@ -13,6 +13,7 @@ import { ensureMediaBucket } from './services/storage.client.js';
 import { getOne } from './db/index.js';
 import { assertEnv } from './config/env.js';
 import { listTemplates, whatsappConfigured } from './services/whatsapp.client.js';
+import { ppRequest, petpoojaConfigured, REST_ID as PP_REST_ID } from './services/petpooja.client.js';
 
 const PORT = Number(process.env.PORT || 8080);
 
@@ -62,6 +63,27 @@ const PORT = Number(process.env.PORT || 8080);
        looking for a seeding bug that did not exist. */
     getOne('SELECT count(*)::int AS n FROM admin_accounts WHERE is_active = TRUE')
       .then((r) => console.log(`[CONFIG] ADMIN phone allowlist=${r?.n ?? '?'} active`)).catch(() => {});
+
+    /*
+     * Can we still reach Petpooja, and from where?
+     *
+     * Their production API is IP-allowlisted, so the answer changes when the egress path changes —
+     * which is exactly the sort of thing that is invisible until an order fails to reach the
+     * kitchen. This asks once per deploy and tells the two failures apart: a business error means we
+     * REACHED them (the allowlist is fine, they just did not like the request), while status 0 means
+     * we never got there at all.
+     *
+     * mapped_restaurant_menus is deprecated by Petpooja and answers with an error, which is exactly
+     * why it is used here — it proves the round trip and writes nothing. fetchMenu() would have
+     * ingested a menu on success, which is not a probe's business.
+     */
+    if (petpoojaConfigured()) {
+      ppRequest('/mapped_restaurant_menus', { restID: PP_REST_ID })
+        .then((r: any) => console.log(r.status > 0
+          ? `[PETPOOJA] reachability | ✓ reached them (http ${r.status}) via ${process.env.HTTPS_PROXY || process.env.PETPOOJA_PROXY_URL ? 'PROXY' : 'DIRECT'}`
+          : `[PETPOOJA] reachability | ✗ never reached — ${r.reason}`))
+        .catch((e) => console.log(`[PETPOOJA] reachability | ✗ ${e.message}`));
+    }
 
     /* One read-only call to Meta on boot, so a broken WhatsApp setup says WHY in the logs.
        The WhatsApp Manager UI reports "not allowed to manage templates" with no reason; the Graph
