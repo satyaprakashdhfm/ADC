@@ -4,7 +4,7 @@ import { ArrowRight, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { isValidName, isValidEmail, nameError, emailError } from '@/lib/profileValidation';
 import { useIsDesktop } from '@/lib/useIsDesktop';
-import { tenDigit, formatPhone } from '@/lib/phone';
+import { tenDigit, formatPhone, isMobile, phoneError } from '@/lib/phone';
 
 /*
  * Catches everyone the OTP flow's own mandatory step doesn't: Google and email/password
@@ -41,7 +41,7 @@ export default function ProfileGate() {
 
   const nameOk = !needs.name || isValidName(name);
   const emailOk = !needs.email || isValidEmail(email);
-  const phoneOk = !needs.phone || phone.length === 10;
+  const phoneOk = !needs.phone || isMobile(phone);
   const valid = nameOk && emailOk && phoneOk;
 
   const save = async () => {
@@ -117,11 +117,16 @@ export default function ProfileGate() {
                 style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-strong)', minWidth: 0, letterSpacing: '.04em' }}
               />
             </div>
-            {phone.length === 10 && (
-              <div style={{ marginTop: 6, marginBottom: 4, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
-                {formatPhone(phone)}
-              </div>
-            )}
+            {/* The reason first, the confirmation second — the same order the name and email
+                fields use. A ten-digit number starting 0-5 used to get the tick and then be
+                refused by the server with nothing on screen to say why. */}
+            {phoneError(phone)
+              ? <div style={hintStyle}>{phoneError(phone)}</div>
+              : isMobile(phone) && (
+                <div style={{ marginTop: 6, marginBottom: 4, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+                  {formatPhone(phone)}
+                </div>
+              )}
           </>
         )}
         {err && <div style={{ marginBottom: 10, fontSize: 'var(--text-sm)', color: 'var(--status-error)' }}>{err}</div>}
