@@ -43,3 +43,19 @@ export function formatPhone(input: string | null | undefined): string {
   const t = tenDigit(input);
   return t.length === 10 ? `+91 ${t.slice(0, 5)} ${t.slice(5)}` : '';
 }
+
+/*
+ * WHY a number is not acceptable, in words a customer can act on — the counterpart to nameError
+ * and emailError in profileValidation.ts, and null while the field is empty or still being typed.
+ *
+ * Every form that refused a number used to do it by disabling the submit button and saying
+ * nothing, which is indistinguishable from a broken page: you cannot tell whether the site is
+ * stuck, your typing did not register, or the number is wrong.
+ */
+export function phoneError(input: string | null | undefined): string | null {
+  const t = tenDigit(input);
+  if (!t) return null;
+  if (t.length < 10) return 'That number is too short — an Indian mobile has 10 digits.';
+  if (!isMobile(t)) return 'That does not look like a mobile number — it should start with 6, 7, 8 or 9.';
+  return null;
+}

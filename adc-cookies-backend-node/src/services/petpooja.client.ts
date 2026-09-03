@@ -56,8 +56,15 @@ const creds = () => ({ app_key: APP_KEY, app_secret: APP_SECRET, access_token: A
  *
  * With no proxy configured this is undefined and fetch behaves normally, which is what staging
  * wants — it has no Petpooja credentials and needs the static IP for nothing.
+ *
+ * PETPOOJA_PROXY_URL and nothing else. It used to fall back to HTTPS_PROXY, which is the variable
+ * left over from the abandoned proxy-everything setup this comment describes — so the one
+ * integration that is supposed to opt IN to the proxy was in fact inheriting it from a general
+ * setting, and the file contradicted its own rule. Now that Railway's own static egress IPs are
+ * allowlisted by Petpooja, the proxy is not needed at all; naming it explicitly means the route is
+ * whatever this one variable says, and putting the VM back is one variable, not four.
  */
-const PROXY_URL = process.env.PETPOOJA_PROXY_URL || process.env.HTTPS_PROXY || '';
+const PROXY_URL = process.env.PETPOOJA_PROXY_URL || '';
 let proxyAgent;
 if (PROXY_URL) {
   try {
@@ -68,6 +75,17 @@ if (PROXY_URL) {
     console.warn(`[PETPOOJA] proxy url unusable (${e.message}) — calling Petpooja directly`);
   }
 }
+
+/*
+ * Which way calls actually leave, for the boot line that reports it.
+ *
+ * Exported rather than re-derived from the environment by the caller: server.ts used to decide the
+ * PROXY/DIRECT label by reading HTTPS_PROXY itself, so the moment the two disagreed the log would
+ * confidently name a route nothing was using — and that log line is the evidence the cutover is
+ * judged on. It reads proxyAgent, so a proxy URL that failed to parse reports DIRECT, which is what
+ * the request will actually do.
+ */
+export const egressRoute = () => (proxyAgent ? 'PROXY' : 'DIRECT');
 
 export async function ppRequest(path: string, body: unknown, { timeoutMs = 20_000 }: { timeoutMs?: number } = {}): Promise<any> {
   const url = `${BASE}${path}`;

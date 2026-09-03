@@ -133,10 +133,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (name: string, email: string, phone: string, password: string) => {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(), password,
-      options: { data: { full_name: name.trim(), phone: phone.trim() } },
+      options: { data: { full_name: name.trim() } },
     });
     if (error) throw new Error(error.message);
     if (!data.session) throw new Error('Account created — please check your email to confirm, then log in.');
+
+    /*
+     * The number goes to PATCH /me, not into user_metadata alongside the name.
+     *
+     * Metadata is writable from the browser, so the server no longer treats a number found there
+     * as proof of anything (see parseAuth) — sending it that way would silently drop it. PATCH /me
+     * is the path that normalizes it to the one stored shape and links an account already held
+     * under it, which is what makes a customer we knew before the website keep their history.
+     *
+     * Deliberately not fatal: the account exists by this point, and failing the whole sign-up over
+     * the phone would leave them unable to get back in. ProfileGate asks again on the next render,
+     * which is where any rejected number gets a second try with a visible error.
+     */
+    if (phone.trim()) {
+      try { await updateMe({ phone: phone.trim() }); } catch { /* ProfileGate will ask again */ }
+    }
+
     const me = await getMe();
     setUser(userFromMe(me));
     setProfileLoaded(true);

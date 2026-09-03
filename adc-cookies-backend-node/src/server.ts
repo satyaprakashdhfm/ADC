@@ -13,7 +13,7 @@ import { ensureMediaBucket } from './services/storage.client.js';
 import { getOne } from './db/index.js';
 import { assertEnv } from './config/env.js';
 import { listTemplates, whatsappConfigured } from './services/whatsapp.client.js';
-import { ppRequest, petpoojaConfigured, REST_ID as PP_REST_ID } from './services/petpooja.client.js';
+import { ppRequest, petpoojaConfigured, egressRoute, REST_ID as PP_REST_ID } from './services/petpooja.client.js';
 
 const PORT = Number(process.env.PORT || 8080);
 
@@ -80,7 +80,7 @@ const PORT = Number(process.env.PORT || 8080);
     if (petpoojaConfigured()) {
       ppRequest('/mapped_restaurant_menus', { restID: PP_REST_ID })
         .then((r: any) => console.log(r.status > 0
-          ? `[PETPOOJA] reachability | ✓ reached them (http ${r.status}) via ${process.env.HTTPS_PROXY || process.env.PETPOOJA_PROXY_URL ? 'PROXY' : 'DIRECT'}`
+          ? `[PETPOOJA] reachability | ✓ reached them (http ${r.status}) via ${egressRoute()}`
           : `[PETPOOJA] reachability | ✗ never reached — ${r.reason}`))
         .catch((e) => console.log(`[PETPOOJA] reachability | ✗ ${e.message}`));
     }

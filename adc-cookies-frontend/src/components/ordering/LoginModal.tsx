@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { X, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { isValidName, isValidEmail, nameError, emailError } from '@/lib/profileValidation';
+import { tenDigit, isMobile, phoneError } from '@/lib/phone';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import AuthPanel from '@/components/auth/AuthPanel';
 import { Divider, authInput, authLinkBtn, fieldHint } from '@/components/auth/authUi';
@@ -52,7 +53,7 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
   // Name + phone are mandatory on sign-up, same as the OTP path — no skipping either flow.
   const submitValid = mode === 'login'
     ? !!email.trim() && !!password.trim()
-    : isValidName(name) && !!phone.trim() && isValidEmail(email) && !!password.trim();
+    : isValidName(name) && isMobile(phone) && isValidEmail(email) && !!password.trim();
 
   /* No admin redirect. This modal signs customers in, full stop — the dashboard is reached only
      through its own phone-OTP sign-in at /admin. */
@@ -143,7 +144,8 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
                   <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={inputStyle} />
                   {/* The reason, under the field. Without it a disabled button is the only feedback. */}
                   {nameError(name) && <div style={fieldHint}>{nameError(name)}</div>}
-                  <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" style={inputStyle} />
+                  <input value={phone} onChange={e => setPhone(tenDigit(e.target.value))} placeholder="Mobile number" inputMode="numeric" autoComplete="tel" style={inputStyle} />
+                  {phoneError(phone) && <div style={fieldHint}>{phoneError(phone)}</div>}
                 </>
               )}
               <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email" style={inputStyle} />
