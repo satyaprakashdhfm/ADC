@@ -4,6 +4,7 @@ import { Pencil, Check, X } from 'lucide-react';
 import { type AdminUser } from '@/lib/api';
 import { PAGE_SIZE } from '@/hooks/admin/usePagination';
 import { fmtDate } from '../shared/format';
+import { tenDigit, formatPhone, isMobile, phoneError } from '@/lib/phone';
 import { td, inp, iconBtn, actionBtn, Panel, Table, Empty, FilterBar, Pager } from '../shared/ui';
 
 interface Props {
@@ -23,11 +24,14 @@ export default function UsersTab({ users, search, onSearch, page, onPage, saveUs
   const [editing, setEditing] = useState<{ id: number; name: string; phone: string } | null>(null);
 
   const uq = search.trim().toLowerCase();
-  const list = (users || []).filter(u => !uq || u.name.toLowerCase().includes(uq) || (u.email || '').toLowerCase().includes(uq) || (u.phone || '').includes(uq));
+  const list = (users || []).filter(u => !uq || u.name.toLowerCase().includes(uq) || (u.email || '').toLowerCase().includes(uq) || tenDigit(u.phone).includes(tenDigit(uq) || uq));
   const search1 = (v: string) => { onSearch(v); onPage(1); };
 
   const commit = async () => {
     if (!editing) return;
+    /* An empty box is a deliberate "remove the number" and the server takes it. Anything else has
+       to be a real mobile before it goes anywhere near a rider's screen. */
+    if (editing.phone && !isMobile(editing.phone)) return;
     const ok = await saveUser(editing.id, { name: editing.name, phone: editing.phone });
     if (ok) setEditing(null);   // stays open on failure so the correction isn't lost
   };
@@ -61,9 +65,16 @@ export default function UsersTab({ users, search, onSearch, page, onPage, saveUs
               </td>
               <td style={td}>
                 {isEditing && !phoneIsLogin
-                  ? <input value={editing.phone} onChange={e => setEditing({ ...editing, phone: e.target.value })} placeholder="10-digit mobile" style={{ ...inp, width: 130, padding: '6px 8px' }} aria-label="Phone" />
+                  ? <>
+                      <input value={editing.phone} onChange={e => setEditing({ ...editing, phone: tenDigit(e.target.value) })} placeholder="10-digit mobile" style={{ ...inp, width: 130, padding: '6px 8px' }} aria-label="Phone" />
+                      {phoneError(editing.phone) && (
+                        <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--danger-text, #a4231d)', marginTop: 2, maxWidth: 180, whiteSpace: 'normal', lineHeight: 1.4 }}>
+                          {phoneError(editing.phone)}
+                        </div>
+                      )}
+                    </>
                   : <>
-                      {u.phone || '—'}
+                      {formatPhone(u.phone) || u.phone || '—'}
                       {isEditing && phoneIsLogin && (
                         <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', marginTop: 2, maxWidth: 180, whiteSpace: 'normal', lineHeight: 1.4 }}>
                           Their sign-in — only they can change it.
@@ -91,7 +102,7 @@ export default function UsersTab({ users, search, onSearch, page, onPage, saveUs
                     <button onClick={() => setEditing(null)} style={iconBtn} aria-label="Cancel"><X size={15} /></button>
                   </div>
                 ) : (
-                  <button onClick={() => setEditing({ id: u.id, name: u.name, phone: u.phone || '' })} style={iconBtn} aria-label={`Edit ${u.name}`} title="Edit name / phone">
+                  <button onClick={() => setEditing({ id: u.id, name: u.name, phone: tenDigit(u.phone) })} style={iconBtn} aria-label={`Edit ${u.name}`} title="Edit name / phone">
                     <Pencil size={15} />
                   </button>
                 )}
