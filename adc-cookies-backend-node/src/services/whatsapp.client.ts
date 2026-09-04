@@ -104,6 +104,35 @@ export async function sendText(to: string, body: string) {
   return r.ok ? { ok: true, messageId: r.data?.messages?.[0]?.id ?? null } : { ok: false, reason: r.reason };
 }
 
+/*
+ * What Meta itself thinks of our business phone number.
+ *
+ * The WhatsApp Manager UI and the Production-setup wizard both say "registered" for a number that
+ * the Cloud API may still not consider connected, so the UI is not the authority here — this is.
+ *
+ * platform_type is the field worth reading first: CLOUD_API means the number is on the API we
+ * actually call. A number still attached to the WhatsApp Business App reads differently, and that
+ * mismatch is a known cause of a number looking registered while behaving as if it is not.
+ */
+export async function phoneNumberStatus() {
+  if (!whatsappConfigured()) return { ok: false, reason: 'not_configured' };
+  const fields = 'id,display_phone_number,verified_name,quality_rating,status,code_verification_status,platform_type,name_status,throughput';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20_000);
+  try {
+    const res = await fetch(`${BASE}/${PHONE_NUMBER_ID}?fields=${fields}`, {
+      headers: { Authorization: `Bearer ${TOKEN}` }, signal: ctrl.signal,
+    });
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, reason: data?.error?.message || `api_error_${res.status}` };
+    return { ok: true, data };
+  } catch (err: any) {
+    return { ok: false, reason: err.name === 'AbortError' ? 'timeout' : err.message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Every template on the account, with its status and quality rating — read-only, for admin. */
 export async function listTemplates() {
   if (!TOKEN || !WABA_ID) return { ok: false, reason: 'not_configured' };
