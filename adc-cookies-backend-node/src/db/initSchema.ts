@@ -276,6 +276,18 @@ export async function initSchema() {
       created_at TIMESTAMPTZ NOT NULL
     );
 
+    -- Which delivery-progress emails this order has already had. The primary key IS the guarantee:
+    -- the poller re-reads every in-flight order every five minutes and a carrier repeats the same
+    -- status for hours, so without a claim the customer gets the same mail twelve times an hour.
+    -- Separate from order_tracking on purpose: that is the customer-visible timeline and anything
+    -- may write to it, whereas this exists solely to answer "have we already sent this one".
+    CREATE TABLE IF NOT EXISTS order_mail_log (
+      order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      milestone TEXT NOT NULL,
+      sent_at TIMESTAMPTZ NOT NULL,
+      PRIMARY KEY (order_id, milestone)
+    );
+
     CREATE TABLE IF NOT EXISTS payments (
       id SERIAL PRIMARY KEY,
       order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,

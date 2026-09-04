@@ -5,6 +5,7 @@ import { serializeOrder, PAYMENT_SELECT } from '../../serializers/index.js';
 import { cancelShipment } from '../../services/delhivery.client.js';
 import { cancelShiprocketOrder } from '../../services/shiprocket.client.js';
 import { cancelOrder as petpoojaCancelOrder } from '../../services/petpooja.client.js';
+import { notifyOrderMilestone } from '../../services/orderProgress.service.js';
 
 const router = Router();
 
@@ -138,6 +139,14 @@ router.patch('/orders/:id/status', async (req, res) => {
   if (status === 'CANCELLED' && order.order_status !== 'CANCELLED') {
     await cancelDownstream(order, remarks || 'Cancelled by ADC admin');
   }
+
+  /* An admin moving an order by hand owes the customer the same email a carrier scan would have
+     sent — a store that delivers a parcel itself, or a status corrected after the fact, is still
+     the moment the customer wants to hear about. The status word we store is already the milestone
+     vocabulary, so it needs no translation, and notifyOrderMilestone ignores anything that is not
+     one of the three and refuses to repeat one already sent. CANCELLED never mails from here: it
+     has its own email with the refund line, sent from the cancel/refund route. */
+  await notifyOrderMilestone(order, status);
   const updated = await getOne('SELECT * FROM orders WHERE id = $1', [order.id]);
   const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order.id]);
   const address = updated!.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [updated!.address_id]) : null;

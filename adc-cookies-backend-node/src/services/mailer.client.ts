@@ -254,6 +254,61 @@ export async function sendOrderCancelledEmail({ order, reason, refunded }) {
   await send({ to, subject: `Your order ${number} has been cancelled`, html: shell('Order cancelled', body) });
 }
 
+/*
+ * The three delivery updates a customer actually wants, and no more.
+ *
+ * The order confirmation already goes out from finalizePaidOrder, so these are the three that
+ * happen AFTER it: the parcel left us, it arrives today, it arrived. A mail per carrier scan was
+ * never an option — Delhivery alone reports a dozen facility hops on a cross-country parcel, the
+ * poller sees every one of them, and the plan is counted per message.
+ *
+ * Keyed on the MILESTONE, not the carrier's status, so Delhivery's "In Transit — Shipment
+ * Received at Facility" and Shiprocket's "PICKED UP" produce the same sentence. The customer does
+ * not care whose vocabulary it is.
+ *
+ * No business copy on these. They already get one per paid order, and three more each would treble
+ * the internal volume to say something the dashboard already shows.
+ */
+const MILESTONE_MAIL = {
+  SHIPPED: {
+    subject: (n) => `Your order ${n} is on its way 🚚`,
+    title: 'On its way',
+    line: 'is packed and has left our kitchen with the courier',
+    note: 'It is moving now. We will write once more on the day it comes out for delivery.',
+  },
+  OUT_FOR_DELIVERY: {
+    subject: (n) => `Your order ${n} arrives today 🍪`,
+    title: 'Arriving today',
+    line: 'is out for delivery today',
+    note: 'Keep your phone nearby — the courier calls the number on your order, and somebody should be there to take it.',
+  },
+  DELIVERED: {
+    subject: (n) => `Your order ${n} has been delivered 🎉`,
+    title: 'Delivered',
+    line: 'has been delivered',
+    note: 'We hope they are still warm. If anything is not right, reply to this email and we will sort it out.',
+  },
+};
+
+export async function sendOrderMilestoneEmail({ to, customerName, orderNumber, milestone, trackingUrl }) {
+  const m = MILESTONE_MAIL[milestone];
+  /* An unknown milestone is our bug, not the customer's problem: say nothing rather than send a
+     mail with a blank middle. */
+  if (!m || !to) return false;
+
+  const body = `
+    <p style="color:#5C4636">${esc(customerName || 'Hello')}, your order
+      <b style="color:#2B1D12">${esc(orderNumber)}</b> ${m.line}.</p>
+    <p style="color:#2B1D12;line-height:1.6">${m.note}</p>
+    ${trackingUrl && milestone !== 'DELIVERED'
+      ? `<p style="margin:18px 0 0"><a href="${esc(trackingUrl)}"
+           style="display:inline-block;background:#EF7507;color:#fff;text-decoration:none;padding:11px 18px;border-radius:10px;font-weight:700">Track your parcel</a></p>`
+      : ''}`;
+
+  await send({ to, subject: m.subject(orderNumber), html: shell(m.title, body) });
+  return true;
+}
+
 export async function sendOrderEmails(o) {
   const html = shell('Order confirmed', orderBody(o));
   // Customer first, and alone: see the note above about which send is allowed to be the one that fails.

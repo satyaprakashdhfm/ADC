@@ -2,7 +2,7 @@ import { getAll, getOne, query, nowIso } from '../db/index.js';
 import { trackShiprocket, shiprocketConfigured, assignAwb, getWalletBalance } from '../services/shiprocket.client.js';
 import type { ClientResult } from '../utils/result.js';
 import { trackShipment, delhiveryConfigured } from '../services/delhivery.client.js';
-import { applyCarrierTerminalStatus } from '../services/orderProgress.service.js';
+import { applyCarrierTerminalStatus, notifyOrderMilestone } from '../services/orderProgress.service.js';
 
 /*
  * Keep carrier status fresh without anybody having to look.
@@ -120,6 +120,7 @@ async function refreshOne(o) {
         [r.status, r.awb || null, nowIso(), o.id],
       );
       await applyCarrierTerminalStatus(o, r.status, 'SHIPROCKET');
+      await notifyOrderMilestone(o, r.status);
       console.log(`[POLL] ${o.order_number} | ${o.shipment_status || '-'} → ${r.status}`);
     }
     await retryRiderSearch(o, r);
@@ -139,6 +140,7 @@ async function refreshOne(o) {
     [status, nowIso(), o.id],
   );
   await applyCarrierTerminalStatus(o, status, 'DELHIVERY');
+  await notifyOrderMilestone(o, status);
   console.log(`[POLL] ${o.order_number} | ${o.shipment_status || '-'} → ${status}`);
 }
 
