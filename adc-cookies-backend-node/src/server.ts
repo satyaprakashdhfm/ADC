@@ -12,7 +12,7 @@ import { ensureStoreAccounts } from './services/storeAuth.service.js';
 import { ensureMediaBucket } from './services/storage.client.js';
 import { getOne } from './db/index.js';
 import { assertEnv } from './config/env.js';
-import { listTemplates, whatsappConfigured } from './services/whatsapp.client.js';
+import { listTemplates, phoneNumberStatus, whatsappConfigured } from './services/whatsapp.client.js';
 import { ppRequest, petpoojaConfigured, egressRoute, REST_ID as PP_REST_ID } from './services/petpooja.client.js';
 
 const PORT = Number(process.env.PORT || 8080);
@@ -89,6 +89,13 @@ const PORT = Number(process.env.PORT || 8080);
        The WhatsApp Manager UI reports "not allowed to manage templates" with no reason; the Graph
        API returns a specific code and message for the same condition. One request per deploy. */
     if (whatsappConfigured()) {
+      /* Meta's own view of the number, which the dashboard does not reliably reflect. */
+      phoneNumberStatus()
+        .then((r: any) => console.log(r.ok
+          ? `[WHATSAPP] number | status=${r.data.status ?? '?'} | platform=${r.data.platform_type ?? '?'} | verified_name=${r.data.verified_name ?? '?'} | name_status=${r.data.name_status ?? '?'} | code_verification=${r.data.code_verification_status ?? '?'} | quality=${r.data.quality_rating ?? '?'} | throughput=${r.data.throughput?.level ?? '?'}`
+          : `[WHATSAPP] number | ✗ ${r.reason}`))
+        .catch((e) => console.log(`[WHATSAPP] number | ✗ ${e.message}`));
+
       listTemplates()
         .then((r: any) => console.log(r.ok
           ? `[WHATSAPP] templates | ✓ ${r.templates.length} on the account`
