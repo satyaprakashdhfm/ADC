@@ -23,9 +23,30 @@ import { applyCarrierTerminalStatus } from '../services/orderProgress.service.js
 
 const POLL_MS = Number(process.env.STATUS_POLL_MS || 5 * 60_000);
 const BATCH = Number(process.env.STATUS_POLL_BATCH || 20);
-/* Past this an order is not "in flight", it is history. Anything still open after three days needs
-   a person, not another poll — and polling it forever would spend the whole budget on the dead. */
-const MAX_AGE_DAYS = 3;
+/*
+ * How long an order stays worth asking about — PER CARRIER, because three days meant two different
+ * things and only one of them was true.
+ *
+ * Three days is right for Shiprocket: that is a same-day hyperlocal rider, so an order still open
+ * after three days is not in flight, it is a problem for a person. It is badly wrong for Delhivery.
+ * ADC20260830105240 went Bangalore → New Delhi, and the numbers tell the whole story: created
+ * 30 Aug 10:52, last polled 2 Sept 06:48, aged out of this window 2 Sept 10:52 — and DELIVERED on
+ * 3 Sept 10:55, a full day after we stopped looking. It sat at CONFIRMED / "In Transit" on the
+ * customer's own order page while Delhivery's panel had said Delivered for a day.
+ *
+ * And it could never recover: the same window that dropped it also excluded it from every later
+ * sweep, so the order was stuck until somebody edited it by hand. A cutoff shorter than the transit
+ * it is tracking does not save budget, it just guarantees the last update is the one we miss —
+ * Delhivery quotes 3 days TAT on outstation routes, so this was below even their own estimate.
+ *
+ * Delhivery has NO webhook, so this poller is the only thing that will ever move an outstation
+ * order. It has to outlast the parcel. Twenty-one days covers a slow cross-country delivery and an
+ * RTO coming back afterwards; the cap is kept finite so a genuinely lost parcel eventually stops
+ * consuming a slot, and `ORDER BY updated_at ASC` already means nothing starves while it is in
+ * there.
+ */
+const MAX_AGE_DAYS_DELHIVERY = Number(process.env.STATUS_POLL_MAX_AGE_DAYS_DELHIVERY || 21);
+const MAX_AGE_DAYS_DEFAULT = Number(process.env.STATUS_POLL_MAX_AGE_DAYS || 3);
 
 /*
  * Automatic "Ship Now" after Shiprocket abandons a rider search.
@@ -69,10 +90,12 @@ async function dueOrders() {
         AND order_status NOT IN ('DELIVERED','CANCELLED')
         AND (shipment_status IS NULL OR shipment_status !~* 'cancel|delivered')
         AND (carrier_order_id IS NOT NULL OR delhivery_shipment_id IS NOT NULL OR delhivery_waybill IS NOT NULL)
-        AND created_at > now() - make_interval(days => $1::int)
+        AND created_at > now() - make_interval(days => CASE
+              WHEN upper(coalesce(carrier, '')) = 'DELHIVERY' THEN $1::int
+              ELSE $2::int END)
       ORDER BY updated_at ASC NULLS FIRST
-      LIMIT $2`,
-    [MAX_AGE_DAYS, BATCH],
+      LIMIT $3`,
+    [MAX_AGE_DAYS_DELHIVERY, MAX_AGE_DAYS_DEFAULT, BATCH],
   );
 }
 
