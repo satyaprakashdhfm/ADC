@@ -13,6 +13,7 @@ export * from './coupon.model.js';
 export * from './couponUsage.model.js';
 export * from './order.model.js';
 export * from './orderItem.model.js';
+export * from './orderMailLog.model.js';
 export * from './orderTracking.model.js';
 export * from './payment.model.js';
 export * from './petpooja.model.js';

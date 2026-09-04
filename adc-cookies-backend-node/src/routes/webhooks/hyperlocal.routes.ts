@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getOne, query, nowIso } from '../../db/index.js';
 import { shiprocketStatusToOrderStatus, getRiderData } from '../../services/shiprocket.client.js';
+import { notifyOrderMilestone } from '../../services/orderProgress.service.js';
 import { riderStatus } from '../../services/petpooja.client.js';
 
 /*
@@ -72,6 +73,13 @@ router.post('/webhook', async (req, res) => {
         WHERE id=$4 AND (shipment_status IS NULL OR shipment_status !~* 'cancel')`,
       [status || 'IN_TRANSIT', awb, ts, order.id]
     );
+
+    /* Outside the status-changed branch below on purpose. Shiprocket's own status can stay put
+       across a real move — PICKED UP and IN TRANSIT both map to OUT_FOR_DELIVERY — so gating
+       the email on OUR status changing would drop the "on its way" mail whenever the webhook
+       reported the two in that order. notifyOrderMilestone does its own de-duplication, which is
+       where that belongs. */
+    await notifyOrderMilestone(order, status);
 
     const next = shiprocketStatusToOrderStatus(status);
     const terminal = ['DELIVERED', 'CANCELLED'].includes(order.order_status);
