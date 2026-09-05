@@ -1,4 +1,3 @@
-import { type OrderItem } from './api';
 
 /*
  * Formatting and status logic shared by anything that shows an order — the account page today,
@@ -10,6 +9,9 @@ export type ParsedOptions = {
   giftPackaging?: boolean;
   giftWrap?: boolean;
   giftMessage?: string;
+  /* Captured by the checkout gift panel alongside the message, and until now typed nowhere and
+     shown on no screen — the shop packing the box is the one place it is actually useful. */
+  giftOccasion?: string;
   message?: string;
   specialNotes?: string;
   addOns?: string[];
@@ -36,7 +38,12 @@ export function hasGift(options: ParsedOptions) {
   return Boolean(options.giftPackaging || options.giftWrap);
 }
 
-export function giftMessage(item: OrderItem, options: ParsedOptions) {
+/*
+ * Takes the minimum it reads rather than a whole OrderItem, so the store portal's StoreOrderItem
+ * satisfies it too. Both screens must show the customer the same sentence; two copies of this
+ * fallback chain would eventually disagree about which field wins.
+ */
+export function giftMessage(item: { specialNotes?: string | null }, options: ParsedOptions) {
   const msg = options.giftMessage || options.message || options.specialNotes || item.specialNotes;
   return typeof msg === 'string' && msg.trim() ? msg.trim() : '';
 }
