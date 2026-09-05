@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Store, LogOut, RefreshCw, Check, Package, Truck, Phone, MapPin, Receipt,
-  AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink, Volume2,
+  AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink, Volume2, Gift,
 } from 'lucide-react';
 import StoreSignIn from './StoreSignIn';
 import StoreMenuBoard from './StoreMenuBoard';
@@ -12,6 +12,63 @@ import {
   getStoreToken, clearStoreToken, StoreAuthError,
   type StoreSession, type StoreOrder, type StoreTrack, type StoreOrdersResponse,
 } from '@/lib/storeApi';
+import { parseOptions, hasGift, giftMessage } from '@/lib/orderFormat';
+
+/*
+ * The gift wrapping, and what the customer wants written on the card.
+ *
+ * The store had no way to see either. Checkout puts giftWrap, giftMessage and giftOccasion into
+ * selected_options on the FIRST line of the order (see useCheckoutPayment), and this screen read
+ * only specialNotes — so a paid-for premium gift box went out as a plain one, with a blank card,
+ * and nobody at the counter had been told. The admin dashboard showed it the whole time, which is
+ * the worst version of the bug: it looked handled from the office and was invisible where the
+ * packing actually happens.
+ *
+ * Scanning every line rather than assuming the first: the checkout attaches it to index 0 today,
+ * but a re-ordered cart or a future edit would silently hide the message again, and a gift is not
+ * something to lose to an implementation detail.
+ */
+function giftFor(order: StoreOrder) {
+  for (const i of order.items) {
+    const opts = parseOptions(i.selectedOptions);
+    if (!hasGift(opts)) continue;
+    return {
+      message: giftMessage(i, opts),
+      occasion: typeof opts.giftOccasion === 'string' ? opts.giftOccasion.trim() : '',
+    };
+  }
+  return null;
+}
+
+/*
+ * Loud on purpose. This is a tablet across a kitchen and the box is already being packed; a grey
+ * line under the items would be read after it was sealed. The message is shown verbatim and in
+ * quotes because somebody has to copy it onto a card by hand, and "no message" is stated rather
+ * than left blank so the packer knows to use a plain card instead of hunting for one.
+ */
+function GiftNote({ order, compact = false }: { order: StoreOrder; compact?: boolean }) {
+  const gift = giftFor(order);
+  if (!gift) return null;
+  return (
+    <div style={{
+      display: 'flex', gap: 10, alignItems: 'flex-start',
+      background: '#fff3e0', border: '2px solid #e8a33d', borderRadius: 12,
+      padding: compact ? '10px 12px' : '12px 14px', marginBottom: compact ? 8 : 14,
+    }}>
+      <Gift size={compact ? 17 : 20} style={{ flexShrink: 0, color: '#9a5a00', marginTop: 1 }} />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 900, color: '#9a5a00', fontSize: compact ? 14 : 15, letterSpacing: '.01em' }}>
+          GIFT PACKAGING{gift.occasion ? ` · ${gift.occasion}` : ''}
+        </div>
+        {gift.message
+          ? <div style={{ marginTop: 3, fontSize: compact ? 14 : 16, color: '#2b2118', fontStyle: 'italic', lineHeight: 1.45, overflowWrap: 'anywhere' }}>
+              &ldquo;{gift.message}&rdquo;
+            </div>
+          : <div style={{ marginTop: 3, fontSize: compact ? 13 : 14, color: '#7b6a58' }}>No message — use a blank card.</div>}
+      </div>
+    </div>
+  );
+}
 
 /*
  * The screen a shop counter works from.
@@ -145,6 +202,8 @@ function OrderCard({
           ))}
         </tbody>
       </table>
+
+      <GiftNote order={order} />
 
       {(order.discountAmount > 0 || order.deliveryFee > 0) && (
         <p style={{ fontSize: 13, color: 'var(--text-muted, #7b6a58)', margin: '0 0 12px' }}>
@@ -675,6 +734,7 @@ export default function StorePortal({ code }: { code: string }) {
                     <span style={{ flex: 'none' }}>{money(i.totalPrice)}</span>
                   </div>
                 ))}
+                <div style={{ marginTop: 8 }}><GiftNote order={o} compact /></div>
                 {o.customer && (
                   <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted, #7b6a58)' }}>
                     {o.customer.name}{o.customer.phone ? ` · ${o.customer.phone}` : ''}
