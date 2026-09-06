@@ -6,7 +6,7 @@ import { ADC_STORES } from '../../services/store.service.js';
 import { relayOrder, unmappedProducts } from '../../services/petpooja.service.js';
 // Same constant the poller counts against, so the panel and the retry cannot disagree about
 // what "out of attempts" means.
-import { RIDER_RETRY_MAX } from '../../jobs/statusPoller.js';
+import { RIDER_RETRY_MAX, RIDER_REFUSAL_MAX } from '../../config/delivery.js';
 
 const router = Router();
 
@@ -258,14 +258,24 @@ router.get('/attention', async (_req, res) => {
      */
     getAll(`SELECT o.id, o.order_number, o.total_amount, o.created_at, o.shipment_error,
                    o.delhivery_shipment_id AS shipment_id, o.shipment_status,
-                   COALESCE(o.rider_retry_count, 0) AS rider_retry_count, o.rider_retry_at
+                   COALESCE(o.rider_retry_count, 0) AS rider_retry_count, o.rider_retry_at,
+                   COALESCE(o.rider_refusal_count, 0) AS rider_refusal_count
               FROM orders o
              WHERE o.payment_status = 'PAID' AND o.order_status NOT IN ('CANCELLED','DELIVERED')
                AND o.carrier = 'SHIPROCKET'
                AND o.delhivery_waybill IS NULL
                AND COALESCE(o.shipment_status, '') !~* 'cancel'
-               AND COALESCE(o.rider_retry_count, 0) >= $1
-             ORDER BY o.created_at DESC LIMIT 100`, [RIDER_RETRY_MAX]),
+               /*
+                * Either way of giving up, not just one.
+                *
+                * This asked only about rider_retry_count, which counts SUCCESSFUL Ship Now sends.
+                * An order the carrier refuses outright never gets one — ADC20260905160011 sat at
+                * 0 hunts and 8 refusals — so the orders that had most conclusively failed were
+                * the exact ones missing from this list. Nobody was told, while the store portal
+                * was telling its counter "the office has been alerted".
+                */
+               AND (COALESCE(o.rider_retry_count, 0) >= $1 OR COALESCE(o.rider_refusal_count, 0) >= $2)
+             ORDER BY o.created_at DESC LIMIT 100`, [RIDER_RETRY_MAX, RIDER_REFUSAL_MAX]),
   ]);
   /*
    * The manual stores' missing bill numbers used to be a fifth list here. It is a real gap — a

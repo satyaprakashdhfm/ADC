@@ -82,7 +82,14 @@ export interface StoreOrder {
   delivery: {
     carrier: string | null; waybill: string | null; shipmentId: string | null;
     shipmentStatus: string | null; trackingUrl: string | null;
-    shipmentError: string | null; estimatedDelivery: string | null;
+    /* Replaces the raw shipmentError, which put the carrier's own words — and our Shiprocket
+       wallet balance — on a shop counter tablet. */
+    rider: {
+      state: 'none' | 'searching' | 'assigned' | 'retrying' | 'gave_up' | 'cancelled';
+      hunts: number; refusals: number; exhausted: boolean;
+      ranOutOf: 'hunts' | 'refusals' | null;
+    } | null;
+    estimatedDelivery: string | null;
   };
   pos: { manual: boolean; relayed: boolean; petpoojaOrderId: string | null; lastError: string | null; billNo: string | null };
   workflow: { acceptedAt: string | null; acceptedBy: number | null; readyAt: string | null };

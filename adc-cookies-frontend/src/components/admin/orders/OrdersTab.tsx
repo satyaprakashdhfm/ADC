@@ -155,10 +155,32 @@ export default function OrdersTab({
                 )}
               </td>
               <td style={td}>
-                <Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} />
-                {/* A paid order with no courier is money taken for an undelivered parcel — say why. */}
-                {o.shipmentError && !o.delhiveryWaybill && (
-                  <div title={o.shipmentError} style={{ color: 'var(--status-error)', fontSize: 'var(--text-2xs)', fontWeight: 700, marginTop: 3, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.shipmentError}</div>
+                {/*
+                  * Once WE delivered it, the courier's state is history and saying it is misleading.
+                  * An order driven over by hand sat here reading "NEW" with Shiprocket's "order is
+                  * in cancelled state" under it — the booking's epitaph, shown as though it were
+                  * the order's own status, on an order that had already reached the customer.
+                  * The note typed at that moment is the true answer and belongs in its place.
+                  */}
+                {o.deliveredByUs ? (
+                  <>
+                    <Badge text="DELIVERED BY US" ok />
+                    {o.statusNote && (
+                      <div title={o.statusNote} style={{ color: 'var(--text-muted)', fontSize: 'var(--text-2xs)', fontWeight: 700, marginTop: 3, maxWidth: 170, whiteSpace: 'normal', lineHeight: 1.4 }}>{o.statusNote}</div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} />
+                    {/* A paid order with no courier is money taken for an undelivered parcel — say
+                        why, in our words. The carrier's own sentence is kept as the tooltip: useful
+                        to whoever debugs it, wrong as the line the board reads. */}
+                    {o.rider?.exhausted && !o.delhiveryWaybill && (
+                      <div title={o.shipmentError || undefined} style={{ color: 'var(--status-error)', fontSize: 'var(--text-2xs)', fontWeight: 700, marginTop: 3, maxWidth: 170, whiteSpace: 'normal', lineHeight: 1.4 }}>
+                        Tried {o.rider.hunts + o.rider.refusals}×, no rider — needs a decision
+                      </div>
+                    )}
+                  </>
                 )}
               </td>
               {/* Did the kitchen actually get this ticket? Blank for unpaid orders, which are

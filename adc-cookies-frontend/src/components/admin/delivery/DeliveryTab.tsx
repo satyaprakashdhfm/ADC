@@ -7,7 +7,7 @@ import {
   adminCreatePickupRequest, adminFetchOrderDocument, adminGetStoreReadiness, adminGetShiprocketWallet,
   type Order, type Warehouse, type WarehouseInput, type StoreReadinessReport, type ShiprocketWallet,
 } from '@/lib/api';
-import { todayStr } from '../shared/format';
+import { todayStr, money, fmtDate } from '../shared/format';
 import { card, td, inp, addBtn, iconBtn, actionBtn, Panel, Table, Badge, Empty, Field } from '../shared/ui';
 import { belongsInShipments } from '../orders/orderConstants';
 import { SR_ORDER_STATES } from './srOrderStates';
@@ -15,8 +15,8 @@ import { shipStatusLabel } from './shipStatusLabel';
 import { EMPTY_WH } from './warehouseDefaults';
 
 interface Props {
-  delivSub: 'main' | 'sameday' | 'delhivery';
-  setDelivSub: (v: 'main' | 'sameday' | 'delhivery') => void;
+  delivSub: 'main' | 'sameday' | 'delhivery' | 'owndelivery';
+  setDelivSub: (v: 'main' | 'sameday' | 'delhivery' | 'owndelivery') => void;
   warehouses: Warehouse[] | null;
   setWarehouses: React.Dispatch<React.SetStateAction<Warehouse[] | null>>;
   setWhForm: (v: { id?: number; data: WarehouseInput } | null) => void;
@@ -52,20 +52,40 @@ interface Props {
  * had simply not moved yet.
  */
 function riderState(o: Order): { text: string; tone: 'ok' | 'wait' | 'bad' | 'muted' } {
-  const s = (o.shipmentStatus || '').toUpperCase();
-  const tries = o.riderRetryCount ?? 0;
+  const r = o.rider;
   const since = o.riderRetryAt ? ` · last ${new Date(o.riderRetryAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
-  const sent = tries ? ` · Ship Now sent ${tries}×${since}` : '';
 
-  if (/CANCEL/.test(s)) return { text: 'Booking cancelled — no rider coming.', tone: 'muted' };
-  if (o.delhiveryWaybill) return { text: `Rider allocated${sent}`, tone: 'ok' };
-  if (o.shipmentError) return { text: `${o.shipmentError}${sent}`, tone: 'bad' };
-  if (s === 'NEW') return tries
-    ? { text: `Rider search lapsed — nobody accepted${sent}. Out of automatic attempts; needs a decision.`, tone: 'bad' }
-    : { text: 'Rider search lapsed — Ship Now will be re-sent automatically within a few minutes.', tone: 'bad' };
-  if (/SEARCH/.test(s)) return { text: `Searching for a rider${sent}`, tone: 'wait' };
-  if (!s || s === 'NOT_CREATED') return { text: 'No booking yet.', tone: 'muted' };
-  return { text: `${s}${sent}`, tone: 'wait' };
+  /* Delivered by hand: the booking's state is history and reading it aloud is misleading. */
+  if (o.deliveredByUs) return { text: o.statusNote || 'Delivered by us — not by the courier.', tone: 'ok' };
+  if (!r) return { text: 'No booking yet.', tone: 'muted' };
+
+  const tried = r.hunts + r.refusals;
+  const attempts = tried ? ` Tried ${tried}×${since}.` : '';
+
+  switch (r.state) {
+    case 'assigned':  return { text: `Rider allocated.${attempts}`, tone: 'ok' };
+    case 'cancelled': return { text: 'Booking cancelled — no rider coming.', tone: 'muted' };
+    case 'gave_up':
+      /*
+       * The whole reason this function was rewritten.
+       *
+       * It used to print o.shipmentError here, so Shiprocket's "order is in cancelled state" —
+       * their words about their own dead booking object — appeared where our order status goes,
+       * and a PAID, PACKED order read as cancelled to the person deciding what to do with it. And
+       * because only hunts were serialized, an order refused 8 times showed "sent 0×" and looked
+       * untouched. Both facts are ours to state, so we state them.
+       */
+      return {
+        text: r.ranOutOf === 'refusals'
+          ? `Tried ${tried}× — Shiprocket refused every attempt, so no rider search ever started.${since} NOT cancelled: the booking is dead at their end. Needs a decision.`
+          : `Tried ${tried}× — nobody accepted the job.${since} Out of automatic attempts. Needs a decision.`,
+        tone: 'bad',
+      };
+    case 'retrying':
+      return { text: `Rider search lapsed — Ship Now re-sends automatically.${attempts}`, tone: 'bad' };
+    case 'searching': return { text: `Searching for a rider.${attempts}`, tone: 'wait' };
+    default:          return { text: 'No booking yet.', tone: 'muted' };
+  }
 }
 
 const TONE: Record<string, string> = {
@@ -153,7 +173,7 @@ export default function DeliveryTab({
 
       {/* Sub-nav: all shipments · same-day intracity · Delhivery outstation */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {([['main', 'All shipments'], ['sameday', 'Same-day · Intracity'], ['delhivery', 'Delhivery · Outstation']] as const).map(([id, label]) => {
+        {([['main', 'All shipments'], ['sameday', 'Same-day · Intracity'], ['delhivery', 'Delhivery · Outstation'], ['owndelivery', 'Delivered by us']] as const).map(([id, label]) => {
           const on = delivSub === id;
           return <button key={id} onClick={() => setDelivSub(id)} style={{ padding: '7px 14px', borderRadius: 'var(--radius-pill)', border: on ? 'none' : '1.5px solid var(--border-default)', background: on ? 'var(--gradient-warm)' : 'var(--surface-card)', color: on ? 'var(--white)' : 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>{label}</button>;
         })}
@@ -450,6 +470,42 @@ export default function DeliveryTab({
         {orders === null && <button onClick={() => adminGetOrders().then(setOrders).catch(() => setOrders([]))} style={addBtn}>Load orders</button>}
       </Panel>
       </>)}
+
+      {delivSub === 'owndelivery' && (
+        <Panel title="Delivered by us" loading={orders === null}
+          action={orders === null ? undefined : <button onClick={() => adminGetOrders().then(setOrders).catch(() => {})} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
+            Orders that reached the customer without the courier delivering them — somebody drove
+            the box over. They are worked out from the order itself rather than a flag: DELIVERED,
+            with no delivery ever reported by a carrier. The note is what the admin typed at the
+            moment they marked it, and is what the customer was told.
+          </p>
+          {(() => {
+            const own = (orders || []).filter(o => o.deliveredByUs);
+            if (!own.length) return <Empty text="None. Every delivered order was delivered by a courier." />;
+            return (
+              <Table head={['Order', 'Customer', 'What we told the customer', 'Booking it replaced', 'Value']}>
+                {own.map(o => (
+                  <tr key={o.id}>
+                    <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{fmtDate(o.createdAt)}</span></td>
+                    <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city} · {o.address?.pincode}</span></td>
+                    <td style={{ ...td, whiteSpace: 'normal', maxWidth: 300, lineHeight: 1.45 }}>
+                      {o.statusNote
+                        ? <span style={{ fontStyle: 'italic' }}>&ldquo;{o.statusNote}&rdquo;</span>
+                        : <span style={{ color: 'var(--status-error)', fontWeight: 700 }}>Nothing — marked delivered with no note</span>}
+                    </td>
+                    <td style={{ ...td, whiteSpace: 'normal', maxWidth: 220, fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                      {o.carrier || '—'}
+                      {o.rider && (o.rider.hunts + o.rider.refusals) > 0 && ` · tried ${o.rider.hunts + o.rider.refusals}×, no rider`}
+                    </td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{money(o.totalAmount)}</td>
+                  </tr>
+                ))}
+              </Table>
+            );
+          })()}
+        </Panel>
+      )}
 
       {delivSub === 'sameday' && (
         <>
