@@ -268,6 +268,11 @@ export async function sendOrderCancelledEmail({ order, reason, refunded }) {
  *
  * No business copy on these. They already get one per paid order, and three more each would treble
  * the internal volume to say something the dashboard already shows.
+ *
+ * `note` is the admin's own sentence, set only when a person moved the order by hand. Nothing
+ * generated fills it, because the one case that needs explaining — we delivered this ourselves
+ * after the courier could not find a rider — is exactly the case a fixed template cannot
+ * describe. Escaped like everything else here: it is free text out of a form.
  */
 const MILESTONE_MAIL = {
   SHIPPED: {
@@ -290,7 +295,7 @@ const MILESTONE_MAIL = {
   },
 };
 
-export async function sendOrderMilestoneEmail({ to, customerName, orderNumber, milestone, trackingUrl }) {
+export async function sendOrderMilestoneEmail({ to, customerName, orderNumber, milestone, trackingUrl, note = '' }) {
   const m = MILESTONE_MAIL[milestone];
   /* An unknown milestone is our bug, not the customer's problem: say nothing rather than send a
      mail with a blank middle. */
@@ -300,6 +305,9 @@ export async function sendOrderMilestoneEmail({ to, customerName, orderNumber, m
     <p style="color:#5C4636">${esc(customerName || 'Hello')}, your order
       <b style="color:#2B1D12">${esc(orderNumber)}</b> ${m.line}.</p>
     <p style="color:#2B1D12;line-height:1.6">${m.note}</p>
+    ${note
+      ? `<div style="margin:16px 0;padding:14px 16px;border-radius:12px;background:#FFF6E9;border:1px solid #F3D9B5;color:#2B1D12;line-height:1.6">${esc(note)}</div>`
+      : ''}
     ${trackingUrl && milestone !== 'DELIVERED'
       ? `<p style="margin:18px 0 0"><a href="${esc(trackingUrl)}"
            style="display:inline-block;background:#EF7507;color:#fff;text-decoration:none;padding:11px 18px;border-radius:10px;font-weight:700">Track your parcel</a></p>`

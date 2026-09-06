@@ -146,7 +146,7 @@ router.patch('/orders/:id/status', async (req, res) => {
      vocabulary, so it needs no translation, and notifyOrderMilestone ignores anything that is not
      one of the three and refuses to repeat one already sent. CANCELLED never mails from here: it
      has its own email with the refund line, sent from the cancel/refund route. */
-  await notifyOrderMilestone(order, status);
+  await notifyOrderMilestone(order, status, typeof remarks === 'string' ? remarks.trim() : '');
   const updated = await getOne('SELECT * FROM orders WHERE id = $1', [order.id]);
   const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order.id]);
   const address = updated!.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [updated!.address_id]) : null;
