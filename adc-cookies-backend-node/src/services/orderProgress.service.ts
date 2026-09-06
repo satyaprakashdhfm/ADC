@@ -90,7 +90,7 @@ function mailMilestoneFor(carrierStatus) {
  * Never throws. A mail problem must not fail a sweep or a webhook; the worst outcome allowed here
  * is that one email is missed.
  */
-export async function notifyOrderMilestone(order, carrierStatus) {
+export async function notifyOrderMilestone(order, carrierStatus, note = '') {
   try {
     const milestone = mailMilestoneFor(carrierStatus);
     if (!milestone) return null;
@@ -132,6 +132,9 @@ export async function notifyOrderMilestone(order, carrierStatus) {
         orderNumber: c.order_number,
         milestone,
         trackingUrl: c.tracking_url,
+        /* Only ever set by the admin route. A carrier scan has nothing to add that the template
+           does not already say; a person overriding the status usually does. */
+        note,
       });
       console.log(`[MAIL] ${c.order_number} | ${milestone} sent to ${String(c.email).replace(/(.).*(@.*)/, '$1***$2')}`);
       return milestone;

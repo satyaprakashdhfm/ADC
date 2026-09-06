@@ -1,10 +1,12 @@
 'use client';
+import { useState } from 'react';
 import { RefreshCw, ChevronDown, ChevronRight, XCircle } from 'lucide-react';
 import { type Order } from '@/lib/api';
 import { PAGE_SIZE } from '@/hooks/admin/usePagination';
 import { money, fmtDate } from '../shared/format';
 import { td, inp, iconBtn, Panel, Table, Badge, Empty, Field, FilterBar, Pager } from '../shared/ui';
 import { ORDER_STATUSES, LIVE_ORDER_STATUSES, isDeadOrder, deadOrderReason } from './orderConstants';
+import StatusNoteModal from './StatusNoteModal';
 
 interface Props {
   orders: Order[] | null;
@@ -18,7 +20,7 @@ interface Props {
   onPaymentFilter: (v: string) => void;
   onRefresh: () => void;
   onOpenOrder: (o: Order) => void;
-  onChangeStatus: (id: number, status: string) => void;
+  onChangeStatus: (id: number, status: string, remarks?: string) => void;
   page: number;
   onPage: (n: number) => void;
   /** Cancelled/failed orders live in their own collapsible panel; this is its open state. */
@@ -90,6 +92,10 @@ export default function OrdersTab({
   paymentFilter, onPaymentFilter, onRefresh, onOpenOrder, onChangeStatus, page, onPage,
   deadOpen, onDeadOpen,
 }: Props) {
+  /* The status the admin has picked but not yet confirmed. Held here rather than applied straight
+     from the <select> so the note can be collected first: the status and the sentence explaining it
+     travel to the server together, in one request. */
+  const [pendingStatus, setPendingStatus] = useState<{ id: number; orderNumber: string; status: string } | null>(null);
   const q = search.trim().toLowerCase();
   const matches = (o: Order) => {
     if (!q) return true;
@@ -181,7 +187,7 @@ export default function OrdersTab({
                 )}
               </td>
               <td style={td} onClick={e => e.stopPropagation()}>
-                <select value={o.orderStatus} onChange={e => onChangeStatus(o.id, e.target.value)} style={{ padding: '7px 10px', borderRadius: 10, border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', cursor: 'pointer' }}>
+                <select value={o.orderStatus} onChange={e => setPendingStatus({ id: o.id, orderNumber: o.orderNumber, status: e.target.value })} style={{ padding: '7px 10px', borderRadius: 10, border: '1.5px solid var(--border-default)', background: 'var(--surface-raised)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)', cursor: 'pointer' }}>
                   {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </td>
@@ -232,6 +238,15 @@ export default function OrdersTab({
             </>)}
           </Panel>
         </div>
+      )}
+
+      {pendingStatus && (
+        <StatusNoteModal
+          orderNumber={pendingStatus.orderNumber}
+          status={pendingStatus.status}
+          onCancel={() => setPendingStatus(null)}
+          onConfirm={note => { onChangeStatus(pendingStatus.id, pendingStatus.status, note || undefined); setPendingStatus(null); }}
+        />
       )}
     </div>
   );

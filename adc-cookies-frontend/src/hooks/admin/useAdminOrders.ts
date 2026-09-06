@@ -39,8 +39,13 @@ export function useAdminOrders(enabled: boolean, { onError, onNotice, refreshSta
 
   const refreshOrders = useCallback(() => { adminGetOrders().then(setOrders).catch(() => {}); }, []);
 
-  const changeOrderStatus = async (id: number, status: string) => {
-    const updated = await adminUpdateOrderStatus(id, status).catch(() => null);
+  /* `remarks` is what the customer is told, not an internal note: the server writes it to the
+     order timeline, the tracking sheet shows it, the delivery email carries it, and for CANCELLED
+     it becomes the reason given downstream. adminUpdateOrderStatus has always accepted it — this
+     hook simply never passed it, so every hand-moved order reached the customer with no
+     explanation at all. */
+  const changeOrderStatus = async (id: number, status: string, remarks?: string) => {
+    const updated = await adminUpdateOrderStatus(id, status, remarks).catch(() => null);
     if (!updated) return;
     setOrders(o => (o || []).map(x => x.id === id ? updated : x));
     refreshStats();
