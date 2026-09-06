@@ -3,6 +3,7 @@ import { trackShiprocket, shiprocketConfigured, assignAwb, getWalletBalance } fr
 import type { ClientResult } from '../utils/result.js';
 import { trackShipment, delhiveryConfigured } from '../services/delhivery.client.js';
 import { applyCarrierTerminalStatus, notifyOrderMilestone } from '../services/orderProgress.service.js';
+import { RIDER_RETRY_MAX, RIDER_RETRY_GAP_MIN, RIDER_REFUSAL_MAX } from '../config/delivery.js';
 
 /*
  * Keep carrier status fresh without anybody having to look.
@@ -66,7 +67,10 @@ const MAX_AGE_DAYS_DEFAULT = Number(process.env.STATUS_POLL_MAX_AGE_DAYS || 3);
  *
  * Three goes, each buying a real ~30 minute search, then the admin's Needs-attention list owns it.
  */
-export const RIDER_RETRY_MAX = Number(process.env.RIDER_RETRY_MAX || 3);
+/* Limits moved to config/delivery.ts — the admin board, the store portal and the
+   Needs-attention query all have to agree with this loop about what "out of attempts" means.
+   Re-exported so existing importers of this module keep working. */
+export { RIDER_RETRY_MAX };
 /*
  * The gap now applies ONLY after a refusal, and this is the whole reason it still exists.
  *
@@ -75,10 +79,8 @@ export const RIDER_RETRY_MAX = Number(process.env.RIDER_RETRY_MAX || 3);
  * success does nothing. A REFUSED assign is the opposite: nothing was booked, the status sits at
  * NEW, and the five-minute sweep would fire again immediately.
  */
-const RIDER_RETRY_GAP_MIN = Number(process.env.RIDER_RETRY_GAP_MIN || 10);
 /* Refusals are bounded separately, only so an unfixable order stops polling for three days. It is
    deliberately generous: a wallet topped up an hour later should still get its three real hunts. */
-const RIDER_REFUSAL_MAX = Number(process.env.RIDER_REFUSAL_MAX || 8);
 
 async function dueOrders() {
   return getAll(

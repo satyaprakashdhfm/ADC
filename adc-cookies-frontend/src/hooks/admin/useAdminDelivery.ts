@@ -21,7 +21,7 @@ export function useAdminDelivery(enabled: boolean) {
   const [purResult, setPurResult] = useState<string>('');
   const [shipmentBusy, setShipmentBusy] = useState<number | null>(null);
   const [shipmentWeights, setShipmentWeights] = useState<Record<number, string>>({});
-  const [delivSub, setDelivSub] = useState<'main' | 'sameday' | 'delhivery'>('main');
+  const [delivSub, setDelivSub] = useState<'main' | 'sameday' | 'delhivery' | 'owndelivery'>('main');
   const [storeReadiness, setStoreReadiness] = useState<StoreReadinessReport | null>(null);
   const [sfxStatesOpen, setSfxStatesOpen] = useState(false);
 

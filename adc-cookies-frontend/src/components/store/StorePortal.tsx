@@ -15,6 +15,36 @@ import {
 import { parseOptions, hasGift, giftMessage } from '@/lib/orderFormat';
 
 /*
+ * What happened to the rider hunt, said in words a counter can act on.
+ *
+ * This screen used to print `shipmentError` — Shiprocket's own text, which for a lapsed booking
+ * reads "order is in cancelled state" and carries our Shiprocket wallet balance on the end. So a
+ * live order looked cancelled to the shop, and the shop was shown the company's account balance.
+ *
+ * The counts now come from the server (see config/delivery.ts) and the sentence is written here.
+ * What the counter needs is only ever: is anybody coming, and should I keep waiting.
+ */
+function riderLine(r: StoreOrder['delivery']['rider']): { text: string; bad: boolean } | null {
+  if (!r || r.state === 'none' || r.state === 'assigned') return null;
+  const tried = r.hunts + r.refusals;
+  const times = `${tried} time${tried === 1 ? '' : 's'}`;
+  if (r.state === 'gave_up') {
+    return {
+      text: `We tried ${times} to book a rider and could not. The office has been told — do not wait on a rider for this one.`,
+      bad: true,
+    };
+  }
+  if (r.state === 'cancelled') return { text: 'The rider booking was cancelled. Nobody is coming for this one.', bad: true };
+  if (r.state === 'retrying') {
+    return {
+      text: `No rider yet after ${times}. We are still trying automatically — keep it packed, but do not expect anyone this minute.`,
+      bad: true,
+    };
+  }
+  return { text: 'Looking for a rider now.', bad: false };
+}
+
+/*
  * The gift wrapping, and what the customer wants written on the card.
  *
  * The store had no way to see either. Checkout puts giftWrap, giftMessage and giftOccasion into
@@ -248,7 +278,7 @@ function OrderCard({
           </>
         ) : (
           <span style={{ color: '#a4231d', fontWeight: 800 }}>
-            No rider booked{order.delivery.shipmentError ? ' — the office has been alerted' : ' yet'}
+            No rider booked{order.delivery.rider?.exhausted ? ' — the office has been alerted' : ' yet'}
           </span>
         )}
       </div>
@@ -276,17 +306,13 @@ function OrderCard({
                 <span>Rider <strong>{track.rider.name}</strong> is assigned{track.status ? ` — ${track.status}` : ''}</span>
                 {track.rider.phone && <a href={`tel:${track.rider.phone}`} style={{ ...btn('primary'), textDecoration: 'none' }}><Phone size={13} /> {track.rider.phone}</a>}
               </div>
-            ) : order.delivery.shipmentError ? (
-              /* The carrier refused the booking — an empty Shiprocket wallet is the usual reason.
-                 "Searching for a rider" here was a lie the counter had no way to see through: they
+            ) : riderLine(order.delivery.rider) ? (
+              /* "Searching for a rider" here was a lie the counter had no way to see through: they
                  kept a bag packed for a rider nobody had successfully called. Say what actually
-                 happened, and that it needs the office rather than more waiting. */
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-start', color: 'var(--red-danger, #b3261e)' }}>
+                 happened, with the number of attempts, and whether to keep waiting. */
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-start', color: riderLine(order.delivery.rider)!.bad ? 'var(--red-danger, #b3261e)' : 'var(--text-muted, #7b6a58)' }}>
                 <Bike size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-                <span>
-                  <strong>No rider could be booked.</strong> {order.delivery.shipmentError}
-                  <br />The office has been alerted — do not wait on a rider for this one.
-                </span>
+                <span>{riderLine(order.delivery.rider)!.text}</span>
               </div>
             ) : (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', color: 'var(--text-muted, #7b6a58)' }}>

@@ -348,6 +348,18 @@ export interface Order {
   /** Automatic "Ship Now" retries used after Shiprocket abandoned a rider search. */
   riderRetryCount?: number;
   riderRetryAt?: string | null;
+  /** Attempts Shiprocket refused outright, before any rider hunt could start. */
+  riderRefusalCount?: number;
+  /** The server's verdict on the rider hunt. Rendered in our words, never the carrier's. */
+  rider?: {
+    state: 'none' | 'searching' | 'assigned' | 'retrying' | 'gave_up' | 'cancelled';
+    hunts: number; refusals: number; exhausted: boolean;
+    ranOutOf: 'hunts' | 'refusals' | null;
+  } | null;
+  /** DELIVERED with no carrier delivery behind it — somebody drove it over themselves. */
+  deliveredByUs?: boolean;
+  /** The last thing an admin said about this order, in their own words. */
+  statusNote?: string | null;
   estimatedDelivery?: string | null; // carrier promised date from webhook (YYYY-MM-DD HH:MM:SS)
   payment?: OrderPayment | null;
   /** Petpooja relay state (admin views only) — whether the kitchen actually received the ticket. */

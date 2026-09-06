@@ -13,6 +13,7 @@ import { storeRelaysToPos, storeProductAvailable, resolveProductAvailability } f
 import { trackShiprocket, getRiderData, shiprocketConfigured, walletStatus } from '../services/shiprocket.client.js';
 import { trackShipment, delhiveryConfigured } from '../services/delhivery.client.js';
 import { bookShipmentAndRelay } from '../services/shipment.service.js';
+import { riderOutcome } from '../config/delivery.js';
 
 /*
  * The store portal — /store/<code> on the frontend, /api/store here.
@@ -145,10 +146,18 @@ function serializeStoreOrder(order, items, address, posRow, relaysToPos) {
       shipmentId: order.delhivery_shipment_id,
       shipmentStatus: order.shipment_status,
       trackingUrl: order.tracking_url,
-      // Why no rider was booked, if none was. The store cannot fix it, but it explains why nobody
-      // is coming — without it they stand there with a packed bag waiting for a rider that was
-      // never called. The admin gets told at the same time through Needs attention.
-      shipmentError: order.shipment_error,
+      /*
+       * What happened to the rider hunt, in OUR vocabulary.
+       *
+       * This used to be `shipment_error` passed straight through, which put Shiprocket's own
+       * sentence on a shop counter tablet — "order is in cancelled state", with our Shiprocket
+       * wallet balance appended to it. Two things wrong at once: an order that is very much alive
+       * reads as cancelled, and a shop is shown the company's account balance.
+       *
+       * The counts travel instead, and each screen writes its own sentence from them. The raw
+       * carrier text stays on the admin payload, where somebody can act on it.
+       */
+      rider: riderOutcome(order),
       estimatedDelivery: order.estimated_delivery,
     },
     pos: {

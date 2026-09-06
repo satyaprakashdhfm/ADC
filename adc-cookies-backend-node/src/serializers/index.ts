@@ -1,3 +1,4 @@
+import { riderOutcome, deliveredByUs } from '../config/delivery.js';
 import { storeByCode } from '../services/store.service.js';
 import { parseMediaList, signMediaRefs, isMediaRef } from '../services/storage.client.js';
 
@@ -149,7 +150,7 @@ export function serializeOrderItem(oi) {
 // of short codes (e.g. 'DUPLICATE_CHARGE') the caller pre-computed from order_tracking rows —
 // admin-facing alerts that don't affect order/payment status itself. `pos` is the petpooja_orders
 // row for this order (admin views only) — whether the kitchen actually received the ticket.
-export function serializeOrder(order, items: any[] = [], address: any = null, payment: any = null, warningFlags: any[] = [], pos: any = null) {
+export function serializeOrder(order, items: any[] = [], address: any = null, payment: any = null, warningFlags: any[] = [], pos: any = null, statusNote: string | null = null) {
   if (!order) return null;
   return {
     pos: pos ? { relayed: !!pos.relay_ok, petpoojaOrderId: pos.petpooja_order_id ?? null, attempts: pos.attempts, lastError: pos.last_error ?? null } : null,
@@ -168,6 +169,26 @@ export function serializeOrder(order, items: any[] = [], address: any = null, pa
     // order that has simply not moved yet.
     riderRetryCount: order.rider_retry_count ?? 0,
     riderRetryAt: order.rider_retry_at ?? null,
+    /*
+     * Attempts the carrier REFUSED outright, and what the two counts add up to.
+     *
+     * riderRefusalCount was counted from the first day and never sent, so an order Shiprocket
+     * rejected eight times arrived at the admin board reading "Ship Now sent 0×" — indis-
+     * tinguishable from one nobody had tried at all. `rider` is the verdict, computed server-side
+     * so the delivery board and the store portal cannot describe the same booking differently.
+     */
+    riderRefusalCount: order.rider_refusal_count ?? 0,
+    rider: riderOutcome(order),
+    /* DELIVERED with no carrier delivery behind it: somebody drove it over themselves. */
+    deliveredByUs: deliveredByUs(order),
+    /*
+     * The last thing an admin said about this order, in their own words.
+     *
+     * A hand-delivered order carried the courier's stale state forever — "NEW", or Shiprocket's
+     * "order is in cancelled state" — with the actual explanation, typed at the moment of
+     * delivery, living only on the customer's tracking sheet where staff never look.
+     */
+    statusNote,
     carrier: order.carrier ?? null,
     estimatedDelivery: order.estimated_delivery ?? null,
     // Which kitchen owns this order, and how far it has got with it. Everywhere except Begur the
