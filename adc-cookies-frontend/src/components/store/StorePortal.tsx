@@ -154,7 +154,15 @@ const input: React.CSSProperties = {
  * is passed through rather than swallowed — a status we have not seen before is still information,
  * and hiding it would be how a new state becomes invisible.
  */
-function riderLabel(status?: string | null): string {
+function riderLabel(status?: string | null, delivery?: StoreOrder['delivery']): string {
+  /* Delivered by the office: the booking's own state is history. Its last word is "NEW", or the
+     "CANCELLED" of the booking that was called off, and a counter reading either of those chases a
+     parcel that is already with the customer. */
+  if (delivery?.deliveredByUs) {
+    return delivery.deliveredNote
+      ? `Delivered by us — ${delivery.deliveredNote}`
+      : 'Delivered by us, not by a courier — nothing left to do.';
+  }
   const s = (status || '').toLowerCase().replace(/[_-]+/g, ' ');
   if (!s || s === 'new') return 'Booked — waiting for a rider to accept.';
   if (/deliver(ed)?\b/.test(s) && !/out for/.test(s)) return 'Delivered — nothing left to do.';
@@ -277,9 +285,14 @@ function OrderCard({
             )}
           </>
         ) : (
+          /* Delivered by the office needs no rider and is not a problem, so it must not be red. */
+          order.delivery.deliveredByUs ? (
+            <span style={{ color: '#1c7a3d', fontWeight: 800 }}>Delivered by us — no courier involved</span>
+          ) : (
           <span style={{ color: '#a4231d', fontWeight: 800 }}>
             No rider booked{order.delivery.rider?.exhausted ? ' — the office has been alerted' : ' yet'}
           </span>
+          )
         )}
       </div>
 
@@ -297,7 +310,7 @@ function OrderCard({
           {!track ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', color: 'var(--text-muted, #7b6a58)' }}>
               <Bike size={16} />
-              <span>{riderLabel(order.delivery.shipmentStatus)}</span>
+              <span>{riderLabel(order.delivery.shipmentStatus, order.delivery)}</span>
             </div>
           ) : track.ok ? (
             track.rider?.name ? (
@@ -326,7 +339,7 @@ function OrderCard({
                an error to read. */
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', color: 'var(--text-muted, #7b6a58)' }}>
               <Bike size={16} />
-              <span>{riderLabel(order.delivery.shipmentStatus)}</span>
+              <span>{riderLabel(order.delivery.shipmentStatus, order.delivery)}</span>
             </div>
           )}
         </div>

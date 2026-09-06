@@ -90,6 +90,10 @@ export interface StoreOrder {
       ranOutOf: 'hunts' | 'refusals' | null;
     } | null;
     estimatedDelivery: string | null;
+    /* Delivered by somebody from the office rather than a courier, and what they said about it.
+       Without this the counter keeps seeing the dead booking's status for days. */
+    deliveredByUs: boolean;
+    deliveredNote: string | null;
   };
   pos: { manual: boolean; relayed: boolean; petpoojaOrderId: string | null; lastError: string | null; billNo: string | null };
   workflow: { acceptedAt: string | null; acceptedBy: number | null; readyAt: string | null };

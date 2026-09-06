@@ -4,6 +4,7 @@ import { adminTrackOrder, type Order } from '@/lib/api';
 import { money, fmtDate } from '../shared/format';
 import { card, addBtn, iconBtn, Badge } from '../shared/ui';
 import CancelRefundPanel from './CancelRefundPanel';
+import { shipmentBadge } from '../shared/shipmentStatus';
 
 interface Props {
   order: Order;
@@ -105,7 +106,7 @@ export default function OrderDetailModal({ order: o, onClose, trackResult, setTr
         <div style={{ ...card, padding: 14, marginBottom: 14 }}>
           <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>Shipment</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'CREATED' || o.shipmentStatus === 'DELIVERED'} />
+            <Badge {...shipmentBadge(o)} />
             {service && <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)' }}>{service}</span>}
             {o.delhiveryWaybill && <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill}</span>}
           </div>

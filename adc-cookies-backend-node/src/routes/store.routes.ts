@@ -13,7 +13,7 @@ import { storeRelaysToPos, storeProductAvailable, resolveProductAvailability } f
 import { trackShiprocket, getRiderData, shiprocketConfigured, walletStatus } from '../services/shiprocket.client.js';
 import { trackShipment, delhiveryConfigured } from '../services/delhivery.client.js';
 import { bookShipmentAndRelay } from '../services/shipment.service.js';
-import { riderOutcome } from '../config/delivery.js';
+import { riderOutcome, deliveredByUs, ORDER_STATUSES } from '../config/delivery.js';
 
 /*
  * The store portal — /store/<code> on the frontend, /api/store here.
@@ -107,7 +107,7 @@ router.post('/password', async (req, res) => {
  * else `manual: true` says the staff must key this into their own terminal and type the bill number
  * back, and `billNo` is whether they have. Nothing else in the system records that link.
  */
-function serializeStoreOrder(order, items, address, posRow, relaysToPos) {
+function serializeStoreOrder(order, items, address, posRow, relaysToPos, statusNote = null) {
   return {
     id: order.id,
     orderNumber: order.order_number,
@@ -158,6 +158,14 @@ function serializeStoreOrder(order, items, address, posRow, relaysToPos) {
        * carrier text stays on the admin payload, where somebody can act on it.
        */
       rider: riderOutcome(order),
+      /*
+       * The counter needs this as badly as the office does. Without it a shop that packed a bag,
+       * watched the rider search fail, and handed it to somebody from head office still sees the
+       * dead booking's status for days — so they chase a parcel that was delivered, or keep the
+       * order open on their board. The note is what the admin typed when they marked it.
+       */
+      deliveredByUs: deliveredByUs(order),
+      deliveredNote: statusNote,
       estimatedDelivery: order.estimated_delivery,
     },
     pos: {
@@ -222,17 +230,29 @@ router.get('/orders', async (req, res) => {
 
   const ids = orders.map((o) => o.id);
   const addrIds = [...new Set(orders.map((o) => o.address_id).filter(Boolean))];
-  const [itemsByOrder, addresses, posRows] = await Promise.all([
+  const [itemsByOrder, addresses, posRows, noteRows] = await Promise.all([
     itemsForOrders(ids, restId),
     addrIds.length ? getAll('SELECT * FROM addresses WHERE id = ANY($1)', [addrIds]) : [],
     ids.length ? getAll('SELECT order_id, relay_ok, petpooja_order_id, last_error FROM petpooja_orders WHERE order_id = ANY($1)', [ids]) : [],
+    /* The last thing an admin said about each order. Restricted to rows carrying a real order
+       status so the POS and shipment bookkeeping sharing this table cannot outrank it. One query
+       for the board, not one per row. */
+    ids.length ? getAll(
+      `SELECT DISTINCT ON (order_id) order_id, remarks
+         FROM order_tracking
+        WHERE order_id = ANY($1)
+          AND remarks IS NOT NULL AND btrim(remarks) <> ''
+          AND status = ANY($2)
+        ORDER BY order_id, created_at DESC, id DESC`,
+      [ids, ORDER_STATUSES]) : [],
   ]);
   const addrById = new Map(addresses.map((a): [any, any] => [a.id, a]));
   const posByOrder = new Map(posRows.map((p): [any, any] => [p.order_id, p]));
+  const noteByOrder = new Map(noteRows.map((n): [any, any] => [n.order_id, n.remarks]));
 
   const serialized = orders.map((o) => serializeStoreOrder(
     o, itemsByOrder.get(o.id) || [], o.address_id ? addrById.get(o.address_id) || null : null,
-    posByOrder.get(o.id) || null, relays
+    posByOrder.get(o.id) || null, relays, noteByOrder.get(o.id) ?? null
   ));
 
   /*
@@ -272,8 +292,12 @@ router.get('/orders/:id', async (req, res) => {
   const address = order.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null;
   const pos = await getOne('SELECT relay_ok, petpooja_order_id, last_error FROM petpooja_orders WHERE order_id = $1', [order.id]);
   const timeline = await getAll('SELECT status, remarks, created_at FROM order_tracking WHERE order_id = $1 ORDER BY id', [order.id]);
+  /* The last thing an admin said, taken from the timeline already in hand rather than a second
+     query. Restricted to real order statuses so POS and shipment bookkeeping cannot outrank it. */
+  const detailNote = [...timeline].reverse().find(
+    (t) => t.remarks && String(t.remarks).trim() && ORDER_STATUSES.includes(t.status)) || null;
   res.json({
-    ...serializeStoreOrder(order, items, address, pos, storeRelaysToPos(req.storeUser!.storeCode)),
+    ...serializeStoreOrder(order, items, address, pos, storeRelaysToPos(req.storeUser!.storeCode), detailNote?.remarks ?? null),
     timeline,
   });
 });

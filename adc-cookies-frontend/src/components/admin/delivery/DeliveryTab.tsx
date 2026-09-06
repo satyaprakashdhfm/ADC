@@ -13,6 +13,7 @@ import { belongsInShipments } from '../orders/orderConstants';
 import { SR_ORDER_STATES } from './srOrderStates';
 import { shipStatusLabel } from './shipStatusLabel';
 import { EMPTY_WH } from './warehouseDefaults';
+import { shipmentBadge } from '../shared/shipmentStatus';
 
 interface Props {
   delivSub: 'main' | 'sameday' | 'delhivery' | 'owndelivery';
@@ -372,7 +373,7 @@ export default function DeliveryTab({
                       ? <span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill}</span>
                       : <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>—</span>}
                   </td>
-                  <td style={td}><Badge text={shipStatusLabel(o.shipmentStatus)} ok={o.shipmentStatus === 'DELIVERED'} /></td>
+                  <td style={td}><Badge {...shipmentBadge(o)} /></td>
                   <td style={{ ...td, whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
                     {/* An intracity order that is already booked has no waybill until a rider
                         accepts, and this row keyed the Create button off the waybill alone — so a
@@ -620,7 +621,7 @@ export default function DeliveryTab({
                         <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{o.orderStatus}</span></td>
                         <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city} · {o.address?.pincode}</span></td>
                         <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-strong)' }}>{o.delhiveryWaybill || '—'}</span></td>
-                        <td style={td}><Badge text={o.shipmentStatus || 'NOT_CREATED'} ok={o.shipmentStatus === 'DELIVERED'} /></td>
+                        <td style={td}><Badge {...shipmentBadge(o)} /></td>
                         <td style={{ ...td, whiteSpace: 'normal', maxWidth: 260 }}>
                           {(() => { const r = riderState(o); return (
                             <span style={{ fontSize: 'var(--text-xs)', lineHeight: 1.45, color: TONE[r.tone], fontWeight: r.tone === 'bad' ? 800 : 600 }}>{r.text}</span>
