@@ -187,13 +187,30 @@ router.get('/attention', async (_req, res) => {
                -- same order twice under two headings is how a panel stops being read.
                AND COALESCE(o.rider_retry_count, 0) < $4
                AND (
-                 -- The carrier said no. That is an answer, not silence, so it shows straight away.
-                 o.shipment_error IS NOT NULL
+                 /*
+                  * The carrier said no, and still means it. That is an answer, not silence, so it
+                  * shows with no grace — but only while the booking is actually stuck.
+                  *
+                  * An error left over from a booking that has since recovered is history, and this
+                  * condition has no grace period to absorb it. A hunt that is visibly under way is
+                  * the booking answering for itself; the poller now clears the string too, and this
+                  * is the belt to that brace.
+                  */
+                 (o.shipment_error IS NOT NULL AND COALESCE(o.shipment_status, '') !~* 'search')
                  -- Nothing was ever attempted.
                  OR (o.carrier_order_id IS NULL AND o.delhivery_shipment_id IS NULL
-                     AND o.created_at < now() - make_interval(mins => $2::int))
-                 -- Booked, but the rider search has run past the point of being a search.
-                 OR o.created_at < now() - make_interval(mins => $3::int)
+                     AND COALESCE(o.store_accepted_at, o.created_at) < now() - make_interval(mins => $2::int))
+                 /*
+                  * Booked, but the rider search has run past the point of being a search — timed
+                  * from when the BOOKING could first exist, not from when the order was placed.
+                  *
+                  * created_at was wrong for every manual store. Their booking is made when staff tap
+                  * Accept, not on payment, so an order accepted an hour after it was placed arrived
+                  * here the instant it was booked: 19 minutes into a rider search and already "45
+                  * minutes past" its grace. COALESCE is right for both kinds of store — an AUTO
+                  * store books on payment and has no store_accepted_at to fall back from.
+                  */
+                 OR COALESCE(o.store_accepted_at, o.created_at) < now() - make_interval(mins => $3::int)
                )
              ORDER BY o.created_at DESC LIMIT 100`, [autoPosStores, BOOKING_GRACE_MIN, RIDER_GRACE_MIN, RIDER_RETRY_MAX]),
     /*

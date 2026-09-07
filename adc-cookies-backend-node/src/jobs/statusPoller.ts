@@ -110,6 +110,26 @@ async function refreshOne(o) {
     // the order endpoint knows the booking was cancelled.
     const r = await trackShiprocket(o.delhivery_shipment_id, o.carrier_order_id);
     if (!r.ok || !r.status) return;
+
+    /*
+     * A recovered booking must stop carrying the note from when it was broken.
+     *
+     * shipment_error was only ever cleared by a SUCCESSFUL Ship Now, so a booking that recovered on
+     * its own kept the last refusal for ever — and Needs-attention fires on shipment_error with no
+     * grace at all, deliberately ("the carrier said no; that is an answer, not silence"). The result
+     * was ADC20260907111310: idle booking, poller sent Ship Now, Shiprocket refused it with "Invalid
+     * status for soft assignment" (you cannot soft-assign a booking that is already hunting), then a
+     * hunt started by itself. Healthy order, actively searching, pinned to the panel by a dead
+     * sentence — which also told the operator to check a wallet holding ₹1006.
+     *
+     * A rider found, or a search genuinely under way, is the booking answering for itself. Anything
+     * written about the state before that is history.
+     */
+    const healthy = !!r.awb || /SEARCH/i.test(r.status);
+    if (healthy && o.shipment_error) {
+      await query('UPDATE orders SET shipment_error = NULL, updated_at = $1 WHERE id = $2', [nowIso(), o.id]).catch(() => {});
+      console.log(`[POLL] ${o.order_number} | cleared stale shipment_error (now ${r.status})`);
+    }
     /* The unchanged-status early return used to live here, above everything. An abandoned search
        parks the order at NEW and it STAYS at NEW, so every sweep after the first one returned here
        and nothing downstream ever ran again - which is exactly the state that needs acting on. */
