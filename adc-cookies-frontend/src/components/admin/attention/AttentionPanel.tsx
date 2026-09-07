@@ -51,7 +51,7 @@ export default function AttentionPanel({ report, busy, onRebook, onRetryPos, onO
                 : o.shipment_error
                   ? o.shipment_error
                   : (o.shipment_id || o.carrier_order_id)
-                    ? `${o.carrier || 'Courier'} booking #${o.shipment_id || o.carrier_order_id} placed${o.shipment_status ? ` — ${o.shipment_status}` : ''}, but no rider has been assigned since. Check the delivery wallet first.`
+                    ? `${o.carrier || 'Courier'} booking #${o.shipment_id || o.carrier_order_id} placed${o.shipment_status ? ` — ${o.shipment_status}` : ''}, but no rider has been assigned since.`
                     : 'No booking attempt recorded yet.'}
             </span>
             {o.has_address === false ? (
@@ -78,7 +78,12 @@ export default function AttentionPanel({ report, busy, onRebook, onRetryPos, onO
             <span style={why}>
               {o.shipment_error
                 ? o.shipment_error
-                : `Booking #${o.shipment_id || '?'} is live${o.shipment_status ? ` (${o.shipment_status})` : ''} but no rider has accepted it after ${o.rider_retry_count} attempts. Check the delivery wallet, then call the customer or cancel and refund.`}
+                /* "Check the delivery wallet" was printed on every one of these regardless. It
+                   was advice about a specific failure — an empty Shiprocket wallet, whose refusal
+                   names the balance in shipment_error — and telling somebody to check a wallet
+                   holding ₹1006 is how a panel teaches people to stop reading it. Say it only when
+                   the carrier's own words are about money. */
+                : `Booking #${o.shipment_id || '?'} is live${o.shipment_status ? ` (${o.shipment_status})` : ''} but no rider has accepted it after ${o.rider_retry_count} attempts.${/wallet|balance|insufficient|fund/i.test(o.shipment_error || '') ? ' Top up the delivery wallet.' : ' Call the customer, or cancel and refund.'}`}
             </span>
             <button onClick={() => onOpen(o.id)} style={{ ...actionBtn(), whiteSpace: 'nowrap' }}
               title="Open the order — cancel and refund lives there, behind its code">
