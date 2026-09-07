@@ -81,7 +81,20 @@ router.post('/webhook', async (req, res) => {
        where that belongs. */
     await notifyOrderMilestone(order, status);
 
-    const next = shiprocketStatusToOrderStatus(status);
+    /*
+     * A cancelled BOOKING is not a cancelled ORDER, here as well as in the poller.
+     *
+     * This branch had its own copy of the promotion rule, so fixing applyCarrierTerminalStatus
+     * alone would have left the same bug reachable through the webhook: cancel a booking in
+     * Shiprocket's dashboard, their webhook lands first, and a delivered order is cancelled anyway.
+     * The commonest reason a booking dies is us killing it on purpose to deliver by hand — see
+     * PROMOTABLE_FROM_CARRIER in orderProgress.service.ts for what that cost two real customers.
+     *
+     * The status is still written to shipment_status above, so nothing is hidden. Only the ORDER
+     * is protected, and it stays that way until a person decides otherwise.
+     */
+    const promoted = shiprocketStatusToOrderStatus(status);
+    const next = promoted === 'CANCELLED' ? null : promoted;
     const terminal = ['DELIVERED', 'CANCELLED'].includes(order.order_status);
     if (next && !terminal && next !== order.order_status) {
       await query('UPDATE orders SET order_status=$1, updated_at=$2 WHERE id=$3', [next, ts, order.id]);
