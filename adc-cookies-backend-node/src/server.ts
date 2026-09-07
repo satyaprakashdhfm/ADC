@@ -7,6 +7,7 @@ import app from './app.js';
 import { initSchema } from './db/initSchema.js';
 import { seedIfEmpty } from './db/seed.js';
 import { startStatusPoller } from './jobs/statusPoller.js';
+import { startPaymentReconciler } from './jobs/paymentReconcile.js';
 import { startLogRetention } from './jobs/logRetention.js';
 import { ensureStoreAccounts } from './services/storeAuth.service.js';
 import { ensureMediaBucket } from './services/storage.client.js';
@@ -44,6 +45,7 @@ const PORT = Number(process.env.PORT || 8080);
      the customer's account render the stored value — which went stale the moment nobody was
      looking at a portal. The webhook was meant to cover this and has not fired once. */
   startStatusPoller();
+  startPaymentReconciler();
   /* Trim the API log directory. It is a mounted volume, so it survives every deploy and nothing
      had ever removed a file from it — and a full volume surfaces as appendFileSync throwing inside
      logApiCall, which stops the record of what we sent Razorpay and Delhivery without stopping the
