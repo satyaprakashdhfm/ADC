@@ -55,6 +55,17 @@ interface OutgoingMail {
 const ZEPTO_URL = process.env.ZEPTOMAIL_API_URL || 'https://api.zeptomail.in/v1.1/email';
 
 /*
+ * Tolerate the key being pasted with its scheme word already attached.
+ *
+ * ZeptoMail's console presents the credential as `Zoho-enczapikey wSsV...`, so copying the line
+ * rather than the token is the obvious mistake {D} and it was made here on the first attempt. We
+ * add the scheme ourselves, so the header would have gone out with it twice and failed as a bare
+ * auth error naming nothing. Accept either form: the operator should not have to know which half
+ * of a displayed value we wanted.
+ */
+const zeptoKeyFrom = (raw: string) => raw.trim().replace(/^Zoho-enczapikey\s+/i, '');
+
+/*
  * ZeptoMail's body is asymmetric in a way that is easy to get inside out: `to` is an array of
  * objects WRAPPING an `email_address`, while `reply_to` is an array of the address objects
  * directly. Swapping them is still valid JSON and is rejected by the API rather than by the
@@ -64,7 +75,7 @@ async function sendViaZeptoMail(apiKey, { to, subject, html, replyTo }: Outgoing
   const res = await fetch(ZEPTO_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Zoho-enczapikey ${apiKey}`,
+      Authorization: `Zoho-enczapikey ${zeptoKeyFrom(apiKey)}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
