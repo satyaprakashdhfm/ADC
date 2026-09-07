@@ -179,13 +179,30 @@ router.get('/attention', async (_req, res) => {
                    o.carrier_order_id, o.delhivery_shipment_id AS shipment_id, o.shipment_status,
                    (o.address_id IS NOT NULL) AS has_address
               FROM orders o
-             WHERE o.payment_status = 'PAID' AND o.order_status <> 'CANCELLED'
+             /*
+              * DELIVERED joins CANCELLED here, and the blanket "ignore cancelled bookings" is gone.
+              *
+              * That exclusion was written when cancelling a booking ALSO cancelled the order, so
+              * hiding it was right: the order was finished and there was nothing to chase. Since a
+              * cancelled booking stopped cancelling the order, the two came apart — the order now
+              * stays PAID and live with no rider coming and nothing watching it. ADC20260907111310
+              * sat exactly there: booking cancelled on purpose to deliver by hand, order PACKED,
+              * invisible to every list.
+              *
+              * The question this list should ask was never "is the booking cancelled" — it was
+              * "is this order finished". order_status answers that directly, which is also what
+              * keeps an order already marked DELIVERED BY US from being dragged back in.
+              */
+             WHERE o.payment_status = 'PAID' AND o.order_status NOT IN ('CANCELLED','DELIVERED')
                AND o.delhivery_waybill IS NULL
-               AND COALESCE(o.shipment_status, '') !~* 'cancel'
                AND NOT (o.store_code IS NOT NULL AND NOT (o.store_code = ANY($1::text[])) AND o.store_accepted_at IS NULL)
-               -- Out of Ship Now attempts is its own list below, with its own action. Listing the
-               -- same order twice under two headings is how a panel stops being read.
-               AND COALESCE(o.rider_retry_count, 0) < $4
+               /*
+                * Out of Ship Now attempts is its own list below, with its own action, and listing
+                * one order under two headings is how a panel stops being read — EXCEPT for a
+                * cancelled booking, which that list excludes. Without the escape an order with
+                * three spent hunts AND a cancelled booking appeared in neither.
+                */
+               AND (COALESCE(o.rider_retry_count, 0) < $4 OR COALESCE(o.shipment_status, '') ~* 'cancel')
                AND (
                  /*
                   * The carrier said no, and still means it. That is an answer, not silence, so it
@@ -197,6 +214,13 @@ router.get('/attention', async (_req, res) => {
                   * is the belt to that brace.
                   */
                  (o.shipment_error IS NOT NULL AND COALESCE(o.shipment_status, '') !~* 'search')
+                 /*
+                  * The booking is cancelled and the order is not. Somebody decided that, so it is
+                  * not a failure — but the order still has to reach the customer somehow, and it
+                  * shows at once rather than waiting out a grace window for a rider nobody is
+                  * looking for any more.
+                  */
+                 OR COALESCE(o.shipment_status, '') ~* 'cancel'
                  -- Nothing was ever attempted.
                  OR (o.carrier_order_id IS NULL AND o.delhivery_shipment_id IS NULL
                      AND COALESCE(o.store_accepted_at, o.created_at) < now() - make_interval(mins => $2::int))

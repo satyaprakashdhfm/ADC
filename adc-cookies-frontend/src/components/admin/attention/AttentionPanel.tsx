@@ -33,7 +33,10 @@ export default function AttentionPanel({ report, busy, onRebook, onRetryPos, onO
       </div>
 
       {!!report.paidNoShipment.length && <>
-        <div style={head}>Paid, but no courier booked ({report.paidNoShipment.length})</div>
+        {/* "no courier booked" stopped covering it once a cancelled booking left the order live:
+            that order HAS been booked, the booking was pulled, and it still has to reach somebody.
+            The heading names the state they all share instead of one route into it. */}
+        <div style={head}>Paid, but no delivery arranged ({report.paidNoShipment.length})</div>
         {report.paidNoShipment.map(o => (
           <div key={o.id} style={line}>
             <span style={num} onClick={() => onOpen(o.id)}>{o.order_number}</span>
@@ -48,6 +51,12 @@ export default function AttentionPanel({ report, busy, onRebook, onRetryPos, onO
             <span style={why}>
               {o.has_address === false
                 ? 'No delivery address on this order — it cannot be shipped.'
+                /* Ranked above shipment_error on purpose. A cancelled booking's last error is
+                   usually the carrier refusing something about a booking that no longer exists
+                   ("order is in cancelled state"), which reads like a fault when the truth is
+                   simply that somebody pulled it and the order now needs another route. */
+                : /cancel/i.test(o.shipment_status || '')
+                  ? `Booking cancelled — nobody is collecting this. It still needs delivering: take it yourself and mark it delivered, or cancel and refund.`
                 : o.shipment_error
                   ? o.shipment_error
                   : (o.shipment_id || o.carrier_order_id)
