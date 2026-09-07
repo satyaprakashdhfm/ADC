@@ -1,6 +1,6 @@
 
 /*
- * Email via ZeptoMail's HTTPS API, with Resend kept as the fallback.
+ * Email via ZeptoMail's HTTPS API.
  *
  * ZeptoMail is Zoho's transactional sender, and the mailboxes for this domain are already Zoho —
  * so the sending domain, the DKIM key and the bounce handling all sit with the same provider that
@@ -21,15 +21,14 @@
  *                        `Authorization: Zoho-enczapikey <key>` — the scheme word is part of the
  *                        header VALUE, and `Bearer <key>` fails here.
  *   ZEPTOMAIL_API_URL  = optional override. Defaults to https://api.zeptomail.in/v1.1/email
- *   RESEND_API_KEY     = fallback, used only when ZEPTOMAIL_API_KEY is absent. Keeping both set
- *                        makes the switch one variable per environment, and rollback is deleting
- *                        one variable.
+ *   RESEND_API_KEY     = RETIRED 2026-09-07. Read by nothing; the Resend transport below is
+ *                        commented out and both go on 2026-09-09.
  *   MAIL_USER          = the address that sends mail (info@adoughcookie.com). Must be on a domain
  *                        VERIFIED IN THE AGENT or ZeptoMail rejects the request outright.
  *   BUSINESS_EMAIL     = where enquiries / order copies go (defaults to MAIL_USER)
  *
- * With neither key set, email is skipped and logged — the API keeps working. Sending never
- * throws, so it cannot break a request.
+ * With no key set, email is skipped and logged — the API keeps working. Sending never throws,
+ * so it cannot break a request.
  *
  * ZeptoMail is TRANSACTIONAL ONLY and its terms forbid bulk or promotional mail. Everything sent
  * from this file qualifies: order confirmations, delivery milestones, cancellations, contact
@@ -104,22 +103,36 @@ async function sendViaZeptoMail(apiKey, { to, subject, html, replyTo }: Outgoing
   return body?.request_id || body?.data?.[0]?.code || '?';
 }
 
-async function sendViaResend(apiKey, { to, subject, html, replyTo }: OutgoingMail) {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: `a dough cookie <${cfg().user}>`,
-      to,
-      subject,
-      html,
-      ...(replyTo ? { reply_to: replyTo } : {}),
-    }),
-  });
-  const body: any = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(body?.message || `HTTP ${res.status}`);
-  return body?.id || '?';
-}
+/*
+ * Resend — RETIRED 2026-09-07, kept commented for two days and then to be deleted.
+ *
+ * ZeptoMail is proven on both environments (a real send to a Gmail address arrived with
+ * dkim=pass for adoughcookie.com), so nothing reaches this code any more. It stays only as a
+ * short-lived record of the previous transport while the new one settles.
+ *
+ * NOTE ON REVERTING: uncommenting this is a code change and a deploy. While the fallback was
+ * live, reverting was deleting one variable. If ZeptoMail turns out to have a problem in the
+ * next two days, restoring RESEND_API_KEY alone will NOT bring mail back — this function has
+ * to come back with it.
+ *
+ * DELETE ME after 2026-09-09 along with RESEND_API_KEY on both Railway services.
+ */
+// async function sendViaResend(apiKey, { to, subject, html, replyTo }: OutgoingMail) {
+//   const res = await fetch('https://api.resend.com/emails', {
+//     method: 'POST',
+//     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+//     body: JSON.stringify({
+//       from: `a dough cookie <${cfg().user}>`,
+//       to,
+//       subject,
+//       html,
+//       ...(replyTo ? { reply_to: replyTo } : {}),
+//     }),
+//   });
+//   const body: any = await res.json().catch(() => null);
+//   if (!res.ok) throw new Error(body?.message || `HTTP ${res.status}`);
+//   return body?.id || '?';
+// }
 
 /*
  * The one funnel every email in the app goes through. Both providers look identical from the
@@ -128,8 +141,7 @@ async function sendViaResend(apiKey, { to, subject, html, replyTo }: OutgoingMai
 async function send({ to, subject, html, replyTo }: OutgoingMail) {
   if (!to) return;
   const zeptoKey = process.env.ZEPTOMAIL_API_KEY;
-  const resendKey = process.env.RESEND_API_KEY;
-  if (!zeptoKey && !resendKey) {
+  if (!zeptoKey) {
     console.warn('[mailer] disabled (set ZEPTOMAIL_API_KEY). Skipped:', subject);
     return;
   }
@@ -144,15 +156,12 @@ async function send({ to, subject, html, replyTo }: OutgoingMail) {
     console.error(`[mailer] ✗ MAIL_USER is not set — no sender address, so nothing can be sent. Skipped: ${subject}`);
     return;
   }
-  const via = zeptoKey ? 'zeptomail' : 'resend';
   try {
-    const id = zeptoKey
-      ? await sendViaZeptoMail(zeptoKey, { to, subject, html, replyTo })
-      : await sendViaResend(resendKey, { to, subject, html, replyTo });
-    console.log(`[mailer] sent via ${via}:`, subject, '→', to, `(id: ${id})`);
+    const id = await sendViaZeptoMail(zeptoKey, { to, subject, html, replyTo });
+    console.log('[mailer] sent via zeptomail:', subject, '→', to, `(id: ${id})`);
   } catch (e: any) {
     // Never throws. A mail problem must not surface as a failed payment or a failed sweep.
-    console.error(`[mailer] ✗ send failed via ${via}:`, subject, '-', e.message);
+    console.error('[mailer] ✗ send failed via zeptomail:', subject, '-', e.message);
   }
 }
 
