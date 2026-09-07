@@ -10,16 +10,43 @@ import { sendOrderMilestoneEmail } from './mailer.client.js';
  * with a cancelled booking underneath it, saying nothing was wrong. Delhivery has no webhook at
  * all, so an intercity order could never reach DELIVERED on our side except by hand.
  *
- * Only the terminal states travel this way. DELIVERED and CANCELLED are unambiguous in every
- * carrier's vocabulary and are the two the customer must be told about. The in-between states
- * (in transit, out for delivery) are already visible through shipment_status, and promoting them
- * from a poll risks calling something out for delivery while it is still crossing a state line.
+ * The in-between states (in transit, out for delivery) are deliberately not promoted: they are
+ * already visible through shipment_status, and promoting them from a poll risks calling something
+ * out for delivery while it is still crossing a state line.
  */
+/** Where an order can END. Used to refuse moving one that has already finished. */
 const TERMINAL = ['DELIVERED', 'CANCELLED'];
+
+/*
+ * Only DELIVERED may be reached FROM a carrier status. CANCELLED may not, and that is the whole
+ * point of this constant existing separately.
+ *
+ * This used to promote both, on the belief that "DELIVERED and CANCELLED are unambiguous in every
+ * carrier's vocabulary". Half of that is true. A carrier saying DELIVERED means the customer has
+ * their cookies. A carrier saying CANCELLED means only that a BOOKING is dead {D} it says nothing
+ * whatever about whether the order happens, and the commonest reason for it is us cancelling the
+ * booking on purpose because we are delivering the thing ourselves.
+ *
+ * ADC20260906123938 and ADC20260906102611 are what that cost. Both were delivered by hand; the
+ * Shiprocket booking was cancelled in their dashboard; the poller read "CANCELED" five minutes
+ * later and cancelled the ORDERS. Two customers holding their cookies were then shown
+ * "Cancelled. Your refund is on its way back to the account you paid from." {D} a promise of money
+ * nobody was going to send {D} while the admin's dead list demanded a refund that was not owed.
+ *
+ * Nothing is lost by refusing to promote it. shipment_status still records the carrier's word,
+ * riderOutcome() still returns 'cancelled', and the delivery board still says "Booking cancelled
+ * {D} no rider coming." An ORDER now reaches CANCELLED only when a person cancels it or the
+ * payment fails, which are the only two things that actually cancel an order.
+ *
+ * RTO and RETURNED map to CANCELLED too and are excluded for the same reason plus a sharper one:
+ * a parcel coming back needs a human to choose between refunding and re-sending, and silently
+ * closing the order makes that choice by default and tells the customer money is coming.
+ */
+const PROMOTABLE_FROM_CARRIER = ['DELIVERED'];
 
 export async function applyCarrierTerminalStatus(order, carrierStatus, source) {
   const next = shiprocketStatusToOrderStatus(carrierStatus);
-  if (!next || !TERMINAL.includes(next)) return null;
+  if (!next || !PROMOTABLE_FROM_CARRIER.includes(next)) return null;
   // Already terminal, or already there: nothing to say.
   if (TERMINAL.includes(order.order_status) || next === order.order_status) return null;
 
