@@ -48,6 +48,12 @@ router.get('/dashboard', async (_req, res) => {
    *                           marks it when the window closes unpaid. Nothing is owed, nothing to do.
    *   cancelledAfterPayment — we took the money and the order was then cancelled. This one is ours:
    *                           there is a refund at the end of it.
+   *   refundsOwed           — how many of those have NOT been paid back yet, which is the only half
+   *                           that is still work. Without it the tile read "refund owed" off the
+   *                           cancelled count alone, so an order refunded in full weeks ago went on
+   *                           demanding a refund forever — while the Orders tab, which does read
+   *                           amount_refunded, showed the very same order settled. Two screens
+   *                           answering one question, one of them without the data to answer it.
    *
    * Worth being straight about the limit: this is the only split the data actually supports. An
    * admin cancelling a paid order records free-text remarks, not a reason code, so "we broke it" and
@@ -58,6 +64,25 @@ router.get('/dashboard', async (_req, res) => {
   const dead = orders.filter((o) => o.order_status === 'CANCELLED');
   const cancelledUnpaid = dead.filter((o) => o.payment_status !== 'PAID').length;
   const cancelledAfterPayment = dead.length - cancelledUnpaid;
+
+  /* Refunds are recorded on the payment, not the order, so this is the one figure above that
+     cannot be read from the orders rows already in hand. The latest payment row is the one that
+     counts -- the same row the Orders tab serializes -- and a partial refund is still owed, which
+     is why this compares the amounts rather than asking whether any refund exists. A PAID order
+     with no payment row at all falls back to the order total and reads as owed: that is a real
+     discrepancy, and hiding it would be the same mistake in the other direction. */
+  const { c: refundsOwedCount } = (await getOne(
+    `SELECT COUNT(*) AS c
+       FROM orders o
+       LEFT JOIN LATERAL (
+         SELECT amount, amount_refunded FROM payments p
+          WHERE p.order_id = o.id ORDER BY p.id DESC LIMIT 1
+       ) pay ON TRUE
+      WHERE o.order_status = 'CANCELLED'
+        AND o.payment_status = 'PAID'
+        AND COALESCE(pay.amount_refunded, 0) < COALESCE(pay.amount, o.total_amount)`
+  ))!;
+  const refundsOwed = Number(refundsOwedCount);
 
   const { c: totalProducts } = (await getOne('SELECT COUNT(*) AS c FROM products'))!;
   const { c: unavailableProducts } = (await getOne('SELECT COUNT(*) AS c FROM products WHERE is_available = FALSE'))!;
@@ -120,7 +145,7 @@ router.get('/dashboard', async (_req, res) => {
   const topProducts = topRows.map((r) => ({ name: r.product_name, qty: Number(r.qty), revenue: Number(r.revenue) }));
 
   res.json({
-    totalOrders, cancelledUnpaid, cancelledAfterPayment, totalRevenue, paidRevenue,
+    totalOrders, cancelledUnpaid, cancelledAfterPayment, refundsOwed, totalRevenue, paidRevenue,
     totalProducts: Number(totalProducts),
     unavailableProducts: Number(unavailableProducts),
     totalUsers: Number(totalUsers), totalAdmins,

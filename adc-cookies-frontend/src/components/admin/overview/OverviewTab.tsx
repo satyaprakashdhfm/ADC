@@ -86,7 +86,15 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
           one that needs acting on could not be seen.
         */}
         <StatCard icon={<XCircle size={20} />} label="Left at checkout" value={stats ? String(stats.cancelledUnpaid) : '—'} sub="never paid — nothing owed" onClick={onOpenCancelled} />
-        <StatCard icon={<Undo2 size={20} />} label="Cancelled after paying" value={stats ? String(stats.cancelledAfterPayment) : '—'} sub={stats?.cancelledAfterPayment ? 'refund owed' : 'none owed'} onClick={onOpenCancelled} accent={!!stats?.cancelledAfterPayment} />
+        {/*
+          The subtitle used to be decided by the count above it -- any cancelled-after-paying order
+          read "refund owed", forever, including one refunded in full weeks ago. It said the
+          opposite of what the same order said on the Orders tab. It now reports how many are
+          actually unpaid, and the card only draws attention to itself while one of them is.
+        */}
+        <StatCard icon={<Undo2 size={20} />} label="Cancelled after paying" value={stats ? String(stats.cancelledAfterPayment) : '—'}
+          sub={!stats ? '' : stats.refundsOwed ? `${stats.refundsOwed} refund${stats.refundsOwed === 1 ? '' : 's'} owed` : stats.cancelledAfterPayment ? 'all refunded — nothing owed' : 'none owed'}
+          onClick={onOpenCancelled} accent={!!stats?.refundsOwed} />
         <StatCard icon={<Package size={20} />} label="Products" value={stats ? String(stats.totalProducts) : '—'} sub={stats && stats.unavailableProducts ? `${stats.unavailableProducts} unavailable` : 'all available'} />
         <StatCard icon={<MessageSquare size={20} />} label="New messages" value={stats ? String(stats.newMessages) : '—'} accent={!!stats?.newMessages} />
       </div>

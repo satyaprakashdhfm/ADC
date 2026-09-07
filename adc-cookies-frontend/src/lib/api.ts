@@ -484,6 +484,9 @@ export interface AdminStats {
   cancelledUnpaid: number;
   /** Paid for, then cancelled. There is a refund at the end of each of these. */
   cancelledAfterPayment: number;
+  /** How many of those have not been paid back yet -- the half that is still work. Counted from
+   *  the payment's amount_refunded, so an order already settled stops asking to be settled. */
+  refundsOwed: number;
   totalProducts: number; unavailableProducts: number;
   totalUsers: number; totalAdmins: number;
   newMessages: number;
