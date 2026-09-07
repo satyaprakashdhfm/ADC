@@ -1,24 +1,39 @@
-// import nodemailer from 'nodemailer'; // kept for the old SMTP path below — see note
 
 /*
- * Email via Resend (HTTPS API) — https://resend.com
+ * Email via ZeptoMail's HTTPS API.
  *
- * Switched from SMTP/nodemailer because Railway's Hobby plan blocks outbound SMTP entirely
- * (ports 25/465/587) — every send was failing with a silent 10s "Connection timeout". Resend's
- * API runs over plain HTTPS, which Railway doesn't restrict, so it isn't affected.
+ * ZeptoMail is Zoho's transactional sender, and the mailboxes for this domain are already Zoho —
+ * so the sending domain, the DKIM key and the bounce handling all sit with the same provider that
+ * holds the inbox, instead of being split across two.
+ *
+ * THE INDIA DATA CENTRE MATTERS. This account is on Zoho's India DC (the MX records are
+ * mx.zoho.in), and ZeptoMail's hosts, consoles and keys are per-DC. A key from one DC used against
+ * another's host fails as an auth error that says nothing about the cause, so the host is a
+ * variable rather than a constant and defaults to the .in endpoint.
+ *
+ * HTTPS, not SMTP, even though Pro lifts Railway's SMTP block. It keeps this file a single fetch
+ * with no sockets, connection pool or timeouts to own, it cannot be re-broken by a change in
+ * Railway's egress policy, and it is the shape the Resend path already had. The dead nodemailer
+ * block that used to sit at the bottom of this file goes with it.
  *
  * Env vars:
- *   RESEND_API_KEY     = Resend API key
- *   MAIL_USER          = the address that sends mail (e.g. info@adoughcookie.com) — must be on
- *                        a domain verified in Resend
+ *   ZEPTOMAIL_API_KEY  = the Agent's "Send API key" (Agents > SMTP/API > Send API key). Sent as
+ *                        `Authorization: Zoho-enczapikey <key>` — the scheme word is part of the
+ *                        header VALUE, and `Bearer <key>` fails here.
+ *   ZEPTOMAIL_API_URL  = optional override. Defaults to https://api.zeptomail.in/v1.1/email
+ *   RESEND_API_KEY     = RETIRED 2026-09-07. Read by nothing; the Resend transport below is
+ *                        commented out and both go on 2026-09-09.
+ *   MAIL_USER          = the address that sends mail (info@adoughcookie.com). Must be on a domain
+ *                        VERIFIED IN THE AGENT or ZeptoMail rejects the request outright.
  *   BUSINESS_EMAIL     = where enquiries / order copies go (defaults to MAIL_USER)
  *
- * If RESEND_API_KEY is not set, email is simply skipped (logged) — the API keeps working.
- * Sending never throws, so it can't break a request.
+ * With no key set, email is skipped and logged — the API keeps working. Sending never throws,
+ * so it cannot break a request.
  *
- * The old SMTP/nodemailer implementation is kept commented out at the bottom of this file —
- * Railway's outbound SMTP block only lifts on the Pro plan and above, so that's the fallback
- * to restore if this project ever moves off Hobby and back to SMTP.
+ * ZeptoMail is TRANSACTIONAL ONLY and its terms forbid bulk or promotional mail. Everything sent
+ * from this file qualifies: order confirmations, delivery milestones, cancellations, contact
+ * replies, support tickets, spin rewards. A marketing send would risk the same account that
+ * delivers order confirmations — that belongs in Zoho Campaigns.
  */
 
 function cfg() {
@@ -36,40 +51,117 @@ interface OutgoingMail {
   replyTo?: string | null;
 }
 
+const ZEPTO_URL = process.env.ZEPTOMAIL_API_URL || 'https://api.zeptomail.in/v1.1/email';
+
+/*
+ * Tolerate the key being pasted with its scheme word already attached.
+ *
+ * ZeptoMail's console presents the credential as `Zoho-enczapikey wSsV...`, so copying the line
+ * rather than the token is the obvious mistake {D} and it was made here on the first attempt. We
+ * add the scheme ourselves, so the header would have gone out with it twice and failed as a bare
+ * auth error naming nothing. Accept either form: the operator should not have to know which half
+ * of a displayed value we wanted.
+ */
+const zeptoKeyFrom = (raw: string) => raw.trim().replace(/^Zoho-enczapikey\s+/i, '');
+
+/*
+ * ZeptoMail's body is asymmetric in a way that is easy to get inside out: `to` is an array of
+ * objects WRAPPING an `email_address`, while `reply_to` is an array of the address objects
+ * directly. Swapping them is still valid JSON and is rejected by the API rather than by the
+ * compiler.
+ */
+async function sendViaZeptoMail(apiKey, { to, subject, html, replyTo }: OutgoingMail) {
+  const res = await fetch(ZEPTO_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Zoho-enczapikey ${zeptoKeyFrom(apiKey)}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      from: { address: cfg().user, name: 'a dough cookie' },
+      to: [{ email_address: { address: to } }],
+      subject,
+      htmlbody: html,
+      ...(replyTo ? { reply_to: [{ address: replyTo }] } : {}),
+      /* Off deliberately. Open tracking injects a pixel and click tracking rewrites every link
+         through a redirector — on an order confirmation that buys nothing and costs the customer
+         a rewritten "Track your parcel" URL. */
+      track_opens: false,
+      track_clicks: false,
+    }),
+  });
+  const body: any = await res.json().catch(() => null);
+  if (!res.ok) {
+    /* Their failures nest the useful part: error.details[].message names what was wrong and
+       .target names the field, while error.message is a generic status. Without this a rejected
+       sender address reads only as "Request not valid". */
+    const d = body?.error?.details?.[0];
+    const why = d?.message || body?.error?.message || body?.message || `HTTP ${res.status}`;
+    throw new Error(d?.target ? `${why} (field: ${d.target})` : why);
+  }
+  return body?.request_id || body?.data?.[0]?.code || '?';
+}
+
+/*
+ * Resend — RETIRED 2026-09-07, kept commented for two days and then to be deleted.
+ *
+ * ZeptoMail is proven on both environments (a real send to a Gmail address arrived with
+ * dkim=pass for adoughcookie.com), so nothing reaches this code any more. It stays only as a
+ * short-lived record of the previous transport while the new one settles.
+ *
+ * NOTE ON REVERTING: uncommenting this is a code change and a deploy. While the fallback was
+ * live, reverting was deleting one variable. If ZeptoMail turns out to have a problem in the
+ * next two days, restoring RESEND_API_KEY alone will NOT bring mail back — this function has
+ * to come back with it.
+ *
+ * DELETE ME after 2026-09-09 along with RESEND_API_KEY on both Railway services.
+ */
+// async function sendViaResend(apiKey, { to, subject, html, replyTo }: OutgoingMail) {
+//   const res = await fetch('https://api.resend.com/emails', {
+//     method: 'POST',
+//     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+//     body: JSON.stringify({
+//       from: `a dough cookie <${cfg().user}>`,
+//       to,
+//       subject,
+//       html,
+//       ...(replyTo ? { reply_to: replyTo } : {}),
+//     }),
+//   });
+//   const body: any = await res.json().catch(() => null);
+//   if (!res.ok) throw new Error(body?.message || `HTTP ${res.status}`);
+//   return body?.id || '?';
+// }
+
+/*
+ * The one funnel every email in the app goes through. Both providers look identical from the
+ * outside, so none of the six senders below ever learns which one carried the message.
+ */
 async function send({ to, subject, html, replyTo }: OutgoingMail) {
   if (!to) return;
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) { console.warn('[mailer] disabled (set RESEND_API_KEY). Skipped:', subject); return; }
+  const zeptoKey = process.env.ZEPTOMAIL_API_KEY;
+  if (!zeptoKey) {
+    console.warn('[mailer] disabled (set ZEPTOMAIL_API_KEY). Skipped:', subject);
+    return;
+  }
   /* Check the sender before spending a round trip on it.
      Without this, an unset MAIL_USER built `from: "a dough cookie <>"` and every send came back
      "Invalid `from` field" — an error that describes the symptom and names neither the variable
      nor the fact that one was missing. Both environments ran that way for weeks: order
      confirmations, spin rewards and contact replies all failed, each logging a line that read like
-     a formatting bug in the code rather than a blank in the config. */
+     a formatting bug in the code rather than a blank in the config. ZeptoMail is stricter still:
+     the address must also be on a domain verified in the Agent. */
   if (!cfg().user) {
     console.error(`[mailer] ✗ MAIL_USER is not set — no sender address, so nothing can be sent. Skipped: ${subject}`);
     return;
   }
   try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: `a dough cookie <${cfg().user}>`,
-        to,
-        subject,
-        html,
-        ...(replyTo ? { reply_to: replyTo } : {}),
-      }),
-    });
-    const body: any = await res.json().catch(() => null);
-    if (!res.ok) {
-      console.error('[mailer] send failed:', subject, '-', body?.message || `HTTP ${res.status}`);
-      return;
-    }
-    console.log('[mailer] sent:', subject, '→', to, '(id:', (body?.id || '?') + ')');
+    const id = await sendViaZeptoMail(zeptoKey, { to, subject, html, replyTo });
+    console.log('[mailer] sent via zeptomail:', subject, '→', to, `(id: ${id})`);
   } catch (e: any) {
-    console.error('[mailer] send failed:', subject, '-', e.message);
+    // Never throws. A mail problem must not surface as a failed payment or a failed sweep.
+    console.error('[mailer] ✗ send failed via zeptomail:', subject, '-', e.message);
   }
 }
 
@@ -333,52 +425,3 @@ export async function sendOrderEmails(o) {
     });
   }
 }
-
-/* ---- Previous SMTP/nodemailer implementation (kept for reference/fallback) ----
- * Works with Gmail OR any SMTP host (Zoho, etc.). Env vars it used:
- *   MAIL_USER          = the address that sends mail (e.g. info@adoughcookie.com)
- *   MAIL_APP_PASSWORD  = its app password (Gmail App password, or a Zoho app-specific password)
- *   BUSINESS_EMAIL     = where enquiries / order copies go (defaults to MAIL_USER)
- *   MAIL_HOST          = SMTP host — set for Zoho: smtp.zoho.in (India) or smtp.zoho.com
- *   MAIL_PORT          = SMTP port (default 465, SSL). MAIL_SECURE=false for STARTTLS on 587.
- *   (If MAIL_HOST is unset, it falls back to Gmail's service preset.)
- *
-function cfgSmtp() {
-  return {
-    user: process.env.MAIL_USER || '',
-    pass: (process.env.MAIL_APP_PASSWORD || '').replace(/\s+/g, ''), // app passwords are shown with spaces
-    business: process.env.BUSINESS_EMAIL || process.env.MAIL_USER || '',
-  };
-}
-
-let transporter = null;
-function transport() {
-  const { user, pass } = cfgSmtp();
-  if (!user || !pass) return null;
-  if (!transporter) {
-    const host = process.env.MAIL_HOST || '';
-    // Custom host (e.g. Zoho) if MAIL_HOST is set; otherwise Gmail's service preset.
-    const base = host
-      ? { host, port: Number(process.env.MAIL_PORT || 465), secure: String(process.env.MAIL_SECURE ?? 'true') !== 'false' }
-      : { service: 'gmail' };
-    transporter = nodemailer.createTransport({
-      ...base,
-      auth: { user, pass },
-      connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
-    });
-  }
-  return transporter;
-}
-
-async function sendSmtp({ to, subject, html, replyTo }) {
-  if (!to) return;
-  const t = transport();
-  if (!t) { console.warn('[mailer] disabled (set MAIL_USER & MAIL_APP_PASSWORD). Skipped:', subject); return; }
-  try {
-    await t.sendMail({ from: `"a dough cookie" <${cfgSmtp().user}>`, to, subject, html, replyTo });
-    console.log('[mailer] sent:', subject, '→', to);
-  } catch (e: any) {
-    console.error('[mailer] send failed:', subject, '-', e.message);
-  }
-}
----- end previous implementation ---- */
