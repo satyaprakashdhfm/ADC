@@ -1,0 +1,169 @@
+name: Monthly restore verification
+
+# The "0" in 3-2-1-1-0: zero unverified restores. A backup nobody has ever restored is a hope,
+# not a backup. This pulls the newest dump out of R2, restores it into a throwaway Postgres and
+# asserts the things that actually go wrong. It never connects to production, so it cannot
+# damage anything it is checking.
+
+on:
+  schedule:
+    - cron: '0 23 1 * *'    # 04:30 IST on the 1st, an hour after that night's backup
+  workflow_dispatch:
+
+env:
+  R2_BUCKET: adc-backup
+  R2_ENDPOINT: https://c202186540523180a7a5ed1103a1050e.r2.cloudflarestorage.com
+  AWS_DEFAULT_REGION: auto
+  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+  PGURL: postgresql://postgres:verify@localhost:5432/postgres
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      pg:
+        image: postgres:17          # match the production major version
+        env:
+          POSTGRES_PASSWORD: verify
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Install the PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Find the newest daily backup, and check it is recent
+        id: newest
+        # This doubles as the absence alarm. A cron that stops running writes no error anywhere,
+        # and GitHub silently disables scheduled workflows after 60 days of repo inactivity.
+        # Asserting freshness here means a dead backup job surfaces within a month, rather than
+        # being discovered on the one day it was needed.
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          KEY=$(aws s3api list-objects-v2 --bucket "$R2_BUCKET" --prefix daily/ \
+                  --endpoint-url "$R2_ENDPOINT" \
+                  --query 'sort_by(Contents,&LastModified)[-1].Key' --output text)
+          if [ -z "$KEY" ] || [ "$KEY" = "None" ]; then
+            echo "::error::No objects under daily/ at all. The nightly backup is not running."
+            exit 1
+          fi
+          MOD=$(aws s3api head-object --bucket "$R2_BUCKET" --key "$KEY" \
+                  --endpoint-url "$R2_ENDPOINT" --query LastModified --output text)
+          AGE_H=$(( ( $(date -u +%s) - $(date -u -d "$MOD" +%s) ) / 3600 ))
+          echo "newest: $KEY  ($AGE_H h old)"
+          if [ "$AGE_H" -gt 48 ]; then
+            echo "::error::Newest backup is $AGE_H hours old. The nightly job has stopped."
+            exit 1
+          fi
+          aws s3 cp "s3://$R2_BUCKET/$KEY" newest.dump --endpoint-url "$R2_ENDPOINT"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare the scratch database
+        # The dump carries public only, so anything it leans on from outside public must exist
+        # first. gen_random_uuid() is built in on PG13+, but uuid-ossp and pgcrypto may be named
+        # in column defaults, and a stub auth schema absorbs any lingering Supabase reference
+        # instead of turning it into a restore error.
+        run: |
+          psql "$PGURL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+          CREATE SCHEMA IF NOT EXISTS auth;
+          CREATE OR REPLACE FUNCTION auth.uid()  RETURNS uuid AS $f$ SELECT NULL::uuid $f$ LANGUAGE sql;
+          CREATE OR REPLACE FUNCTION auth.role() RETURNS text AS $f$ SELECT NULL::text $f$ LANGUAGE sql;
+          SQL
+
+      - name: Restore
+        run: |
+          # Deliberately not --exit-on-error: one stray provider-specific object should not mask
+          # an otherwise good restore. The verdict comes from the data assertions in the next
+          # step, but the error count is printed so it can never pass unnoticed.
+          set +e
+          pg_restore --no-owner --no-acl --dbname "$PGURL" newest.dump 2> restore.err
+          set -e
+          ERRS=$(grep -c "^pg_restore: error" restore.err || true)
+          echo "pg_restore reported $ERRS error line(s)"
+          if [ "$ERRS" -gt 0 ]; then head -40 restore.err; fi
+          echo "errs=$ERRS" >> "$GITHUB_ENV"
+
+      - name: Assert the restored data is actually usable
+        run: |
+          psql "$PGURL" -v ON_ERROR_STOP=1 <<'SQL'
+          -- 1. The tables came back at all.
+          DO $$
+          DECLARE n int;
+          BEGIN
+            SELECT count(*) INTO n FROM information_schema.tables
+             WHERE table_schema='public' AND table_type='BASE TABLE';
+            RAISE NOTICE 'tables restored: %', n;
+            IF n < 30 THEN RAISE EXCEPTION 'only % tables restored, expected ~40', n; END IF;
+          END $$;
+
+          -- 2. The tables that must never be empty are not empty. A dump can be structurally
+          --    perfect and carry no rows.
+          DO $$
+          DECLARE t text; n bigint;
+          BEGIN
+            FOREACH t IN ARRAY ARRAY['users','orders','products'] LOOP
+              EXECUTE format('SELECT count(*) FROM %I', t) INTO n;
+              RAISE NOTICE '% rows: %', t, n;
+              IF n = 0 THEN RAISE EXCEPTION 'table % restored empty', t; END IF;
+            END LOOP;
+          END $$;
+
+          -- 3. Every sequence is ahead of its own column. THIS is the classic migration outage:
+          --    a restore that looks flawless, then the very next insert collides on a primary
+          --    key because the id counter came back at 1.
+          DO $$
+          DECLARE r record; seqv bigint; maxv bigint; bad int := 0; checked int := 0;
+          BEGIN
+            FOR r IN
+              SELECT s.relname AS seq, t.relname AS tbl, a.attname AS col
+                FROM pg_class s
+                JOIN pg_depend d  ON d.objid = s.oid
+                                 AND d.classid = 'pg_class'::regclass
+                                 AND d.refclassid = 'pg_class'::regclass
+                JOIN pg_class t   ON t.oid = d.refobjid
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+                JOIN pg_namespace ns ON ns.oid = s.relnamespace AND ns.nspname = 'public'
+               WHERE s.relkind = 'S'
+            LOOP
+              EXECUTE format('SELECT last_value FROM %I', r.seq) INTO seqv;
+              EXECUTE format('SELECT COALESCE(max(%I),0) FROM %I', r.col, r.tbl) INTO maxv;
+              checked := checked + 1;
+              IF seqv < maxv THEN
+                RAISE WARNING 'sequence % at % but %.% reaches %', r.seq, seqv, r.tbl, r.col, maxv;
+                bad := bad + 1;
+              END IF;
+            END LOOP;
+            RAISE NOTICE 'sequences checked: %', checked;
+            IF checked = 0 THEN RAISE EXCEPTION 'no sequences found -- the dump lost them'; END IF;
+            IF bad > 0 THEN RAISE EXCEPTION '% sequence(s) restored behind their data', bad; END IF;
+          END $$;
+          SQL
+
+      - name: Summarise
+        run: |
+          {
+            echo "### Restore verified"
+            echo ""
+            echo "- source: \`${{ steps.newest.outputs.key }}\`"
+            echo "- pg_restore errors: $errs"
+            echo "- tables, key row counts and every sequence value asserted"
+          } >> "$GITHUB_STEP_SUMMARY"

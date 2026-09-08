@@ -1,0 +1,127 @@
+name: Nightly database backup
+
+# Runs on GitHub, not on Railway, deliberately: a backup pipeline living inside the platform it
+# backs up dies with that platform. Three custodians, three failure domains -- the data in
+# Cloudflare R2, the schedule on GitHub, the database on Supabase/Railway. Losing any one of them
+# still leaves a recoverable copy.
+
+on:
+  schedule:
+    # 22:00 UTC = 03:30 IST, the quietest hour for the storefront. The dump is ~150 KB and takes
+    # seconds; the timing is about predictability, not load.
+    - cron: '0 22 * * *'
+  workflow_dispatch:        # so the very first run can be proven by hand, today
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false   # never kill a backup that is midway through uploading
+
+env:
+  # Not secrets. The account id is public in the endpoint URL and useless without the API token,
+  # so these are inlined rather than made two more things to configure and get wrong.
+  R2_BUCKET: adc-backup
+  R2_ENDPOINT: https://c202186540523180a7a5ed1103a1050e.r2.cloudflarestorage.com
+  AWS_DEFAULT_REGION: auto  # R2 requires this literal string
+  # AWS CLI v2 now sends CRC32 integrity headers by default, which R2 rejects on some paths.
+  # Restricting them to where the protocol demands them is the documented fix.
+  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install the PostgreSQL 17 client
+        # The runner ships pg_dump 16, and pg_dump REFUSES to run against a newer server rather
+        # than producing a partial dump. The server is 17.6. This is the single most likely
+        # reason a job like this fails on its first run, so it is step one.
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          pg_dump --version
+
+      - name: Work out which retention tier this dump belongs to
+        id: naming
+        # Grandfather-father-son by PREFIX. Retention is then R2's job through lifecycle rules,
+        # not something this script deletes. A script that never deletes cannot quietly stop
+        # pruning, and -- far more important -- cannot start pruning the wrong thing.
+        run: |
+          STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+          DOW=$(date -u +%u)    # 7 = Sunday
+          DOM=$(date -u +%d)
+          TIER=daily
+          if [ "$DOM" = "01" ]; then TIER=monthly
+          elif [ "$DOW" = "7" ]; then TIER=weekly
+          fi
+          echo "key=$TIER/adc-$STAMP.dump" >> "$GITHUB_OUTPUT"
+          echo "Target: $TIER/adc-$STAMP.dump"
+
+      - name: Dump the database
+        env:
+          # Must be the POOLER host. Supabase's direct host is IPv6-only and GitHub runners are
+          # IPv4-only, so the direct connection string simply never connects.
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          # public only: auth, storage and supabase_vault are provider-managed and will not
+          # restore onto any other Postgres -- which is the entire point of holding a portable
+          # copy. --no-owner --no-acl because the Supabase roles (anon, authenticated,
+          # service_role) do not exist elsewhere and every GRANT would error on restore.
+          pg_dump "$DATABASE_URL" \
+            --schema=public --no-owner --no-acl --format=custom \
+            --file=adc.dump
+          ls -l adc.dump
+
+      - name: Refuse to upload a dump that is obviously wrong
+        # A dump can exit 0 and still be useless. Two failures actually happen: a near-empty file
+        # (bad credentials, wrong schema), and one missing its sequence values -- which restores
+        # perfectly and then collides on the next insert because every id counter restarted at 1.
+        # Uploading either would overwrite nothing, but it would let a real backup age out of
+        # retention while the dashboard says green.
+        run: |
+          SIZE=$(stat -c%s adc.dump)
+          TABLES=$(pg_restore -l adc.dump | grep -c "TABLE DATA" || true)
+          SEQS=$(pg_restore -l adc.dump | grep -c "SEQUENCE SET" || true)
+          echo "size=$SIZE bytes | tables with data=$TABLES | sequence values=$SEQS"
+          # Measured on 2026-09-08: 146,738 bytes, 34 tables with data, 26 sequence values.
+          # Thresholds sit well below that so ordinary growth never trips them.
+          if [ "$SIZE" -lt 20000 ]; then
+            echo "::error::Dump is only $SIZE bytes -- refusing to upload. Expected >20KB."
+            exit 1
+          fi
+          if [ "$TABLES" -lt 20 ] || [ "$SEQS" -lt 20 ]; then
+            echo "::error::Dump looks incomplete ($TABLES tables, $SEQS sequences). Not uploading."
+            exit 1
+          fi
+
+      - name: Upload to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          aws s3 cp adc.dump "s3://$R2_BUCKET/${{ steps.naming.outputs.key }}" \
+            --endpoint-url "$R2_ENDPOINT"
+
+      - name: Prove the object actually landed
+        # An upload command exiting 0 is not evidence that the object exists. Read it back and
+        # compare byte counts, because "the backup ran fine" is precisely what everyone believes
+        # right up until the restore.
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          REMOTE=$(aws s3api head-object \
+            --bucket "$R2_BUCKET" --key "${{ steps.naming.outputs.key }}" \
+            --endpoint-url "$R2_ENDPOINT" --query ContentLength --output text)
+          LOCAL=$(stat -c%s adc.dump)
+          if [ "$REMOTE" != "$LOCAL" ]; then
+            echo "::error::Uploaded object is $REMOTE bytes but the dump was $LOCAL."
+            exit 1
+          fi
+          echo "### Backup OK" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`${{ steps.naming.outputs.key }}\` -- $REMOTE bytes" >> "$GITHUB_STEP_SUMMARY"
