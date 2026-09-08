@@ -7,6 +7,8 @@
  * gate would make the assertion false, and would be a 500 on an anonymous request.
  */
 import { Router } from 'express';
+/* crypto, anonClient and findAuthUserIdByEmail are all reachable only from the commented-out
+   Supabase half of phone login. Kept imported so restoring it is a single uncomment. */
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { getOne, query, nowIso } from '../db/index.js';

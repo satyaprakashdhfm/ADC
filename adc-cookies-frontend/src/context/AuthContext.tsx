@@ -219,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendOtp = (phone: string) => apiSendOtp(phone);
 
   const verifyOtp = async (phone: string, verificationId: string, code: string) => {
-    const { sessionToken, accessToken, refreshToken } = await apiVerifyOtp(phone, verificationId, code);
+    const { sessionToken } = await apiVerifyOtp(phone, verificationId, code);
     /* The server no longer returns a Supabase pair at all, so there is nothing to fall back to:
        no session token means the login genuinely failed, and saying so beats appearing to succeed.
        (The old branch installed a Supabase session from accessToken/refreshToken.) */

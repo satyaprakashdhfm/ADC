@@ -3,6 +3,8 @@ import { getOne, getAll, nowIso } from '../../db/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { serializeAddress, serializeUser } from '../../serializers/index.js';
 import { normalizePhone } from '../../services/messageCentral.client.js';
+/* Reachable only from the commented-out user_metadata mirror below. Left imported so restoring
+   that block is one uncomment rather than two edits. */
 import { adminClient, supabaseConfigured } from '../../config/supabase.js';
 
 const router = Router();

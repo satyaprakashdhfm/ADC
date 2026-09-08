@@ -1,6 +1,8 @@
 import { verifySupabaseToken } from '../services/auth.service.js';
 import { getOne, query, nowIso } from '../db/index.js';
 import { adminClient, supabaseConfigured } from '../config/supabase.js';
+/* Used only by the commented-out Supabase JWT branch in parseAuth, which normalised the phone
+   claim before trusting it. Kept so that branch can be restored in one piece. */
 import { normalizePhone } from '../services/messageCentral.client.js';
 import { looksLikeJwt, resolveUserSession, touchSession } from '../services/userAuth.service.js';
 

@@ -132,12 +132,15 @@ export async function sendOtp(phone: string): Promise<{ verificationId: string; 
   return request('/auth/otp/send', { method: 'POST', body: JSON.stringify({ phone }) });
 }
 
-/** Confirm the OTP. Returns OUR session token, the Supabase pair (still sent while both are
- *  accepted), and whether we still need the user's name — true for a brand-new number, or an
- *  account that never set one. */
+/** Confirm the OTP. Returns our session token and whether we still need the user's name — true
+ *  for a brand-new number, or an account that never set one.
+ *
+ *  accessToken/refreshToken are gone from this type because they are gone from the response. They
+ *  were briefly declared as REQUIRED here after the server stopped sending them, which is worse
+ *  than either state: TypeScript hands you a guaranteed string that is undefined at runtime, and
+ *  the compiler cannot warn about the one thing it was asked to check. */
 export async function verifyOtp(phone: string, verificationId: string, code: string): Promise<{
-  sessionToken?: string; sessionExpiresAt?: string;
-  accessToken: string; refreshToken: string; needsName: boolean;
+  sessionToken: string; sessionExpiresAt: string; needsName: boolean;
 }> {
   return request('/auth/otp/verify', { method: 'POST', body: JSON.stringify({ phone, verificationId, code }) });
 }
