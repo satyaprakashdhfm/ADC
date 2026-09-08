@@ -242,9 +242,30 @@ copy at best.
   compromise takes the database and its backups together. Write-only where the provider allows.
 - **Object lock / versioning**, so a deletion cannot propagate into the backups.
 
-**Retention — grandfather-father-son:** 7 daily, 4 weekly, 12 monthly. Cheap at this size, and it
-covers the case a 4-week window misses: slow corruption, a bug quietly writing bad rows for two
-months.
+**Retention — REVISED 2026-09-08, on building it.** This said grandfather-father-son: 7 daily, 4
+weekly, 12 monthly. That is the right shape for a database where storage costs something, and it
+was over-engineering here — three lifecycle rules and three code paths bought for nothing. The
+dump is ~150 KB, so **30 days of history is 4.5 MB** against R2's 10 GB free tier. There is no
+saving available to pay for the moving parts.
+
+**What shipped: one prefix, one rule, delete after 30 days.**
+
+Two things that changed my mind beyond simplicity:
+
+- Dropping the 400-day tier is a **privacy gain, not a loss**. The dumps carry customer names,
+  phone numbers and delivery addresses; holding personal data longer than it is useful is a DPDP
+  negative rather than prudence.
+- 30 days rather than the 2 that first felt sufficient, because the failure retention actually
+  saves you from is **slow corruption** — a bug writing bad rows for a fortnight before anyone
+  notices. A two-day window means every copy you hold already contains the damage, and PITR
+  already covers the crash-you-notice-immediately case.
+
+**Cloudflare has two separate features that are easy to confuse, and they do opposite things.**
+*Object Lifecycle* rules DELETE after N days (this is retention). *Bucket Lock* rules PREVENT
+deletion and overwrite for N days (this is immutability — the "1" in 3-2-1-1-0, and the best
+defence against a leaked token being used to wipe the backups rather than read them). If both are
+ever set, the lifecycle delete must be LONGER than the lock or it fails silently against locked
+objects.
 
 **Where the job runs.** A Railway cron in the same project keeps the database on the private
 network and is simplest. A GitHub Actions schedule has the virtue of living outside the thing it
