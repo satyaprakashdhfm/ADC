@@ -51,3 +51,34 @@ export function anonClient(): SupabaseClient {
   }
   return _anon;
 }
+
+/*
+ * The id of the Supabase auth account holding exactly this email, or null.
+ *
+ * Replaces `SELECT id FROM auth.users WHERE email = $1`, which only worked while Supabase's
+ * managed auth schema shared a database with our own tables.
+ *
+ * GoTrue's admin list endpoint accepts a `filter`, verified against the live API rather than
+ * assumed: filtering on one full synthetic address returns exactly that account, and on the
+ * `phone_` prefix returns the 66 phone-login accounts out of 80. supabase-js does not expose the
+ * parameter, so this calls the REST endpoint directly.
+ *
+ * The filter only narrows the page; the exact comparison below is what decides. So this stays
+ * correct even if a future GoTrue loosens the parameter or ignores it altogether.
+ */
+export async function findAuthUserIdByEmail(email: string): Promise<string | null> {
+  if (!URL || !SERVICE_ROLE_KEY) return null;
+  const target = email.trim().toLowerCase();
+  try {
+    const res = await fetch(
+      `${URL}/auth/v1/admin/users?per_page=200&filter=${encodeURIComponent(target)}`,
+      { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
+    );
+    if (!res.ok) return null;
+    const body: any = await res.json();
+    const hit = (body?.users || []).find((u: any) => String(u?.email || '').toLowerCase() === target);
+    return hit ? String(hit.id) : null;
+  } catch {
+    return null;   // best-effort: the caller falls back to creating the account
+  }
+}

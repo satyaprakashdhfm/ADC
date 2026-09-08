@@ -45,19 +45,51 @@ async function absorbAccount(intoId, fromId) {
       await query('UPDATE cart SET user_id = $1 WHERE id = $2', [intoId, fromCart.id]);
     }
   }
-  const fromUser = await getOne('SELECT email FROM users WHERE id = $1', [fromId]);
+  /* Take the auth id off the row before deleting it, so the now-orphaned Supabase account can
+     still be removed afterwards. This used to re-find it with `SELECT id FROM auth.users WHERE
+     email = ...`, which worked only while our tables and Supabase's managed auth schema shared
+     one database — and it could not find a phone-OTP account by anything but the synthetic
+     address we mint for it. */
+  const fromUser = await getOne('SELECT supabase_user_id FROM users WHERE id = $1', [fromId]);
   await query('DELETE FROM users WHERE id = $1', [fromId]);
-  if (fromUser && supabaseConfigured()) {
+  if (fromUser?.supabase_user_id && supabaseConfigured()) {
     try {
-      const supaRow = await getOne('SELECT id FROM auth.users WHERE email = $1', [fromUser.email]).catch(() => null);
-      if (supaRow) await adminClient().auth.admin.deleteUser(supaRow.id);
+      await adminClient().auth.admin.deleteUser(fromUser.supabase_user_id);
     } catch { /* non-critical */ }
   }
 }
 
+/*
+ * Record which Supabase account this row belongs to, the first time we see it.
+ *
+ * The id is `claims.sub` off a token that has already been verified, which makes it a far better
+ * source than the email string match this replaces: it is not writable by the caller, it does not
+ * change when somebody edits their email address, and a phone-login user has one without us
+ * having to reconstruct a synthetic address to go looking for it.
+ *
+ * Written once and then left alone. An existing value is never overwritten — that would let a
+ * second Supabase account quietly take over a row that already belongs to another — so the WHERE
+ * clause makes this a no-op on every request after the first.
+ *
+ * Failure is deliberately silent. Nothing in the request depends on the link being recorded; the
+ * worst case is that a cosmetic metadata mirror is skipped and the next request tries again.
+ */
+async function linkAuthId(user, authId) {
+  if (!user || user.supabase_user_id) return user;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(authId || ''))) return user;
+  const row = await getOne(
+    `UPDATE users SET supabase_user_id = $1
+      WHERE id = $2 AND supabase_user_id IS NULL
+        AND NOT EXISTS (SELECT 1 FROM users x WHERE x.supabase_user_id = $1)
+      RETURNING *`,
+    [authId, user.id]
+  ).catch(() => null);
+  return row || user;
+}
+
 // Find-or-create the local user row for a Supabase-authenticated identity. The identity is
 // either an email (Google / email-password) or a phone (phone-OTP login).
-async function syncUser({ email, phone, name }) {
+async function syncUser({ email, phone, name, authId }) {
   // Email identity — keyed by email.
   if (email) {
     let user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
@@ -104,7 +136,7 @@ async function syncUser({ email, phone, name }) {
       );
     }
 
-    return user;
+    return linkAuthId(user, authId);
   }
   // Phone identity — keyed by phone. Email stays NULL: phone users have no email unless they
   // choose to add a real one later.
@@ -119,7 +151,7 @@ async function syncUser({ email, phone, name }) {
         [name || '', phone, 'CUSTOMER', ts]
       );
     }
-    return user;
+    return linkAuthId(user, authId);
   }
   return null;
 }
@@ -171,7 +203,7 @@ export async function parseAuth(req, _res, next) {
       const email = SYNTHETIC_EMAIL.test(rawEmail) ? '' : rawEmail;
       if (email || phone) {
         const name = meta.full_name || meta.name || (email ? email.split('@')[0] : '');
-        const user = await syncUser({ email, phone, name });
+        const user = await syncUser({ email, phone, name, authId: claims.sub });
         if (user) req.user = { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone };
         else authLog(req, 'syncUser returned no row');
       } else {

@@ -13,7 +13,7 @@ import { getOne, query, nowIso } from '../db/index.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { ApiError } from '../utils/ApiError.js';
 import { normalizePhone, sendOtp, validateOtp, messageCentralConfigured } from '../services/messageCentral.client.js';
-import { adminClient, anonClient, supabaseConfigured } from '../config/supabase.js';
+import { adminClient, anonClient, supabaseConfigured, findAuthUserIdByEmail } from '../config/supabase.js';
 import { linkEmailClaimsToUser } from '../services/coupon.service.js';
 
 // Rejects junk like "123@gmail.com" (digits-only local part) — requires a real-looking local
@@ -52,15 +52,14 @@ async function mergeAccounts(intoId, fromId) {
     }
   }
 
-  // Grab the synthetic email before deletion so we can remove from Supabase
-  const fromUser = await getOne('SELECT email FROM users WHERE id = $1', [fromId]);
+  // Grab the auth id before deletion so we can remove the account from Supabase afterwards.
+  const fromUser = await getOne('SELECT supabase_user_id FROM users WHERE id = $1', [fromId]);
   await query('DELETE FROM users WHERE id = $1', [fromId]);
 
   // Best-effort: remove the now-orphaned Supabase auth record for the phone account
-  if (fromUser && supabaseConfigured()) {
+  if (fromUser?.supabase_user_id && supabaseConfigured()) {
     try {
-      const supaRow = await getOne("SELECT id FROM auth.users WHERE email = $1", [fromUser.email]).catch(() => null);
-      if (supaRow) await adminClient().auth.admin.deleteUser(supaRow.id);
+      await adminClient().auth.admin.deleteUser(fromUser.supabase_user_id);
     } catch { /* non-critical */ }
   }
 }
@@ -203,20 +202,22 @@ router.patch('/me', requireAuth, async (req, res) => {
   params.push(req.user!.id);
   const row = await getOne(`UPDATE users SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, params);
 
-  // Best-effort mirror into Supabase (never blocks the response). CRITICAL for phone-OTP users:
-  // they have no real email, so looking up auth.users by req.user!.email found nothing and the
-  // name never synced — which made the client fall back to a generic name on the next load and
-  // re-show the "add your name" prompt forever. Resolve their auth row by the synthetic phone
-  // email (or the current email for email/Google users) so the name actually persists.
+  /*
+   * Best-effort mirror into Supabase (never blocks the response), so the customer's own account
+   * page shows the change too.
+   *
+   * The account is addressed by the id stored on the row. This previously had to reconstruct a
+   * lookup address — the real email for Google users, and a synthetic `phone_…@phone.adccookies
+   * .app` one for phone-OTP users, who have no email at all. Missing that second case was a real
+   * bug: the name never synced, so the client fell back to a generic name on the next load and
+   * re-showed the "add your name" prompt forever. There is no address to reconstruct now.
+   */
   try {
-    if (supabaseConfigured()) {
+    if (supabaseConfigured() && row!.supabase_user_id) {
       const meta: Record<string, any> = {};
       if (req.body?.name != null) meta.full_name = String(req.body.name).trim();
       if (normalizedPhone) meta.phone = normalizedPhone;
-      const effectivePhone = normalizedPhone || row!.phone;
-      const lookupEmail = req.user!.email || (effectivePhone ? `phone_${effectivePhone}@phone.adccookies.app` : null);
-      const su = lookupEmail ? await getOne('SELECT id FROM auth.users WHERE email = $1', [lookupEmail]).catch(() => null) : null;
-      if (su) await adminClient().auth.admin.updateUserById(su.id, { user_metadata: meta });
+      await adminClient().auth.admin.updateUserById(row!.supabase_user_id, { user_metadata: meta });
     }
   } catch { /* metadata sync is non-critical */ }
 
@@ -322,17 +323,34 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
   const email = `phone_${phone.digits}@phone.adccookies.app`;
   const password = crypto.randomBytes(24).toString('base64url');
 
-  let supaUserId: any = null;
-  let existingName: any = null;
-  try {
-    const row = await getOne(
-      "SELECT id, raw_user_meta_data->>'full_name' AS full_name FROM auth.users WHERE email = $1 OR phone = $2",
-      [email, phone.digits]
-    );
-    if (row) { supaUserId = row.id; existingName = row.full_name; }
-  } catch { /* no access to the auth schema — fall back to create-then-recover below */ }
-  // New number, or an existing account that never set a real name → the UI should ask for it.
-  const needsName = supaUserId == null || !existingName || existingName === 'Guest';
+  /*
+   * Whether the UI should ask for a name, decided from our own users.name.
+   *
+   * This used to read Supabase's metadata copy of the name out of auth.users, which was one of
+   * the two things here requiring Supabase's managed schema to share our database. Ours is the
+   * authoritative copy anyway — every other route already treats it that way — and reading it
+   * fixes a small rudeness on the side: a customer seeded from the contact list we kept before
+   * the site existed is now greeted by the name we already have, instead of being asked to type
+   * it in again. users.phone holds 91XXXXXXXXXX, the same shape as phone.digits.
+   */
+  const local = await getOne(
+    'SELECT id, name, supabase_user_id FROM users WHERE phone = $1',
+    [phone.digits]
+  ).catch(() => null);
+  const localName = String(local?.name || '').trim();
+  const needsName = !localName || localName === 'Guest';
+
+  /*
+   * Which auth account this login is, resolved by the synthetic address.
+   *
+   * Deliberately NOT users.supabase_user_id, and the distinction is not academic: one local row
+   * can correspond to two auth accounts. Three customers in production hold both a Google account
+   * and a phone-OTP one, and the column keeps whichever they happened to sign in with first. Using
+   * it here would reset the password on their Google account and then try to sign in as the
+   * synthetic address — a login broken outright to save one HTTPS call. The synthetic address
+   * names exactly one account, always.
+   */
+  let supaUserId: any = await findAuthUserIdByEmail(email);
 
   if (supaUserId) {
     const fields: Record<string, any> = { password, email_confirm: true, phone_confirm: true };
@@ -340,18 +358,36 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
     const { error } = await admin.auth.admin.updateUserById(supaUserId, fields);
     if (error) throw new ApiError(error.message, 502);
   } else {
-    const { error } = await admin.auth.admin.createUser({
+    const { data: created, error } = await admin.auth.admin.createUser({
       email, phone: phone.e164, password,
       email_confirm: true, phone_confirm: true,
       user_metadata: { phone: phone.digits, full_name: name || '' },
     });
     if (error) {
-      // Most likely already exists — recover the id and reset the password.
-      const row = await getOne('SELECT id FROM auth.users WHERE email = $1 OR phone = $2', [email, phone.digits]).catch(() => null);
-      if (!row) throw new ApiError(error.message, 502);
-      const upd = await admin.auth.admin.updateUserById(row.id, { password, email_confirm: true, phone_confirm: true });
+      /* The lookup above said there was no such account, so reaching here means one appeared in
+         between — a second OTP verify for the same number, in flight at the same time. Re-resolve
+         and reset the password on the account that won, rather than failing a login the customer
+         has already proved they own. */
+      const foundId = await findAuthUserIdByEmail(email);
+      if (!foundId) throw new ApiError(error.message, 502);
+      supaUserId = foundId;
+      const upd = await admin.auth.admin.updateUserById(foundId, { password, email_confirm: true, phone_confirm: true });
       if (upd.error) throw new ApiError(upd.error.message, 502);
+    } else {
+      supaUserId = created?.user?.id || null;
     }
+  }
+
+  /* Record the link now that both ids are known. A number logging in for the very first time has
+     no local row yet — parseAuth's syncUser creates it, and links it, on the first request that
+     carries the token we are about to hand back. */
+  if (local && supaUserId && !local.supabase_user_id) {
+    await query(
+      `UPDATE users SET supabase_user_id = $1
+        WHERE id = $2 AND supabase_user_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM users x WHERE x.supabase_user_id = $1)`,
+      [supaUserId, local.id]
+    ).catch(() => null);
   }
 
   // 3) Exchange the credentials for a real Supabase session and hand it to the client.
