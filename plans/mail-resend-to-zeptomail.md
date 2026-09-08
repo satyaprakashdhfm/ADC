@@ -106,3 +106,54 @@ record — there is still no opt-in column in the database.
 - Nothing lands in spam
 - `[mailer]` logs show no skips
 - The dead SMTP code and the stale Hostinger DKIM records are both gone
+
+---
+
+# Verified DNS state — 2026-09-08
+
+The "real work is DNS" section above describes the **old** Cloudflare zone and is kept only as the
+record of what was wrong. Nameservers moved to GoDaddy (`ns21`/`ns22.domaincontrol.com`) and the
+whole zone was rebuilt. Every line below was resolved live through both Google and Cloudflare
+public resolvers, not read off a dashboard — a provider's own "Verified" badge can be cached from
+before a nameserver move, which is exactly the case this check existed to catch.
+
+| Purpose | Record | Value |
+|---|---|---|
+| Site | `www` CNAME | `dfblk14u.up.railway.app` → serves 200 from Railway `sin1` |
+| Site | apex A | GoDaddy forwarding → **301 to `https://www.adoughcookie.com/`** |
+| Mail in | MX | `mx.zoho.in` (10), `mx2` (20), `mx3` (50) |
+| Mail out | SPF | `v=spf1 include:zohomail.in ~all` — one record only |
+| Zoho Mail | DKIM | `zmail._domainkey` |
+| **ZeptoMail** | **DKIM** | **`716344._domainkey`** — the selector is a 6-digit number, unguessable; read it from the ZeptoMail console, do not probe for it |
+| **ZeptoMail** | **Return-Path** | **`bounce-zem` CNAME → `cluster89.zeptomail.in`** |
+| Policy | `_dmarc` | `v=DMARC1; p=none` |
+| Ownership | TXT | `google-site-verification=…`, `zoho-verification=zb06287503.zmverify.zoho.in` |
+
+**Do NOT add `include:zeptomail.in` to SPF.** It is already covered transitively and adding it
+wastes lookups against the limit of ten:
+
+```
+adoughcookie.com  ->  include:zohomail.in
+zohomail.in       ->  include:spf.zohomail.in  include:zeptomail.net.in
+```
+
+**`bounce-zem` is load-bearing, not decoration.** It puts the envelope sender on our own domain,
+which is what makes SPF *align* with the From header under DMARC. Delete it and alignment falls
+back to DKIM alone.
+
+The ZeptoMail DKIM key has no `v=DKIM1;` prefix. That is valid — RFC 6376 makes the tag
+RECOMMENDED with `DKIM1` as the default — and is how ZeptoMail generates them. Do not "fix" it.
+
+**Gone, confirmed NXDOMAIN:** all three `hostingermail-*._domainkey` records (which were proxied
+and had been silently breaking DKIM), `resend._domainkey`, `send.`, `_amazonses`, `autoconfig`,
+`autodiscover`. The two DNS faults this document opened with are both resolved.
+
+Two things that look wrong and are not:
+
+- **`dfblk14u.up.railway.app` returns 404 on its own.** Railway's CNAME target only routes when the
+  Host header matches the custom domain. `www` returning 200 is the real test.
+- **The apex answers with `Server: cloudflare`.** That is GoDaddy's forwarding service running
+  behind Cloudflare, not leftover configuration of ours.
+
+Still open: no message header has actually been inspected since the move. DNS is correct, but
+`dkim=pass header.i=@adoughcookie.com` on a real delivery is the only complete proof.
