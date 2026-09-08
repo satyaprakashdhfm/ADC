@@ -26,6 +26,9 @@ declare global {
       name: string | null;
       role: string | null;
       phone: string | null;
+      /** Stable per-account key for client-side state (cart, chat thread). The Supabase uuid
+       *  where one exists, so it survives retiring Supabase Auth; 'local:<id>' otherwise. */
+      authId: string;
     }
 
     /** A store tablet, from requireStoreUser. */

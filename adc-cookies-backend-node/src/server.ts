@@ -77,7 +77,14 @@ function dbTarget(): string {
     console.log(`[CONFIG] SUPABASE=${process.env.SUPABASE_URL ? 'yes' : 'MISSING'}`);
     console.log(`[CONFIG] DELHIVERY_TOKEN=${process.env.DELIVERY_API_TOKEN || process.env.DELHIVERY_API_TOKEN ? 'set' : 'MISSING'}`);
     console.log(`[CONFIG] DELHIVERY_BASE_URL=${process.env.DELHIVERY_BASE_URL || '(default: track.delhivery.com)'}`);
-    console.log(`[CONFIG] RESEND=${process.env.RESEND_API_KEY ? 'set' : 'MISSING'}`);
+    console.log(`[CONFIG] MAIL=${process.env.ZEPTOMAIL_API_KEY ? 'zeptomail set' : 'MISSING — no mail will send'}`);
+    /* Reports presence, never values. The redirect URI IS printed in full, deliberately: Google
+       compares it byte-for-byte with what is registered and answers a mismatch with nothing but
+       redirect_uri_mismatch, so having both strings in front of you is the only quick way to see
+       which character differs. It is a public URL, not a secret. */
+    console.log(`[CONFIG] GOOGLE=${process.env.GOOGLE_CLIENT_ID ? 'id set' : 'id MISSING'}, ${process.env.GOOGLE_CLIENT_SECRET ? 'secret set' : 'secret MISSING'}`);
+    console.log(`[CONFIG] GOOGLE_REDIRECT_URI=${process.env.GOOGLE_REDIRECT_URI || 'MISSING'}`);
+    console.log(`[CONFIG] FRONTEND_URL=${process.env.FRONTEND_URL || 'MISSING (Google callback cannot redirect home)'}`);
     /* The admin allowlist, which is admin_accounts — NOT users.role.
        This counted users WHERE role = 'ADMIN' long after that column was retired, and initSchema
        itself sets every such row to CUSTOMER. So it printed 0 on every boot of every environment

@@ -21,8 +21,6 @@
  *                        `Authorization: Zoho-enczapikey <key>` — the scheme word is part of the
  *                        header VALUE, and `Bearer <key>` fails here.
  *   ZEPTOMAIL_API_URL  = optional override. Defaults to https://api.zeptomail.in/v1.1/email
- *   RESEND_API_KEY     = RETIRED 2026-09-07. Read by nothing; the Resend transport below is
- *                        commented out and both go on 2026-09-09.
  *   MAIL_USER          = the address that sends mail (info@adoughcookie.com). Must be on a domain
  *                        VERIFIED IN THE AGENT or ZeptoMail rejects the request outright.
  *   BUSINESS_EMAIL     = where enquiries / order copies go (defaults to MAIL_USER)
@@ -102,37 +100,6 @@ async function sendViaZeptoMail(apiKey, { to, subject, html, replyTo }: Outgoing
   }
   return body?.request_id || body?.data?.[0]?.code || '?';
 }
-
-/*
- * Resend — RETIRED 2026-09-07, kept commented for two days and then to be deleted.
- *
- * ZeptoMail is proven on both environments (a real send to a Gmail address arrived with
- * dkim=pass for adoughcookie.com), so nothing reaches this code any more. It stays only as a
- * short-lived record of the previous transport while the new one settles.
- *
- * NOTE ON REVERTING: uncommenting this is a code change and a deploy. While the fallback was
- * live, reverting was deleting one variable. If ZeptoMail turns out to have a problem in the
- * next two days, restoring RESEND_API_KEY alone will NOT bring mail back — this function has
- * to come back with it.
- *
- * DELETE ME after 2026-09-09 along with RESEND_API_KEY on both Railway services.
- */
-// async function sendViaResend(apiKey, { to, subject, html, replyTo }: OutgoingMail) {
-//   const res = await fetch('https://api.resend.com/emails', {
-//     method: 'POST',
-//     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-//     body: JSON.stringify({
-//       from: `a dough cookie <${cfg().user}>`,
-//       to,
-//       subject,
-//       html,
-//       ...(replyTo ? { reply_to: replyTo } : {}),
-//     }),
-//   });
-//   const body: any = await res.json().catch(() => null);
-//   if (!res.ok) throw new Error(body?.message || `HTTP ${res.status}`);
-//   return body?.id || '?';
-// }
 
 /*
  * The one funnel every email in the app goes through. Both providers look identical from the
@@ -406,6 +373,38 @@ export async function sendOrderMilestoneEmail({ to, customerName, orderNumber, m
       : ''}`;
 
   await send({ to, subject: m.subject(orderNumber), html: shell(m.title, body) });
+  return true;
+}
+
+/*
+ * "You may need to sign in again."
+ *
+ * A one-off service notice for the sign-in changeover, sent by scripts/notify-resignin.mjs. Not
+ * marketing -- it is about the recipient's own account and nothing else, which is what keeps it
+ * inside ZeptoMail's transactional terms and outside the consent question we have no column for.
+ *
+ * Written to be true whether it arrives before or after the deploy ("may have been"), because a
+ * notice that has to land in a narrow window is a notice that will land in the wrong one.
+ *
+ * No reason to explain the plumbing. What a customer needs is: nothing is wrong, nothing is lost,
+ * here is what to tap. Saying "we replaced our authentication provider" invites the reading that
+ * something went wrong with the old one.
+ */
+export async function sendReSignInNotice({ to, name }: { to: string; name?: string | null }) {
+  if (!to) return false;
+  const body = `
+    <p style="color:#5C4636">${esc(name || 'Hello')}, we have made some improvements to how you
+      sign in to a dough cookie.</p>
+    <p style="color:#2B1D12;line-height:1.6">You may have been signed out. If so, just sign in
+      again the same way you always do &mdash; with Google, or with your mobile number and an
+      OTP.</p>
+    <p style="color:#2B1D12;line-height:1.6"><b>Nothing has changed about your account.</b> Your
+      past orders, saved addresses and any rewards are exactly where they were.</p>
+    <p style="margin:18px 0 0"><a href="https://www.adoughcookie.com/"
+       style="display:inline-block;background:#EF7507;color:#fff;text-decoration:none;padding:11px 18px;border-radius:10px;font-weight:700">Sign in</a></p>
+    <p style="color:#7A6353;font-size:13px;margin:18px 0 0">If you have any trouble getting back
+      in, reply to this email and we will sort it out.</p>`;
+  await send({ to, subject: 'You may need to sign in again', html: shell('Signing in just changed', body) });
   return true;
 }
 

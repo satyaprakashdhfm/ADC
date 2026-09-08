@@ -1,6 +1,5 @@
 // Same-origin by default: the browser calls /api/... on whatever host served the page
 // (localhost or your LAN IP on a phone), and Next.js rewrites it to the backend server-side.
-import { supabase } from './supabase';
 import type { ProductCategory } from './categories';
 
 // Where the browser sends API calls. In the browser we ALWAYS use the same-origin `/api` path so
@@ -14,12 +13,45 @@ const API_BASE =
       ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api')
       : 'http://localhost:8080/api';
 
-// The bearer token is the current Supabase session access token (auto-refreshed by the client).
+/*
+ * Our own customer session token, stored the same way the admin one already is.
+ *
+ * Opaque and server-validated, so unlike a Supabase JWT it cannot expire out from under the page
+ * and needs no refresh: the server decides on every request, and signing out is a row being
+ * deleted. See services/userAuth.service.ts.
+ */
+const SESSION_KEY = 'adc_session';
+export const userSessionToken = {
+  get: (): string => { try { return localStorage.getItem(SESSION_KEY) || ''; } catch { return ''; } },
+  set: (t: string) => { try { localStorage.setItem(SESSION_KEY, t); } catch { /* private mode */ } },
+  clear: () => { try { localStorage.removeItem(SESSION_KEY); } catch { /* private mode */ } },
+};
+
+/*
+ * Ours, and only ours.
+ *
+ * The Supabase fallback that lived here is commented out below. It was what made the switchover
+ * invisible — nobody signed in got logged out — but on staging it is now a liability rather than
+ * a kindness: while it exists, a login test can pass by quietly using a Supabase session and
+ * prove nothing whatsoever about our own. Removing it is what makes the test mean something.
+ *
+ * Restore both halves (here and in AuthContext) to put the app back on Supabase Auth.
+ */
 async function getToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+  return userSessionToken.get() || null;
+  // const ours = userSessionToken.get();
+  // if (ours) return ours;
+  // const { data } = await supabase.auth.getSession();
+  // return data.session?.access_token ?? null;
 }
+
+/*
+ * The token an authenticated request should carry, exported because the chat transport builds its
+ * own headers and must not grow a second copy of the ours-then-Supabase fallback. Two copies of
+ * that rule would drift, and the one nobody remembers is the one that keeps the bug.
+ */
+export const currentAuthToken = getToken;
 
 /*
  * The admin session token, kept apart from the customer's Supabase session in every respect: its
@@ -100,14 +132,28 @@ export async function sendOtp(phone: string): Promise<{ verificationId: string; 
   return request('/auth/otp/send', { method: 'POST', body: JSON.stringify({ phone }) });
 }
 
-/** Confirm the OTP. Returns Supabase session tokens plus whether we still need the user's name
- *  (true for a brand-new number or an account that never set one). */
-export async function verifyOtp(phone: string, verificationId: string, code: string): Promise<{ accessToken: string; refreshToken: string; needsName: boolean }> {
+/** Confirm the OTP. Returns our session token and whether we still need the user's name — true
+ *  for a brand-new number, or an account that never set one.
+ *
+ *  accessToken/refreshToken are gone from this type because they are gone from the response. They
+ *  were briefly declared as REQUIRED here after the server stopped sending them, which is worse
+ *  than either state: TypeScript hands you a guaranteed string that is undefined at runtime, and
+ *  the compiler cannot warn about the one thing it was asked to check. */
+export async function verifyOtp(phone: string, verificationId: string, code: string): Promise<{
+  sessionToken: string; sessionExpiresAt: string; needsName: boolean;
+}> {
   return request('/auth/otp/verify', { method: 'POST', body: JSON.stringify({ phone, verificationId, code }) });
 }
 
-/** The signed-in user as our backend sees them (synced from the Supabase session). */
-export interface MeResponse { email: string | null; name: string; role: string; phone: string | null; }
+/*
+ * The signed-in user as our backend sees them.
+ *
+ * authId is a stable per-account key for local state (the cart, the chat thread) and is computed
+ * server-side rather than read from a session. It returns the original Supabase uuid wherever one
+ * exists, which is what stops CartContext seeing an "account change" -- and emptying every
+ * basket -- on the day the frontend stops reading Supabase sessions.
+ */
+export interface MeResponse { authId: string; email: string | null; name: string; role: string; phone: string | null; }
 export async function getMe(): Promise<MeResponse> {
   return request('/auth/me');
 }
@@ -121,6 +167,25 @@ export async function getMe(): Promise<MeResponse> {
  */
 export async function updateMe(patch: { name?: string; phone?: string; email?: string; verificationId?: string; code?: string }): Promise<MeResponse> {
   return request('/auth/me', { method: 'PATCH', body: JSON.stringify(patch) });
+}
+
+/*
+ * Spend the one-time code Google sign-in came home with, for a real session token.
+ *
+ * The code is single-use and lives about a minute. This exists so a 60-day credential never
+ * travels in a URL, where it would be written into browser history and leak through Referer.
+ */
+export async function exchangeGoogleCode(code: string): Promise<{
+  sessionToken: string; sessionExpiresAt: string;
+  email: string | null; name: string; role: string; phone: string | null; needsPhone: boolean;
+}> {
+  return request('/auth/google/exchange', { method: 'POST', body: JSON.stringify({ code }) });
+}
+
+/** Revoke the session server-side. Supabase's signOut only cleared the browser's copy, which left
+ *  a stolen token valid until it aged out; deleting the row takes effect on the next request. */
+export async function logoutSession(): Promise<{ ok: boolean }> {
+  return request('/auth/logout', { method: 'POST' });
 }
 
 /** Best-effort: records the city/region this login is coming from (IP-based, no permission prompt). */

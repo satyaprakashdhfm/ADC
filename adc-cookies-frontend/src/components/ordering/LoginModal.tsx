@@ -1,13 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { X, ArrowRight } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { isValidName, isValidEmail, nameError, emailError } from '@/lib/profileValidation';
-import { tenDigit, isMobile, phoneError } from '@/lib/phone';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 import AuthPanel from '@/components/auth/AuthPanel';
-import { Divider, authInput, authLinkBtn, fieldHint } from '@/components/auth/authUi';
 
 interface LoginModalProps {
   open: boolean;
@@ -16,30 +13,28 @@ interface LoginModalProps {
 }
 
 /*
- * The full sign-in modal: phone OTP + Google (via AuthPanel, shared with the Spin & Win wheel),
- * with email + password kept underneath as the last resort. The OTP flow used to live inline
- * here; it moved out so the wheel could offer the same sign-in without stacking a second modal.
+ * The sign-in modal: phone OTP + Google, via AuthPanel (shared with the Spin & Win wheel).
+ *
+ * The email + password path that used to sit under the divider here is gone. Not disabled —
+ * deleted, along with the /reset-password page and the reset mail it depended on. Every one of the
+ * 67 accounts Supabase filed under its "email" provider turned out to be a synthetic
+ * phone_<number>@phone.adccookies.app address we mint ourselves for the OTP bridge; not one real
+ * person had ever set a password. Keeping it meant owning registration, password hashing,
+ * reset-token issuance and expiry — the part of an auth system where mistakes cost accounts — to
+ * serve nobody.
+ *
+ * What remains of this component is the modal chrome. AuthPanel owns the sign-in itself, which is
+ * why the wheel can offer the same flow without stacking a second modal on top of its own.
  */
 export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
   // Raised by AuthPanel while its mandatory name/email step is showing — see `dismissible`.
   const [locked, setLocked] = useState(false);
-  const { login, register, resetPassword, setAuthModalOpen } = useAuth();
+  const { setAuthModalOpen } = useAuth();
   // Compact sizing is for mobile only — desktop gets the roomier layout back.
   const desktop = useIsDesktop();
 
   useEffect(() => {
-    if (open) {
-      setError(''); setEmail(''); setPassword(''); setName(''); setPhone(''); setLoading(false);
-      setResetSent(false); setLocked(false);
-    }
+    if (open) setLocked(false);
   }, [open]);
 
   // Tells ProfileGate (a separate, globally-mounted component) to stay quiet while this modal is
@@ -50,46 +45,12 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
     if (open) { setAuthModalOpen(true); return () => setAuthModalOpen(false); }
   }, [open, setAuthModalOpen]);
 
-  // Name + phone are mandatory on sign-up, same as the OTP path — no skipping either flow.
-  const submitValid = mode === 'login'
-    ? !!email.trim() && !!password.trim()
-    : isValidName(name) && isMobile(phone) && isValidEmail(email) && !!password.trim();
-
   /* No admin redirect. This modal signs customers in, full stop — the dashboard is reached only
      through its own phone-OTP sign-in at /admin. */
   const finishLogin = () => {
     onSuccess?.();
     onClose();
   };
-
-  const handleSubmit = async () => {
-    if (!submitValid) return;
-    setError(''); setLoading(true);
-    try {
-      if (mode === 'login') await login(email, password);
-      else await register(name, email, phone, password);
-      finishLogin();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleForgot = async () => {
-    if (!email.trim()) { setError('Enter your email above, then tap “Forgot password?”'); return; }
-    setError(''); setLoading(true);
-    try {
-      await resetPassword(email);
-      setResetSent(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send the reset email.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const inputStyle = authInput(desktop);
 
   if (!open) return null;
 
@@ -133,51 +94,6 @@ export default function LoginModal({ open, onClose, onSuccess }: LoginModalProps
           )}
 
           <AuthPanel onSuccess={finishLogin} onLockChange={setLocked} resetKey={open} autoFocusPhone />
-
-          {!locked && (
-            <>
-              <Divider label="or use email" />
-
-              {/* Email + password (last) */}
-              {mode === 'register' && (
-                <>
-                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={inputStyle} />
-                  {/* The reason, under the field. Without it a disabled button is the only feedback. */}
-                  {nameError(name) && <div style={fieldHint}>{nameError(name)}</div>}
-                  <input value={phone} onChange={e => setPhone(tenDigit(e.target.value))} placeholder="Mobile number" inputMode="numeric" autoComplete="tel" style={inputStyle} />
-                  {phoneError(phone) && <div style={fieldHint}>{phoneError(phone)}</div>}
-                </>
-              )}
-              <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email" style={inputStyle} />
-              {emailError(email) && <div style={fieldHint}>{emailError(email)}</div>}
-              <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" style={inputStyle} />
-
-              {/* Reset is only relevant to the email/password login path (Google & OTP users never set one). */}
-              {mode === 'login' && (
-                resetSent
-                  ? <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-success)', fontWeight: 700, margin: '0 2px 12px' }}>Reset link sent. Check your email to set a new password.</p>
-                  : <button onClick={handleForgot} disabled={loading} style={{ ...authLinkBtn, display: 'block', margin: '0 2px 12px', fontSize: 'var(--text-xs)' }}>Forgot password?</button>
-              )}
-
-              {error && (
-                <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--status-error-bg)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', marginBottom: 12 }}>{error}</div>
-              )}
-
-              <button onClick={handleSubmit} disabled={loading || !submitValid} style={{
-                width: '100%', padding: '14px', borderRadius: 'var(--radius-button)', border: 'none',
-                background: (loading || !submitValid) ? 'var(--border-default)' : 'var(--gradient-warm)', color: 'var(--white)',
-                fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: (loading || !submitValid) ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12,
-              }}>
-                {loading ? 'Please wait…' : (mode === 'login' ? 'Log in with email' : 'Create account')}
-                {!loading && submitValid && <ArrowRight size={18} />}
-              </button>
-
-              <button onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', textAlign: 'center' }}>
-                {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Log in'}
-              </button>
-            </>
-          )}
         </div>
       </div>
     </div>

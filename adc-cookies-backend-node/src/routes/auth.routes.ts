@@ -7,10 +7,17 @@
  * gate would make the assertion false, and would be a 500 on an anonymous request.
  */
 import { Router } from 'express';
+/* crypto, anonClient and findAuthUserIdByEmail are all reachable only from the commented-out
+   Supabase half of phone login. Kept imported so restoring it is a single uncomment. */
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { getOne, query, nowIso } from '../db/index.js';
-import { requireAuth } from '../middlewares/auth.middleware.js';
+import { requireAuth, syncUser } from '../middlewares/auth.middleware.js';
+import { createUserSession, revokeUserSession } from '../services/userAuth.service.js';
+import {
+  googleConfigured, beginGoogleLogin, consumeState, exchangeCodeForIdentity,
+  createHandoff, consumeHandoff, safeNextPath,
+} from '../services/googleAuth.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { normalizePhone, sendOtp, validateOtp, messageCentralConfigured } from '../services/messageCentral.client.js';
 import { adminClient, anonClient, supabaseConfigured, findAuthUserIdByEmail } from '../config/supabase.js';
@@ -52,16 +59,15 @@ async function mergeAccounts(intoId, fromId) {
     }
   }
 
-  // Grab the auth id before deletion so we can remove the account from Supabase afterwards.
-  const fromUser = await getOne('SELECT supabase_user_id FROM users WHERE id = $1', [fromId]);
   await query('DELETE FROM users WHERE id = $1', [fromId]);
-
-  // Best-effort: remove the now-orphaned Supabase auth record for the phone account
+  /* COMMENTED OUT 2026-09-08 — see the identical block in auth.middleware.ts. Nothing signs in
+     through Supabase, so an orphaned auth row grants nothing. Sessions still cascade away.
+  const fromUser = await getOne('SELECT supabase_user_id FROM users WHERE id = $1', [fromId]);
   if (fromUser?.supabase_user_id && supabaseConfigured()) {
     try {
       await adminClient().auth.admin.deleteUser(fromUser.supabase_user_id);
-    } catch { /* non-critical */ }
-  }
+    } catch { }
+  } */
 }
 
 const router = Router();
@@ -83,7 +89,7 @@ router.get('/me', requireAuth, async (req, res) => {
   // Attach any email-subscribe spin reward won before this account existed (best-effort, never
   // blocks the profile response) — this is what makes an emailed coupon usable at checkout.
   if (req.user!.email) { try { await linkEmailClaimsToUser(req.user!.id, req.user!.email); } catch { /* ignore */ } }
-  res.json({ email: req.user!.email, name: req.user!.name, role: req.user!.role, phone: req.user!.phone ?? null });
+  res.json({ authId: req.user!.authId, email: req.user!.email, name: req.user!.name, role: req.user!.role, phone: req.user!.phone ?? null });
 });
 
 // Update the signed-in user's profile. Phone-OTP users fill in their name here; Google /
@@ -192,7 +198,30 @@ router.patch('/me', requireAuth, async (req, res) => {
     const email = String(req.body.email).trim().toLowerCase();
     if (!EMAIL_RE.test(email)) throw new ApiError('Enter a proper email address.');
     const taken = await getOne('SELECT id FROM users WHERE email = $1 AND id <> $2', [email, req.user!.id]);
-    if (taken) throw new ApiError('That email is already linked to another account.');
+    if (taken) {
+      /*
+       * Refused, and deliberately NOT merged — even though the caller is almost always the same
+       * person, as they were the day this message was first read in anger.
+       *
+       * Merging here would take an email address on nothing but the caller's word. Anyone who can
+       * verify ANY phone number could then type somebody else's address and absorb their account,
+       * orders and saved addresses included. That is the exact shape of the hole closed on
+       * 2026-09-03, arriving from the opposite direction: there it was an unverified phone claim,
+       * here it would be an unverified email one. The phone branch above demands an OTP before it
+       * will move an account; nothing weaker belongs on this side.
+       *
+       * There IS a safe route, and it needs no new proof mechanism because they already hold the
+       * proof: signing in with Google on that address demonstrates ownership. They then land on
+       * the account that owns the email, ProfileGate asks for the number, and the phone branch
+       * above merges the two — ungated, because the account being absorbed has no activity to
+       * protect. So the fix is to say this, with a code the client can act on, rather than leaving
+       * somebody staring at a mandatory email field they can never satisfy.
+       */
+      throw new ApiError(
+        'You already have an account with that email. Sign in with Google using it and we will move this number across.',
+        409, 'EMAIL_ON_ANOTHER_ACCOUNT',
+      );
+    }
     sets.push(`email = $${i++}`); params.push(email);
   }
 
@@ -202,24 +231,27 @@ router.patch('/me', requireAuth, async (req, res) => {
   params.push(req.user!.id);
   const row = await getOne(`UPDATE users SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, params);
 
-  /*
-   * Best-effort mirror into Supabase (never blocks the response), so the customer's own account
-   * page shows the change too.
-   *
-   * The account is addressed by the id stored on the row. This previously had to reconstruct a
-   * lookup address — the real email for Google users, and a synthetic `phone_…@phone.adccookies
-   * .app` one for phone-OTP users, who have no email at all. Missing that second case was a real
-   * bug: the name never synced, so the client fell back to a generic name on the next load and
-   * re-showed the "add your name" prompt forever. There is no address to reconstruct now.
-   */
-  try {
-    if (supabaseConfigured() && row!.supabase_user_id) {
-      const meta: Record<string, any> = {};
-      if (req.body?.name != null) meta.full_name = String(req.body.name).trim();
-      if (normalizedPhone) meta.phone = normalizedPhone;
-      await adminClient().auth.admin.updateUserById(row!.supabase_user_id, { user_metadata: meta });
-    }
-  } catch { /* metadata sync is non-critical */ }
+  /* COMMENTED OUT 2026-09-08 — mirrored the name and phone into Supabase user_metadata so a
+     Supabase-hosted session would show the change. Nothing reads that copy now: the client gets
+     its profile from GET /auth/me, which reads our own users table. */
+  // /*
+  // * Best-effort mirror into Supabase (never blocks the response), so the customer's own account
+  // * page shows the change too.
+  // *
+  // * The account is addressed by the id stored on the row. This previously had to reconstruct a
+  // * lookup address — the real email for Google users, and a synthetic `phone_…@phone.adccookies
+  // * .app` one for phone-OTP users, who have no email at all. Missing that second case was a real
+  // * bug: the name never synced, so the client fell back to a generic name on the next load and
+  // * re-showed the "add your name" prompt forever. There is no address to reconstruct now.
+  // */
+  // try {
+  // if (supabaseConfigured() && row!.supabase_user_id) {
+  // const meta: Record<string, any> = {};
+  // if (req.body?.name != null) meta.full_name = String(req.body.name).trim();
+  // if (normalizedPhone) meta.phone = normalizedPhone;
+  // await adminClient().auth.admin.updateUserById(row!.supabase_user_id, { user_metadata: meta });
+  // }
+  // } catch { /* metadata sync is non-critical */ }
 
   res.json({ email: row!.email, name: row!.name, role: row!.role, phone: row!.phone ?? null });
 });
@@ -315,90 +347,248 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
   const v = await validateOtp(verificationId, code);
   if (!v.ok) throw new ApiError(v.message, 401);
 
-  // 2) Create/confirm the user in Supabase and (re)set a one-time password we control.
-  //    We key the Supabase login on a stable synthetic email so it works with the
-  //    always-on Email provider (no Supabase Phone provider/SMS config needed), while
-  //    still storing the real phone number on the record.
-  const admin = adminClient();
-  const email = `phone_${phone.digits}@phone.adccookies.app`;
-  const password = crypto.randomBytes(24).toString('base64url');
+  /*
+   * 2) COMMENTED OUT 2026-09-08 — the Supabase half of phone login.
+   *
+   * This used to create or update a Supabase auth user under a synthetic address, reset its
+   * password to one we generated, and exchange that for a Supabase session. All of it existed
+   * only to borrow Supabase's session machinery; the identity was always the phone number, held
+   * in our own users.phone.
+   *
+   * Commented rather than deleted so staging can be put back with one edit if these tests go
+   * badly. It goes for good once production has run on our sessions for a while — and with it the
+   * synthetic phone_<number>@phone.adccookies.app address, which existed for no other reason.
+   *
+   * NOTE: src/config/supabase.ts STAYS. Supabase Storage uses the very same adminClient() for the
+   * adc-media bucket, so SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are still required — this
+   * retires Supabase AUTH, not Supabase.
+   */
+  // // 2) Create/confirm the user in Supabase and (re)set a one-time password we control.
+  // //    We key the Supabase login on a stable synthetic email so it works with the
+  // //    always-on Email provider (no Supabase Phone provider/SMS config needed), while
+  // //    still storing the real phone number on the record.
+  // const admin = adminClient();
+  // const email = `phone_${phone.digits}@phone.adccookies.app`;
+  // const password = crypto.randomBytes(24).toString('base64url');
+  //
+  // /*
+  // * Whether the UI should ask for a name, decided from our own users.name.
+  // *
+  // * This used to read Supabase's metadata copy of the name out of auth.users, which was one of
+  // * the two things here requiring Supabase's managed schema to share our database. Ours is the
+  // * authoritative copy anyway — every other route already treats it that way — and reading it
+  // * fixes a small rudeness on the side: a customer seeded from the contact list we kept before
+  // * the site existed is now greeted by the name we already have, instead of being asked to type
+  // * it in again. users.phone holds 91XXXXXXXXXX, the same shape as phone.digits.
+  // */
+  // const local = await getOne(
+  // 'SELECT id, name, supabase_user_id FROM users WHERE phone = $1',
+  // [phone.digits]
+  // ).catch(() => null);
+  // const localName = String(local?.name || '').trim();
+  // const needsName = !localName || localName === 'Guest';
+  //
+  // /*
+  // * Which auth account this login is, resolved by the synthetic address.
+  // *
+  // * Deliberately NOT users.supabase_user_id, and the distinction is not academic: one local row
+  // * can correspond to two auth accounts. Three customers in production hold both a Google account
+  // * and a phone-OTP one, and the column keeps whichever they happened to sign in with first. Using
+  // * it here would reset the password on their Google account and then try to sign in as the
+  // * synthetic address — a login broken outright to save one HTTPS call. The synthetic address
+  // * names exactly one account, always.
+  // */
+  // let supaUserId: any = await findAuthUserIdByEmail(email);
+  //
+  // if (supaUserId) {
+  // const fields: Record<string, any> = { password, email_confirm: true, phone_confirm: true };
+  // if (name) fields.user_metadata = { phone: phone.digits, full_name: name };
+  // const { error } = await admin.auth.admin.updateUserById(supaUserId, fields);
+  // if (error) throw new ApiError(error.message, 502);
+  // } else {
+  // const { data: created, error } = await admin.auth.admin.createUser({
+  // email, phone: phone.e164, password,
+  // email_confirm: true, phone_confirm: true,
+  // user_metadata: { phone: phone.digits, full_name: name || '' },
+  // });
+  // if (error) {
+  // /* The lookup above said there was no such account, so reaching here means one appeared in
+  // between — a second OTP verify for the same number, in flight at the same time. Re-resolve
+  // and reset the password on the account that won, rather than failing a login the customer
+  // has already proved they own. */
+  // const foundId = await findAuthUserIdByEmail(email);
+  // if (!foundId) throw new ApiError(error.message, 502);
+  // supaUserId = foundId;
+  // const upd = await admin.auth.admin.updateUserById(foundId, { password, email_confirm: true, phone_confirm: true });
+  // if (upd.error) throw new ApiError(upd.error.message, 502);
+  // } else {
+  // supaUserId = created?.user?.id || null;
+  // }
+  // }
+  //
+  // /* Record the link now that both ids are known. A number logging in for the very first time has
+  // no local row yet — parseAuth's syncUser creates it, and links it, on the first request that
+  // carries the token we are about to hand back. */
+  // if (local && supaUserId && !local.supabase_user_id) {
+  // await query(
+  // `UPDATE users SET supabase_user_id = $1
+  // WHERE id = $2 AND supabase_user_id IS NULL
+  // AND NOT EXISTS (SELECT 1 FROM users x WHERE x.supabase_user_id = $1)`,
+  // [supaUserId, local.id]
+  // ).catch(() => null);
+  // }
 
   /*
-   * Whether the UI should ask for a name, decided from our own users.name.
+   * 2) Whether the UI should ask for a name, from our own users.name.
    *
-   * This used to read Supabase's metadata copy of the name out of auth.users, which was one of
-   * the two things here requiring Supabase's managed schema to share our database. Ours is the
-   * authoritative copy anyway — every other route already treats it that way — and reading it
-   * fixes a small rudeness on the side: a customer seeded from the contact list we kept before
-   * the site existed is now greeted by the name we already have, instead of being asked to type
-   * it in again. users.phone holds 91XXXXXXXXXX, the same shape as phone.digits.
+   * Ours is the authoritative copy — every other route already treats it that way — and reading
+   * it means a customer seeded from the contact list we kept before the site existed is greeted
+   * by the name we already have, rather than asked to type it in again. users.phone holds
+   * 91XXXXXXXXXX, the same shape as phone.digits.
    */
   const local = await getOne(
-    'SELECT id, name, supabase_user_id FROM users WHERE phone = $1',
-    [phone.digits]
+    'SELECT id, name FROM users WHERE phone = $1',
+    [phone.digits],
   ).catch(() => null);
   const localName = String(local?.name || '').trim();
   const needsName = !localName || localName === 'Guest';
 
   /*
-   * Which auth account this login is, resolved by the synthetic address.
+   * 3) Our own session.
    *
-   * Deliberately NOT users.supabase_user_id, and the distinction is not academic: one local row
-   * can correspond to two auth accounts. Three customers in production hold both a Google account
-   * and a phone-OTP one, and the column keeps whichever they happened to sign in with first. Using
-   * it here would reset the password on their Google account and then try to sign in as the
-   * synthetic address — a login broken outright to save one HTTPS call. The synthetic address
-   * names exactly one account, always.
+   * syncUser rather than a local INSERT: a number signing in for the first time has no users row
+   * yet, and a session needs a users.id to belong to. Reusing it also means the account-claiming
+   * rules -- adopting a row already held under this number -- apply here exactly as they do on
+   * every other authenticated request, instead of being reimplemented.
+   *
+   * authId is null now: there is no Supabase account being created for this login, so there is no
+   * auth id to link. supabase_user_id stays as the backfill left it for accounts that had one,
+   * and stays NULL for anyone who signs up from here on.
    */
-  let supaUserId: any = await findAuthUserIdByEmail(email);
+  const localUser = await syncUser({ phone: phone.digits, name: name || localName, authId: null });
+  if (!localUser) throw new ApiError('Could not establish an account for this number.', 500);
+  const ours = await createUserSession(localUser.id, req.headers['user-agent']);
 
-  if (supaUserId) {
-    const fields: Record<string, any> = { password, email_confirm: true, phone_confirm: true };
-    if (name) fields.user_metadata = { phone: phone.digits, full_name: name };
-    const { error } = await admin.auth.admin.updateUserById(supaUserId, fields);
-    if (error) throw new ApiError(error.message, 502);
-  } else {
-    const { data: created, error } = await admin.auth.admin.createUser({
-      email, phone: phone.e164, password,
-      email_confirm: true, phone_confirm: true,
-      user_metadata: { phone: phone.digits, full_name: name || '' },
-    });
-    if (error) {
-      /* The lookup above said there was no such account, so reaching here means one appeared in
-         between — a second OTP verify for the same number, in flight at the same time. Re-resolve
-         and reset the password on the account that won, rather than failing a login the customer
-         has already proved they own. */
-      const foundId = await findAuthUserIdByEmail(email);
-      if (!foundId) throw new ApiError(error.message, 502);
-      supaUserId = foundId;
-      const upd = await admin.auth.admin.updateUserById(foundId, { password, email_confirm: true, phone_confirm: true });
-      if (upd.error) throw new ApiError(upd.error.message, 502);
-    } else {
-      supaUserId = created?.user?.id || null;
-    }
-  }
-
-  /* Record the link now that both ids are known. A number logging in for the very first time has
-     no local row yet — parseAuth's syncUser creates it, and links it, on the first request that
-     carries the token we are about to hand back. */
-  if (local && supaUserId && !local.supabase_user_id) {
-    await query(
-      `UPDATE users SET supabase_user_id = $1
-        WHERE id = $2 AND supabase_user_id IS NULL
-          AND NOT EXISTS (SELECT 1 FROM users x WHERE x.supabase_user_id = $1)`,
-      [supaUserId, local.id]
-    ).catch(() => null);
-  }
-
-  // 3) Exchange the credentials for a real Supabase session and hand it to the client.
-  const { data, error } = await anonClient().auth.signInWithPassword({ email, password });
-  if (error || !data?.session) throw new ApiError(error?.message || 'Could not establish a session.', 502);
-
+  /* 4) Done. There is no Supabase session to mint any more, and no accessToken/refreshToken in
+        the reply — the client has been reading sessionToken since the frontend switched over. */
   res.json({
-    accessToken: data.session.access_token,
-    refreshToken: data.session.refresh_token,
+    sessionToken: ours.token,
+    sessionExpiresAt: ours.expiresAt,
     needsName,
   });
+});
+
+/*
+ * Google sign-in, ours end to end.
+ *
+ * Three endpoints because the flow crosses three trust boundaries: the browser leaves for Google,
+ * Google returns to us, and then the finished session has to reach the frontend on another origin.
+ *
+ *   GET  /google/start     -> redirect the browser to Google
+ *   GET  /google/callback  -> Google returns here; we finish and bounce back to the frontend
+ *   POST /google/exchange  -> the frontend spends the one-time code for a session token
+ *
+ * FRONTEND_URL says where the browser goes home to. It is env-only, never taken from the request:
+ * a sign-in endpoint that redirects wherever it is told is a phishing primitive, because the link
+ * genuinely starts on our domain and really does authenticate before landing somewhere else.
+ */
+const FRONTEND_URL = () => (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
+
+router.get('/google/start', async (req, res) => {
+  if (!googleConfigured()) throw new ApiError('Google sign-in is not configured.', 503);
+  const url = await beginGoogleLogin(safeNextPath(req.query?.next));
+  res.redirect(url);
+});
+
+router.get('/google/callback', async (req, res) => {
+  const home = FRONTEND_URL() || '';
+  /* Errors go back to the frontend as a query flag rather than rendering here. The browser is
+     mid-navigation and the customer is looking at a blank tab: a JSON error body would be the
+     end of the road, whereas the site can show the sign-in sheet again with a message. */
+  const fail = (reason: string, nextPath = '/') =>
+    res.redirect(`${home}${safeNextPath(nextPath)}?adc_auth_error=${encodeURIComponent(reason)}`);
+
+  if (!googleConfigured()) return fail('not_configured');
+
+  // Google reports a refusal by redirecting here with ?error=access_denied, not by failing.
+  if (req.query?.error) return fail(String(req.query.error));
+
+  const stored = await consumeState(String(req.query?.state || ''));
+  /* An unknown or expired state. Ordinary causes: the sign-in was left open too long, the back
+     button re-submitted a callback already spent, or two tabs raced. It is also exactly what
+     login CSRF looks like, and there is no way to tell them apart, so it always fails. */
+  if (!stored) return fail('expired_or_replayed');
+
+  const code = String(req.query?.code || '');
+  if (!code) return fail('no_code', stored.nextPath);
+
+  let who;
+  try {
+    who = await exchangeCodeForIdentity(code, stored.verifier);
+  } catch (e: any) {
+    console.error('[GOOGLE] token exchange failed |', e.message);
+    return fail('exchange_failed', stored.nextPath);
+  }
+
+  /* Refuse an address Google has not verified. Accounts here are keyed on email, so treating an
+     unverified one as proof of identity would let anybody who can merely ASSERT an address take
+     over the account already holding it. Rare with consumer Gmail, entirely possible on Workspace
+     domains, and the consequence is total. */
+  if (!who.emailVerified) {
+    console.warn('[GOOGLE] refused unverified email |', who.email.replace(/(.).*(@.*)/, '$1***$2'));
+    return fail('email_unverified', stored.nextPath);
+  }
+
+  const user = await syncUser({ email: who.email, name: who.name, authId: null });
+  if (!user) return fail('account_failed', stored.nextPath);
+
+  const handoff = await createHandoff(user.id);
+  console.log(`[GOOGLE] signed in | user=${user.id}`);
+  res.redirect(`${home}${stored.nextPath}?adc_code=${encodeURIComponent(handoff)}`);
+});
+
+/*
+ * Spend the one-time code for a real session.
+ *
+ * This is the step that keeps a 60-day credential out of the address bar, out of browser history
+ * and out of the Referer header of whatever the page loads next.
+ */
+router.post('/google/exchange', async (req, res) => {
+  const userId = await consumeHandoff(String(req.body?.code || ''));
+  if (!userId) throw new ApiError('That sign-in link has already been used or has expired.', 401);
+  const row = await getOne('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!row) throw new ApiError('Account not found.', 404);
+  const ours = await createUserSession(userId, req.headers['user-agent']);
+  res.json({
+    sessionToken: ours.token,
+    sessionExpiresAt: ours.expiresAt,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    phone: row.phone ?? null,
+    /* Google gives us a name and an email but never a phone number, and checkout cannot dispatch
+       an order without one. Same signal the OTP path returns, so ProfileGate behaves identically
+       whichever way somebody signed in. */
+    needsPhone: !row.phone,
+  });
+});
+
+/*
+ * Sign out, which for our own sessions has to reach the server.
+ *
+ * Supabase's signOut only cleared the browser's copy; a stolen token stayed valid until it aged
+ * out because nothing server-side knew about it. Deleting the row means the very next request
+ * carrying it is anonymous.
+ *
+ * Deliberately not behind requireAuth. The one moment you most need to sign out is when the
+ * session is already broken, and demanding a valid session first would refuse exactly then.
+ * Revoking an unknown token is a no-op, so this is safe to call blind, and it always answers 200
+ * so a client can treat "signed out" as unconditional.
+ */
+router.post('/logout', async (req, res) => {
+  const header = String(req.headers['authorization'] || '');
+  if (header.startsWith('Bearer ')) await revokeUserSession(header.substring(7).trim());
+  res.json({ ok: true });
 });
 
 export default router;

@@ -1,8 +1,15 @@
 'use client';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+/* Both of these now feed only the commented-out Supabase fallback below, along with
+   fromSessionMeta and mergeSessionUser. Left in place so restoring that path is uncommenting it
+   rather than reconstructing it; they and @supabase/supabase-js go from the frontend entirely once
+   production has run on our own sessions long enough to trust. */
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { getMe, updateMe, logLoginLocation, sendOtp as apiSendOtp, verifyOtp as apiVerifyOtp, type MeResponse } from '@/lib/api';
+import {
+  getMe, updateMe, logLoginLocation, sendOtp as apiSendOtp, verifyOtp as apiVerifyOtp,
+  exchangeGoogleCode, logoutSession, userSessionToken, type MeResponse,
+} from '@/lib/api';
 import { isValidName, isValidEmail } from '@/lib/profileValidation';
 
 interface User { name: string; email: string; role: string; initials: string; phone?: string; }
@@ -17,10 +24,7 @@ interface AuthContextType {
   profileLoaded: boolean;  // true once the authoritative /me profile has loaded (or there's no user)
   authModalOpen: boolean;          // true while a LoginModal instance is open anywhere in the app
   setAuthModalOpen: (open: boolean) => void;
-  login: (email: string, password: string) => Promise<string>;            // returns role
-  register: (name: string, email: string, phone: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;                          // emails a reset link
   sendOtp: (phone: string) => Promise<{ verificationId: string; timeout: number }>;
   verifyOtp: (phone: string, verificationId: string, code: string) => Promise<{ role: string; needsName: boolean }>;
   updateProfile: (patch: { name?: string; phone?: string; email?: string; verificationId?: string; code?: string }) => Promise<void>; // persists to the backend
@@ -105,76 +109,109 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logLoginLocation().catch(() => {});
   };
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(prev => mergeSessionUser(prev, fromSessionMeta(data.session)));   // instant — no waiting on the backend
-      setAuthId(data.session?.user?.id ?? null);
+  /*
+   * Load the profile for one of our own sessions.
+   *
+   * There is no local copy of the identity to show instantly, the way fromSessionMeta could read a
+   * decoded JWT — an opaque token says nothing about who it belongs to. That is the trade for the
+   * server being the only authority: one request on load, and in exchange the name and role on
+   * screen are never a stale copy of what the server actually thinks.
+   */
+  const loadOwnSession = async () => {
+    try {
+      const me = await getMe();
+      setUser(userFromMe(me));
+      setAuthId(me.authId ?? null);
+      logLoginLocationOnce();
+    } catch {
+      /* A token the server no longer honours — revoked, expired, or minted by another
+         environment. Cleared rather than retried on every page load with a dead credential. */
+      userSessionToken.clear();
+      setUser(null);
+      setAuthId(null);
+    } finally {
+      setProfileLoaded(true);
       setLoading(false);
-      if (data.session) refineFromBackend(); else setProfileLoaded(true);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(prev => mergeSessionUser(prev, fromSessionMeta(session)));         // instant on login / logout / token refresh
-      setAuthId(session?.user?.id ?? null);
-      if (session) refineFromBackend(); else setProfileLoaded(true);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) throw new Error(error.message);
-    const me = await getMe();
-    setUser(userFromMe(me));
-    setProfileLoaded(true);
-    return me.role;
+    }
   };
 
-  const register = async (name: string, email: string, phone: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(), password,
-      options: { data: { full_name: name.trim() } },
-    });
-    if (error) throw new Error(error.message);
-    if (!data.session) throw new Error('Account created — please check your email to confirm, then log in.');
+  useEffect(() => {
+    /*
+     * Coming home from Google.
+     *
+     * The callback redirected here with a single-use code rather than a session token, so that a
+     * 60-day credential never appears in the address bar, in history, or in the Referer header of
+     * whatever this page loads next. Spend it, then strip it from the URL with replaceState so a
+     * reload or a shared link cannot try to spend it again.
+     */
+    const url = new URL(window.location.href);
+    const handoff = url.searchParams.get('adc_code');
+    const authError = url.searchParams.get('adc_auth_error');
+    if (handoff || authError) {
+      url.searchParams.delete('adc_code');
+      url.searchParams.delete('adc_auth_error');
+      window.history.replaceState({}, '', url.toString());
+    }
+    if (handoff) {
+      exchangeGoogleCode(handoff)
+        .then(({ sessionToken }) => { userSessionToken.set(sessionToken); return loadOwnSession(); })
+        .catch(() => { setProfileLoaded(true); setLoading(false); });
+      return;
+    }
+    if (authError) console.warn('[auth] google sign-in did not complete:', authError);
+
+    // Our session, if there is one.
+    if (userSessionToken.get()) { loadOwnSession(); return; }
 
     /*
-     * The number goes to PATCH /me, not into user_metadata alongside the name.
+     * COMMENTED OUT 2026-09-08 — the Supabase fallback.
      *
-     * Metadata is writable from the browser, so the server no longer treats a number found there
-     * as proof of anything (see parseAuth) — sending it that way would silently drop it. PATCH /me
-     * is the path that normalizes it to the one stored shape and links an account already held
-     * under it, which is what makes a customer we knew before the website keep their history.
+     * It kept the switchover invisible: anyone already signed in stayed signed in. On staging that
+     * same kindness hides what we are trying to measure, because a session test can pass through
+     * this branch without ever exercising our own. Gone, so the tests mean something.
      *
-     * Deliberately not fatal: the account exists by this point, and failing the whole sign-up over
-     * the phone would leave them unable to get back in. ProfileGate asks again on the next render,
-     * which is where any rejected number gets a second try with a visible error.
+     * Consequence, stated plainly: anybody holding a Supabase session is now signed out once.
+     * Acceptable on staging. Expected, and worth announcing, whenever this reaches production.
      */
-    if (phone.trim()) {
-      try { await updateMe({ phone: phone.trim() }); } catch { /* ProfileGate will ask again */ }
-    }
+    // /*
+    // * Otherwise fall back to Supabase. This branch is what keeps the migration invisible: anybody
+    // * already signed in when this shipped stays signed in, and moves across only when they next
+    // * log in. It goes when Supabase Auth is switched off for good.
+    // */
+    // supabase.auth.getSession().then(({ data }) => {
+    // setUser(prev => mergeSessionUser(prev, fromSessionMeta(data.session)));   // instant — no waiting on the backend
+    // setAuthId(data.session?.user?.id ?? null);
+    // setLoading(false);
+    // if (data.session) refineFromBackend(); else setProfileLoaded(true);
+    // });
+    //
+    // const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    // if (userSessionToken.get()) return;   // ours wins; ignore Supabase's chatter
+    // setUser(prev => mergeSessionUser(prev, fromSessionMeta(session)));         // instant on login / logout / token refresh
+    // setAuthId(session?.user?.id ?? null);
+    // if (session) refineFromBackend(); else setProfileLoaded(true);
+    // });
+    // return () => sub.subscription.unsubscribe();
 
-    const me = await getMe();
-    setUser(userFromMe(me));
+    // Nothing else to try: no session of ours means signed out.
+    setUser(null);
+    setAuthId(null);
+    setLoading(false);
     setProfileLoaded(true);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  /*
+   * Hand the browser to our own start endpoint, which builds the Google URL with state and PKCE
+   * and keeps the client secret server-side.
+   *
+   * A full page navigation rather than fetch: OAuth is a redirect chain the browser itself has to
+   * follow. `next` is only ever a path — the server refuses anything that could change origin,
+   * because an authenticated open redirect is a better phishing tool than a plain one.
+   */
   const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined },
-    });
-    if (error) throw new Error(error.message);
-    // Browser redirects to Google and back; onAuthStateChange picks up the session on return.
-  };
-
-  // Email a password-reset link (Supabase native). The link returns to /reset-password,
-  // where detectSessionInUrl establishes a recovery session and the user sets a new password.
-  const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined,
-    });
-    if (error) throw new Error(error.message);
+    const next = window.location.pathname + window.location.search;
+    window.location.href = `/api/auth/google/start?next=${encodeURIComponent(next)}`;
   };
 
   // Phone OTP: our backend texts the code (Message Central). Verifying returns Supabase
@@ -182,10 +219,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendOtp = (phone: string) => apiSendOtp(phone);
 
   const verifyOtp = async (phone: string, verificationId: string, code: string) => {
-    const { accessToken, refreshToken } = await apiVerifyOtp(phone, verificationId, code);
-    const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-    if (error) throw new Error(error.message);
+    const { sessionToken } = await apiVerifyOtp(phone, verificationId, code);
+    /* The server no longer returns a Supabase pair at all, so there is nothing to fall back to:
+       no session token means the login genuinely failed, and saying so beats appearing to succeed.
+       (The old branch installed a Supabase session from accessToken/refreshToken.) */
+    if (!sessionToken) throw new Error('Sign-in did not return a session. Please try again.');
+    userSessionToken.set(sessionToken);
     const me = await getMe();
+    setAuthId(me.authId ?? null);
     setUser(userFromMe(me));
     setProfileLoaded(true);
     // Mandatory, no-skip name + email: keep asking on every OTP login until both meet the real
@@ -210,13 +251,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  /*
+   * Sign out on the server, not just in this tab.
+   *
+   * supabase.auth.signOut() only dropped the browser's copy, so a token already lifted from this
+   * device stayed valid until it aged out. Revoking the row means the very next request carrying
+   * it is anonymous.
+   *
+   * Local state is cleared whatever the network did. A sign-out that appears to fail is worse
+   * than useless: the customer is left believing they are still signed in, quite possibly on a
+   * shared machine. Supabase's signOut still runs, to clear a legacy session if one exists.
+   */
   const logout = async () => {
-    await supabase.auth.signOut();
+    try { await logoutSession(); } catch { /* revoke best-effort; clear locally regardless */ }
+    userSessionToken.clear();
+    // try { await supabase.auth.signOut(); } catch { }   // no Supabase session exists any more
     setUser(null);
+    setAuthId(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, authId, loading, profileLoaded, authModalOpen, setAuthModalOpen, login, register, loginWithGoogle, resetPassword, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
+    <AuthContext.Provider value={{ user, authId, loading, profileLoaded, authModalOpen, setAuthModalOpen, loginWithGoogle, sendOtp, verifyOtp, updateProfile, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
