@@ -56,21 +56,29 @@ jobs:
           pg_dump --version | grep -qE ' 17\.' || {
             echo "::error::pg_dump is not v17 despite installing postgresql-client-17."; exit 1; }
 
-      - name: Work out which retention tier this dump belongs to
+      - name: Name this dump
         id: naming
-        # Grandfather-father-son by PREFIX. Retention is then R2's job through lifecycle rules,
-        # not something this script deletes. A script that never deletes cannot quietly stop
-        # pruning, and -- far more important -- cannot start pruning the wrong thing.
+        # One prefix, deliberately. This started as grandfather-father-son -- daily/ weekly/
+        # monthly/, each pruned differently -- which is the right shape for a database where
+        # storage costs something. Here it was three dashboard rules and three code paths bought
+        # for nothing: the dump is ~150KB, so thirty days of history is 4.5MB against R2's 10GB
+        # free tier. There is no saving available to justify the moving parts.
+        #
+        # Dropping the 400-day monthly tier is also a small privacy gain rather than a loss. These
+        # dumps carry customer names, phone numbers and delivery addresses, and holding personal
+        # data longer than it is useful is a DPDP negative, not prudence.
+        #
+        # Retention stays R2's job via one lifecycle rule on this prefix (delete after 30 days).
+        # Nothing here ever deletes: a job that cannot delete can never start deleting the wrong
+        # thing, and can never quietly stop pruning either.
+        #
+        # 30 days rather than a couple: the failure retention actually saves you from is slow
+        # corruption -- a bug writing bad rows for a fortnight before anyone notices. A two-day
+        # window means every copy you hold already contains the damage.
         run: |
           STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
-          DOW=$(date -u +%u)    # 7 = Sunday
-          DOM=$(date -u +%d)
-          TIER=daily
-          if [ "$DOM" = "01" ]; then TIER=monthly
-          elif [ "$DOW" = "7" ]; then TIER=weekly
-          fi
-          echo "key=$TIER/adc-$STAMP.dump" >> "$GITHUB_OUTPUT"
-          echo "Target: $TIER/adc-$STAMP.dump"
+          echo "key=daily/adc-$STAMP.dump" >> "$GITHUB_OUTPUT"
+          echo "Target: daily/adc-$STAMP.dump"
 
       - name: Dump the database
         env:
