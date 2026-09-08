@@ -46,6 +46,16 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
+          # Installing the package is not enough: /usr/bin/pg_restore is a postgresql-common
+          # wrapper that dispatches to whichever version PATH finds first, and the runner already
+          # ships client 16. It matters more here than in the backup job -- pg_restore 16 cannot
+          # even read a dump written by pg_dump 17 ("unsupported version in file header"), so the
+          # verification would fail on every single archive while the backups were perfectly fine.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          pg_restore --version
+          pg_restore --version | grep -qE ' 17\.' || {
+            echo "::error::pg_restore is not v17 despite installing postgresql-client-17."; exit 1; }
 
       - name: Find the newest daily backup, and check it is recent
         id: newest
