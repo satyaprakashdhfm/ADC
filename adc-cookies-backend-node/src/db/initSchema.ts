@@ -177,6 +177,33 @@ export async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_admin_sessions_phone ON admin_sessions(phone);
 
+    /*
+     * Customer sessions, ours rather than Supabase's.
+     *
+     * Same shape as admin_sessions above, and for the same reasons: an opaque random token, only
+     * its SHA-256 stored, so a dump of this table cannot be replayed as a login. Deliberately not
+     * a self-contained JWT -- a JWT cannot be revoked without a blocklist, whereas here signing
+     * somebody out is DELETE FROM user_sessions, and it takes effect on their very next request.
+     *
+     * Expiry SLIDES on use (see userAuth.service.ts), so the window means "logged out after this
+     * long inactive", not "logged out on a timer". Admins get three fixed days because privileged
+     * access should be re-proven; a customer who orders every fortnight must never be asked to
+     * verify an OTP again just because a clock ran out.
+     *
+     * ON DELETE CASCADE matters: absorbAccount deletes the losing row when two accounts turn out
+     * to be one person, and their sessions have to go with it rather than pointing at nothing.
+     */
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      last_seen_at TIMESTAMPTZ,
+      user_agent TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at);
+
     CREATE TABLE IF NOT EXISTS store_product_overrides (
       store_code TEXT NOT NULL,
       product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,

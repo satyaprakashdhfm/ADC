@@ -10,7 +10,8 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { getOne, query, nowIso } from '../db/index.js';
-import { requireAuth } from '../middlewares/auth.middleware.js';
+import { requireAuth, syncUser } from '../middlewares/auth.middleware.js';
+import { createUserSession, revokeUserSession } from '../services/userAuth.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { normalizePhone, sendOtp, validateOtp, messageCentralConfigured } from '../services/messageCentral.client.js';
 import { adminClient, anonClient, supabaseConfigured, findAuthUserIdByEmail } from '../config/supabase.js';
@@ -390,15 +391,54 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
     ).catch(() => null);
   }
 
-  // 3) Exchange the credentials for a real Supabase session and hand it to the client.
+  /*
+   * 3) Our own session.
+   *
+   * syncUser rather than a local INSERT: a number signing in for the first time has no users row
+   * yet, and a session needs a users.id to belong to. Reusing it also means the account-claiming
+   * rules -- adopting a row already held under this number, linking supabase_user_id -- apply here
+   * exactly as they do on every other authenticated request, instead of being reimplemented.
+   */
+  const localUser = await syncUser({ phone: phone.digits, name: name || localName, authId: supaUserId });
+  if (!localUser) throw new ApiError('Could not establish an account for this number.', 500);
+  const ours = await createUserSession(localUser.id, req.headers['user-agent']);
+
+  /*
+   * 4) And a Supabase session, for now.
+   *
+   * Both are returned during the changeover: the client still runs on Supabase's until it is
+   * switched over, and parseAuth accepts either, so neither side has to move first. Once the
+   * frontend reads sessionToken, this whole password-reset-and-sign-in round trip goes -- along
+   * with the synthetic email address that only exists to make it possible.
+   */
   const { data, error } = await anonClient().auth.signInWithPassword({ email, password });
   if (error || !data?.session) throw new ApiError(error?.message || 'Could not establish a session.', 502);
 
   res.json({
+    sessionToken: ours.token,
+    sessionExpiresAt: ours.expiresAt,
     accessToken: data.session.access_token,
     refreshToken: data.session.refresh_token,
     needsName,
   });
+});
+
+/*
+ * Sign out, which for our own sessions has to reach the server.
+ *
+ * Supabase's signOut only cleared the browser's copy; a stolen token stayed valid until it aged
+ * out because nothing server-side knew about it. Deleting the row means the very next request
+ * carrying it is anonymous.
+ *
+ * Deliberately not behind requireAuth. The one moment you most need to sign out is when the
+ * session is already broken, and demanding a valid session first would refuse exactly then.
+ * Revoking an unknown token is a no-op, so this is safe to call blind, and it always answers 200
+ * so a client can treat "signed out" as unconditional.
+ */
+router.post('/logout', async (req, res) => {
+  const header = String(req.headers['authorization'] || '');
+  if (header.startsWith('Bearer ')) await revokeUserSession(header.substring(7).trim());
+  res.json({ ok: true });
 });
 
 export default router;

@@ -2,6 +2,7 @@ import { verifySupabaseToken } from '../services/auth.service.js';
 import { getOne, query, nowIso } from '../db/index.js';
 import { adminClient, supabaseConfigured } from '../config/supabase.js';
 import { normalizePhone } from '../services/messageCentral.client.js';
+import { looksLikeJwt, resolveUserSession, touchSession } from '../services/userAuth.service.js';
 
 /*
  * Auth now runs on Supabase. The frontend sends the Supabase session access token as
@@ -87,9 +88,17 @@ async function linkAuthId(user, authId) {
   return row || user;
 }
 
-// Find-or-create the local user row for a Supabase-authenticated identity. The identity is
-// either an email (Google / email-password) or a phone (phone-OTP login).
-async function syncUser({ email, phone, name, authId }) {
+/*
+ * Find-or-create the local user row for a proven identity — an email (Google) or a phone (OTP).
+ *
+ * Exported so the OTP route can call it directly rather than repeating the insert. It needs a
+ * users.id to hang a session on, and a number logging in for the first time has no row yet. The
+ * duplicated absorbAccount was the lesson here: two copies of identity logic drift, and the copy
+ * nobody remembers is the one that keeps the bug.
+ */
+export async function syncUser({ email, phone, name, authId }: {
+  email?: string; phone?: string; name?: string; authId?: string | null;
+}) {
   // Email identity — keyed by email.
   if (email) {
     let user = await getOne('SELECT * FROM users WHERE email = $1', [email]);
@@ -169,8 +178,36 @@ const authLog = (req, why) => console.warn(`[AUTH] ${req.method} ${req.originalU
 export async function parseAuth(req, _res, next) {
   const header = req.headers['authorization'];
   if (header && header.startsWith('Bearer ')) {
+    const bearer = header.substring(7).trim();
+
+    /*
+     * Our own session token, if that is what arrived.
+     *
+     * Both kinds ride in this one header so the frontend needs no second code path and so both
+     * work at once while Supabase Auth is being retired — a customer holding either is signed in.
+     * Anything that is not shaped like a JWT is treated as ours and looked up; an unknown value
+     * simply resolves to nothing and the request continues anonymous, exactly as a bad JWT does.
+     *
+     * No syncUser here, unlike the Supabase branch below. A session row already names a real
+     * users.id, so there is no identity to reconcile — which is the point of owning the session.
+     */
+    if (bearer && !looksLikeJwt(bearer)) {
+      try {
+        const row = await resolveUserSession(bearer);
+        if (row) {
+          req.user = { id: row.id, email: row.email, name: row.name, role: row.role, phone: row.phone };
+          touchSession(row.token_hash);
+        } else {
+          authLog(req, 'session token not found or expired');
+        }
+      } catch (e: any) {
+        authLog(req, `session lookup failed: ${e.message}`);
+      }
+      return next();
+    }
+
     try {
-      const payload = await verifySupabaseToken(header.substring(7));
+      const payload = await verifySupabaseToken(bearer);
       /* verifySupabaseToken can hand back a bare string for a non-JSON payload; only an
          object carries the claims we read. */
       const claims: any = typeof payload === 'object' && payload ? payload : {};
