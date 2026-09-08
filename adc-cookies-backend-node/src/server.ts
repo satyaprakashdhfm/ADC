@@ -77,7 +77,7 @@ function dbTarget(): string {
     console.log(`[CONFIG] SUPABASE=${process.env.SUPABASE_URL ? 'yes' : 'MISSING'}`);
     console.log(`[CONFIG] DELHIVERY_TOKEN=${process.env.DELIVERY_API_TOKEN || process.env.DELHIVERY_API_TOKEN ? 'set' : 'MISSING'}`);
     console.log(`[CONFIG] DELHIVERY_BASE_URL=${process.env.DELHIVERY_BASE_URL || '(default: track.delhivery.com)'}`);
-    console.log(`[CONFIG] RESEND=${process.env.RESEND_API_KEY ? 'set' : 'MISSING'}`);
+    console.log(`[CONFIG] MAIL=${process.env.ZEPTOMAIL_API_KEY ? 'zeptomail set' : 'MISSING — no mail will send'}`);
     /* Reports presence, never values. The redirect URI IS printed in full, deliberately: Google
        compares it byte-for-byte with what is registered and answers a mismatch with nothing but
        redirect_uri_mismatch, so having both strings in front of you is the only quick way to see

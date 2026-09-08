@@ -21,8 +21,6 @@
  *                        `Authorization: Zoho-enczapikey <key>` — the scheme word is part of the
  *                        header VALUE, and `Bearer <key>` fails here.
  *   ZEPTOMAIL_API_URL  = optional override. Defaults to https://api.zeptomail.in/v1.1/email
- *   RESEND_API_KEY     = RETIRED 2026-09-07. Read by nothing; the Resend transport below is
- *                        commented out and both go on 2026-09-09.
  *   MAIL_USER          = the address that sends mail (info@adoughcookie.com). Must be on a domain
  *                        VERIFIED IN THE AGENT or ZeptoMail rejects the request outright.
  *   BUSINESS_EMAIL     = where enquiries / order copies go (defaults to MAIL_USER)
@@ -102,37 +100,6 @@ async function sendViaZeptoMail(apiKey, { to, subject, html, replyTo }: Outgoing
   }
   return body?.request_id || body?.data?.[0]?.code || '?';
 }
-
-/*
- * Resend — RETIRED 2026-09-07, kept commented for two days and then to be deleted.
- *
- * ZeptoMail is proven on both environments (a real send to a Gmail address arrived with
- * dkim=pass for adoughcookie.com), so nothing reaches this code any more. It stays only as a
- * short-lived record of the previous transport while the new one settles.
- *
- * NOTE ON REVERTING: uncommenting this is a code change and a deploy. While the fallback was
- * live, reverting was deleting one variable. If ZeptoMail turns out to have a problem in the
- * next two days, restoring RESEND_API_KEY alone will NOT bring mail back — this function has
- * to come back with it.
- *
- * DELETE ME after 2026-09-09 along with RESEND_API_KEY on both Railway services.
- */
-// async function sendViaResend(apiKey, { to, subject, html, replyTo }: OutgoingMail) {
-//   const res = await fetch('https://api.resend.com/emails', {
-//     method: 'POST',
-//     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-//     body: JSON.stringify({
-//       from: `a dough cookie <${cfg().user}>`,
-//       to,
-//       subject,
-//       html,
-//       ...(replyTo ? { reply_to: replyTo } : {}),
-//     }),
-//   });
-//   const body: any = await res.json().catch(() => null);
-//   if (!res.ok) throw new Error(body?.message || `HTTP ${res.status}`);
-//   return body?.id || '?';
-// }
 
 /*
  * The one funnel every email in the app goes through. Both providers look identical from the
