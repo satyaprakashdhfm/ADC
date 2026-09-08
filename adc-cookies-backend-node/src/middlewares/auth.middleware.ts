@@ -51,13 +51,17 @@ async function absorbAccount(intoId, fromId) {
      email = ...`, which worked only while our tables and Supabase's managed auth schema shared
      one database — and it could not find a phone-OTP account by anything but the synthetic
      address we mint for it. */
-  const fromUser = await getOne('SELECT supabase_user_id FROM users WHERE id = $1', [fromId]);
   await query('DELETE FROM users WHERE id = $1', [fromId]);
+  /* COMMENTED OUT 2026-09-08 — also deleted the absorbed account's Supabase auth record. Nothing
+     signs in through Supabase now, so an orphaned auth row grants nothing; it is dead data in a
+     system we are leaving. The user_sessions rows DO still go, via ON DELETE CASCADE above, which
+     is the part that actually matters: the absorbed account's tokens stop working immediately.
+  const fromUser = await getOne('SELECT supabase_user_id FROM users WHERE id = $1', [fromId]);
   if (fromUser?.supabase_user_id && supabaseConfigured()) {
     try {
       await adminClient().auth.admin.deleteUser(fromUser.supabase_user_id);
-    } catch { /* non-critical */ }
-  }
+    } catch { }
+  } */
 }
 
 /*
@@ -222,55 +226,75 @@ export async function parseAuth(req, _res, next) {
       return next();
     }
 
-    try {
-      const payload = await verifySupabaseToken(bearer);
-      /* verifySupabaseToken can hand back a bare string for a non-JSON payload; only an
-         object carries the claims we read. */
-      const claims: any = typeof payload === 'object' && payload ? payload : {};
-      const meta = claims.user_metadata || {};
-      const rawEmail = String(claims.email || meta.email || '').toLowerCase();
-      /*
-       * claims.phone ONLY, and normalized — two fixes to one line, for two different reasons.
-       *
-       * NOT user_metadata.phone. That field is writable by the account holder (supabase.auth
-       * .updateUser from the browser), which is the documented reason the admin gate refuses to
-       * trust a phone claim — see initSchema.ts and adminAuth.service.ts. syncUser below does not
-       * merely read this value: it resolves WHICH ACCOUNT the caller is and, on a match, absorbs
-       * the other one. Sourcing that from a field the caller can write meant anybody could sign up
-       * with their own email, set user_metadata.phone to somebody else's number, and have that
-       * person's orders and saved addresses transferred onto their account. claims.phone is set by
-       * Supabase from auth.users.phone, which only our OTP flow writes after Message Central has
-       * confirmed the code, so it is the one form of this number the caller cannot author.
-       *
-       * The sign-up form's number is not lost: AuthContext.register now sends it to PATCH /me,
-       * which validates it, and ProfileGate asks again if that did not land.
-       *
-       * Normalized because users.phone is the join key an OTP login is resolved by and it holds
-       * 91XXXXXXXXXX. A bare digit-strip stored whatever shape the value arrived in, so one number
-       * had two spellings and the ten-digit one matched no login and no merge ever again.
-       */
-      const claimed = claims.phone || '';
-      const phone = normalizePhone(claimed)?.digits || '';
-      if (claimed && !phone) authLog(req, `ignoring unusable phone claim (${String(claimed).replace(/\d/g, 'x')})`);
-      // A synthetic phone-login email is NOT a real email — drop it so the phone branch handles it.
-      const email = SYNTHETIC_EMAIL.test(rawEmail) ? '' : rawEmail;
-      if (email || phone) {
-        const name = meta.full_name || meta.name || (email ? email.split('@')[0] : '');
-        const user = await syncUser({ email, phone, name, authId: claims.sub });
-        if (user) req.user = { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone, authId: stableAuthId(user) };
-        else authLog(req, 'syncUser returned no row');
-      } else {
-        // Verified, but carries no identity we can key on. Happens when a phone-login token has
-        // only its synthetic email and no phone claim — the account then silently cannot act.
-        authLog(req, `token has no usable identity (email=${rawEmail ? 'synthetic' : 'none'}, phone=none)`);
-      }
-    } catch (e: any) {
-      // Still anonymous — but say WHY. This was a bare `catch {}`, which made an expired token, a
-      // Supabase project mismatch and a database failure all look identical from outside: a bald
-      // 401 "Authentication required" with nothing to diagnose from. The token itself is never
-      // logged; only the reason it was rejected.
-      authLog(req, `token rejected: ${e.message}`);
-    }
+    /*
+     * COMMENTED OUT 2026-09-08 — the Supabase JWT branch.
+     *
+     * Every login now issues one of our own session tokens, and the block above resolves it, so
+     * nothing reaches here. Kept commented rather than deleted because it is also the rollback:
+     * restoring it plus the OTP half in auth.routes.ts puts the app back on Supabase Auth in one
+     * edit, which is worth having while these are the first real tests.
+     *
+     * Losing it means anybody still holding a Supabase JWT is treated as anonymous rather than
+     * signed in. On staging that is the point — a fallback would let a test pass while proving
+     * nothing about our own sessions. Before this goes to production, note that it logs everyone
+     * with a live Supabase session out exactly once.
+     *
+     * DELETE, along with verifySupabaseToken and syncUser's authId plumbing, once production has
+     * run on our sessions long enough to trust.
+     */
+    // try {
+    // const payload = await verifySupabaseToken(bearer);
+    // /* verifySupabaseToken can hand back a bare string for a non-JSON payload; only an
+    // object carries the claims we read. */
+    // const claims: any = typeof payload === 'object' && payload ? payload : {};
+    // const meta = claims.user_metadata || {};
+    // const rawEmail = String(claims.email || meta.email || '').toLowerCase();
+    // /*
+    // * claims.phone ONLY, and normalized — two fixes to one line, for two different reasons.
+    // *
+    // * NOT user_metadata.phone. That field is writable by the account holder (supabase.auth
+    // * .updateUser from the browser), which is the documented reason the admin gate refuses to
+    // * trust a phone claim — see initSchema.ts and adminAuth.service.ts. syncUser below does not
+    // * merely read this value: it resolves WHICH ACCOUNT the caller is and, on a match, absorbs
+    // * the other one. Sourcing that from a field the caller can write meant anybody could sign up
+    // * with their own email, set user_metadata.phone to somebody else's number, and have that
+    // * person's orders and saved addresses transferred onto their account. claims.phone is set by
+    // * Supabase from auth.users.phone, which only our OTP flow writes after Message Central has
+    // * confirmed the code, so it is the one form of this number the caller cannot author.
+    // *
+    // * The sign-up form's number is not lost: AuthContext.register now sends it to PATCH /me,
+    // * which validates it, and ProfileGate asks again if that did not land.
+    // *
+    // * Normalized because users.phone is the join key an OTP login is resolved by and it holds
+    // * 91XXXXXXXXXX. A bare digit-strip stored whatever shape the value arrived in, so one number
+    // * had two spellings and the ten-digit one matched no login and no merge ever again.
+    // */
+    // const claimed = claims.phone || '';
+    // const phone = normalizePhone(claimed)?.digits || '';
+    // if (claimed && !phone) authLog(req, `ignoring unusable phone claim (${String(claimed).replace(/\d/g, 'x')})`);
+    // // A synthetic phone-login email is NOT a real email — drop it so the phone branch handles it.
+    // const email = SYNTHETIC_EMAIL.test(rawEmail) ? '' : rawEmail;
+    // if (email || phone) {
+    // const name = meta.full_name || meta.name || (email ? email.split('@')[0] : '');
+    // const user = await syncUser({ email, phone, name, authId: claims.sub });
+    // if (user) req.user = { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone, authId: stableAuthId(user) };
+    // else authLog(req, 'syncUser returned no row');
+    // } else {
+    // // Verified, but carries no identity we can key on. Happens when a phone-login token has
+    // // only its synthetic email and no phone claim — the account then silently cannot act.
+    // authLog(req, `token has no usable identity (email=${rawEmail ? 'synthetic' : 'none'}, phone=none)`);
+    // }
+    // } catch (e: any) {
+    // // Still anonymous — but say WHY. This was a bare `catch {}`, which made an expired token, a
+    // // Supabase project mismatch and a database failure all look identical from outside: a bald
+    // // 401 "Authentication required" with nothing to diagnose from. The token itself is never
+    // // logged; only the reason it was rejected.
+    // authLog(req, `token rejected: ${e.message}`);
+    // }
+    // }
+
+    /* Not one of ours, and the Supabase path is gone: a JWT is now simply an unknown credential. */
+    authLog(req, 'bearer token is a JWT, but Supabase auth is retired — treating as anonymous');
   }
   next();
 }

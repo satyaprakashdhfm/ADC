@@ -1,5 +1,9 @@
 'use client';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+/* Both of these now feed only the commented-out Supabase fallback below, along with
+   fromSessionMeta and mergeSessionUser. Left in place so restoring that path is uncommenting it
+   rather than reconstructing it; they and @supabase/supabase-js go from the frontend entirely once
+   production has run on our own sessions long enough to trust. */
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import {
@@ -160,24 +164,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (userSessionToken.get()) { loadOwnSession(); return; }
 
     /*
-     * Otherwise fall back to Supabase. This branch is what keeps the migration invisible: anybody
-     * already signed in when this shipped stays signed in, and moves across only when they next
-     * log in. It goes when Supabase Auth is switched off for good.
+     * COMMENTED OUT 2026-09-08 — the Supabase fallback.
+     *
+     * It kept the switchover invisible: anyone already signed in stayed signed in. On staging that
+     * same kindness hides what we are trying to measure, because a session test can pass through
+     * this branch without ever exercising our own. Gone, so the tests mean something.
+     *
+     * Consequence, stated plainly: anybody holding a Supabase session is now signed out once.
+     * Acceptable on staging. Expected, and worth announcing, whenever this reaches production.
      */
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(prev => mergeSessionUser(prev, fromSessionMeta(data.session)));   // instant — no waiting on the backend
-      setAuthId(data.session?.user?.id ?? null);
-      setLoading(false);
-      if (data.session) refineFromBackend(); else setProfileLoaded(true);
-    });
+    // /*
+    // * Otherwise fall back to Supabase. This branch is what keeps the migration invisible: anybody
+    // * already signed in when this shipped stays signed in, and moves across only when they next
+    // * log in. It goes when Supabase Auth is switched off for good.
+    // */
+    // supabase.auth.getSession().then(({ data }) => {
+    // setUser(prev => mergeSessionUser(prev, fromSessionMeta(data.session)));   // instant — no waiting on the backend
+    // setAuthId(data.session?.user?.id ?? null);
+    // setLoading(false);
+    // if (data.session) refineFromBackend(); else setProfileLoaded(true);
+    // });
+    //
+    // const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    // if (userSessionToken.get()) return;   // ours wins; ignore Supabase's chatter
+    // setUser(prev => mergeSessionUser(prev, fromSessionMeta(session)));         // instant on login / logout / token refresh
+    // setAuthId(session?.user?.id ?? null);
+    // if (session) refineFromBackend(); else setProfileLoaded(true);
+    // });
+    // return () => sub.subscription.unsubscribe();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (userSessionToken.get()) return;   // ours wins; ignore Supabase's chatter
-      setUser(prev => mergeSessionUser(prev, fromSessionMeta(session)));         // instant on login / logout / token refresh
-      setAuthId(session?.user?.id ?? null);
-      if (session) refineFromBackend(); else setProfileLoaded(true);
-    });
-    return () => sub.subscription.unsubscribe();
+    // Nothing else to try: no session of ours means signed out.
+    setUser(null);
+    setAuthId(null);
+    setLoading(false);
+    setProfileLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -200,15 +220,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyOtp = async (phone: string, verificationId: string, code: string) => {
     const { sessionToken, accessToken, refreshToken } = await apiVerifyOtp(phone, verificationId, code);
-    if (sessionToken) {
-      /* Ours, and no Supabase session is installed alongside it — a signed-in customer should be
-         on exactly one of the two, never both. */
-      userSessionToken.set(sessionToken);
-    } else {
-      // A backend older than our sessions. Removable once every environment is past it.
-      const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-      if (error) throw new Error(error.message);
-    }
+    /* The server no longer returns a Supabase pair at all, so there is nothing to fall back to:
+       no session token means the login genuinely failed, and saying so beats appearing to succeed.
+       (The old branch installed a Supabase session from accessToken/refreshToken.) */
+    if (!sessionToken) throw new Error('Sign-in did not return a session. Please try again.');
+    userSessionToken.set(sessionToken);
     const me = await getMe();
     setAuthId(me.authId ?? null);
     setUser(userFromMe(me));
@@ -249,7 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try { await logoutSession(); } catch { /* revoke best-effort; clear locally regardless */ }
     userSessionToken.clear();
-    try { await supabase.auth.signOut(); } catch { /* a legacy session may not exist */ }
+    // try { await supabase.auth.signOut(); } catch { }   // no Supabase session exists any more
     setUser(null);
     setAuthId(null);
   };

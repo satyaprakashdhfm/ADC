@@ -1,6 +1,5 @@
 // Same-origin by default: the browser calls /api/... on whatever host served the page
 // (localhost or your LAN IP on a phone), and Next.js rewrites it to the backend server-side.
-import { supabase } from './supabase';
 import type { ProductCategory } from './categories';
 
 // Where the browser sends API calls. In the browser we ALWAYS use the same-origin `/api` path so
@@ -29,19 +28,22 @@ export const userSessionToken = {
 };
 
 /*
- * Ours first, Supabase second.
+ * Ours, and only ours.
  *
- * Both are accepted by the server (see parseAuth), and the fallback is what makes this deployable
- * without logging anybody out: a customer who already had a Supabase session when this shipped
- * keeps it until they next sign in, at which point they get one of ours. Nobody is forced through
- * a login by the migration itself.
+ * The Supabase fallback that lived here is commented out below. It was what made the switchover
+ * invisible — nobody signed in got logged out — but on staging it is now a liability rather than
+ * a kindness: while it exists, a login test can pass by quietly using a Supabase session and
+ * prove nothing whatsoever about our own. Removing it is what makes the test mean something.
+ *
+ * Restore both halves (here and in AuthContext) to put the app back on Supabase Auth.
  */
 async function getToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  const ours = userSessionToken.get();
-  if (ours) return ours;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+  return userSessionToken.get() || null;
+  // const ours = userSessionToken.get();
+  // if (ours) return ours;
+  // const { data } = await supabase.auth.getSession();
+  // return data.session?.access_token ?? null;
 }
 
 /*

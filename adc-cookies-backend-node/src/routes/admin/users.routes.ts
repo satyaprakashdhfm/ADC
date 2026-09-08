@@ -80,21 +80,24 @@ router.put('/users/:id', async (req, res) => {
     req.body?.phone !== undefined ? `phone=${row!.phone || 'cleared'}` : null,
   ].filter(Boolean).join(' | ')}`);
 
-  // Mirror into Supabase so the customer's own account page shows the correction too. Best-effort,
-  // exactly as the self-serve profile update does — never block the response on it.
-  try {
-    if (supabaseConfigured()) {
-      const meta: Record<string, any> = {};
-      if (req.body?.name !== undefined) meta.full_name = row!.name;
-      if (newPhone) meta.phone = newPhone;
-      // Addressed by the stored auth id. The old lookup was gated on `row.email`, so a correction
-      // an admin made to a phone-only customer never reached Supabase at all — most customers
-      // here are phone-OTP and have no email.
-      if (row!.supabase_user_id && Object.keys(meta).length) {
-        await adminClient().auth.admin.updateUserById(row!.supabase_user_id, { user_metadata: meta });
-      }
-    }
-  } catch { /* metadata sync is non-critical */ }
+  /* COMMENTED OUT 2026-09-08 — same reason as PATCH /auth/me: nothing reads Supabase
+     user_metadata any more. The correction lands in our users table, which is what the customer's
+     account page renders. */
+  // // Mirror into Supabase so the customer's own account page shows the correction too. Best-effort,
+  // // exactly as the self-serve profile update does — never block the response on it.
+  // try {
+  // if (supabaseConfigured()) {
+  // const meta: Record<string, any> = {};
+  // if (req.body?.name !== undefined) meta.full_name = row!.name;
+  // if (newPhone) meta.phone = newPhone;
+  // // Addressed by the stored auth id. The old lookup was gated on `row.email`, so a correction
+  // // an admin made to a phone-only customer never reached Supabase at all — most customers
+  // // here are phone-OTP and have no email.
+  // if (row!.supabase_user_id && Object.keys(meta).length) {
+  // await adminClient().auth.admin.updateUserById(row!.supabase_user_id, { user_metadata: meta });
+  // }
+  // }
+  // } catch { /* metadata sync is non-critical */ }
 
   const { c } = (await getOne('SELECT COUNT(*) AS c FROM orders WHERE user_id = $1', [id]))!;
   const addrs = await getAll('SELECT * FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, id DESC', [id]);
