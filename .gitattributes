@@ -1,0 +1,7 @@
+# These are executed by Linux CI runners. A CRLF here is not cosmetic: it breaks shell
+# heredoc terminators (a line reading "SQL\r" never matches the "SQL" delimiter) and
+# trails an invisible \r onto every variable a script assigns. Windows checkouts get LF
+# for these files regardless of core.autocrlf.
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.sh   text eol=lf
