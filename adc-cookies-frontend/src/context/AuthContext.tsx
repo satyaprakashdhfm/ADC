@@ -123,12 +123,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(userFromMe(me));
       setAuthId(me.authId ?? null);
       logLoginLocationOnce();
-    } catch {
-      /* A token the server no longer honours — revoked, expired, or minted by another
-         environment. Cleared rather than retried on every page load with a dead credential. */
-      userSessionToken.clear();
+    } catch (e) {
+      /*
+       * ONLY a 401 throws the credential away.
+       *
+       * This used to clear on any failure at all, which quietly signed people out for reasons
+       * that had nothing to do with their session: a dropped connection, a 500, a slow network,
+       * or the server restarting mid-request — which is precisely what a deploy does. The token
+       * was still perfectly valid; we discarded it and showed them the login sheet, and the only
+       * way back was to sign in again.
+       *
+       * A 401 is the server actively saying "I do not honour this", and that is the one case
+       * where holding on to it is pointless. Anything else is a failure to ASK, not an answer,
+       * so the token stays and the next page load tries again.
+       */
+      const status = (e as { status?: number })?.status;
+      if (status === 401) {
+        userSessionToken.clear();
+        setAuthId(null);
+      }
       setUser(null);
-      setAuthId(null);
     } finally {
       setProfileLoaded(true);
       setLoading(false);
@@ -155,7 +169,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (handoff) {
       exchangeGoogleCode(handoff)
         .then(({ sessionToken }) => { userSessionToken.set(sessionToken); return loadOwnSession(); })
-        .catch(() => { setProfileLoaded(true); setLoading(false); });
+        .catch(() => {
+          /* The code is single-use and lives a minute, so a second attempt at the same one fails
+             by design — a back button, a restored tab, or a refresh of the callback URL all do it.
+             That is not a reason to appear signed out: if the first attempt already banked a
+             token, use it. Only give up when there is genuinely nothing to fall back on. */
+          if (userSessionToken.get()) return loadOwnSession();
+          setProfileLoaded(true);
+          setLoading(false);
+        });
       return;
     }
     if (authError) console.warn('[auth] google sign-in did not complete:', authError);

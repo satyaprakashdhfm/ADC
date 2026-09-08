@@ -295,8 +295,20 @@ export async function parseAuth(req, _res, next) {
     // }
     // }
 
-    /* Not one of ours, and the Supabase path is gone: a JWT is now simply an unknown credential. */
-    authLog(req, 'bearer token is a JWT, but Supabase auth is retired — treating as anonymous');
+    /*
+     * A JWT is no longer a customer credential, so this request is anonymous as far as we are
+     * concerned — but that is only worth SAYING on a customer route.
+     *
+     * The store portal and the admin dashboard both authenticate themselves, with their own
+     * tokens, in this same Authorization header, and both of those tokens are JWTs. Logging here
+     * unconditionally meant every single store-terminal poll printed a warning that read exactly
+     * like a broken store portal, several times a minute, for something working perfectly. Noise
+     * that looks like a fault is worse than no logging: it trains people to ignore the log.
+     */
+    const path = String(req.originalUrl || req.url || '');
+    if (!path.startsWith('/api/store') && !path.startsWith('/api/admin')) {
+      authLog(req, 'bearer token is a JWT, not one of our sessions — treating as anonymous');
+    }
   }
   next();
 }
