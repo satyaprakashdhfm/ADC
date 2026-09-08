@@ -198,7 +198,30 @@ router.patch('/me', requireAuth, async (req, res) => {
     const email = String(req.body.email).trim().toLowerCase();
     if (!EMAIL_RE.test(email)) throw new ApiError('Enter a proper email address.');
     const taken = await getOne('SELECT id FROM users WHERE email = $1 AND id <> $2', [email, req.user!.id]);
-    if (taken) throw new ApiError('That email is already linked to another account.');
+    if (taken) {
+      /*
+       * Refused, and deliberately NOT merged — even though the caller is almost always the same
+       * person, as they were the day this message was first read in anger.
+       *
+       * Merging here would take an email address on nothing but the caller's word. Anyone who can
+       * verify ANY phone number could then type somebody else's address and absorb their account,
+       * orders and saved addresses included. That is the exact shape of the hole closed on
+       * 2026-09-03, arriving from the opposite direction: there it was an unverified phone claim,
+       * here it would be an unverified email one. The phone branch above demands an OTP before it
+       * will move an account; nothing weaker belongs on this side.
+       *
+       * There IS a safe route, and it needs no new proof mechanism because they already hold the
+       * proof: signing in with Google on that address demonstrates ownership. They then land on
+       * the account that owns the email, ProfileGate asks for the number, and the phone branch
+       * above merges the two — ungated, because the account being absorbed has no activity to
+       * protect. So the fix is to say this, with a code the client can act on, rather than leaving
+       * somebody staring at a mandatory email field they can never satisfy.
+       */
+      throw new ApiError(
+        'You already have an account with that email. Sign in with Google using it and we will move this number across.',
+        409, 'EMAIL_ON_ANOTHER_ACCOUNT',
+      );
+    }
     sets.push(`email = $${i++}`); params.push(email);
   }
 

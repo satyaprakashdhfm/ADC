@@ -110,13 +110,26 @@ export default function AuthPanel({ onSuccess, onLockChange, resetKey, compact =
   const nameMsg = nameError(profileName);
   const emailMsg = emailError(profileEmail);
 
+  /*
+   * Raised when the email they entered already belongs to another account.
+   *
+   * Without this the step is a dead end: a valid email is mandatory to leave it (profileValid
+   * above), and the server will not accept one that is taken — so somebody typing their own
+   * address, which is what actually happened, could neither continue nor skip. The server refuses
+   * to merge on an unverified email claim, and it is right to; what it can do is point at the
+   * proof they already have, which is Google.
+   */
+  const [emailOnOtherAccount, setEmailOnOtherAccount] = useState(false);
+
   const handleSaveProfile = async () => {
     if (!profileValid) return;
-    setError(''); setLoading(true);
+    setError(''); setEmailOnOtherAccount(false); setLoading(true);
     try {
       await updateProfile({ name: profileName.trim(), email: profileEmail.trim() });
       onSuccess();
     } catch (e) {
+      const code = (e as { code?: string })?.code;
+      if (code === 'EMAIL_ON_ANOTHER_ACCOUNT') setEmailOnOtherAccount(true);
       setError(e instanceof Error ? e.message : 'Could not save your details');
     } finally {
       setLoading(false);
@@ -165,6 +178,16 @@ export default function AuthPanel({ onSuccess, onLockChange, resetKey, compact =
           {loading ? 'Saving…' : 'Continue'}{!loading && profileValid && <ArrowRight size={18} />}
         </button>
         {error && <div style={authErrorBox}>{error}</div>}
+        {/* The way out of what would otherwise be a dead end: the email is mandatory here and the
+            server will not take one that belongs to somebody else, so without this button there is
+            no third option. Google proves the address, which is the one thing the server is
+            missing — after that the existing phone-merge path folds this number into that account
+            on its own, ungated, because this account has no orders or addresses to protect. */}
+        {emailOnOtherAccount && (
+          <button onClick={handleGoogle} disabled={googleLoading} style={{ width: '100%', padding: '13px', marginTop: 10, borderRadius: 'var(--radius-button)', border: '1.5px solid var(--border-strong)', background: 'var(--surface-card)', color: 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-base)', cursor: googleLoading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            <GoogleG /> {googleLoading ? 'Redirecting…' : 'Continue with Google to link them'}
+          </button>
+        )}
       </div>
     );
   }
