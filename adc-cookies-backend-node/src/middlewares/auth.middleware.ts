@@ -61,6 +61,22 @@ async function absorbAccount(intoId, fromId) {
 }
 
 /*
+ * A per-account identifier the client can key local state on — CartContext clears the basket when
+ * it changes, and the Chatbot resets its thread.
+ *
+ * It has to stay STABLE across retiring Supabase Auth, which is the whole reason it is computed
+ * here rather than read off a session. The frontend used session.user.id, the Supabase uuid, and
+ * once our own sessions carry the login there is no Supabase session to read it from. Returning
+ * users.supabase_user_id keeps that exact uuid for the 77 accounts the backfill linked, so nothing
+ * on the client notices the change and nobody's cart is emptied by the migration.
+ *
+ * The 'local:' prefix is for accounts that never had a Supabase identity -- new sign-ups after the
+ * cutover, and the imported contacts. Prefixed so the two kinds can never collide, and so a value
+ * in a log says immediately which era it came from.
+ */
+const stableAuthId = (row: any) => row?.supabase_user_id || `local:${row?.id}`;
+
+/*
  * Record which Supabase account this row belongs to, the first time we see it.
  *
  * The id is `claims.sub` off a token that has already been verified, which makes it a far better
@@ -195,7 +211,7 @@ export async function parseAuth(req, _res, next) {
       try {
         const row = await resolveUserSession(bearer);
         if (row) {
-          req.user = { id: row.id, email: row.email, name: row.name, role: row.role, phone: row.phone };
+          req.user = { id: row.id, email: row.email, name: row.name, role: row.role, phone: row.phone, authId: stableAuthId(row) };
           touchSession(row.token_hash);
         } else {
           authLog(req, 'session token not found or expired');
@@ -241,7 +257,7 @@ export async function parseAuth(req, _res, next) {
       if (email || phone) {
         const name = meta.full_name || meta.name || (email ? email.split('@')[0] : '');
         const user = await syncUser({ email, phone, name, authId: claims.sub });
-        if (user) req.user = { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone };
+        if (user) req.user = { id: user.id, email: user.email, name: user.name, role: user.role, phone: user.phone, authId: stableAuthId(user) };
         else authLog(req, 'syncUser returned no row');
       } else {
         // Verified, but carries no identity we can key on. Happens when a phone-login token has

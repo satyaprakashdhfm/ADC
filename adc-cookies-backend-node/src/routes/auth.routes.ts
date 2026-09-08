@@ -88,7 +88,7 @@ router.get('/me', requireAuth, async (req, res) => {
   // Attach any email-subscribe spin reward won before this account existed (best-effort, never
   // blocks the profile response) — this is what makes an emailed coupon usable at checkout.
   if (req.user!.email) { try { await linkEmailClaimsToUser(req.user!.id, req.user!.email); } catch { /* ignore */ } }
-  res.json({ email: req.user!.email, name: req.user!.name, role: req.user!.role, phone: req.user!.phone ?? null });
+  res.json({ authId: req.user!.authId, email: req.user!.email, name: req.user!.name, role: req.user!.role, phone: req.user!.phone ?? null });
 });
 
 // Update the signed-in user's profile. Phone-OTP users fill in their name here; Google /

@@ -2,7 +2,10 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { getMe, updateMe, logLoginLocation, sendOtp as apiSendOtp, verifyOtp as apiVerifyOtp, type MeResponse } from '@/lib/api';
+import {
+  getMe, updateMe, logLoginLocation, sendOtp as apiSendOtp, verifyOtp as apiVerifyOtp,
+  exchangeGoogleCode, logoutSession, userSessionToken, type MeResponse,
+} from '@/lib/api';
 import { isValidName, isValidEmail } from '@/lib/profileValidation';
 
 interface User { name: string; email: string; role: string; initials: string; phone?: string; }
@@ -102,7 +105,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logLoginLocation().catch(() => {});
   };
 
+  /*
+   * Load the profile for one of our own sessions.
+   *
+   * There is no local copy of the identity to show instantly, the way fromSessionMeta could read a
+   * decoded JWT — an opaque token says nothing about who it belongs to. That is the trade for the
+   * server being the only authority: one request on load, and in exchange the name and role on
+   * screen are never a stale copy of what the server actually thinks.
+   */
+  const loadOwnSession = async () => {
+    try {
+      const me = await getMe();
+      setUser(userFromMe(me));
+      setAuthId(me.authId ?? null);
+      logLoginLocationOnce();
+    } catch {
+      /* A token the server no longer honours — revoked, expired, or minted by another
+         environment. Cleared rather than retried on every page load with a dead credential. */
+      userSessionToken.clear();
+      setUser(null);
+      setAuthId(null);
+    } finally {
+      setProfileLoaded(true);
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
+    /*
+     * Coming home from Google.
+     *
+     * The callback redirected here with a single-use code rather than a session token, so that a
+     * 60-day credential never appears in the address bar, in history, or in the Referer header of
+     * whatever this page loads next. Spend it, then strip it from the URL with replaceState so a
+     * reload or a shared link cannot try to spend it again.
+     */
+    const url = new URL(window.location.href);
+    const handoff = url.searchParams.get('adc_code');
+    const authError = url.searchParams.get('adc_auth_error');
+    if (handoff || authError) {
+      url.searchParams.delete('adc_code');
+      url.searchParams.delete('adc_auth_error');
+      window.history.replaceState({}, '', url.toString());
+    }
+    if (handoff) {
+      exchangeGoogleCode(handoff)
+        .then(({ sessionToken }) => { userSessionToken.set(sessionToken); return loadOwnSession(); })
+        .catch(() => { setProfileLoaded(true); setLoading(false); });
+      return;
+    }
+    if (authError) console.warn('[auth] google sign-in did not complete:', authError);
+
+    // Our session, if there is one.
+    if (userSessionToken.get()) { loadOwnSession(); return; }
+
+    /*
+     * Otherwise fall back to Supabase. This branch is what keeps the migration invisible: anybody
+     * already signed in when this shipped stays signed in, and moves across only when they next
+     * log in. It goes when Supabase Auth is switched off for good.
+     */
     supabase.auth.getSession().then(({ data }) => {
       setUser(prev => mergeSessionUser(prev, fromSessionMeta(data.session)));   // instant — no waiting on the backend
       setAuthId(data.session?.user?.id ?? null);
@@ -111,20 +172,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (userSessionToken.get()) return;   // ours wins; ignore Supabase's chatter
       setUser(prev => mergeSessionUser(prev, fromSessionMeta(session)));         // instant on login / logout / token refresh
       setAuthId(session?.user?.id ?? null);
       if (session) refineFromBackend(); else setProfileLoaded(true);
     });
     return () => sub.subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /*
+   * Hand the browser to our own start endpoint, which builds the Google URL with state and PKCE
+   * and keeps the client secret server-side.
+   *
+   * A full page navigation rather than fetch: OAuth is a redirect chain the browser itself has to
+   * follow. `next` is only ever a path — the server refuses anything that could change origin,
+   * because an authenticated open redirect is a better phishing tool than a plain one.
+   */
   const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined },
-    });
-    if (error) throw new Error(error.message);
-    // Browser redirects to Google and back; onAuthStateChange picks up the session on return.
+    const next = window.location.pathname + window.location.search;
+    window.location.href = `/api/auth/google/start?next=${encodeURIComponent(next)}`;
   };
 
   // Phone OTP: our backend texts the code (Message Central). Verifying returns Supabase
@@ -132,10 +199,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendOtp = (phone: string) => apiSendOtp(phone);
 
   const verifyOtp = async (phone: string, verificationId: string, code: string) => {
-    const { accessToken, refreshToken } = await apiVerifyOtp(phone, verificationId, code);
-    const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-    if (error) throw new Error(error.message);
+    const { sessionToken, accessToken, refreshToken } = await apiVerifyOtp(phone, verificationId, code);
+    if (sessionToken) {
+      /* Ours, and no Supabase session is installed alongside it — a signed-in customer should be
+         on exactly one of the two, never both. */
+      userSessionToken.set(sessionToken);
+    } else {
+      // A backend older than our sessions. Removable once every environment is past it.
+      const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      if (error) throw new Error(error.message);
+    }
     const me = await getMe();
+    setAuthId(me.authId ?? null);
     setUser(userFromMe(me));
     setProfileLoaded(true);
     // Mandatory, no-skip name + email: keep asking on every OTP login until both meet the real
@@ -160,9 +235,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  /*
+   * Sign out on the server, not just in this tab.
+   *
+   * supabase.auth.signOut() only dropped the browser's copy, so a token already lifted from this
+   * device stayed valid until it aged out. Revoking the row means the very next request carrying
+   * it is anonymous.
+   *
+   * Local state is cleared whatever the network did. A sign-out that appears to fail is worse
+   * than useless: the customer is left believing they are still signed in, quite possibly on a
+   * shared machine. Supabase's signOut still runs, to clear a legacy session if one exists.
+   */
   const logout = async () => {
-    await supabase.auth.signOut();
+    try { await logoutSession(); } catch { /* revoke best-effort; clear locally regardless */ }
+    userSessionToken.clear();
+    try { await supabase.auth.signOut(); } catch { /* a legacy session may not exist */ }
     setUser(null);
+    setAuthId(null);
   };
 
   return (

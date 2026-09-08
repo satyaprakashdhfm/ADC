@@ -5,7 +5,7 @@ import { X, Send, ArrowUp, RotateCcw } from 'lucide-react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { whatsappLink } from '@/lib/site';
-import { supabase } from '@/lib/supabase';
+import { currentAuthToken } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 /*
@@ -142,8 +142,9 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
   const transport = useMemo(() => new DefaultChatTransport({
     api: '/api/chat',
     headers: async (): Promise<Record<string, string>> => {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
+      // Shared with lib/api.ts so this cannot disagree with the rest of the app about which
+      // token is current — ours if we have one, the legacy Supabase session otherwise.
+      const token = await currentAuthToken();
       return token ? { Authorization: `Bearer ${token}` } : {};
     },
   }), []);
