@@ -44,7 +44,17 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
+          # Installing the package is NOT enough, and this is where the first real run failed.
+          # /usr/bin/pg_dump is a postgresql-common wrapper that dispatches to whichever version
+          # PATH finds first, and the runner already ships client 16 -- so the install succeeded
+          # and pg_dump --version still reported 16.15, which then refused the 17.6 server.
+          # Put the versioned bindir ahead of it for every later step.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          # And assert it, so a wrapper that silently wins again fails here rather than at the dump.
           pg_dump --version
+          pg_dump --version | grep -qE ' 17\.' || {
+            echo "::error::pg_dump is not v17 despite installing postgresql-client-17."; exit 1; }
 
       - name: Work out which retention tier this dump belongs to
         id: naming
