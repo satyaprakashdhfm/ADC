@@ -25,7 +25,7 @@ jobs:
 
     services:
       pg:
-        image: postgres:17          # match the production major version
+        image: postgres:18          # match the Railway Postgres major version
         env:
           POSTGRES_PASSWORD: verify
         ports:
@@ -37,7 +37,7 @@ jobs:
           --health-retries 12
 
     steps:
-      - name: Install the PostgreSQL 17 client
+      - name: Install the PostgreSQL 18 client
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
@@ -45,17 +45,17 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-17
+          sudo apt-get install -y -qq postgresql-client-18
           # Installing the package is not enough: /usr/bin/pg_restore is a postgresql-common
           # wrapper that dispatches to whichever version PATH finds first, and the runner already
           # ships client 16. It matters more here than in the backup job -- pg_restore 16 cannot
           # even read a dump written by pg_dump 17 ("unsupported version in file header"), so the
           # verification would fail on every single archive while the backups were perfectly fine.
-          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
-          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/18/bin:$PATH"
           pg_restore --version
-          pg_restore --version | grep -qE ' 17\.' || {
-            echo "::error::pg_restore is not v17 despite installing postgresql-client-17."; exit 1; }
+          pg_restore --version | grep -qE ' 18\.' || {
+            echo "::error::pg_restore is not v18 despite installing postgresql-client-18."; exit 1; }
 
       - name: Find the newest daily backup, and check it is recent
         id: newest
@@ -107,8 +107,12 @@ jobs:
           set +e
           pg_restore --no-owner --no-acl --dbname "$PGURL" newest.dump 2> restore.err
           set -e
-          ERRS=$(grep -c "^pg_restore: error" restore.err || true)
-          echo "pg_restore reported $ERRS error line(s)"
+          # One error is EXPECTED and benign: the dump carries `CREATE SCHEMA public`, which
+          # collides with the public schema Postgres already provides. Filtering it out is not
+          # cosmetic -- if a known-harmless error is counted every month, a real one stops being
+          # noticeable, and the point of this job is to notice.
+          ERRS=$(grep "^pg_restore: error" restore.err                    | grep -cv 'schema "public" already exists' || true)
+          echo "pg_restore reported $ERRS unexpected error line(s)"
           if [ "$ERRS" -gt 0 ]; then head -40 restore.err; fi
           echo "errs=$ERRS" >> "$GITHUB_ENV"
 
