@@ -204,6 +204,54 @@ export async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at);
 
+    /*
+     * One in-flight Google sign-in.
+     *
+     * OAuth spans two separate requests -- the redirect out to Google, and Google's redirect back
+     * -- so the two things that make the round trip safe have to survive in between:
+     *
+     *   state          proves the callback belongs to a sign-in WE started. Without it, an
+     *                  attacker can feed a victim's browser a callback URL carrying their own
+     *                  authorization code and silently sign the victim into the attacker's
+     *                  account. This is login CSRF, and the state value is the entire defence.
+     *   code_verifier  the PKCE secret. Not strictly required for a confidential client like
+     *                  ours, since the code exchange is also authenticated by the client secret,
+     *                  but it costs three lines and removes a whole class of code-interception
+     *                  attack, so there is no argument for leaving it out.
+     *
+     * Kept in a table rather than a cookie because the frontend and backend are on different
+     * origins, and a boring row is easier to reason about than SameSite semantics across a
+     * cross-site redirect. Rows are short-lived and single-use; see googleAuth.service.ts.
+     */
+    CREATE TABLE IF NOT EXISTS oauth_states (
+      state TEXT PRIMARY KEY,
+      code_verifier TEXT NOT NULL,
+      next_path TEXT,
+      created_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_oauth_states_expires ON oauth_states(expires_at);
+
+    /*
+     * The handoff from a finished OAuth callback to the browser.
+     *
+     * The callback runs on the BACKEND, but the session has to end up in the frontend's hands,
+     * and the only channel between them is a redirect URL. Putting the session token in that URL
+     * would write a 60-day credential into browser history, and into the Referer header of the
+     * next request the page makes. So the URL carries a single-use code that is good for about a
+     * minute and names nothing but a user id; the frontend spends it over POST for the real token.
+     *
+     * Only the code's hash is stored, same as sessions. No session token exists at rest here --
+     * the session is minted at the moment the code is spent.
+     */
+    CREATE TABLE IF NOT EXISTS oauth_handoffs (
+      code_hash TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_oauth_handoffs_expires ON oauth_handoffs(expires_at);
+
     CREATE TABLE IF NOT EXISTS store_product_overrides (
       store_code TEXT NOT NULL,
       product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,

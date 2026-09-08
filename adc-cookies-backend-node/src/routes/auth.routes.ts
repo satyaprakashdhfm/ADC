@@ -12,6 +12,10 @@ import rateLimit from 'express-rate-limit';
 import { getOne, query, nowIso } from '../db/index.js';
 import { requireAuth, syncUser } from '../middlewares/auth.middleware.js';
 import { createUserSession, revokeUserSession } from '../services/userAuth.service.js';
+import {
+  googleConfigured, beginGoogleLogin, consumeState, exchangeCodeForIdentity,
+  createHandoff, consumeHandoff, safeNextPath,
+} from '../services/googleAuth.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { normalizePhone, sendOtp, validateOtp, messageCentralConfigured } from '../services/messageCentral.client.js';
 import { adminClient, anonClient, supabaseConfigured, findAuthUserIdByEmail } from '../config/supabase.js';
@@ -420,6 +424,101 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
     accessToken: data.session.access_token,
     refreshToken: data.session.refresh_token,
     needsName,
+  });
+});
+
+/*
+ * Google sign-in, ours end to end.
+ *
+ * Three endpoints because the flow crosses three trust boundaries: the browser leaves for Google,
+ * Google returns to us, and then the finished session has to reach the frontend on another origin.
+ *
+ *   GET  /google/start     -> redirect the browser to Google
+ *   GET  /google/callback  -> Google returns here; we finish and bounce back to the frontend
+ *   POST /google/exchange  -> the frontend spends the one-time code for a session token
+ *
+ * FRONTEND_URL says where the browser goes home to. It is env-only, never taken from the request:
+ * a sign-in endpoint that redirects wherever it is told is a phishing primitive, because the link
+ * genuinely starts on our domain and really does authenticate before landing somewhere else.
+ */
+const FRONTEND_URL = () => (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
+
+router.get('/google/start', async (req, res) => {
+  if (!googleConfigured()) throw new ApiError('Google sign-in is not configured.', 503);
+  const url = await beginGoogleLogin(safeNextPath(req.query?.next));
+  res.redirect(url);
+});
+
+router.get('/google/callback', async (req, res) => {
+  const home = FRONTEND_URL() || '';
+  /* Errors go back to the frontend as a query flag rather than rendering here. The browser is
+     mid-navigation and the customer is looking at a blank tab: a JSON error body would be the
+     end of the road, whereas the site can show the sign-in sheet again with a message. */
+  const fail = (reason: string, nextPath = '/') =>
+    res.redirect(`${home}${safeNextPath(nextPath)}?adc_auth_error=${encodeURIComponent(reason)}`);
+
+  if (!googleConfigured()) return fail('not_configured');
+
+  // Google reports a refusal by redirecting here with ?error=access_denied, not by failing.
+  if (req.query?.error) return fail(String(req.query.error));
+
+  const stored = await consumeState(String(req.query?.state || ''));
+  /* An unknown or expired state. Ordinary causes: the sign-in was left open too long, the back
+     button re-submitted a callback already spent, or two tabs raced. It is also exactly what
+     login CSRF looks like, and there is no way to tell them apart, so it always fails. */
+  if (!stored) return fail('expired_or_replayed');
+
+  const code = String(req.query?.code || '');
+  if (!code) return fail('no_code', stored.nextPath);
+
+  let who;
+  try {
+    who = await exchangeCodeForIdentity(code, stored.verifier);
+  } catch (e: any) {
+    console.error('[GOOGLE] token exchange failed |', e.message);
+    return fail('exchange_failed', stored.nextPath);
+  }
+
+  /* Refuse an address Google has not verified. Accounts here are keyed on email, so treating an
+     unverified one as proof of identity would let anybody who can merely ASSERT an address take
+     over the account already holding it. Rare with consumer Gmail, entirely possible on Workspace
+     domains, and the consequence is total. */
+  if (!who.emailVerified) {
+    console.warn('[GOOGLE] refused unverified email |', who.email.replace(/(.).*(@.*)/, '$1***$2'));
+    return fail('email_unverified', stored.nextPath);
+  }
+
+  const user = await syncUser({ email: who.email, name: who.name, authId: null });
+  if (!user) return fail('account_failed', stored.nextPath);
+
+  const handoff = await createHandoff(user.id);
+  console.log(`[GOOGLE] signed in | user=${user.id}`);
+  res.redirect(`${home}${stored.nextPath}?adc_code=${encodeURIComponent(handoff)}`);
+});
+
+/*
+ * Spend the one-time code for a real session.
+ *
+ * This is the step that keeps a 60-day credential out of the address bar, out of browser history
+ * and out of the Referer header of whatever the page loads next.
+ */
+router.post('/google/exchange', async (req, res) => {
+  const userId = await consumeHandoff(String(req.body?.code || ''));
+  if (!userId) throw new ApiError('That sign-in link has already been used or has expired.', 401);
+  const row = await getOne('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!row) throw new ApiError('Account not found.', 404);
+  const ours = await createUserSession(userId, req.headers['user-agent']);
+  res.json({
+    sessionToken: ours.token,
+    sessionExpiresAt: ours.expiresAt,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    phone: row.phone ?? null,
+    /* Google gives us a name and an email but never a phone number, and checkout cannot dispatch
+       an order without one. Same signal the OTP path returns, so ProfileGate behaves identically
+       whichever way somebody signed in. */
+    needsPhone: !row.phone,
   });
 });
 
