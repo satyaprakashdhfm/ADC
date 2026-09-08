@@ -155,3 +155,127 @@ in one variable. Stage 3 is where the security ownership transfers and deserves 
 
 **Never ship the database move and the auth replacement in one cutover** — a failure then
 gives you two suspects instead of one.
+
+---
+
+# Backups and disaster recovery
+
+Added 2026-09-08. Railway's native capability taken from their docs, not assumed.
+
+## The rule the industry actually follows: 3-2-1
+
+- **3** copies of the data
+- **2** different storage types
+- **1** off-site, on infrastructure that can fail independently
+
+The modern extension is **3-2-1-1-0**: one copy **immutable**, and **0** unverified restores.
+That last digit is the one people skip and the one that bites — an untested backup is a hope,
+not a backup.
+
+Two numbers frame every decision:
+
+| | Question | Ours |
+|---|---|---|
+| **RPO** | How much data can we afford to lose? | A day of orders is survivable now; it stops being survivable as volume grows |
+| **RTO** | How fast must we be serving again? | 14 MB restores in minutes. The constraint is decision time, not transfer time |
+
+## What Railway gives natively — more than expected
+
+- **Point-in-time recovery.** The Postgres image archives every WAL segment with **pgBackRest**,
+  taking weekly full and daily incremental base backups. The last 4 fulls are retained, so the
+  restore window is **roughly 4 weeks**, to any timestamp inside it — not just to snapshot
+  boundaries.
+- **Volume snapshots**, incremental and copy-on-write, billed only for data unique to each.
+- No separate PITR fee: it bills through bucket storage and egress.
+
+This is competitive with Supabase Pro and far better than Supabase Free, which has **no
+automated backups at all**. Turning PITR on is the highest-value action in this document.
+
+## The gap it does not close
+
+**All of it lives inside Railway.** The WAL archive goes to *a private Railway storage bucket*.
+That covers everything except the scenario actually worth planning for:
+
+- the account is suspended (a failed card, a billing dispute, a false abuse positive)
+- credentials are compromised and someone deletes the project
+- Railway has a catastrophic failure, or stops trading
+
+A backup stored inside the system it is backing up is not the off-site copy. It is the second
+copy at best.
+
+## The off-site layer to build
+
+**One encrypted dump a day, pushed somewhere that is not Railway.**
+
+- **Produce**: `pg_dump -Fc` (custom format, compressed). At 14 MB this takes seconds.
+- **Encrypt before it leaves**: the dump holds customer names, phone numbers, delivery addresses
+  and order history. That is personal data under the DPDP Act. Use `age` or `gpg`, encrypting at
+  the source, never writing plaintext to disk.
+- **Ship to a different provider.** Cloudflare **R2** is the natural fit: DNS is already there,
+  and R2 charges **no egress** — which matters precisely on the day of a restore. Backblaze B2
+  and AWS S3 are equivalent. The only hard requirement is that it is not Railway.
+- **Separate credentials.** The bucket key must not be one the app already holds, or a single
+  compromise takes the database and its backups together. Write-only where the provider allows.
+- **Object lock / versioning**, so a deletion cannot propagate into the backups.
+
+**Retention — grandfather-father-son:** 7 daily, 4 weekly, 12 monthly. Cheap at this size, and it
+covers the case a 4-week window misses: slow corruption, a bug quietly writing bad rows for two
+months.
+
+**Where the job runs.** A Railway cron in the same project keeps the database on the private
+network and is simplest. A GitHub Actions schedule has the virtue of living outside the thing it
+backs up, but needs the database publicly reachable through a TCP proxy — a real security cost
+for a modest independence gain. Start with the Railway cron; what matters is that the *storage*
+is elsewhere.
+
+## Two failure modes that ruin real recoveries
+
+**1. The key dies with the platform.** Encrypted backups in R2, decryption key only in Railway's
+environment variables. Railway is gone, so the key is gone, so the backups are noise. **The
+decryption key belongs in a password manager plus one offline copy** — never solely inside the
+platform being backed up.
+
+**2. Silent failure.** The job stops working in March and nobody notices until August. The check
+must **alert on absence**, not only on error: a dead cron writes no error. Confirm the object
+landed and that its size is sane, and shout when it did not.
+
+## Verification — the "0" in 3-2-1-1-0
+
+**Monthly**: restore the newest dump into a scratch database and assert row counts per table
+against production, plus every sequence's `last_value`. Automate it. A restore that has never
+been run is an assumption, and sequences are exactly where a restore quietly goes wrong.
+
+Recognised enough that tooling exists for it specifically — e.g.
+`Kjudeh/railway-postgres-backups`, whose whole pitch is "backups you've actually restored, with
+daily restore verification".
+
+## Runbook: Railway is gone
+
+What this buys is a bounded, rehearsed recovery. Three things are needed, held by three
+deliberately separate custodians: the **dump** (R2), the **key** (password manager), the **code**
+(GitHub).
+
+1. Provision Postgres anywhere — Neon, RDS, another Railway account, a VPS.
+2. Pull the newest dump from R2; decrypt with the offline key.
+3. `pg_restore --no-owner --no-acl`; verify row counts and sequences.
+4. Deploy the backend from GitHub; point `DATABASE_URL` at the new host.
+5. Re-point DNS.
+
+Rehearse it once, on a quiet afternoon, before needing it.
+
+## Right-sizing — what NOT to build
+
+At 14 MB and 19 orders, streaming replicas, multi-region failover and an hourly RPO are
+over-engineering that will not be maintained. **Daily encrypted dump to R2, PITR on, monthly
+verified restore, alert on absence.** Revisit when order volume makes a day's loss unacceptable.
+
+## Order of work
+
+1. **Turn PITR on**, the moment Postgres exists on Railway — biggest win for the least effort.
+2. **Daily encrypted dump to R2**, separate credentials, key in a password manager.
+3. **Alerting on absence.**
+4. **Monthly automated restore test.**
+5. **Rehearse the runbook once.**
+
+Steps 1 and 2 are the difference between "we have backups" and "we have backups that survive
+losing the vendor". Do not migrate production onto Railway until at least those two are in place.
