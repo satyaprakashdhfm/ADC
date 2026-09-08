@@ -376,6 +376,38 @@ export async function sendOrderMilestoneEmail({ to, customerName, orderNumber, m
   return true;
 }
 
+/*
+ * "You may need to sign in again."
+ *
+ * A one-off service notice for the sign-in changeover, sent by scripts/notify-resignin.mjs. Not
+ * marketing -- it is about the recipient's own account and nothing else, which is what keeps it
+ * inside ZeptoMail's transactional terms and outside the consent question we have no column for.
+ *
+ * Written to be true whether it arrives before or after the deploy ("may have been"), because a
+ * notice that has to land in a narrow window is a notice that will land in the wrong one.
+ *
+ * No reason to explain the plumbing. What a customer needs is: nothing is wrong, nothing is lost,
+ * here is what to tap. Saying "we replaced our authentication provider" invites the reading that
+ * something went wrong with the old one.
+ */
+export async function sendReSignInNotice({ to, name }: { to: string; name?: string | null }) {
+  if (!to) return false;
+  const body = `
+    <p style="color:#5C4636">${esc(name || 'Hello')}, we have made some improvements to how you
+      sign in to a dough cookie.</p>
+    <p style="color:#2B1D12;line-height:1.6">You may have been signed out. If so, just sign in
+      again the same way you always do &mdash; with Google, or with your mobile number and an
+      OTP.</p>
+    <p style="color:#2B1D12;line-height:1.6"><b>Nothing has changed about your account.</b> Your
+      past orders, saved addresses and any rewards are exactly where they were.</p>
+    <p style="margin:18px 0 0"><a href="https://www.adoughcookie.com/"
+       style="display:inline-block;background:#EF7507;color:#fff;text-decoration:none;padding:11px 18px;border-radius:10px;font-weight:700">Sign in</a></p>
+    <p style="color:#7A6353;font-size:13px;margin:18px 0 0">If you have any trouble getting back
+      in, reply to this email and we will sort it out.</p>`;
+  await send({ to, subject: 'You may need to sign in again', html: shell('Signing in just changed', body) });
+  return true;
+}
+
 export async function sendOrderEmails(o) {
   const html = shell('Order confirmed', orderBody(o));
   // Customer first, and alone: see the note above about which send is allowed to be the one that fails.
