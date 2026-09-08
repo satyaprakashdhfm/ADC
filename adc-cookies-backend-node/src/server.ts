@@ -18,6 +18,21 @@ import { ppRequest, petpoojaConfigured, egressRoute, REST_ID as PP_REST_ID } fro
 
 const PORT = Number(process.env.PORT || 8080);
 
+/* Where DATABASE_URL actually points, for the boot log. Parsed rather than pattern-matched, so a
+   change of provider needs no change here, and the password is deliberately dropped: a boot line
+   is the most copy-pasted text there is during an incident. */
+function dbTarget(): string {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return 'local-pg (DATABASE_URL unset)';
+  try {
+    const u = new URL(raw);
+    return `${u.hostname}:${u.port || '5432'}${u.pathname}`;
+  } catch {
+    return 'unparseable DATABASE_URL';
+  }
+}
+
+
 (async () => {
   /* Before anything opens a connection or books anything: refuse to start if an outbound host is
      ambiguous. A wrong host is silent in both directions — staging booking real Delhivery parcels,
@@ -53,7 +68,12 @@ const PORT = Number(process.env.PORT || 8080);
   startLogRetention();
   app.listen(PORT, () => {
     console.log(`ADC Cookies backend listening on http://localhost:${PORT}`);
-    console.log(`[CONFIG] DB=${process.env.DATABASE_URL ? 'supabase-pooler' : 'local-pg'}`);
+    /* The HOST, not a guess at it.
+       This printed the literal string 'supabase-pooler' whenever DATABASE_URL was set at all, so
+       it went on saying supabase-pooler while the process was demonstrably serving from Railway
+       Postgres. A boot line that claims to name the database has to be true during a database
+       migration, which is the one time anybody reads it. */
+    console.log(`[CONFIG] DB=${dbTarget()}`);
     console.log(`[CONFIG] SUPABASE=${process.env.SUPABASE_URL ? 'yes' : 'MISSING'}`);
     console.log(`[CONFIG] DELHIVERY_TOKEN=${process.env.DELIVERY_API_TOKEN || process.env.DELHIVERY_API_TOKEN ? 'set' : 'MISSING'}`);
     console.log(`[CONFIG] DELHIVERY_BASE_URL=${process.env.DELHIVERY_BASE_URL || '(default: track.delhivery.com)'}`);
