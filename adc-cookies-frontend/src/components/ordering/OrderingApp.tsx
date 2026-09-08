@@ -121,6 +121,20 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
   // authoritatively at order-creation, never trusting whatever the client shows here.
   const intracity = !!(delivCheck && delivCheck.serviceable && delivCheck.intracity);
   const delivery = total > 0 ? (delivCheck?.deliveryFee ?? (intracity ? 0 : 100)) : 0;
+  /*
+   * Do we actually KNOW the delivery fee, or is the line above guessing?
+   *
+   * That `?? 100` is a placeholder, and CheckoutFlow remounts on the /checkout -> /payment
+   * navigation, so delivCheck starts null again and the fee silently reverts to the guess until
+   * the quote comes back. The bill therefore CHANGED between the two pages, and since the payment
+   * step showed a bare total with no breakdown, a customer who had just applied a coupon read the
+   * jump as the discount being dropped. That is exactly the ticket Prerit raised, and he was right
+   * that something changed -- it just was not his coupon, which had been kept all along.
+   *
+   * A guessed number must never be presented as the amount to pay. Everything that shows money
+   * now waits for the real quote.
+   */
+  const deliveryKnown = total === 0 || !!delivCheck;
   const gstIncl = total > 0 ? Math.round(total - total / 1.05) : 0;  // 5% GST is already inside the prices
   const giftFee = gift ? GIFT_FEE : 0;
   const grand = total + delivery + giftFee - discount;               // GST included in `total`, not added on top
@@ -320,7 +334,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
         )}
         {applied && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--green-success)', fontWeight: 700 }}><span>Coupon ({coupon})</span><span>−₹{discount}</span></div>}
         <Dash />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}><span>To pay</span><span>₹{grand}</span></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-strong)' }}><span>To pay</span><span>{deliveryKnown ? `₹${grand}` : 'calculating…'}</span></div>
       </div>
     </div>
   );
@@ -740,6 +754,13 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
           </div>
         ) : (
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* The bill, on the page where the money is actually taken.
+                It used to live only on /checkout, so the payment step showed one unexplained
+                number -- no subtotal, no delivery line, and no confirmation that a coupon had
+                been applied. A customer had no way to tell a correct total from a wrong one, and
+                no way to see their discount had survived. */}
+            {orderSummary}
+
             <div style={card$}>
               {head(<MapPin size={18} color="var(--brand-secondary)" />, 'Delivery address')}
               {selected ? (
@@ -857,8 +878,12 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
             {payError && (
               <div style={{ maxWidth: 720, margin: '0 auto 10px', padding: '10px 14px', borderRadius: 'var(--radius-button)', background: 'var(--red-wash)', border: '1.5px solid var(--status-error)', color: 'var(--status-error)', fontSize: 'var(--text-sm)', fontWeight: 700, textAlign: 'center' }}>{payError}</div>
             )}
-            <button onClick={() => user ? handlePlace() : setLoginOpen(true)} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: 'var(--gradient-warm)', color: 'var(--white)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              {user ? <>Pay ₹{grand} <Lock size={18} /></> : <>Log in to place order <Lock size={18} /></>}
+            <button onClick={() => user ? handlePlace() : setLoginOpen(true)} disabled={!deliveryKnown} style={{ width: '100%', maxWidth: 720, margin: '0 auto', padding: '16px', borderRadius: 'var(--radius-button)', border: 'none', background: deliveryKnown ? 'var(--gradient-warm)' : 'var(--border-default)', color: deliveryKnown ? 'var(--white)' : 'var(--text-strong)', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 'var(--text-base)', cursor: deliveryKnown ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              {/* Held until the quote lands. Offering "Pay ₹X" off a placeholder invites someone to
+                  tap an amount we have not worked out yet. */}
+              {!deliveryKnown ? <>Working out delivery…</>
+                : user ? <>Pay ₹{grand} <Lock size={18} /></>
+                  : <>Log in to place order <Lock size={18} /></>}
             </button>
             {/* The "secure payments" reassurance lives in the payment-method card above, not here:
                 the CTA floats over the page, so a caption under it printed on top of the bill. */}
