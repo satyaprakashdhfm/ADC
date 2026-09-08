@@ -8,7 +8,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: '*',
       allow: '/',
       // Account/checkout/admin pages are user-specific or private — nothing for a crawler to index.
-      disallow: ['/account', '/admin', '/checkout', '/order', '/payment', '/reset-password'],
+      disallow: ['/account', '/admin', '/checkout', '/order', '/payment'],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };
