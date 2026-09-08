@@ -505,6 +505,64 @@ export async function initSchema() {
     -- for admin visibility into where customers are logging in from, not precise geolocation.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_location TEXT;
 
+    /*
+     * Which Supabase auth account this row belongs to, stored instead of re-derived.
+     *
+     * Six places used to answer that question with a SELECT against auth.users, matched on email.
+     * That works only because our tables and Supabase's managed auth schema happen to share one
+     * database, so it is the single thing preventing the database from being moved on its own.
+     * Holding the id here makes the link explicit and leaves every remaining Supabase call an
+     * ordinary HTTPS admin call that does not care where Postgres lives.
+     *
+     * It is also more correct than the string match it replaces. Matching on email re-guessed the
+     * association on every request and got it wrong in the cases that mattered: a phone-login user
+     * has no real email, so the lookup had to reconstruct a synthetic address to find them, and a
+     * customer who changed their email address stopped resolving at all.
+     *
+     * NULL is expected and harmless — it means "not linked yet". syncUser fills it in from the
+     * verified token on the next authenticated request, so the column self-heals and the backfill
+     * below is only a head start.
+     */
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS supabase_user_id UUID UNIQUE;
+  `);
+
+  /*
+   * Backfill the mapping while the join is still possible.
+   *
+   * This is the one moment it can be done in SQL: `auth` and `public` are in the same database
+   * today and will not be after the move to Railway. Guarded on the table actually existing so
+   * the same statement is a no-op on any database without Supabase's auth schema, rather than an
+   * error that stops boot.
+   *
+   * Two passes rather than one OR, so a real email always wins over a synthetic one. Each pass
+   * can only match a single row per side — users.email and users.phone are both UNIQUE — so
+   * neither can violate the UNIQUE on the column it is filling.
+   */
+  await query(`
+    DO $$
+    BEGIN
+      IF to_regclass('auth.users') IS NULL THEN RETURN; END IF;
+
+      -- Pass 1: real email addresses (Google and email/password accounts).
+      UPDATE users u SET supabase_user_id = a.id
+        FROM auth.users a
+       WHERE u.supabase_user_id IS NULL
+         AND u.email IS NOT NULL
+         AND LOWER(a.email) = LOWER(u.email)
+         AND NOT EXISTS (SELECT 1 FROM users x WHERE x.supabase_user_id = a.id);
+
+      -- Pass 2: phone-OTP accounts, which Supabase knows only by the synthetic address we mint.
+      UPDATE users u SET supabase_user_id = a.id
+        FROM auth.users a
+       WHERE u.supabase_user_id IS NULL
+         AND u.phone IS NOT NULL
+         AND a.email = 'phone_' || u.phone || '@phone.adccookies.app'
+         AND NOT EXISTS (SELECT 1 FROM users x WHERE x.supabase_user_id = a.id);
+    END $$;
+  `);
+
+  await query(`
+
     -- The admin allowlist has to exist on every environment: seed.js is skipped on staging
     -- (SKIP_SEED=true) and an empty allowlist means nobody can open the dashboard at all.
     -- Kept here rather than run by hand against each database, so staging and production cannot end

@@ -8,7 +8,7 @@
  * here on purpose: models/ is what drizzle-kit diffs the database against, so a table left out of
  * it would be generated as a DROP on the next migration.
  */
-import { pgTable, text, boolean, serial, unique, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, boolean, serial, unique, primaryKey, uuid } from 'drizzle-orm/pg-core';
 import { tstz } from './_columns.js';
 
 export const users = pgTable("users", {
@@ -21,9 +21,16 @@ export const users = pgTable("users", {
 	createdAt: tstz("created_at").notNull(),
 	updatedAt: tstz("updated_at").notNull(),
 	lastLoginLocation: text("last_login_location"),
+	/* Added by hand rather than by a drizzle-kit pull, against this file's own instructions,
+	   because the alternative is worse: models/ is what drizzle-kit diffs the database against, so
+	   a live column missing from here is generated as a DROP COLUMN on the next migration. That
+	   would silently discard the link between our users and their Supabase auth accounts. Re-pull
+	   and re-split when convenient; this keeps the diff honest until then. */
+	supabaseUserId: uuid("supabase_user_id"),
 }, (table) => [
 	unique("users_email_key").on(table.email),
 	unique("users_phone_key").on(table.phone),
+	unique("users_supabase_user_id_key").on(table.supabaseUserId),
 ]);
 
 export const passwordResetOtps = pgTable("password_reset_otps", {

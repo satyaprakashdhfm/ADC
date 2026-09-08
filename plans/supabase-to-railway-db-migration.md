@@ -65,12 +65,36 @@ src/routes/admin/users.routes.ts:90
 src/routes/auth.routes.ts:62, 218, 329, 350
 ```
 
-Every one hunts a Supabase user id in order to mirror `name`/`phone` into `user_metadata`.
-**That id is already in the token as `claims.sub`.** The mirroring is cosmetic — the code says
-repeatedly that our own `users` table is authoritative.
+**Corrected 2026-09-08, on doing the work.** The paragraph here used to claim all six were
+cosmetic `user_metadata` mirrors that `claims.sub` would replace. That was wrong, and only one
+of the six actually fits it. What they really are:
 
-Use `claims.sub`; delete the SQL. This *removes* code, kills the cross-schema dependency, and
-is worth doing on its own merits. Ships independently. No cutover, no risk.
+| Sites | What it does | Why `claims.sub` does not solve it |
+|---|---|---|
+| `auth.routes.ts:218` | mirrors the caller's own name/phone | — it does, this is the one |
+| `admin/users.routes.ts:90` | mirrors a customer an **admin** edited | `claims.sub` is the admin's id, not the customer's |
+| `auth.middleware.ts:52`, `auth.routes.ts:62` | deletes the **absorbed** account's auth record | the absorbed account is not the caller |
+| `auth.routes.ts:329`, `:350` | phone-OTP find-or-create, and the name | runs *before* any token exists |
+
+The fix that covers all six is to **store the association instead of re-deriving it**: a new
+`users.supabase_user_id`, backfilled while `auth` and `public` still share a database, and kept
+current by `syncUser` from the verified `claims.sub` on every authenticated request.
+
+It is better than what it replaces, not merely equivalent. Matching on an email string re-guessed
+the association on every request and got it wrong exactly where it mattered — a phone-OTP user has
+no email, so the lookup had to *reconstruct* a synthetic address to find them, and the admin-edit
+mirror was gated on `row.email` and so silently never ran for phone-only customers, who are most
+of them.
+
+**One trap, found only by querying production first.** A local row can map to *two* auth accounts:
+14 accounts match by real email, 66 by synthetic address, and **3 customers have both**. For those
+three the column holds whichever they signed in with first. Had the OTP route trusted it, it would
+have reset the password on their Google account and then tried to sign in as the synthetic address
+— login broken outright. So the OTP route resolves by the synthetic address through GoTrue's admin
+API (`?filter=`, verified against the live API, not assumed), and the column is used only where the
+account is unambiguous.
+
+Still ships independently. No cutover, and it is revertible by ignoring one column.
 
 ## Stage 2 — Move Postgres
 

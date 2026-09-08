@@ -87,8 +87,12 @@ router.put('/users/:id', async (req, res) => {
       const meta: Record<string, any> = {};
       if (req.body?.name !== undefined) meta.full_name = row!.name;
       if (newPhone) meta.phone = newPhone;
-      const su = row!.email ? await getOne('SELECT id FROM auth.users WHERE email = $1', [row!.email]).catch(() => null) : null;
-      if (su && Object.keys(meta).length) await adminClient().auth.admin.updateUserById(su.id, { user_metadata: meta });
+      // Addressed by the stored auth id. The old lookup was gated on `row.email`, so a correction
+      // an admin made to a phone-only customer never reached Supabase at all — most customers
+      // here are phone-OTP and have no email.
+      if (row!.supabase_user_id && Object.keys(meta).length) {
+        await adminClient().auth.admin.updateUserById(row!.supabase_user_id, { user_metadata: meta });
+      }
     }
   } catch { /* metadata sync is non-critical */ }
 
