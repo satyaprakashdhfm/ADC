@@ -30,7 +30,7 @@ const rawImage = raw({ type: Object.keys(ALLOWED_TYPES), limit: MAX_UPLOAD_BYTES
 
 router.post('/uploads', rawImage, async (req, res) => {
   if (!storageConfigured()) {
-    throw new ApiError('Image storage is not configured on this environment (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY).', 503);
+    throw new ApiError('Image storage is not configured on this environment (JWT_SECRET signs the media URLs).', 503);
   }
   const prefix = PREFIXES[String(req.query.kind || '').toLowerCase()];
   if (!prefix) throw new ApiError(`Unknown upload kind. Use one of: ${Object.keys(PREFIXES).join(', ')}.`);

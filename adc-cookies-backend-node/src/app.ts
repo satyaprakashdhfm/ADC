@@ -23,6 +23,7 @@ import { parseAuth } from './middlewares/auth.middleware.js';
 import { noStore } from './middlewares/cache.middleware.js';
 
 import authRoutes from './routes/auth.routes.js';
+import mediaRoutes from './routes/media.routes.js';
 import productRoutes from './routes/products.routes.js';
 import cartRoutes from './routes/cart.routes.js';
 import orderRoutes from './routes/orders.routes.js';
@@ -120,6 +121,9 @@ app.use(parseAuth);
 
 app.get('/', (_req, res) => res.json({ status: 'ok', service: 'adc-cookies-backend (node/pg)' }));
 
+/* Uploaded images. Public by design and authorised by the signature in the URL, not a session —
+   the catalogue is browsed by anonymous shoppers. See routes/media.routes.ts. */
+app.use('/api/media', mediaRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/coupons', couponRoutes);
