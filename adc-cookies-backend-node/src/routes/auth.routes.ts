@@ -335,7 +335,16 @@ router.post('/otp/send', sendLimiter, async (req, res) => {
 
 router.post('/otp/verify', verifyLimiter, async (req, res) => {
   if (!messageCentralConfigured()) throw new ApiError('Phone login is not configured yet.', 503);
-  if (!supabaseConfigured()) throw new ApiError('Phone login is not fully configured (Supabase admin missing).', 503);
+  /*
+   * The Supabase gate that stood here is gone, and removing it matters more than it looks.
+   *
+   * It refused every phone login unless SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY were set, from
+   * when this route minted a Supabase session. It stopped doing that on 2026-09-08; the check
+   * outlived the dependency. So deleting those variables -- the plan once the Supabase project is
+   * retired -- would have taken phone login down entirely, with a 503 blaming a "Supabase admin"
+   * nothing here has needed for a day. A check for something no longer used does not fail safe:
+   * it fails on the day somebody tidies up, and blames the tidying.
+   */
 
   const { verificationId, code } = req.body || {};
   const name = String(req.body?.name || '').trim();

@@ -74,8 +74,25 @@ export function normalizePhone(input) {
   return { national, e164: `+${COUNTRY}${national}`, digits: `${COUNTRY}${national}` };
 }
 
-/** Send an OTP over SMS. Returns { ok, verificationId, timeout, message }. */
-export async function sendOtp(national, otpLength = 4) {
+/*
+ * Discriminated unions, so `if (!r.ok)` actually narrows.
+ *
+ * Without the literal `true`/`false`, TypeScript infers `ok: boolean` and cannot tell the two
+ * shapes apart -- `r.message` then types as `string | undefined` at every call site. That went
+ * unnoticed because the catch used to return `message: e.message`, which is `any` and assignable
+ * to anything; typing the failure path honestly is what surfaced it. The contract was always this,
+ * it just was not written down.
+ */
+export type OtpSendResult =
+  | { ok: true; verificationId: string; timeout: number }
+  | { ok: false; message: string };
+
+export type OtpValidateResult =
+  | { ok: true; mobileNumber: string | null }
+  | { ok: false; message: string };
+
+/** Send an OTP over SMS. */
+export async function sendOtp(national, otpLength = 4): Promise<OtpSendResult> {
   try {
     const token = await getAuthToken();
     const qs = new URLSearchParams({
@@ -90,14 +107,36 @@ export async function sendOtp(national, otpLength = 4) {
     if (res.ok && (body.responseCode === 200 || String(data.responseCode) === '200') && data.verificationId) {
       return { ok: true, verificationId: String(data.verificationId), timeout: data.timeout || 60 };
     }
-    return { ok: false, message: data.errorMessage || body.message || 'Could not send the OTP. Please try again.' };
+    /*
+     * Say something a customer can act on, rather than forwarding the provider's code.
+     *
+     * REQUEST_ALREADY_EXISTS was reaching people verbatim, and it is the most likely explanation
+     * for "the first OTP never came, the resend did": Message Central refuses a second request
+     * while an earlier verification for that number is still alive, so NO message is sent and the
+     * only clue is a string that means nothing to the person reading it. Waiting a minute and
+     * asking again works, which is exactly the shape of the report.
+     *
+     * The raw code is logged rather than shown. Whoever is debugging needs the provider's exact
+     * word; whoever is trying to order a cookie needs a next step.
+     */
+    const raw = String(data.errorMessage || body.message || '');
+    const friendly =
+      /ALREADY_EXISTS/i.test(raw) ? 'We have already sent a code to this number. Check your messages, or wait a minute and try again.'
+      : /BLOCKED|BLACKLIST/i.test(raw) ? 'We cannot send a code to this number. Please contact us and we will help.'
+      : /LIMIT|QUOTA|EXCEED/i.test(raw) ? 'Too many code requests. Please wait a few minutes and try again.'
+      : '';
+    if (raw && !friendly) console.warn(`[OTP] send refused | ${raw}`);
+    return { ok: false, message: friendly || 'Could not send the OTP. Please try again.' };
   } catch (e: any) {
-    return { ok: false, message: e.message || 'Could not send the OTP. Please try again.' };
+    /* The network failed, which is ours to own and not something to hand the customer as a stack
+       message. Logged so a real outage is visible, generic on the way out. */
+    console.warn(`[OTP] send failed | ${e?.message || e}`);
+    return { ok: false, message: 'Could not send the OTP. Please try again.' };
   }
 }
 
 /** Validate the code the user typed. Returns { ok, mobileNumber, message }. */
-export async function validateOtp(verificationId, code) {
+export async function validateOtp(verificationId, code): Promise<OtpValidateResult> {
   try {
     const token = await getAuthToken();
     const qs = new URLSearchParams({ verificationId: String(verificationId), code: String(code) });
