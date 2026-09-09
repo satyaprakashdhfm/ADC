@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { validateCoupon, getAvailableCoupons, getSpinStatus, firstImage, type AvailableCoupon, type SpinClaim } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
@@ -12,7 +12,7 @@ import { useAuth } from '@/context/AuthContext';
  * dependency of this behaviour, not something the component should have to thread through.
  */
 export function useCheckoutCoupons() {
-  const { cart, total, setQty, coupon, setApplied, setDiscount, setGiftLineId } = useCart();
+  const { cart, total, setQty, coupon, applied, setApplied, setDiscount, setGiftLineId } = useCart();
   const { user } = useAuth();
   const [couponErr, setCouponErr] = useState('');
   const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
@@ -43,7 +43,35 @@ export function useCheckoutCoupons() {
    * Safe against the apply path: a failed apply never changes the cart, so it cannot clear its own
    * message. A successful one may (a free-item reward adds the product), and by then there is no
    * error to lose. */
-  useEffect(() => { setCouponErr(''); }, [total]);
+  /*
+   * A discount belongs to the basket it was calculated for. When the basket changes, it retires.
+   *
+   * This used to clear only the ERROR, so a discount survived the cart it was priced against:
+   * apply a coupon to a 1,000 rupee basket, take 100 off, remove items down to 200, and the bill
+   * still promised -100. Nobody was overcharged -- the server recalculates at order time -- but
+   * the screen showed a discount that would not be honoured, which is how "why did I pay more
+   * than it said" begins.
+   *
+   * Clearing on every total change is the obvious fix and it is WRONG, which is worth writing
+   * down because it looks right. A free-item reward calls setQty to add the prize at its real
+   * price, so applying one CHANGES the total by itself -- and an unconditional clear would wipe
+   * the coupon in the same breath as granting it.
+   *
+   * So the total the discount was priced against is remembered, and only a move away from THAT
+   * retires it. The first total seen while applied is the reference, which is exactly the basket
+   * after any free item has landed.
+   */
+  const pricedAtTotal = useRef<number | null>(null);
+  useEffect(() => {
+    setCouponErr('');
+    if (!applied) { pricedAtTotal.current = null; return; }
+    if (pricedAtTotal.current === null) { pricedAtTotal.current = total; return; }
+    if (total !== pricedAtTotal.current) {
+      setApplied(false);
+      setDiscount(0);
+      pricedAtTotal.current = null;
+    }
+  }, [total, applied, setApplied, setDiscount]);
 
   const applyCoupon = async (overrideCode?: string) => {
     const code = (overrideCode ?? coupon).trim().toUpperCase();

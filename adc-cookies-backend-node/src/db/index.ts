@@ -27,14 +27,26 @@ pg.types.setTypeParser(1082, (v) => v);
 // If DATABASE_URL is set (and non-empty) it wins; otherwise node-postgres reads
 // PGHOST / PGDATABASE / PGUSER / PGPASSWORD / PGPORT from the environment (.env).
 // Remote hosts (e.g. Supabase) require SSL; local Unix-socket auth does not.
-// max:10 — we connect through the Supabase SESSION pooler, which caps THIS backend at
-// ~15 client connections (exceeding it returns EMAXCONNSESSION). 10 stays safely under that.
-// To raise it, switch DATABASE_URL to the TRANSACTION pooler (port 6543), which multiplexes
-// connections and removes the per-client session cap.
+/*
+ * max:30 — RAISED 2026-09-09, when the reason for the old cap stopped existing.
+ *
+ * It was 10 because we went through Supabase's SESSION pooler, which capped this backend at ~15
+ * client connections and returned EMAXCONNSESSION past that. Production moved to Railway Postgres
+ * over the private network on 2026-09-08: no pooler, no per-client session cap, and the database
+ * is a millisecond away instead of a region away.
+ *
+ * The cap was costing something real. GET /api/admin/users fires 319 queries (an N+1 over the
+ * customer list) and ten connections meant they queued in batches of ten. The N+1 is still the
+ * actual bug and still worth fixing; this stops the pool making it ten times worse.
+ *
+ * 30 rather than 100: Postgres allocates a backend process per connection, so an oversized pool
+ * costs memory on the database to make an application-side queue disappear. 30 leaves ample room
+ * under Railway's default 100 max_connections for the poller, the reconciler and a second service.
+ */
 export const pool = new Pool(
   process.env.DATABASE_URL
-    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, max: 10 }
-    : { max: 10 }
+    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, max: 30 }
+    : { max: 30 }
 );
 
 /*
