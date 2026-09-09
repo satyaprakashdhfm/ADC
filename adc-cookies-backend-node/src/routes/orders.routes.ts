@@ -17,7 +17,6 @@ import { trackShiprocket, pickServiceableStore } from '../services/shiprocket.cl
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../services/razorpay.client.js';
 import { applyCarrierTerminalStatus } from '../services/orderProgress.service.js';
 import { isPackProduct, validatePackPicks } from '../services/pack.service.js';
-import { userByEmail } from '../services/user.service.js';
 import { SHIPROCKET_DISABLED } from '../services/shipment.service.js';
 import { finalizePaidOrder } from '../services/order.service.js';
 
@@ -82,9 +81,8 @@ async function assertOrderingOpen() {
 
 router.post('/', async (req, res) => {
   await assertOrderingOpen();
-  const user = await userByEmail(req.user!.email);
   const { addressId, couponCode, items: bodyItems } = req.body || {};
-  console.log(`[ORDER] create | user=${user?.id}(${req.user!.email}) | addressId=${addressId} | items=${JSON.stringify((bodyItems || []).map(i => ({ p: i.productId, q: i.quantity })))}`);
+  console.log(`[ORDER] create | user=${req.user!.id}(${req.user!.email}) | addressId=${addressId} | items=${JSON.stringify((bodyItems || []).map(i => ({ p: i.productId, q: i.quantity })))}`);
 
   let lineItems;
   if (Array.isArray(bodyItems) && bodyItems.length > 0) {
@@ -114,7 +112,7 @@ router.post('/', async (req, res) => {
                specialNotes: it.specialNotes ?? null };
     }));
   } else {
-    const cart = await getCartRow(req.user!.email);
+    const cart = await getCartRow(req.user!.id);
     const cartItems = await getAll('SELECT * FROM cart_items WHERE cart_id = $1', [cart.id]);
     if (cartItems.length === 0) { console.log(`[ORDER] create | ✗ cart_empty (no body items + empty server cart)`); throw new ApiError('Cart is empty'); }
     lineItems = await Promise.all(cartItems.map(async (ci) => {
@@ -125,8 +123,8 @@ router.post('/', async (req, res) => {
   }
 
   // Scope the address to the caller so an order can never reference another user's address.
-  const address = await getOne('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [addressId, user.id]);
-  if (!address) { console.log(`[ORDER] create | ✗ address_not_found | addressId=${addressId} user=${user?.id}`); throw new ApiError('Address not found'); }
+  const address = await getOne('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [addressId, req.user!.id]);
+  if (!address) { console.log(`[ORDER] create | ✗ address_not_found | addressId=${addressId} user=${req.user!.id}`); throw new ApiError('Address not found'); }
   const destPin = String(address.pincode || '').replace(/\D/g, '');
 
   /*
@@ -156,8 +154,8 @@ router.post('/', async (req, res) => {
   let coupon: any = null;
   if (couponCode && String(couponCode).trim()) {
     const rawCoupon = await getCouponByCode(couponCode);
-    const giftProduct = rawCoupon ? await resolveGiftProduct(rawCoupon, user.id) : null;
-    coupon = await validateCoupon(couponCode, subtotal, user.id);
+    const giftProduct = rawCoupon ? await resolveGiftProduct(rawCoupon, req.user!.id) : null;
+    coupon = await validateCoupon(couponCode, subtotal, req.user!.id);
     // A "free item" reward only makes sense if that item is actually in the order — the
     // frontend auto-adds it the moment the coupon is applied, so this only fires if it was
     // removed afterwards (or the request was tampered with).
@@ -313,7 +311,7 @@ router.post('/', async (req, res) => {
           total_amount, coupon_code, payment_status, order_status, shipment_status, label_generated,
           store_code, created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING','PLACED','NOT_CREATED',FALSE,$10,$11,$12) RETURNING id`,
-      [orderNumber, user.id, deliveryAddress.id, subtotal, discount, deliveryFee, 0, total,
+      [orderNumber, req.user!.id, deliveryAddress.id, subtotal, discount, deliveryFee, 0, total,
        couponCode ?? null, fulfillingStore?.code ?? null, ts, ts]
     );
     const oid = order.id;
@@ -336,7 +334,7 @@ router.post('/', async (req, res) => {
     });
   }
 
-  const cart = await getOne('SELECT * FROM cart WHERE user_id = $1', [user.id]);
+  const cart = await getOne('SELECT * FROM cart WHERE user_id = $1', [req.user!.id]);
   if (cart) await query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
 
   /* No confirmation email here.
@@ -374,10 +372,9 @@ router.post('/', async (req, res) => {
  * genuinely needs to be visible.
  */
 router.get('/', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
   const rows = await getAll(
     `SELECT * FROM orders WHERE user_id = $1 AND payment_status = 'PAID'
-      ORDER BY created_at DESC, id DESC`, [user.id]
+      ORDER BY created_at DESC, id DESC`, [req.user!.id]
   );
   const serialized = await Promise.all(rows.map(async (o) => {
     const items = await getAll('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [o.id]);
@@ -420,7 +417,6 @@ function feedbackPair(body, key: string) {
  * 404ing when there is nothing to ask — "no feedback due" is the normal case, not an error.
  */
 router.get('/feedback/pending', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
   /*
    * Only recent orders. "How was the delivery?" asked about a parcel from two months ago gets a
    * guess rather than an answer, and the point of collecting this is that it is reliable. The
@@ -437,14 +433,13 @@ router.get('/feedback/pending', async (req, res) => {
         AND o.created_at > now() - ($2 || ' days')::interval
       ORDER BY o.created_at DESC
       LIMIT 1`,
-    [user.id, String(Number.isFinite(maxAgeDays) && maxAgeDays > 0 ? maxAgeDays : 30)]
+    [req.user!.id, String(Number.isFinite(maxAgeDays) && maxAgeDays > 0 ? maxAgeDays : 30)]
   );
   if (!order) return res.json({ pending: null });
   res.json({ pending: { id: order.id, orderNumber: order.order_number, carrier: order.carrier } });
 });
 
 router.post('/:id/feedback', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
   // Ownership and deliveredness are checked in one query: an order the caller does not own is
   // indistinguishable from one that does not exist, which is what it should look like to them.
   // Guard the cast: `id` lands in an integer comparison, and a non-numeric one would surface as a
@@ -452,7 +447,7 @@ router.post('/:id/feedback', async (req, res) => {
   const orderId = Number(req.params.id);
   if (!Number.isInteger(orderId) || orderId <= 0) throw new ApiError('Order not found');
   const order = await getOne(
-    'SELECT id, order_status FROM orders WHERE id = $1 AND user_id = $2', [orderId, user.id]
+    'SELECT id, order_status FROM orders WHERE id = $1 AND user_id = $2', [orderId, req.user!.id]
   );
   if (!order) throw new ApiError('Order not found');
   if (order.order_status !== 'DELIVERED') {
@@ -473,24 +468,22 @@ router.post('/:id/feedback', async (req, res) => {
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      ON CONFLICT (order_id) DO NOTHING
      RETURNING id`,
-    [order.id, user.id, website!.rating, website!.comment, flow!.rating, flow!.comment,
+    [order.id, req.user!.id, website!.rating, website!.comment, flow!.rating, flow!.comment,
      delivery!.rating, delivery!.comment, nowIso()]
   );
   res.status(201).json({ ok: true, recorded: rows.length > 0 });
 });
 
 router.get('/:id', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
   // Scope to the owner so one user can never read another's order.
-  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
+  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
   if (!order) throw new ApiError('Order not found');
   res.json(await fullOrder(order.id));
 });
 
 router.get('/:id/tracking', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
   // Only expose tracking for an order the caller owns.
-  const order = await getOne('SELECT id FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
+  const order = await getOne('SELECT id FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
   if (!order) throw new ApiError('Order not found');
   const rows = await getAll(
     'SELECT * FROM order_tracking WHERE order_id = $1 ORDER BY created_at ASC, id ASC', [order.id]
@@ -499,8 +492,7 @@ router.get('/:id/tracking', async (req, res) => {
 });
 
 router.get('/:id/delhivery-track', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
-  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
+  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
   if (!order) throw new ApiError('Order not found');
   if (!order.delhivery_waybill) return res.json({ tracked: false, reason: 'no_waybill' });
 
@@ -585,10 +577,9 @@ router.get('/:id/delhivery-track', async (req, res) => {
  * tidy up behind them is ours to notice in the logs, not theirs to be told about.
  */
 router.post('/:id/abandon', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
   const order = await getOne(
     "SELECT * FROM orders WHERE id = $1 AND user_id = $2 AND payment_status = 'PENDING'",
-    [req.params.id, user.id]
+    [req.params.id, req.user!.id]
   );
   if (!order) return res.json({ ok: true, cancelled: false });
 
@@ -611,8 +602,7 @@ router.post('/:id/abandon', async (req, res) => {
 router.post('/:id/payment/razorpay-order', async (req, res) => {
   await assertOrderingOpen();   // an order created before the pause must not still open a payment
   if (!razorpayConfigured()) { console.log(`[PAYMENT] rzp-order | order=${req.params.id} | ✗ not_configured`); throw new ApiError('Payments are not configured', 503); }
-  const user = await userByEmail(req.user!.email);
-  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
+  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
   if (!order) { console.log(`[PAYMENT] rzp-order | order=${req.params.id} | ✗ order_not_found`); throw new ApiError('Order not found'); }
   if (order.payment_status === 'PAID') { console.log(`[PAYMENT] rzp-order | order=${order.order_number} | ✗ already_paid`); throw new ApiError('Order already paid', 409); }
   // A cancelled order is finished. Without this, a stale tab left open on the payment step could
@@ -644,9 +634,8 @@ router.post('/:id/payment/razorpay-order', async (req, res) => {
 // Step 2: verify the Checkout result and mark PAID. Razorpay must be configured and
 // the signature MUST verify server-side — the frontend's word alone is never trusted.
 router.post('/:id/payment/verify', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
   // Scope to the owner so one user can never mark another's order as paid.
-  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
+  const order = await getOne('SELECT * FROM orders WHERE id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
   if (!order) { console.log(`[PAYMENT] verify | order=${req.params.id} | ✗ order_not_found`); throw new ApiError('Order not found'); }
   if (order.payment_status === 'PAID') { console.log(`[PAYMENT] verify | order=${order.order_number} | already_paid → ok`); return res.json(await fullOrder(order.id)); }
 

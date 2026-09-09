@@ -10,7 +10,6 @@ import { requireAuth } from '../middlewares/auth.middleware.js';
 import { ApiError } from '../utils/ApiError.js';
 import { serializeAddress } from '../serializers/index.js';
 import { normalizePhone } from '../services/messageCentral.client.js';
-import { userByEmail } from '../services/user.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -48,25 +47,23 @@ function validateAddressInput(b) {
 }
 
 router.get('/', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
-  const rows = await getAll('SELECT * FROM addresses WHERE user_id = $1 ORDER BY id', [user.id]);
+  const rows = await getAll('SELECT * FROM addresses WHERE user_id = $1 ORDER BY id', [req.user!.id]);
   res.json(rows.map(serializeAddress));
 });
 
 router.post('/', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
   const b = req.body || {};
   const v = validateAddressInput(b);
 
   if (b.isDefault) {
-    await query('UPDATE addresses SET is_default = FALSE WHERE user_id = $1', [user.id]);
+    await query('UPDATE addresses SET is_default = FALSE WHERE user_id = $1', [req.user!.id]);
   }
 
   const row = await getOne(
     `INSERT INTO addresses
        (user_id, full_name, phone, address_line1, address_line2, city, state, pincode, latitude, longitude, is_default, label)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-    [user.id, v.fullName, v.phone, v.addressLine1, b.addressLine2 ?? null,
+    [req.user!.id, v.fullName, v.phone, v.addressLine1, b.addressLine2 ?? null,
      canonicalCity(b.city), titleCase(b.state), v.pincode, b.latitude ?? null, b.longitude ?? null, !!b.isDefault, b.label || 'Home']
   );
   logAddress('create', row);
@@ -84,14 +81,13 @@ function logAddress(verb, row) {
 }
 
 router.put('/:id', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
-  const existing = await getOne('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
+  const existing = await getOne('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
   if (!existing) throw new ApiError('Address not found', 404);
   const b = req.body || {};
   const v = validateAddressInput(b);
 
   if (b.isDefault) {
-    await query('UPDATE addresses SET is_default = FALSE WHERE user_id = $1', [user.id]);
+    await query('UPDATE addresses SET is_default = FALSE WHERE user_id = $1', [req.user!.id]);
   }
 
   /*
@@ -115,15 +111,14 @@ router.put('/:id', async (req, res) => {
     [v.fullName, v.phone, v.addressLine1, b.addressLine2 ?? null,
      canonicalCity(b.city), titleCase(b.state), v.pincode, !!b.isDefault, b.label || 'Home',
      b.latitude ?? null, b.longitude ?? null,
-     req.params.id, user.id]
+     req.params.id, req.user!.id]
   );
   logAddress('update', row);
   res.json(serializeAddress(row));
 });
 
 router.delete('/:id', async (req, res) => {
-  const user = await userByEmail(req.user!.email);
-  await query('DELETE FROM addresses WHERE id = $1 AND user_id = $2', [req.params.id, user.id]);
+  await query('DELETE FROM addresses WHERE id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
   res.status(200).end();
 });
 
