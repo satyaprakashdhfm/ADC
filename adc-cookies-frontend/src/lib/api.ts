@@ -578,6 +578,20 @@ export interface ProductInput {
 
 export interface AdminAnalytics {
   from?: string; to?: string;
+  /**
+   * The headline figures for the chosen period — the same five the dashboard used to show as
+   * all-time totals underneath the date filter. Optional because the frontend and the backend
+   * deploy separately: a browser that loads the new page against the old API must render "—"
+   * rather than throw.
+   */
+  totals?: {
+    orders: number; revenue: number; paidRevenue: number;
+    cancelledUnpaid: number; cancelledAfterPayment: number; refundsOwed: number;
+    /** Customers who registered inside the period. The one customer figure that IS a period figure. */
+    newSignups: number;
+  };
+  /** Live orders in the period by stage. CANCELLED is deliberately absent — it has its own cards. */
+  ordersByStatus?: Record<string, number>;
   salesByDay: { day: string; orders: number; revenue: number; paid: number }[];
   /** Abandoned/cancelled orders per day, kept out of salesByDay so they cannot inflate revenue. */
   cancelledByDay: { day: string; orders: number }[];

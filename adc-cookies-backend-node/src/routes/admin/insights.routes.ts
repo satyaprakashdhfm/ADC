@@ -221,6 +221,61 @@ router.get('/analytics', async (req, res) => {
      happened. What those numbers were being read FOR is already better answered elsewhere: the two
      cancelled figures on /dashboard, and Needs attention for a paid order with no parcel. */
 
+  /*
+   * The headline figures FOR THE CHOSEN PERIOD.
+   *
+   * They used to come from /dashboard, which counts the shop's whole history, while sitting
+   * underneath the Period control — so picking "today" left five cards showing all-time totals that
+   * never moved. Either the filter looked broken or the numbers were read as the day's takings.
+   * Anything below the filter is now scoped by it; what genuinely has no period (the customer base,
+   * the catalogue, the unread messages) moved above it instead.
+   *
+   * The definitions match /dashboard exactly so the two agree when the range is widened to cover
+   * everything: cancelled orders are not revenue, and the two cancelled buckets are split by
+   * whether money actually changed hands. IS DISTINCT FROM rather than <>, because a NULL
+   * payment_status means "never paid", and <> NULL would quietly drop those rows from both counts.
+   */
+  const t = (await getOne(
+    `SELECT COUNT(*) FILTER (WHERE ${VALID})                                              AS orders,
+            COALESCE(SUM(o.total_amount) FILTER (WHERE ${VALID}), 0)                      AS revenue,
+            COALESCE(SUM(o.total_amount) FILTER (WHERE ${VALID} AND o.payment_status = 'PAID'), 0) AS paid,
+            COUNT(*) FILTER (WHERE o.order_status = 'CANCELLED' AND o.payment_status IS DISTINCT FROM 'PAID') AS cancelled_unpaid,
+            COUNT(*) FILTER (WHERE o.order_status = 'CANCELLED' AND o.payment_status = 'PAID')                AS cancelled_paid
+       FROM orders o WHERE ${inRange}`, p
+  ))!;
+
+  /* Refunds live on the payment, not the order, so this is the one figure that cannot be read off
+     the orders rows. Latest payment row wins, and a PARTIAL refund still counts as owed — which is
+     why it compares amounts instead of asking whether a refund exists at all. */
+  const { c: refundsOwed } = (await getOne(
+    `SELECT COUNT(*) AS c
+       FROM orders o
+       LEFT JOIN LATERAL (
+         SELECT amount, amount_refunded FROM payments p
+          WHERE p.order_id = o.id ORDER BY p.id DESC LIMIT 1
+       ) pay ON TRUE
+      WHERE ${inRange}
+        AND o.order_status = 'CANCELLED' AND o.payment_status = 'PAID'
+        AND COALESCE(pay.amount_refunded, 0) < COALESCE(pay.amount, o.total_amount)`, p
+  ))!;
+
+  /* Customers who signed up in the period — the one customer figure that IS a period figure, as
+     opposed to the size of the customer base, which is not. Cut on the same IST day as the orders,
+     so "today" means the same thing in both halves of the screen. */
+  const { c: newSignups } = (await getOne(
+    `SELECT COUNT(*) AS c FROM users u
+      WHERE u.role = 'CUSTOMER'
+        AND (u.created_at AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $1::date AND $2::date`, p
+  ).catch(() => ({ c: 0 })))!;
+
+  /* Where this period's live orders are sitting. CANCELLED is deliberately absent — it has its own
+     two cards, and a cancelled bar next to the live ones invites reading it as a stage. */
+  const statusRows = await getAll(
+    `SELECT o.order_status AS status, COUNT(*)::int AS n
+       FROM orders o WHERE ${inRange} AND ${VALID} GROUP BY 1 ORDER BY 2 DESC`, p);
+  const ordersByStatus = {};
+  for (const r of statusRows) ordersByStatus[r.status] = Number(r.n);
+
   const topProducts = (await getAll(
     `SELECT oi.product_name AS name, SUM(oi.quantity) AS qty, COALESCE(SUM(oi.total_price),0) AS revenue
        FROM order_items oi JOIN orders o ON o.id = oi.order_id
@@ -228,7 +283,15 @@ router.get('/analytics', async (req, res) => {
       GROUP BY 1 ORDER BY revenue DESC LIMIT 8`, p
   )).map((r) => ({ name: r.name, qty: Number(r.qty), revenue: Number(r.revenue) }));
 
-  res.json({ from, to, salesByDay, cancelledByDay, ordersByArea, topProducts });
+  res.json({
+    from, to,
+    totals: {
+      orders: Number(t.orders), revenue: Number(t.revenue), paidRevenue: Number(t.paid),
+      cancelledUnpaid: Number(t.cancelled_unpaid), cancelledAfterPayment: Number(t.cancelled_paid),
+      refundsOwed: Number(refundsOwed), newSignups: Number(newSignups),
+    },
+    ordersByStatus, salesByDay, cancelledByDay, ordersByArea, topProducts,
+  });
 });
 
 export default router;
