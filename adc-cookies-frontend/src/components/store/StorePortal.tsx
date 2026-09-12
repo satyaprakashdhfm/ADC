@@ -2,12 +2,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Store, LogOut, RefreshCw, Check, Package, Truck, Phone, MapPin, Receipt,
-  AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink, Volume2, Gift,
+  AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink, Volume2, Gift, Bell,
 } from 'lucide-react';
 import StoreSignIn from './StoreSignIn';
 import StoreMenuBoard from './StoreMenuBoard';
 import StatusPopup from './StatusPopup';
-import { askToNotify, notifyMoney, notifyOrder } from '@/lib/notify';
+import { askToNotify, notifyMoney, notifyOrder, notifyPermission, type NotifyState } from '@/lib/notify';
 import {
   storeMe, storeOrders, storeTrack,
   storeAcceptOrder, storeMarkReady, storeSetPosBill, storeSetOrderStatus, storeChangePassword,
@@ -438,6 +438,11 @@ export default function StorePortal({ code }: { code: string }) {
   // once, per fresh load. Dismissible either way so it can never trap someone on a browser that
   // genuinely cannot grant audio (rare, but real).
   const [soundGateDismissed, setSoundGateDismissed] = useState(false);
+  /* Whether this browser will show a notification. Read once on mount — Notification.permission is
+     not reactive — and re-read after every ask, which is the only thing that changes it from here. */
+  const [notifyState, setNotifyState] = useState<NotifyState>('default');
+  useEffect(() => { setNotifyState(notifyPermission()); }, []);
+  const askNotify = useCallback(async () => { setNotifyState(await askToNotify()); }, []);
 
   /*
    * The alert tone, synthesised rather than loaded — a kitchen tablet may be offline from
@@ -635,7 +640,7 @@ export default function StorePortal({ code }: { code: string }) {
   if (booting) return <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><p>Loading…</p></main>;
   // Signing in is the user gesture that lets the browser play sound at all — prime the audio
   // context here or the first new-order chime is silently dropped by the autoplay policy.
-  if (!session) return <StoreSignIn code={code} onSignedIn={(s) => { setSession(s); chime(); void askToNotify(); }} />;
+  if (!session) return <StoreSignIn code={code} onSignedIn={(s) => { setSession(s); chime(); void askNotify(); }} />;
 
   const manual = !session.store.relaysToPos;
 
@@ -713,10 +718,19 @@ export default function StorePortal({ code }: { code: string }) {
           <button onClick={() => setView(view === 'orders' ? 'menu' : 'orders')} style={btn()}>
             {view === 'orders' ? <><BookOpen size={15} /> Menu &amp; stock</> : <><ClipboardList size={15} /> Orders</>}
           </button>
+          {/* The sound gate asks for notifications too, but it only appears when the browser is
+              blocking audio — a tablet whose browser already trusts this site never sees it and
+              would never be asked. This is the way in for that case, and it takes itself away once
+              the question has an answer either way. */}
+          {notifyState === 'default' && (
+            <button onClick={() => void askNotify()} style={btn()} title="Get a notification when an order comes in, even when this tab is not in front">
+              <Bell size={15} /> Order alerts
+            </button>
+          )}
           <button onClick={() => refresh(false)} style={btn()} title="Refresh"><RefreshCw size={15} /></button>
           {/* Lets staff confirm the alarm actually works, at the start of a shift, without waiting
               for a real order to find out that it doesn't. */}
-          <button onClick={() => { void chime(); void askToNotify(); }} style={btn()} title="Test the new-order sound and turn on order notifications"><Volume2 size={15} /></button>
+          <button onClick={() => { void chime(); void askNotify(); }} style={btn()} title="Test the new-order sound and turn on order notifications"><Volume2 size={15} /></button>
           <button onClick={() => setPwOpen(true)} style={btn()} title="Change password"><KeyRound size={15} /></button>
           <button onClick={signOut} style={btn()}><LogOut size={15} /></button>
         </div>
@@ -737,7 +751,7 @@ export default function StorePortal({ code }: { code: string }) {
             <span style={{ fontSize: 15, fontWeight: 700, flex: 1, minWidth: 200 }}>
               New orders will show on screen but make no sound until you tap once.
             </span>
-            <button onClick={() => { void chime(); void askToNotify(); }} style={btn('primary')}>Turn the sound on</button>
+            <button onClick={() => { void chime(); void askNotify(); }} style={btn('primary')}>Turn the sound on</button>
           </div>
         )}
 
@@ -861,7 +875,7 @@ export default function StorePortal({ code }: { code: string }) {
               Your browser only allows sound after a tap. Tap below once at the start of your shift —
               every new order then rings until it is accepted, even while this tab sits in the background.
             </p>
-            <button onClick={() => { void chime(); void askToNotify(); setSoundGateDismissed(true); }} style={{ ...btn('primary', true), width: '100%', marginBottom: 10 }}>
+            <button onClick={() => { void chime(); void askNotify(); setSoundGateDismissed(true); }} style={{ ...btn('primary', true), width: '100%', marginBottom: 10 }}>
               <Volume2 size={19} /> Enable sound
             </button>
             <button onClick={() => setSoundGateDismissed(true)} style={{ ...btn(), width: '100%' }}>Continue without sound</button>
