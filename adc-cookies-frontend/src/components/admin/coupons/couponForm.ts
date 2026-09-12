@@ -1,4 +1,5 @@
 import { type AdminCoupon } from '@/lib/api';
+import { todayStr } from '../shared/format';
 
 // Coupon create/edit form uses string fields (easy inputs); converted to CouponInput on save.
 // `editId` is set when editing an existing coupon (PUT) instead of creating a new one (POST).
@@ -27,7 +28,9 @@ export function couponToDraft(c: AdminCoupon): CouponDraft {
 // Live coupon status derived at read-time — no cron needed to "deactivate" a coupon.
 export function couponStatus(c: AdminCoupon): { text: string; ok: boolean } {
   if (!c.isActive) return { text: 'Disabled', ok: false };
-  if (c.expiryDate && c.expiryDate < new Date().toISOString().slice(0, 10)) return { text: 'Expired', ok: false };
+  // todayStr() is the IST day; a bare toISOString() said yesterday until 05:30 IST, so a coupon
+  // that had in fact expired went on reading as live through the small hours.
+  if (c.expiryDate && c.expiryDate < todayStr()) return { text: 'Expired', ok: false };
   if (c.usageLimit != null && (c.timesUsed ?? 0) >= c.usageLimit) return { text: 'Limit reached', ok: false };
   return { text: 'Active', ok: true };
 }

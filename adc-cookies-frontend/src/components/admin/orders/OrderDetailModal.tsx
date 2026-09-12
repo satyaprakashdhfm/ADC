@@ -1,7 +1,7 @@
 'use client';
 import { X, Gift, Package, Truck, RefreshCw, ExternalLink } from 'lucide-react';
 import { adminTrackOrder, type Order } from '@/lib/api';
-import { money, fmtDate } from '../shared/format';
+import { money, fmtDateTime } from '../shared/format';
 import { card, addBtn, iconBtn, Badge } from '../shared/ui';
 import CancelRefundPanel from './CancelRefundPanel';
 import { shipmentBadge } from '../shared/shipmentStatus';
@@ -52,7 +52,7 @@ export default function OrderDetailModal({ order: o, onClose, trackResult, setTr
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
           <div style={{ flex: 1 }}>
             <h3 style={{ fontSize: 'var(--text-h4)' }}>{o.orderNumber}</h3>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 2 }}>{fmtDate(o.createdAt)}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)', marginTop: 2 }}>{fmtDateTime(o.createdAt)}</div>
           </div>
           <button onClick={onClose} style={iconBtn}><X size={18} /></button>
         </div>
@@ -213,7 +213,7 @@ export default function OrderDetailModal({ order: o, onClose, trackResult, setTr
             <div style={{ marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border-default)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
               <span style={{ fontWeight: 800, color: 'var(--text-strong)' }}>Payment:</span> {o.payment.provider === 'RAZORPAY' ? 'Razorpay' : o.payment.provider} · {o.payment.status}
               {o.payment.transactionId && <><br /><span style={{ fontFamily: 'monospace', color: 'var(--text-body)' }}>{o.payment.transactionId}</span></>}
-              {o.payment.paidAt && <><br />Paid {fmtDate(o.payment.paidAt)}</>}
+              {o.payment.paidAt && <><br />Paid {fmtDateTime(o.payment.paidAt)}</>}
             </div>
           )}
         </div>

@@ -5,7 +5,7 @@ import {
   adminCreateStoreStaff, adminSetStoreStaffPassword, adminToggleStoreStaff, adminDeleteStoreStaff,
   type AdminStore,
 } from '@/lib/api';
-import { fmtDate } from '../shared/format';
+import { fmtDateTime } from '../shared/format';
 import { card, td, inp, addBtn, actionBtn, MiniStat, Table, Badge } from '../shared/ui';
 
 /*
@@ -135,7 +135,7 @@ export default function StoreCard({ store, busy, setBusy, onChanged, setErr, set
                     </div>
                   )}
                 </td>
-                <td style={td}>{u.lastLoginAt ? fmtDate(u.lastLoginAt) : <span style={{ color: 'var(--text-muted)' }}>never</span>}</td>
+                <td style={td}>{u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : <span style={{ color: 'var(--text-muted)' }}>never</span>}</td>
                 {/* "Inactive", not "Disabled" — it pairs with "Active" as the opposite of the same
                     thing, where "Disabled" read like a different property altogether. */}
                 <td style={td}>{u.isActive ? <Badge text="Active" ok /> : <Badge text="Inactive" />}</td>

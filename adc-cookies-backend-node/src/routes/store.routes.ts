@@ -6,6 +6,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { getOne, getAll, query, nowIso } from '../db/index.js';
 import { ApiError } from '../utils/ApiError.js';
+import { applyOrderStatus } from '../services/orderStatus.service.js';
 import {
   requireStoreUser, signStoreToken, checkPassword, hashPassword, storeAuthConfigured,
 } from '../services/storeAuth.service.js';
@@ -332,9 +333,11 @@ router.post('/orders/:id/accept', async (req, res) => {
 /*
  * Ready — baked, bagged, waiting for the rider.
  *
- * Stops at PACKED and goes no further. A store cannot mark an order delivered: the carrier reports
- * that through the tracking webhook, and letting a counter declare a delivery would let an order be
- * closed while the parcel is still sitting on the shelf.
+ * Stops at PACKED. This used to be the end of what a counter could say, on the reasoning that only
+ * the carrier can report a delivery — but the shop delivers its own orders when Shiprocket finds no
+ * rider, and that reasoning left the customer watching a status that would never move and ringing
+ * the shop to ask. POST /orders/:id/status below carries it the rest of the way; this route stays
+ * as the one-tap path for the ordinary case.
  */
 router.post('/orders/:id/ready', async (req, res) => {
   const order = await loadStoreOrder(req);
@@ -364,6 +367,41 @@ router.post('/orders/:id/pos-bill', async (req, res) => {
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [order.id, 'POS_BILLED_MANUALLY', `Billed on the ${req.storeUser!.store.name} Petpooja terminal — bill ${billNo} (entered by ${req.storeUser!.username})`, ts]);
   res.json({ ok: true, billNo });
+});
+
+/*
+ * Set the status by hand, from the counter.
+ *
+ * The shop delivers plenty of its own orders: Shiprocket finds no rider, or the booking is
+ * cancelled, and a manager takes it out personally. Until this existed the status stayed wherever
+ * the carrier left it, the customer had no way to know, and they rang the shop — which is the
+ * problem this solves.
+ *
+ * DELIVERED set from here is exactly what "delivered by us" means, with no extra flag: the order
+ * reaches DELIVERED with no carrier delivery behind it, which is the condition deliveredByUs()
+ * already tests, so the admin list, the store board and the customer's page all say the same thing.
+ *
+ * Available on every order rather than only when a booking has failed. A manager who has already
+ * arranged their own rider should not have to argue with the screen about whether Shiprocket agrees
+ * — they can see the parcel and we cannot.
+ *
+ * Same service the admin dashboard uses, so a cancellation from here still calls off the POS ticket
+ * and the courier, and the customer still gets the same milestone email. A counter cancelling an
+ * order does NOT refund it — refunds live on their own admin route — so the portal says so before
+ * the button is pressed.
+ */
+router.post('/orders/:id/status', async (req, res) => {
+  const order = await loadStoreOrder(req);
+  const status = String(req.body?.status || '').toUpperCase();
+  if (!ORDER_STATUSES.includes(status)) throw new ApiError('Unknown status.');
+  if (status === order.order_status) return res.json({ ok: true, unchanged: true, status });
+
+  const who = `${req.storeUser!.store.name} (${req.storeUser!.username})`;
+  const { at, cancelWarnings } = await applyOrderStatus({
+    order, status, remarks: req.body?.remarks, by: who,
+  });
+  console.log(`[STORE] status | order=${order.order_number} | ${order.order_status} -> ${status} | by=${who}`);
+  res.json({ ok: true, status, at, cancelWarnings });
 });
 
 /*

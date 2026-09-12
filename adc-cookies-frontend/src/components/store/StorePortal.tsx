@@ -6,9 +6,10 @@ import {
 } from 'lucide-react';
 import StoreSignIn from './StoreSignIn';
 import StoreMenuBoard from './StoreMenuBoard';
+import StatusPopup from './StatusPopup';
 import {
   storeMe, storeOrders, storeTrack,
-  storeAcceptOrder, storeMarkReady, storeSetPosBill, storeChangePassword,
+  storeAcceptOrder, storeMarkReady, storeSetPosBill, storeSetOrderStatus, storeChangePassword,
   getStoreToken, clearStoreToken, StoreAuthError,
   type StoreSession, type StoreOrder, type StoreTrack, type StoreOrdersResponse,
 } from '@/lib/storeApi';
@@ -185,10 +186,11 @@ function Chip({ text, tone = 'neutral' }: { text: string; tone?: 'neutral' | 'ok
 /* ------------------------------------------------------------------ */
 
 function OrderCard({
-  order, manual, onAccept, onReady, onBill, onTrack, track, busy,
+  order, manual, onAccept, onReady, onBill, onTrack, onStatus, track, busy,
 }: {
   order: StoreOrder; manual: boolean; busy: boolean;
   onAccept: () => void; onReady: () => void; onBill: (n: string) => void; onTrack: () => void;
+  onStatus: () => void;
   track: StoreTrack | null;
 }) {
   const [billDraft, setBillDraft] = useState('');
@@ -378,6 +380,12 @@ function OrderCard({
               <Package size={14} /> Mark packed &amp; ready
             </button>
           )}
+          {/* Always offered, not only when the rider hunt has failed. A manager who has already
+              arranged their own delivery should not have to persuade the screen that Shiprocket has
+              given up — they can see the parcel and we cannot. */}
+          <button disabled={busy} onClick={onStatus} style={{ ...btn(), opacity: busy ? 0.6 : 1 }}>
+            <Truck size={14} /> Update status
+          </button>
           {order.workflow.readyAt && (
             <span style={{ fontSize: 14, color: 'var(--text-muted, #7b6a58)', alignSelf: 'center' }}>
               Packed — the courier above closes this out.
@@ -400,6 +408,10 @@ export default function StorePortal({ code }: { code: string }) {
   const [view, setView] = useState<'orders' | 'menu'>('orders');
   const [tracks, setTracks] = useState<Record<number, StoreTrack>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
+  /* Which order has the status popup open. The order itself is looked up from `orders` on render
+     rather than copied into state, so the popup shows the freshly refreshed status after a change
+     instead of the snapshot taken when it opened. */
+  const [statusFor, setStatusFor] = useState<number | null>(null);
   const [err, setErr] = useState('');
   const [alerting, setAlerting] = useState<StoreOrder[]>([]);
   // After accepting from the alert, a manual-POS store still has to key the order into Petpooja and
@@ -660,6 +672,7 @@ export default function StorePortal({ code }: { code: string }) {
                 onAccept={() => act(o.id, () => storeAcceptOrder(code, o.id))}
                 onReady={() => act(o.id, () => storeMarkReady(code, o.id))}
                 onBill={(n) => act(o.id, () => storeSetPosBill(code, o.id, n))}
+                onStatus={() => setStatusFor(o.id)}
                 onTrack={() => doTrack(o.id)} />
             ))}
           </div>}
@@ -840,6 +853,31 @@ export default function StorePortal({ code }: { code: string }) {
           </div>
         </div>
       )}
+
+      {/* Looked up from `orders` rather than held in state, so after a change the popup shows the
+          refreshed status instead of the snapshot it opened with. */}
+      {statusFor != null && (() => {
+        const o = (orders || []).find(x => x.id === statusFor);
+        if (!o) return null;
+        return (
+          <StatusPopup
+            orderNumber={o.orderNumber}
+            current={o.status}
+            busy={busyId === o.id}
+            onClose={() => setStatusFor(null)}
+            onSet={(status, remarks) => {
+              void act(o.id, async () => {
+                const r = await storeSetOrderStatus(code, o.id, status, remarks || undefined);
+                /* A cancellation the carrier or POS refused is not a success. Saying so here is the
+                   difference between the counter finishing the job by hand and a rider turning up
+                   for a parcel nobody is going to pay for. */
+                if (r.cancelWarnings?.length) setErr(r.cancelWarnings.join(' · '));
+              });
+              setStatusFor(null);
+            }}
+          />
+        );
+      })()}
     </main>
   );
 }

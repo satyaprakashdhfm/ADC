@@ -7,7 +7,7 @@ import {
   adminCreatePickupRequest, adminFetchOrderDocument, adminGetStoreReadiness, adminGetShiprocketWallet,
   type Order, type Warehouse, type WarehouseInput, type StoreReadinessReport, type ShiprocketWallet,
 } from '@/lib/api';
-import { todayStr, money, fmtDate } from '../shared/format';
+import { todayStr, money, fmtDateTime } from '../shared/format';
 import { card, td, inp, addBtn, iconBtn, actionBtn, Panel, Table, Badge, Empty, Field } from '../shared/ui';
 import { belongsInShipments } from '../orders/orderConstants';
 import { SR_ORDER_STATES } from './srOrderStates';
@@ -488,7 +488,7 @@ export default function DeliveryTab({
               <Table head={['Order', 'Customer', 'What we told the customer', 'Booking it replaced', 'Value']}>
                 {own.map(o => (
                   <tr key={o.id}>
-                    <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{fmtDate(o.createdAt)}</span></td>
+                    <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{fmtDateTime(o.createdAt)}</span></td>
                     <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city} · {o.address?.pincode}</span></td>
                     <td style={{ ...td, whiteSpace: 'normal', maxWidth: 300, lineHeight: 1.45 }}>
                       {o.statusNote

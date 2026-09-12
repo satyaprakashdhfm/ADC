@@ -5,7 +5,7 @@ import {
   adminCreateProductFromPetpooja,
   type PetpoojaMapping, type PetpoojaRelay, type PetpoojaItem,
 } from '@/lib/api';
-import { money, fmtDate } from '../shared/format';
+import { money, fmtDateTime } from '../shared/format';
 import { td, inp, iconBtn, actionBtn, MiniStat, Panel, Table, Badge, Empty, Field, FilterBar } from '../shared/ui';
 
 interface Props {
@@ -71,7 +71,7 @@ export default function PetpoojaTab({
                           <MiniStat label="Items in menu" value={String(total)} />
                           <MiniStat label="Linked to products" value={`${linked} / ${total}`} bad={linked < total} />
                           <MiniStat label="Restaurant code" value={ppMap.restId} />
-                          <MiniStat label="Last received" value={lastPush ? fmtDate(lastPush.received_at) : '—'} />
+                          <MiniStat label="Last received" value={lastPush ? fmtDateTime(lastPush.received_at) : '—'} />
                         </div>
                         {linked < total && (
                           <p style={{ fontSize: 'var(--text-xs)', color: 'var(--status-error)', fontWeight: 700, margin: '0 0 12px', lineHeight: 1.5 }}>
@@ -87,7 +87,7 @@ export default function PetpoojaTab({
                             <Table head={['Received', 'Restaurant', 'Source', 'Items']}>
                               {ppMap.pushes.map(p => (
                                 <tr key={p.id}>
-                                  <td style={td}>{fmtDate(p.received_at)}</td>
+                                  <td style={td}>{fmtDateTime(p.received_at)}</td>
                                   <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{p.rest_id}</span></td>
                                   <td style={td}>{p.source}</td>
                                   <td style={td}>{p.item_count}</td>
@@ -262,7 +262,7 @@ export default function PetpoojaTab({
                             </td>
                             <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 'var(--text-xs)' }}>{r.petpooja_order_id || '—'}</span></td>
                             <td style={td}>{r.attempts}</td>
-                            <td style={td}>{fmtDate(r.updated_at)}</td>
+                            <td style={td}>{fmtDateTime(r.updated_at)}</td>
                           </tr>
                         ))}
                       </Table>

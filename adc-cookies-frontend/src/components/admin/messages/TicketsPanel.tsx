@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { MessageSquare, Package } from 'lucide-react';
 import { type AdminTicket, type AdminTicketStatus } from '@/lib/api';
 import { PAGE_SIZE } from '@/hooks/admin/usePagination';
-import { fmtDate } from '../shared/format';
+import { fmtDateTime } from '../shared/format';
 import { card, inp, Empty, Field, FilterBar, Pager } from '../shared/ui';
 
 /*
@@ -119,7 +119,7 @@ export default function TicketsPanel({ tickets, search, onSearch, statusFilter, 
                 <span style={{ ...pill, ...STATUS_STYLE[t.status] }}>{STATUS_LABEL[t.status]}</span>
                 <span style={{ ...pill, background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}>{CATEGORY_LABEL[t.category] || t.category}</span>
                 <strong style={{ color: 'var(--text-strong)' }}>{t.subject}</strong>
-                <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>#{t.id} · {fmtDate(t.createdAt)}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>#{t.id} · {fmtDateTime(t.createdAt)}</span>
               </div>
 
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 8 }}>

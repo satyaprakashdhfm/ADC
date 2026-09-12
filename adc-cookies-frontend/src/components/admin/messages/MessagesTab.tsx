@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Check } from 'lucide-react';
 import { type AdminMessage, type AdminTicket, type AdminTicketStatus } from '@/lib/api';
 import { PAGE_SIZE } from '@/hooks/admin/usePagination';
-import { fmtDate } from '../shared/format';
+import { fmtDateTime } from '../shared/format';
 import { card, inp, iconBtn, Panel, Empty, Field, FilterBar, Pager } from '../shared/ui';
 import TicketsPanel from './TicketsPanel';
 
@@ -119,7 +119,7 @@ export default function MessagesTab({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
                   <strong style={{ color: 'var(--text-strong)' }}>{m.name}</strong>
                   <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{m.email}{m.phone ? ` · ${m.phone}` : ''}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{fmtDate(m.createdAt)}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{fmtDateTime(m.createdAt)}</span>
                 </div>
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', lineHeight: 1.6, marginBottom: 10 }}>{m.message}</p>
                 {!m.handled

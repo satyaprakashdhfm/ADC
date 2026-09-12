@@ -158,8 +158,12 @@ router.get('/dashboard', async (_req, res) => {
 // All order-based metrics are scoped to [from, to] inclusive, cut on IST calendar days.
 // Defaults to the last 30 days when no range is given.
 router.get('/analytics', async (req, res) => {
-  const today = new Date().toISOString().slice(0, 10);
-  const def = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10);
+  /* The default range is cut in IST like everything else here. toISOString() is UTC, so between
+     midnight and 05:30 IST it named yesterday — a caller that sent no range got a window ending
+     before the day it was asking about. */
+  const istDay = (ms) => new Date(ms + 5.5 * 3600_000).toISOString().slice(0, 10);
+  const today = istDay(Date.now());
+  const def = istDay(Date.now() - 29 * 864e5);
   const okDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
   let from = okDate(req.query.from) ? req.query.from : def;
   let to = okDate(req.query.to) ? req.query.to : today;

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pencil, Check, X } from 'lucide-react';
 import { type AdminUser } from '@/lib/api';
 import { PAGE_SIZE } from '@/hooks/admin/usePagination';
-import { fmtDate } from '../shared/format';
+import { fmtDateTime } from '../shared/format';
 import { tenDigit, formatPhone, isMobile, phoneError } from '@/lib/phone';
 import { td, inp, iconBtn, actionBtn, Panel, Table, Empty, FilterBar, Pager } from '../shared/ui';
 
@@ -92,7 +92,7 @@ export default function UsersTab({ users, search, onSearch, page, onPage, saveUs
               </td>
               <td style={td}>{u.lastLoginLocation || '—'}</td>
               <td style={td}>{u.orderCount}</td>
-              <td style={td}>{fmtDate(u.createdAt)}</td>
+              <td style={td}>{fmtDateTime(u.createdAt)}</td>
               <td style={{ ...td, whiteSpace: 'nowrap' }}>
                 {isEditing ? (
                   <div style={{ display: 'flex', gap: 6 }}>

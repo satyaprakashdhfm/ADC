@@ -163,6 +163,21 @@ export const storeMarkReady = (code: string, id: number) =>
 export const storeSetPosBill = (code: string, id: number, billNo: string) =>
   request<{ ok: boolean; billNo: string }>(code, `/orders/${id}/pos-bill`, { method: 'POST', body: JSON.stringify({ billNo }) });
 
+/*
+ * Set the status by hand from the counter.
+ *
+ * The same statuses the admin dashboard uses and the same server code behind them, so a counter
+ * marking an order delivered is indistinguishable from an admin doing it — which is the point,
+ * because the counter is the one who actually delivered it.
+ *
+ * cancelWarnings comes back non-empty when a CANCELLED could not be called off downstream: the
+ * Petpooja ticket or the courier booking is still live and needs doing by hand in their dashboard.
+ * Showing it is not optional — a silent success there means a rider still turns up.
+ */
+export const storeSetOrderStatus = (code: string, id: number, status: string, remarks?: string) =>
+  request<{ ok: boolean; status: string; at: string; unchanged?: boolean; cancelWarnings?: string[] }>(
+    code, `/orders/${id}/status`, { method: 'POST', body: JSON.stringify({ status, remarks }) });
+
 /* ---- What this store can currently sell ----
    Scoped to the signed-in store by the token; there is no store code in these paths to get wrong. */
 

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { RefreshCw, ChevronDown, ChevronRight, XCircle } from 'lucide-react';
 import { type Order } from '@/lib/api';
 import { PAGE_SIZE } from '@/hooks/admin/usePagination';
-import { money, fmtDate } from '../shared/format';
+import { money, fmtDateTime } from '../shared/format';
 import { td, inp, iconBtn, Panel, Table, Badge, Empty, Field, FilterBar, Pager } from '../shared/ui';
 import { ORDER_STATUSES, LIVE_ORDER_STATUSES, isDeadOrder, deadOrderReason } from './orderConstants';
 import StatusNoteModal from './StatusNoteModal';
@@ -71,7 +71,7 @@ function DeadGroup({ title, note, rows, emptyText, owed, onOpenOrder }: {
                     <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)' }}>{reason.text}</span>
                     {reason.owed && <div style={{ marginTop: 4 }}><Badge text="refund owed" /></div>}
                   </td>
-                  <td style={td}>{fmtDate(o.createdAt)}</td>
+                  <td style={td}>{fmtDateTime(o.createdAt)}</td>
                   <td style={td}><XCircle size={15} color="var(--text-subtle)" /></td>
                 </tr>
               );
@@ -207,7 +207,7 @@ export default function OrdersTab({
                   {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </td>
-              <td style={td}>{fmtDate(o.createdAt)}</td>
+              <td style={td}>{fmtDateTime(o.createdAt)}</td>
             </tr>
           ))}
         </Table>
