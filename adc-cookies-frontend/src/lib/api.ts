@@ -784,6 +784,19 @@ export async function adminAnalytics(from?: string, to?: string): Promise<AdminA
 
 export async function adminGetOrders(): Promise<Order[]> { return request('/admin/orders'); }
 
+/** One new order, as the notification poller sees it — five fields, not a whole serialized order. */
+export interface NewOrderPing { id: number; orderNumber: string; totalAmount: number; store: string | null; createdAt: string }
+
+/**
+ * Orders that have arrived since id `since`, for the new-order notification.
+ *
+ * Call it with no `since` the first time: it then reports only where "now" is, so a dashboard
+ * opened on a morning's queue does not announce orders that arrived overnight.
+ */
+export async function adminNewOrders(since?: number): Promise<{ latestId: number; orders: NewOrderPing[] }> {
+  return request(`/admin/orders/new${since ? `?since=${since}` : ''}`);
+}
+
 /**
  * Cancelling also cancels the POS ticket and the courier booking. `cancelWarnings` lists any leg
  * that refused — those need doing by hand in the carrier's or Petpooja's own dashboard.

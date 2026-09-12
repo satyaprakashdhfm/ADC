@@ -4,6 +4,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { serializeOrder, PAYMENT_SELECT } from '../../serializers/index.js';
 import { ORDER_STATUSES } from '../../config/delivery.js';
 import { applyOrderStatus } from '../../services/orderStatus.service.js';
+import { storeByCode } from '../../services/store.service.js';
 
 const router = Router();
 
@@ -67,6 +68,46 @@ router.get('/orders', async (req, res) => {
       duplicateChargeOrderIds.has(o.id) ? ['DUPLICATE_CHARGE'] : [], posByOrder.get(o.id) || null, noteByOrder.get(o.id) ?? null)
   );
   res.json(serialized);
+});
+
+/*
+ * Only the orders that have landed since the caller last looked.
+ *
+ * The dashboard polls this so it can raise a browser notification the moment an order arrives.
+ * Deliberately NOT the full /orders list: that one carries items, addresses, payments and POS state
+ * for every order the shop has ever taken, and pulling all of it twice a minute to discover that
+ * nothing has changed is the sort of thing that is free at thirty orders and ruinous at thirty
+ * thousand. This returns five columns and, most of the time, no rows at all.
+ *
+ * MUST stay above /orders/:id — Express matches in order, and "new" reaching that handler would be
+ * passed to Postgres as an integer id.
+ *
+ * A first call sends no `since` and gets back only where "now" is, with no orders. A dashboard
+ * opened on a morning's queue must not fire ten notifications for orders that arrived hours ago.
+ */
+router.get('/orders/new', async (req, res) => {
+  const since = Number(req.query.since);
+  const rows = Number.isFinite(since) && since > 0
+    ? await getAll(
+        `SELECT id, order_number, total_amount, store_code, created_at
+           FROM orders WHERE id > $1 ORDER BY id DESC LIMIT 20`, [since])
+    : [];
+  /* MAX(id), not the newest row we just read — with no `since` there are no rows, and after a burst
+     of more than twenty there would be orders above the ones returned. Either way the caller must
+     come back asking for what it has not seen, not for what it was handed. */
+  const { id: latestId } = (await getOne('SELECT COALESCE(MAX(id), 0) AS id FROM orders'))!;
+  res.json({
+    latestId: Number(latestId),
+    orders: rows.map((o) => ({
+      id: o.id,
+      orderNumber: o.order_number,
+      totalAmount: Number(o.total_amount),
+      /* "Besant Nagar", not "besant" and not "A Dough Cookie, Besant Nagar" — a notification body
+         is one short line and the shop's own name in it is the half that carries nothing. */
+      store: o.store_code ? (storeByCode(o.store_code)?.name || o.store_code).replace(/^A Dough Cookie,\s*/, '') : null,
+      createdAt: o.created_at,
+    })),
+  });
 });
 
 router.get('/orders/:id', async (req, res) => {

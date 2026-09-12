@@ -3,9 +3,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminLogin from './AdminLogin';
 import { useAdminSession } from '@/hooks/admin/useAdminSession';
+import { useNewOrderAlert } from '@/hooks/admin/useNewOrderAlert';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
-  LogOut, Truck, FileText, Store as StoreIcon, Paintbrush,
+  LogOut, Truck, FileText, Store as StoreIcon, Paintbrush, Bell, BellOff, BellRing,
 } from 'lucide-react';
 import { usePagination } from '@/hooks/admin/usePagination';
 import { useTransientNotice } from '@/hooks/admin/useTransientNotice';
@@ -74,6 +75,10 @@ export default function AdminDashboard() {
 
   const isAdmin = !!admin;
 
+  /* Runs for the whole dashboard, not a tab: an order does not wait for somebody to be on the
+     right screen, and the point of a notification is reaching them when they are on another one. */
+  const { permission: notifyState, enableNotifications, newOrders, clearNewOrders } = useNewOrderAlert(isAdmin);
+
   const { attention, refreshAttention } = useAdminAttention(isAdmin);
 
   const { users, search: userSearch, setSearch: setUserSearch, saveUser, savingUser } = useAdminUsers(isAdmin && tab === 'users', setErr);
@@ -120,6 +125,26 @@ export default function AdminDashboard() {
               {' · '}signed in until {new Date(admin.expiresAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
             </div>
           </div>
+          {/* Order alerts. Asking has to come from a click — Safari refuses a prompt that no one
+              asked for — so this is a button rather than something that happens on load. Hidden
+              entirely where the browser has no Notification API (iOS Safari outside an installed
+              web app), because offering a switch that cannot do anything is worse than silence. */}
+          {notifyState !== 'unsupported' && (
+            notifyState === 'granted'
+              ? <span title="Order alerts are on. New orders appear as a browser notification while this tab is open." style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontWeight: 700, color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                  <BellRing size={16} /> Alerts on
+                  {!!newOrders && <span style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: 'var(--brand-secondary)', color: 'var(--white)', fontSize: 11, fontWeight: 900, display: 'grid', placeItems: 'center' }}>{newOrders}</span>}
+                </span>
+              : notifyState === 'denied'
+                /* Once denied, asking again does nothing at all — the browser will not re-prompt.
+                   Saying where to change it is the only useful thing left. */
+                ? <span title="This browser is blocking notifications for the dashboard. Turn them back on in the padlock menu beside the address bar." style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', fontWeight: 700, color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>
+                    <BellOff size={16} /> Alerts blocked
+                  </span>
+                : <button onClick={() => void enableNotifications()} title="Get a browser notification the moment an order comes in" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>
+                    <Bell size={16} /> Order alerts
+                  </button>
+          )}
           <button onClick={() => { void adminSignOut().then(() => router.push('/')); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}><LogOut size={16} /> Log out</button>
         </div>
       </header>
@@ -137,9 +162,12 @@ export default function AdminDashboard() {
           {TABS.map(t => {
             const on = tab === t.id;
             const Icon = t.icon;
-            const badge = t.id === 'messages' ? stats?.newMessages : undefined;
+            /* Orders carries what has landed since this page was opened, cleared by opening the
+               tab. Not a count of unhandled orders — that is Needs attention's job, and two badges
+               counting different things on the same screen is how both stop being read. */
+            const badge = t.id === 'messages' ? stats?.newMessages : t.id === 'orders' ? newOrders : undefined;
             return (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none', padding: '10px 16px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', border: on ? 'none' : '1.5px solid var(--border-default)', background: on ? 'var(--gradient-warm)' : 'var(--surface-card)', color: on ? 'var(--white)' : 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
+              <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'orders') { clearNewOrders(); refreshOrders(); } }} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none', padding: '10px 16px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', border: on ? 'none' : '1.5px solid var(--border-default)', background: on ? 'var(--gradient-warm)' : 'var(--surface-card)', color: on ? 'var(--white)' : 'var(--text-body)', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
                 <Icon size={17} /> {t.label}
                 {!!badge && <span style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: on ? 'var(--white)' : 'var(--brand-secondary)', color: on ? 'var(--brand-secondary)' : 'var(--white)', fontSize: 11, fontWeight: 900, display: 'grid', placeItems: 'center' }}>{badge}</span>}
               </button>

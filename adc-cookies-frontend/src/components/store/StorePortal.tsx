@@ -7,6 +7,7 @@ import {
 import StoreSignIn from './StoreSignIn';
 import StoreMenuBoard from './StoreMenuBoard';
 import StatusPopup from './StatusPopup';
+import { askToNotify, notifyMoney, notifyOrder } from '@/lib/notify';
 import {
   storeMe, storeOrders, storeTrack,
   storeAcceptOrder, storeMarkReady, storeSetPosBill, storeSetOrderStatus, storeChangePassword,
@@ -565,7 +566,21 @@ export default function StorePortal({ code }: { code: string }) {
       const ids = new Set(waiting.map(o => o.id));
       if (announce && announced.current) {
         const fresh = waiting.filter(o => !announced.current!.has(o.id));
-        if (fresh.length) { setAlerting(fresh); void startAlarm(); }
+        if (fresh.length) {
+          setAlerting(fresh);
+          void startAlarm();
+          /* A tablet on the counter spends most of the day showing the POS app, and the alarm only
+             plays while this tab is the one in front. A notification is the one thing the browser
+             will put on top of whatever they are actually looking at. It does not replace the
+             alarm -- a busy kitchen hears before it reads. */
+          if (fresh.length > 3) {
+            notifyOrder(`${fresh.length} new orders`, fresh.map(o => o.orderNumber).join(', ').slice(0, 140), 'adc-store-orders');
+          } else {
+            for (const o of fresh) {
+              notifyOrder('New order', `${o.orderNumber} · ${notifyMoney(o.totalAmount)}`, `adc-store-order-${o.id}`);
+            }
+          }
+        }
       }
       announced.current = ids;
       // Live carrier/rider status, automatically — nobody should have to remember to tap "Check
@@ -620,7 +635,7 @@ export default function StorePortal({ code }: { code: string }) {
   if (booting) return <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><p>Loading…</p></main>;
   // Signing in is the user gesture that lets the browser play sound at all — prime the audio
   // context here or the first new-order chime is silently dropped by the autoplay policy.
-  if (!session) return <StoreSignIn code={code} onSignedIn={(s) => { setSession(s); chime(); }} />;
+  if (!session) return <StoreSignIn code={code} onSignedIn={(s) => { setSession(s); chime(); void askToNotify(); }} />;
 
   const manual = !session.store.relaysToPos;
 
@@ -701,7 +716,7 @@ export default function StorePortal({ code }: { code: string }) {
           <button onClick={() => refresh(false)} style={btn()} title="Refresh"><RefreshCw size={15} /></button>
           {/* Lets staff confirm the alarm actually works, at the start of a shift, without waiting
               for a real order to find out that it doesn't. */}
-          <button onClick={() => void chime()} style={btn()} title="Test the new-order sound"><Volume2 size={15} /></button>
+          <button onClick={() => { void chime(); void askToNotify(); }} style={btn()} title="Test the new-order sound and turn on order notifications"><Volume2 size={15} /></button>
           <button onClick={() => setPwOpen(true)} style={btn()} title="Change password"><KeyRound size={15} /></button>
           <button onClick={signOut} style={btn()}><LogOut size={15} /></button>
         </div>
@@ -722,7 +737,7 @@ export default function StorePortal({ code }: { code: string }) {
             <span style={{ fontSize: 15, fontWeight: 700, flex: 1, minWidth: 200 }}>
               New orders will show on screen but make no sound until you tap once.
             </span>
-            <button onClick={() => void chime()} style={btn('primary')}>Turn the sound on</button>
+            <button onClick={() => { void chime(); void askToNotify(); }} style={btn('primary')}>Turn the sound on</button>
           </div>
         )}
 
@@ -846,7 +861,7 @@ export default function StorePortal({ code }: { code: string }) {
               Your browser only allows sound after a tap. Tap below once at the start of your shift —
               every new order then rings until it is accepted, even while this tab sits in the background.
             </p>
-            <button onClick={() => { void chime(); setSoundGateDismissed(true); }} style={{ ...btn('primary', true), width: '100%', marginBottom: 10 }}>
+            <button onClick={() => { void chime(); void askToNotify(); setSoundGateDismissed(true); }} style={{ ...btn('primary', true), width: '100%', marginBottom: 10 }}>
               <Volume2 size={19} /> Enable sound
             </button>
             <button onClick={() => setSoundGateDismissed(true)} style={{ ...btn(), width: '100%' }}>Continue without sound</button>
