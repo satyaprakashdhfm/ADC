@@ -842,6 +842,12 @@ export async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_pos_bill_no TEXT;
     CREATE INDEX IF NOT EXISTS idx_orders_store_code ON orders(store_code);
 
+    -- Where the order came from: the ad click or outside link that brought the customer (UTM tags,
+    -- fbclid/gclid, referrer), plus the browser details Meta's Conversions API matches on. Written
+    -- once at creation — see services/attribution.service.ts. NULL on every order placed before it
+    -- existed, which the dashboard shows as "not tracked" rather than folding into "direct".
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS attribution JSONB;
+
     /*
      * Post-delivery feedback, three questions per order.
      *

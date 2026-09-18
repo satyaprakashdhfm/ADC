@@ -19,6 +19,7 @@ import { applyCarrierTerminalStatus } from '../services/orderProgress.service.js
 import { isPackProduct, validatePackPicks } from '../services/pack.service.js';
 import { SHIPROCKET_DISABLED } from '../services/shipment.service.js';
 import { finalizePaidOrder } from '../services/order.service.js';
+import { attributionFromRequest, attributionSummary } from '../services/attribution.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -82,7 +83,8 @@ async function assertOrderingOpen() {
 router.post('/', async (req, res) => {
   await assertOrderingOpen();
   const { addressId, couponCode, items: bodyItems } = req.body || {};
-  console.log(`[ORDER] create | user=${req.user!.id}(${req.user!.email}) | addressId=${addressId} | items=${JSON.stringify((bodyItems || []).map(i => ({ p: i.productId, q: i.quantity })))}`);
+  const attribution = attributionFromRequest(req);
+  console.log(`[ORDER] create | user=${req.user!.id}(${req.user!.email}) | addressId=${addressId} | from=${attributionSummary(attribution)} | items=${JSON.stringify((bodyItems || []).map(i => ({ p: i.productId, q: i.quantity })))}`);
 
   let lineItems;
   if (Array.isArray(bodyItems) && bodyItems.length > 0) {
@@ -309,10 +311,10 @@ router.post('/', async (req, res) => {
       `INSERT INTO orders
          (order_number, user_id, address_id, subtotal, discount_amount, delivery_fee, tax_amount,
           total_amount, coupon_code, payment_status, order_status, shipment_status, label_generated,
-          store_code, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING','PLACED','NOT_CREATED',FALSE,$10,$11,$12) RETURNING id`,
+          store_code, created_at, updated_at, attribution)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING','PLACED','NOT_CREATED',FALSE,$10,$11,$12,$13) RETURNING id`,
       [orderNumber, req.user!.id, deliveryAddress.id, subtotal, discount, deliveryFee, 0, total,
-       couponCode ?? null, fulfillingStore?.code ?? null, ts, ts]
+       couponCode ?? null, fulfillingStore?.code ?? null, ts, ts, attribution ? JSON.stringify(attribution) : null]
     );
     const oid = order.id;
     for (const li of lineItems) {

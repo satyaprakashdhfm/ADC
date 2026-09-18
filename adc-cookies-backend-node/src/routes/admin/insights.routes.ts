@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getOne, getAll } from '../../db/index.js';
+import { sourceOf } from '../../services/attribution.service.js';
 
 const router = Router();
 
@@ -283,8 +284,33 @@ router.get('/analytics', async (req, res) => {
       GROUP BY 1 ORDER BY revenue DESC LIMIT 8`, p
   )).map((r) => ({ name: r.name, qty: Number(r.qty), revenue: Number(r.revenue) }));
 
+  /*
+   * Where this period's orders came from, out of our own data rather than Ads Manager's.
+   *
+   * Grouped in JS rather than SQL because the rules (see sourceOf) are the kind that get argued
+   * about and changed, and one function is easier to change than a CASE nobody wants to read.
+   * A period holds tens of orders, not millions. Meta campaigns get their own breakdown underneath,
+   * since "which ad is working" is the question the Meta row exists to answer.
+   */
+  const srcRows = await getAll(
+    `SELECT o.attribution, o.total_amount FROM orders o WHERE ${inRange} AND ${VALID}`, p);
+  const bySource = new Map<string, { orders: number; revenue: number }>();
+  const byCampaign = new Map<string, { orders: number; revenue: number }>();
+  const bump = (m, k, amt) => { const r = m.get(k) || { orders: 0, revenue: 0 }; r.orders += 1; r.revenue += amt; m.set(k, r); };
+  for (const r of srcRows) {
+    const amt = Number(r.total_amount) || 0;
+    const source = sourceOf(r.attribution);
+    bump(bySource, source, amt);
+    if (source === 'Meta ads') bump(byCampaign, r.attribution?.campaign || '(no campaign name)', amt);
+  }
+  const ranked = (m: Map<string, { orders: number; revenue: number }>, key: string) =>
+    [...m.entries()].map(([k, v]) => ({ [key]: k, ...v })).sort((x, y) => y.orders - x.orders || y.revenue - x.revenue);
+  const ordersBySource = ranked(bySource, 'source');
+  const metaCampaigns = ranked(byCampaign, 'campaign');
+
   res.json({
     from, to,
+    ordersBySource, metaCampaigns,
     totals: {
       orders: Number(t.orders), revenue: Number(t.revenue), paidRevenue: Number(t.paid),
       cancelledUnpaid: Number(t.cancelled_unpaid), cancelledAfterPayment: Number(t.cancelled_paid),

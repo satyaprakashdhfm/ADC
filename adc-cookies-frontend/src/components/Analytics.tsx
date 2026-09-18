@@ -1,6 +1,7 @@
 'use client';
 import Script from 'next/script';
 import { GA_ID, ADS_ID, analyticsEnabled } from '@/lib/analytics';
+import { usePageTracking } from '@/hooks/usePageTracking';
 
 /*
  * Loads gtag.js, once, for whichever Google properties are configured.
@@ -14,6 +15,9 @@ import { GA_ID, ADS_ID, analyticsEnabled } from '@/lib/analytics';
  * first paint, which is the trade every Core Web Vitals score is made of.
  */
 export default function Analytics() {
+  /* Always on, whatever is configured: remembering where a visitor came from is our own data, not
+     Google's or Meta's, and the Meta Pixel loads itself on the first page view (lib/analytics). */
+  usePageTracking();
   if (!analyticsEnabled) return null;
   const primary = GA_ID || ADS_ID;
   return (

@@ -1,8 +1,9 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getProducts, createOrder, createRazorpayOrder, verifyPayment, abandonOrder, type Product, type OrderItemInput, type Address } from '@/lib/api';
 import { loadRazorpay } from '@/lib/razorpay';
+import { trackInitiateCheckout } from '@/lib/analytics';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 
@@ -36,6 +37,15 @@ export function useCheckoutPayment({ step, chosen, addresses, grand, onNeedLogin
   const [pendingPayment, setPendingPayment] = useState(false); // true when confirmed via stall mode (no Razorpay), not yet actually paid
 
   const lines = Object.values(cart);
+
+  /* InitiateCheckout, once per visit to the review step — the moment a browse becomes an intent to
+     buy. Only with something in the cart; a refresh of an emptied checkout is not a checkout. */
+  const checkoutReported = useRef(false);
+  useEffect(() => {
+    if (step !== 'review' || checkoutReported.current || lines.length === 0) return;
+    checkoutReported.current = true;
+    trackInitiateCheckout(lines.map(l => ({ id: l.productId ?? l.id, name: l.name, price: l.price, qty: l.qty })));
+  }, [step, lines]);
 
   // A failed payment bounces back here (/checkout?payment=failed) — surface why, then clean the URL
   // so a refresh doesn't keep showing it.

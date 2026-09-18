@@ -1,6 +1,7 @@
 // Same-origin by default: the browser calls /api/... on whatever host served the page
 // (localhost or your LAN IP on a phone), and Next.js rewrites it to the backend server-side.
 import type { ProductCategory } from './categories';
+import { getAttribution } from './attribution';
 
 // Where the browser sends API calls. In the browser we ALWAYS use the same-origin `/api` path so
 // Next.js rewrites it to the backend (see next.config.ts). This keeps `next dev` hitting your LOCAL
@@ -445,7 +446,9 @@ export interface OrderItem {
 export interface OrderItemInput { productId: number; quantity: number; selectedOptions?: unknown; specialNotes?: string; }
 
 export async function createOrder(addressId: number, couponCode?: string, items?: OrderItemInput[]): Promise<Order> {
-  return request('/orders', { method: 'POST', body: JSON.stringify({ addressId, couponCode, items }) });
+  // attribution: where this shopper came from (an ad, a link, a search), stored on the order so the
+  // dashboard can report it and the backend's Meta Purchase event can match it. See lib/attribution.
+  return request('/orders', { method: 'POST', body: JSON.stringify({ addressId, couponCode, items, attribution: getAttribution() }) });
 }
 
 export interface RazorpayOrder { keyId: string; orderId: string; amount: number; currency: string; orderNumber: string; }
@@ -592,6 +595,11 @@ export interface AdminAnalytics {
   };
   /** Live orders in the period by stage. CANCELLED is deliberately absent — it has its own cards. */
   ordersByStatus?: Record<string, number>;
+  /** Live orders in the period by where the customer came from — our own attribution, not Meta's.
+   *  "Not tracked" is every order placed before attribution was recorded. */
+  ordersBySource?: { source: string; orders: number; revenue: number }[];
+  /** The "Meta ads" row above, split by utm_campaign. */
+  metaCampaigns?: { campaign: string; orders: number; revenue: number }[];
   salesByDay: { day: string; orders: number; revenue: number; paid: number }[];
   /** Abandoned/cancelled orders per day, kept out of salesByDay so they cannot inflate revenue. */
   cancelledByDay: { day: string; orders: number }[];

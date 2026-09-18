@@ -2,6 +2,7 @@ import { getOne, getAll, query, nowIso } from '../db/index.js';
 import { sendOrderEmails } from './mailer.client.js';
 import { storeByCode } from './store.service.js';
 import { bookShipmentAndRelay } from './shipment.service.js';
+import { sendMetaPurchase } from './metaCapi.client.js';
 
 /*
  * What happens to an order once the money is actually in.
@@ -76,6 +77,12 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
   );
   await query('INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
     [orderId, 'CONFIRMED', 'Payment received via Razorpay', ts]);
+
+  /* The sale, reported to Meta from here rather than only from the success screen — a redirected or
+     abandoned-tab payment never reaches that screen, and this line runs for every one of them.
+     Fire-and-forget and never throws; only the caller that won the claim above gets here, so a
+     payment.captured / order.paid pair cannot report one order twice. */
+  void sendMetaPurchase(orderId);
 
   // Record coupon redemption now (on payment) — idempotent via the per-order check, so calling
   // finalizePaidOrder from both the verify route and the webhook can't double-count a use.

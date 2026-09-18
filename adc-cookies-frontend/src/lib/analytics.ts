@@ -1,5 +1,5 @@
 /*
- * Google Analytics 4 and Google Ads, in one place.
+ * Google Analytics 4, Google Ads and the Meta Pixel, in one place.
  *
  * DORMANT UNTIL CONFIGURED. With no measurement id set, nothing loads and every call here is a
  * no-op — the same shape as an unconfigured integration on the backend. So this can ship before
@@ -17,9 +17,13 @@ export const ADS_PURCHASE_LABEL = process.env.NEXT_PUBLIC_ADS_PURCHASE_LABEL || 
 
 export const analyticsEnabled = !!(GA_ID || ADS_ID);
 
+/** Meta Pixel id (Events Manager). Public by nature — it ends up in the page either way. */
+export const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID || '';
+
 type GtagArgs = [command: string, ...rest: unknown[]];
+type Fbq = ((...args: unknown[]) => void) & { callMethod?: (...a: unknown[]) => void; queue: unknown[][]; push: Fbq; loaded: boolean; version: string };
 declare global {
-  interface Window { dataLayer?: unknown[]; gtag?: (...args: GtagArgs) => void }
+  interface Window { dataLayer?: unknown[]; gtag?: (...args: GtagArgs) => void; fbq?: Fbq; _fbq?: Fbq }
 }
 
 /** Never throws, never fires when unconfigured, never runs during SSR. */
@@ -30,6 +34,73 @@ function gtag(...args: GtagArgs) {
 
 export function trackEvent(name: string, params: Record<string, unknown> = {}) {
   gtag('event', name, params);
+}
+
+/*
+ * The Meta Pixel, loaded on first use rather than from a <Script> tag.
+ *
+ * This is Meta's own base snippet, run as a function: it installs a queueing stub for fbq, starts
+ * fetching fbevents.js, and calls init — and the library drains the queue when it arrives. Doing it
+ * here means an event fired before the library has loaded is queued, not lost, which a separate
+ * <Script> racing a component's first effect could not promise. The first caller is the page-view
+ * hook, after hydration, so it still never sits in front of the page.
+ *
+ * Staff screens (/admin, /store) never call it, so the office and the shop counters are not in the
+ * audience the ads are trained on.
+ */
+function loadPixel(): Fbq | null {
+  if (typeof window === 'undefined' || !META_PIXEL_ID) return null;
+  if (window.fbq) return window.fbq;
+  const n = function (...args: unknown[]) {
+    // apply(n, …), exactly as Meta's snippet does — fbevents.js may rely on `this` being fbq.
+    if (n.callMethod) n.callMethod.apply(n, args); else n.queue.push(args);
+  } as Fbq;
+  n.push = n; n.loaded = true; n.version = '2.0'; n.queue = [];
+  window.fbq = n;
+  if (!window._fbq) window._fbq = n;
+  const t = document.createElement('script');
+  t.async = true;
+  t.src = 'https://connect.facebook.net/en_US/fbevents.js';
+  document.head.appendChild(t);
+  n('init', META_PIXEL_ID);
+  return n;
+}
+
+/** Never throws, never fires when unconfigured, never runs during SSR. */
+function fbq(...args: unknown[]) {
+  try { loadPixel()?.(...args); } catch { /* analytics must not break a page */ }
+}
+
+/** One per page, including client-side navigations — the hook in usePageTracking calls it. */
+export function trackPageView() {
+  fbq('track', 'PageView');
+}
+
+export interface CartLine { id: string | number; name: string; price: number; qty: number }
+
+export function trackAddToCart(line: CartLine) {
+  const value = line.price * line.qty;
+  fbq('track', 'AddToCart', {
+    content_ids: [String(line.id)], content_name: line.name, content_type: 'product',
+    contents: [{ id: String(line.id), quantity: line.qty }], value, currency: 'INR',
+  });
+  trackEvent('add_to_cart', {
+    currency: 'INR', value,
+    items: [{ item_id: String(line.id), item_name: line.name, price: line.price, quantity: line.qty }],
+  });
+}
+
+export function trackInitiateCheckout(lines: CartLine[]) {
+  const value = lines.reduce((s, l) => s + l.price * l.qty, 0);
+  fbq('track', 'InitiateCheckout', {
+    content_ids: lines.map(l => String(l.id)), content_type: 'product',
+    contents: lines.map(l => ({ id: String(l.id), quantity: l.qty })),
+    num_items: lines.reduce((s, l) => s + l.qty, 0), value, currency: 'INR',
+  });
+  trackEvent('begin_checkout', {
+    currency: 'INR', value,
+    items: lines.map(l => ({ item_id: String(l.id), item_name: l.name, price: l.price, quantity: l.qty })),
+  });
 }
 
 export interface PurchasePayload {
@@ -66,6 +137,12 @@ export function trackPurchase({ orderNumber, value, items, coupon }: PurchasePay
     })),
   };
   trackEvent('purchase', payload);
+  /* eventID is the order number, and the server sends the same id from finalizePaidOrder. When both
+     arrive Meta keeps one — which is what makes it safe to send from both places. */
+  fbq('track', 'Purchase', {
+    value, currency: 'INR', content_type: 'product',
+    num_items: (items || []).reduce((s, i) => s + i.qty, 0),
+  }, { eventID: orderNumber });
   if (ADS_PURCHASE_LABEL) {
     gtag('event', 'conversion', {
       send_to: ADS_PURCHASE_LABEL,

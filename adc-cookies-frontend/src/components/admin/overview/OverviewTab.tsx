@@ -5,6 +5,7 @@ import { money, fmtDate, todayStr, daysAgoStr } from '../shared/format';
 import { card, inp, iconBtn, StatCard, Empty } from '../shared/ui';
 import { fillDays, SalesChart, BarRows } from './OverviewCharts';
 import OrderingStatusPanel from './OrderingStatusPanel';
+import SourceBreakdown from './SourceBreakdown';
 
 interface Props {
   stats: AdminStats | null;
@@ -238,11 +239,17 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
           : <SalesChart data={series} />}
       </ChartCard>
 
-      <ChartCard title="Orders by city" error={analyticsError} onRetry={onReloadAnalytics} empty={!!analytics && !analytics.ordersByArea.length}>
-        {analytics
-          ? <BarRows items={analytics.ordersByArea.map(a => ({ label: a.city, value: a.orders, sub: `${a.orders} order${a.orders === 1 ? '' : 's'} · ${money(a.revenue)}` }))} />
-          : <Empty text="Loading…" />}
-      </ChartCard>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
+        <ChartCard title="Orders by source" error={analyticsError} onRetry={onReloadAnalytics}>
+          {analytics ? <SourceBreakdown analytics={analytics} /> : <Empty text="Loading…" />}
+        </ChartCard>
+
+        <ChartCard title="Orders by city" error={analyticsError} onRetry={onReloadAnalytics} empty={!!analytics && !analytics.ordersByArea.length}>
+          {analytics
+            ? <BarRows items={analytics.ordersByArea.map(a => ({ label: a.city, value: a.orders, sub: `${a.orders} order${a.orders === 1 ? '' : 's'} · ${money(a.revenue)}` }))} />
+            : <Empty text="Loading…" />}
+        </ChartCard>
+      </div>
 
       {/* The Payments and Shipments donuts are gone.
           Both counted every order in the range, cancelled included, so a quiet week rendered as

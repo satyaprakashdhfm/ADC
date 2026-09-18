@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import type { PackPick } from '@/lib/api';
+import { trackAddToCart } from '@/lib/analytics';
 
 export interface CartEntry {
   id: string; name: string; price: number; qty: number; img?: string; addOns?: string[]; note?: string;
@@ -69,7 +70,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem('adc_cart', JSON.stringify(cart)); } catch { /* quota / private mode */ }
   }, [cart]);
 
+  /* The cart as of the last render, so setQty can tell an add from a removal without doing it inside
+     the state updater — React may run an updater twice, and an analytics call in there would count
+     every add twice. */
+  const cartRef = useRef(cart);
+  useEffect(() => { cartRef.current = cart; }, [cart]);
+
   const setQty = useCallback((id: string, qty: number, name?: string, price?: number, img?: string, addOns?: string[], note?: string, extra?: { productId?: number; packPicks?: PackPick[] }) => {
+    /* Every add on the site comes through here — the menu's Add, the +, a pack from the builder — so
+       this is the one place AddToCart is reported. Only the increase, and never a zero-priced line
+       (a coupon's free item is not something they chose to buy). */
+    const was = cartRef.current[id];
+    const unit = price ?? was?.price ?? 0;
+    if (qty > (was?.qty || 0) && unit > 0) {
+      trackAddToCart({ id: extra?.productId ?? was?.productId ?? id, name: name || was?.name || id, price: unit, qty: qty - (was?.qty || 0) });
+    }
     setCart(prev => {
       const next = { ...prev };
       if (qty <= 0) {
