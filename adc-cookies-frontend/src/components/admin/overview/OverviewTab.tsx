@@ -83,12 +83,12 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
       <OrderingStatusPanel {...ordering} />
 
       {/* ============ Not scoped to any period - kept ABOVE the filter on purpose ============ */}
-      <SectionLabel hint="as it stands Â· the period filter below does not change these">The shop right now</SectionLabel>
+      <SectionLabel hint="as it stands · the period filter below does not change these">The shop right now</SectionLabel>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14 }}>
-        <StatCard icon={<Users size={20} />} label="Customers" value={stats ? String(stats.totalUsers) : 'â'} sub="everyone registered" onClick={onOpenUsers} />
-        <StatCard icon={<Package size={20} />} label="Products" value={stats ? String(stats.totalProducts) : 'â'} sub={stats && stats.unavailableProducts ? `${stats.unavailableProducts} unavailable` : 'all available'} />
-        <StatCard icon={<MessageSquare size={20} />} label="New messages" value={stats ? String(stats.newMessages) : 'â'} sub="unread" accent={!!stats?.newMessages} />
+        <StatCard icon={<Users size={20} />} label="Customers" value={stats ? String(stats.totalUsers) : '—'} sub="everyone registered" onClick={onOpenUsers} />
+        <StatCard icon={<Package size={20} />} label="Products" value={stats ? String(stats.totalProducts) : '—'} sub={stats && stats.unavailableProducts ? `${stats.unavailableProducts} unavailable` : 'all available'} />
+        <StatCard icon={<MessageSquare size={20} />} label="New messages" value={stats ? String(stats.newMessages) : '—'} sub="unread" accent={!!stats?.newMessages} />
       </div>
 
       {/* Who your customers are is a property of the customer base, not of a date range - which is
@@ -96,7 +96,7 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
           city" panel built on orders, which on a shop with nine customers and one completed order
           reported a single customer: a true answer to a question nobody was asking. */}
       <ChartCard title="Customers by state" right={<span style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', fontWeight: 700 }}>every customer, all time</span>}>
-        {!stats ? <Empty text="Loadingâ¦" />
+        {!stats ? <Empty text="Loading…" />
           : !stats.customersByState?.length ? <Empty text="No customers yet." />
           : (() => {
               const rows = stats.customersByState;
@@ -136,7 +136,7 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
           <input type="date" value={range.from} max={range.to} onChange={e => e.target.value && setRange(r => ({ ...r, from: e.target.value }))} style={{ ...inp, width: 'auto', padding: '7px 10px', cursor: 'pointer' }} />
-          <span style={{ color: 'var(--text-muted)' }}>â</span>
+          <span style={{ color: 'var(--text-muted)' }}>→</span>
           <input type="date" value={range.to} min={range.from} max={todayStr()} onChange={e => e.target.value && setRange(r => ({ ...r, to: e.target.value }))} style={{ ...inp, width: 'auto', padding: '7px 10px', cursor: 'pointer' }} />
         </div>
       </div>
@@ -160,33 +160,33 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
             <button onClick={onReloadAnalytics} style={{ ...iconBtn, marginRight: 0, flex: 'none' }} title="Try again"><RefreshCw size={15} /></button>
           </div>
         : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14 }}>
-            <StatCard icon={<ShoppingBag size={20} />} label="Orders" value={T ? String(T.orders) : 'â'} sub="Cancelled excluded" />
-            <StatCard icon={<IndianRupee size={20} />} label="Revenue" value={T ? money(T.revenue) : 'â'} sub={T ? `${money(T.paidRevenue)} paid` : ''} />
+            <StatCard icon={<ShoppingBag size={20} />} label="Orders" value={T ? String(T.orders) : '—'} sub="Cancelled excluded" />
+            <StatCard icon={<IndianRupee size={20} />} label="Revenue" value={T ? money(T.revenue) : '—'} sub={T ? `${money(T.paidRevenue)} paid` : ''} />
             {/* The period's own customer number. The Customers card above counts everyone ever;
                 this counts who joined while this range was running, which is the question somebody
                 sets a date filter to ask. */}
-            <StatCard icon={<UserPlus size={20} />} label="New signups" value={T ? String(T.newSignups) : 'â'} sub="registered in this period" onClick={onOpenUsers} />
+            <StatCard icon={<UserPlus size={20} />} label="New signups" value={T ? String(T.newSignups) : '—'} sub="registered in this period" onClick={onOpenUsers} />
             {/*
               Two cards, not one, because "cancelled or failed" covered two opposite situations.
               Someone closing the payment window costs nothing and needs nobody. A paid order that
               was then cancelled has a refund at the end of it. Averaging those into one number
               meant the one that needs acting on could not be seen.
             */}
-            <StatCard icon={<XCircle size={20} />} label="Left at checkout" value={T ? String(T.cancelledUnpaid) : 'â'} sub="never paid â nothing owed" onClick={onOpenCancelled} />
+            <StatCard icon={<XCircle size={20} />} label="Left at checkout" value={T ? String(T.cancelledUnpaid) : '—'} sub="never paid — nothing owed" onClick={onOpenCancelled} />
             {/*
               The subtitle used to be decided by the count above it -- any cancelled-after-paying
               order read "refund owed", forever, including one refunded in full weeks ago. It said
               the opposite of what the same order said on the Orders tab. It now reports how many
               are actually unpaid, and the card only draws attention to itself while one of them is.
             */}
-            <StatCard icon={<Undo2 size={20} />} label="Cancelled after paying" value={T ? String(T.cancelledAfterPayment) : 'â'}
-              sub={!T ? '' : T.refundsOwed ? `${T.refundsOwed} refund${T.refundsOwed === 1 ? '' : 's'} owed` : T.cancelledAfterPayment ? 'all refunded â nothing owed' : 'none owed'}
+            <StatCard icon={<Undo2 size={20} />} label="Cancelled after paying" value={T ? String(T.cancelledAfterPayment) : '—'}
+              sub={!T ? '' : T.refundsOwed ? `${T.refundsOwed} refund${T.refundsOwed === 1 ? '' : 's'} owed` : T.cancelledAfterPayment ? 'all refunded — nothing owed' : 'none owed'}
               onClick={onOpenCancelled} accent={!!T?.refundsOwed} />
           </div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
         <ChartCard title="Orders by status" error={analyticsError} onRetry={onReloadAnalytics}>
-          {!analytics ? <Empty text="Loadingâ¦" />
+          {!analytics ? <Empty text="Loading…" />
             : !Object.keys(analytics.ordersByStatus || {}).length ? <Empty text="No orders in this period." />
             : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -207,7 +207,7 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
             bestsellers while sitting under a date filter, so a record week and a dead one showed
             the identical list. */}
         <ChartCard title="Top products" error={analyticsError} onRetry={onReloadAnalytics}>
-          {!analytics ? <Empty text="Loadingâ¦" />
+          {!analytics ? <Empty text="Loading…" />
             : !analytics.topProducts.length ? <Empty text="No sales in this period." />
             : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -215,7 +215,7 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
                   <div key={pr.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ width: 22, height: 22, borderRadius: 7, background: 'var(--amber-100)', color: 'var(--amber-800)', fontSize: 12, fontWeight: 900, display: 'grid', placeItems: 'center', flex: 'none' }}>{i + 1}</span>
                     <span style={{ flex: 1, fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>{pr.name}</span>
-                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{pr.qty} sold Â· {money(pr.revenue)}</span>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{pr.qty} sold · {money(pr.revenue)}</span>
                   </div>
                 ))}
               </div>
@@ -229,24 +229,24 @@ export default function OverviewTab({ stats, analytics, analyticsError, onReload
         onRetry={onReloadAnalytics}
         right={analytics && (
           <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', fontWeight: 700 }}>
-            {money(analytics.salesByDay.reduce((s, d) => s + d.revenue, 0))} Â· {analytics.salesByDay.reduce((s, d) => s + d.orders, 0)} orders
+            {money(analytics.salesByDay.reduce((s, d) => s + d.revenue, 0))} · {analytics.salesByDay.reduce((s, d) => s + d.orders, 0)} orders
           </span>
         )}
       >
         {loading
-          ? <div style={{ height: 232, display: 'grid', placeItems: 'center', color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>Loadingâ¦</div>
+          ? <div style={{ height: 232, display: 'grid', placeItems: 'center', color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>Loading…</div>
           : <SalesChart data={series} />}
       </ChartCard>
 
       <ChartCard title="Orders by city" error={analyticsError} onRetry={onReloadAnalytics} empty={!!analytics && !analytics.ordersByArea.length}>
         {analytics
-          ? <BarRows items={analytics.ordersByArea.map(a => ({ label: a.city, value: a.orders, sub: `${a.orders} order${a.orders === 1 ? '' : 's'} Â· ${money(a.revenue)}` }))} />
-          : <Empty text="Loadingâ¦" />}
+          ? <BarRows items={analytics.ordersByArea.map(a => ({ label: a.city, value: a.orders, sub: `${a.orders} order${a.orders === 1 ? '' : 's'} · ${money(a.revenue)}` }))} />
+          : <Empty text="Loading…" />}
       </ChartCard>
 
       {/* The Payments and Shipments donuts are gone.
           Both counted every order in the range, cancelled included, so a quiet week rendered as
-          "CANCELLED 50% Â· PAID 50%" and "NOT_CREATED 50% Â· Delivered 50%" - a pie chart of two
+          "CANCELLED 50% · PAID 50%" and "NOT_CREATED 50% · Delivered 50%" - a pie chart of two
           slices, half of it an order that never happened. What they were being read for is answered
           properly elsewhere now: the two cancelled cards above, Orders by status for where the live
           ones are, and Needs attention for a paid order with no parcel. */}
