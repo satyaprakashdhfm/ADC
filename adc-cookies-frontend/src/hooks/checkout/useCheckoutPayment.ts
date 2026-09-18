@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getProducts, createOrder, createRazorpayOrder, verifyPayment, abandonOrder, type Product, type OrderItemInput, type Address } from '@/lib/api';
 import { loadRazorpay } from '@/lib/razorpay';
-import { trackInitiateCheckout } from '@/lib/analytics';
+import { trackInitiateCheckout, trackAddPaymentInfo } from '@/lib/analytics';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 
@@ -101,6 +101,7 @@ export function useCheckoutPayment({ step, chosen, addresses, grand, onNeedLogin
     if (lines.length === 0) { setPayError('Your cart is empty.'); return; }
     setPayError('');
     setPlacing(true);
+    trackAddPaymentInfo(grand);
     try {
       const items = await resolveOrderItems();
       if (items.length === 0) {

@@ -89,7 +89,10 @@ router.get('/me', requireAuth, async (req, res) => {
   // Attach any email-subscribe spin reward won before this account existed (best-effort, never
   // blocks the profile response) — this is what makes an emailed coupon usable at checkout.
   if (req.user!.email) { try { await linkEmailClaimsToUser(req.user!.id, req.user!.email); } catch { /* ignore */ } }
-  res.json({ authId: req.user!.authId, email: req.user!.email, name: req.user!.name, role: req.user!.role, phone: req.user!.phone ?? null });
+  /* createdAt lets the storefront tell a sign-up from a returning login, which analytics reports as
+     two different events (GA4 sign_up vs login, Meta CompleteRegistration). One indexed lookup. */
+  const row = await getOne('SELECT created_at FROM users WHERE id = $1', [req.user!.id]).catch(() => null);
+  res.json({ authId: req.user!.authId, email: req.user!.email, name: req.user!.name, role: req.user!.role, phone: req.user!.phone ?? null, createdAt: row?.created_at ?? null });
 });
 
 // Update the signed-in user's profile. Phone-OTP users fill in their name here; Google /

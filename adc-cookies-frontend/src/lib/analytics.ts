@@ -90,6 +90,36 @@ export function trackAddToCart(line: CartLine) {
   });
 }
 
+/** GA only — Meta has no standard event for taking something out. */
+export function trackRemoveFromCart(line: CartLine) {
+  trackEvent('remove_from_cart', {
+    currency: 'INR', value: line.price * line.qty,
+    items: [{ item_id: String(line.id), item_name: line.name, price: line.price, quantity: line.qty }],
+  });
+}
+
+/** Pay pressed — the step between "reviewing an order" and "in Razorpay's window". */
+export function trackAddPaymentInfo(value: number) {
+  fbq('track', 'AddPaymentInfo', { value, currency: 'INR' });
+  trackEvent('add_payment_info', { currency: 'INR', value, payment_type: 'razorpay' });
+}
+
+/*
+ * A completed sign-in. A brand-new account is a sign-up (GA4 sign_up, Meta CompleteRegistration —
+ * the event a "get sign-ups" campaign optimises for); anyone else is a login. "New" is an account
+ * created in the last ten minutes, read from /auth/me, because the sign-in itself looks identical
+ * either way from here.
+ */
+export function trackSignIn(method: 'phone' | 'google', createdAt?: string | null) {
+  const created = createdAt ? Date.parse(createdAt) : NaN;
+  if (Number.isFinite(created) && Date.now() - created < 10 * 60_000) {
+    trackEvent('sign_up', { method });
+    fbq('track', 'CompleteRegistration', { content_name: method, status: true });
+  } else {
+    trackEvent('login', { method });
+  }
+}
+
 export function trackInitiateCheckout(lines: CartLine[]) {
   const value = lines.reduce((s, l) => s + l.price * l.qty, 0);
   fbq('track', 'InitiateCheckout', {

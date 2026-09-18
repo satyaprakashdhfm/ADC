@@ -154,7 +154,7 @@ export async function verifyOtp(phone: string, verificationId: string, code: str
  * exists, which is what stops CartContext seeing an "account change" -- and emptying every
  * basket -- on the day the frontend stops reading Supabase sessions.
  */
-export interface MeResponse { authId: string; email: string | null; name: string; role: string; phone: string | null; }
+export interface MeResponse { authId: string; email: string | null; name: string; role: string; phone: string | null; createdAt?: string | null; }
 export async function getMe(): Promise<MeResponse> {
   return request('/auth/me');
 }

@@ -3,11 +3,7 @@ import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { captureAttribution } from '@/lib/attribution';
 import { trackPageView } from '@/lib/analytics';
-
-/** The back office and the shop counters' tablets. Not customers, so not tracked. */
-function isStaffScreen(p: string) {
-  return p === '/admin' || p.startsWith('/admin/') || p === '/store' || p.startsWith('/store/');
-}
+import { isStaffScreen } from '@/lib/staffScreens';
 
 /**
  * Per-page tracking for the storefront.

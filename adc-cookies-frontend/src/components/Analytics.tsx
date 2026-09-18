@@ -1,7 +1,10 @@
 'use client';
 import Script from 'next/script';
 import { GA_ID, ADS_ID, analyticsEnabled } from '@/lib/analytics';
+import { usePathname } from 'next/navigation';
 import { usePageTracking } from '@/hooks/usePageTracking';
+import { useRedirectPurchase } from '@/hooks/useRedirectPurchase';
+import { isStaffScreen } from '@/lib/staffScreens';
 
 /*
  * Loads gtag.js, once, for whichever Google properties are configured.
@@ -18,7 +21,9 @@ export default function Analytics() {
   /* Always on, whatever is configured: remembering where a visitor came from is our own data, not
      Google's or Meta's, and the Meta Pixel loads itself on the first page view (lib/analytics). */
   usePageTracking();
-  if (!analyticsEnabled) return null;
+  useRedirectPurchase();
+  const staff = isStaffScreen(usePathname());
+  if (!analyticsEnabled || staff) return null;
   const primary = GA_ID || ADS_ID;
   return (
     <>

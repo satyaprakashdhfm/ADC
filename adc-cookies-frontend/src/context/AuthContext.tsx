@@ -11,6 +11,7 @@ import {
   exchangeGoogleCode, logoutSession, userSessionToken, type MeResponse,
 } from '@/lib/api';
 import { isValidName, isValidEmail } from '@/lib/profileValidation';
+import { trackSignIn } from '@/lib/analytics';
 
 interface User { name: string; email: string; role: string; initials: string; phone?: string; }
 
@@ -117,11 +118,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * server being the only authority: one request on load, and in exchange the name and role on
    * screen are never a stale copy of what the server actually thinks.
    */
-  const loadOwnSession = async () => {
+  /** `signedInWith` is set only on the load that completes a Google sign-in, which is then reported
+   *  as a login or sign-up. An ordinary page load passes nothing and reports nothing. */
+  const loadOwnSession = async (signedInWith?: 'google') => {
     try {
       const me = await getMe();
       setUser(userFromMe(me));
       setAuthId(me.authId ?? null);
+      if (signedInWith) trackSignIn(signedInWith, me.createdAt);
       logLoginLocationOnce();
     } catch (e) {
       /*
@@ -168,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (handoff) {
       exchangeGoogleCode(handoff)
-        .then(({ sessionToken }) => { userSessionToken.set(sessionToken); return loadOwnSession(); })
+        .then(({ sessionToken }) => { userSessionToken.set(sessionToken); return loadOwnSession('google'); })
         .catch(() => {
           /* The code is single-use and lives a minute, so a second attempt at the same one fails
              by design — a back button, a restored tab, or a refresh of the callback URL all do it.
@@ -251,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthId(me.authId ?? null);
     setUser(userFromMe(me));
     setProfileLoaded(true);
+    trackSignIn('phone', me.createdAt);
     // Mandatory, no-skip name + email: keep asking on every OTP login until both meet the real
     // bar (proper length/format) — not just "present", and not just for brand-new numbers.
     const needsName = me.name === 'Guest' || !isValidName(me.name) || !isValidEmail(cleanEmail(me.email));
