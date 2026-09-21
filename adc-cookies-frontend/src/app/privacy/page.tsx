@@ -37,6 +37,7 @@ const SECTIONS: LegalSection[] = [
     heading: 'Why we need it',
     body: [
       'To bake and deliver your order, to let you see your order history, to answer you when you contact us, and to meet our own accounting and tax obligations.',
+      'To send your order confirmation on WhatsApp, to the phone number on your account.',
       'To understand which of our adverts actually lead to orders, so we spend on the ones that work.',
       'We do not sell your information to anybody.',
     ],
@@ -49,7 +50,7 @@ const SECTIONS: LegalSection[] = [
         'Our payment provider, to take the payment and process any refund.',
         'Our delivery partners, who receive the delivery name, address and phone number so a rider or courier can find you.',
         'The shop fulfilling your order, and its billing system.',
-        'The services that host this website and our database, and the one that sends order emails.',
+        'The services that host this website and our database, and the ones that send your order emails and WhatsApp messages.',
         'Meta (Facebook and Instagram) and Google, to measure our advertising. They see which pages you visit and what you add to your basket and buy. When you order, Meta also receives your email address and phone number in scrambled (hashed) form, so it can tell whether one of our adverts led to that order.',
       ],
       'That is the whole list. The payment, delivery and hosting companies are bound to use the information only for the job we gave them; Meta and Google handle what they receive under their own privacy policies.',
@@ -66,6 +67,7 @@ const SECTIONS: LegalSection[] = [
     body: [
       'You can ask us for a copy of what we hold about you, ask us to correct it, or ask us to delete your account. We may have to keep records of past orders even after an account is closed, because tax law requires it.',
       `Write to ${SITE_EMAIL} and we will act on it.`,
+      'If you would rather not hear from us on WhatsApp, block our number there. Nothing more reaches you from us on WhatsApp after that.',
     ],
   },
   {
@@ -94,7 +96,7 @@ export default function PrivacyPolicyPage() {
     <LegalPage
       title="Privacy Policy"
       intro="What we collect when you order, why we need it, and who else sees it. Short, because we collect little."
-      updated="18 September 2026"
+      updated="21 September 2026"
       sections={SECTIONS}
     />
   );

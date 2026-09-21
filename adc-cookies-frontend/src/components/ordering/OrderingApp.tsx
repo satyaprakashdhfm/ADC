@@ -825,9 +825,10 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     ['We bake to order', 'Your cookies go into the oven as soon as this is paid, so an order can’t be cancelled or changed once placed. Do check your basket and address above.', '/terms', 'Terms of Service'],
                     ['If anything is wrong, we fix it', 'Damaged, wrong or missing items, or an order that never arrives. Tell us within 24 hours and you get it remade or refunded, back to the account you paid from.', '/refund-policy', 'Refund Policy'],
                     ['How it reaches you', 'Same-day from the shop nearest your address inside our cities, courier elsewhere. The fee and the arrival date shown above are the real ones.', '/shipping-policy', 'Shipping Policy'],
+                    ['Your confirmation on WhatsApp', 'We send your order confirmation on WhatsApp, to the phone number on your account. You can block us there at any time.', '/privacy', 'Privacy Policy'],
                     ['Your details stay yours', 'We never see your card or UPI details. They go straight to Razorpay. We keep only what’s needed to bake and deliver the order.', '/privacy', 'Privacy Policy'],
                   ] as [string, string, string, string][]).map(([title, text, href, linkLabel]) => (
-                    <div key={href} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <div key={title} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                       <Check size={15} strokeWidth={3} style={{ flex: 'none', marginTop: 3, color: 'var(--green-success)' }} />
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 800, fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}>{title}</div>
@@ -838,7 +839,7 @@ function CheckoutFlow({ step }: { step: 'review' | 'pay' }) {
                     </div>
                   ))}
                   <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-subtle)', lineHeight: 1.6, paddingTop: 4, borderTop: '1px solid var(--border-soft)' }}>
-                    By paying, you agree to our Terms of Service, Refund, Shipping and Privacy policies.
+                    By paying, you agree to our Terms of Service, Refund, Shipping and Privacy policies, and to receive updates about this order on WhatsApp.
                   </div>
                 </div>
               </div>
