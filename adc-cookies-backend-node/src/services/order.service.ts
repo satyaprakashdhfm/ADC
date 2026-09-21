@@ -3,6 +3,7 @@ import { sendOrderEmails } from './mailer.client.js';
 import { storeByCode } from './store.service.js';
 import { bookShipmentAndRelay } from './shipment.service.js';
 import { sendMetaPurchase } from './metaCapi.client.js';
+import { sendOrderConfirmationWhatsApp } from './whatsapp.service.js';
 
 /*
  * What happens to an order once the money is actually in.
@@ -83,6 +84,10 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
      Fire-and-forget and never throws; only the caller that won the claim above gets here, so a
      payment.captured / order.paid pair cannot report one order twice. */
   void sendMetaPurchase(orderId);
+
+  /* The customer's WhatsApp confirmation, on the same once-only claim. Never throws, and does
+     nothing where WhatsApp is not configured. */
+  void sendOrderConfirmationWhatsApp(orderId);
 
   // Record coupon redemption now (on payment) — idempotent via the per-order check, so calling
   // finalizePaidOrder from both the verify route and the webhook can't double-count a use.

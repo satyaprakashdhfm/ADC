@@ -90,15 +90,22 @@ router.post('/webhook', async (req, res) => {
 
         /* Delivery receipts for messages WE sent: sent → delivered → read, or failed. This is the
            only way to know a message actually arrived; the send call's 200 means accepted, not
-           delivered. */
+           delivered.
+
+           They do not arrive in order — the first live send logged "delivered" before "sent" — so
+           a status only ever moves FORWARD, or to failed. Otherwise a late "sent" would overwrite
+           "read" and the row would claim the customer never saw it. */
         for (const st of value?.statuses ?? []) {
           const err = st?.errors?.[0];
           await query(
             `UPDATE whatsapp_messages
-                SET status = $1,
+                SET status = $1::text,
                     last_error = COALESCE($2, last_error),
                     updated_at = $3
-              WHERE message_id = $4`,
+              WHERE message_id = $4
+                AND ($1::text = 'failed'
+                     OR COALESCE(array_position(ARRAY['accepted','sent','delivered','read'], $1::text), 0)
+                      > COALESCE(array_position(ARRAY['accepted','sent','delivered','read'], status), 0))`,
             [String(st?.status || ''), err ? `${err.code}: ${err.title || err.message || ''}`.slice(0, 500) : null, nowIso(), String(st?.id || '')]
           ).catch(() => {});
           log('status', `${st?.id} → ${st?.status}${err ? ` (${err.code} ${err.title || ''})` : ''}`);

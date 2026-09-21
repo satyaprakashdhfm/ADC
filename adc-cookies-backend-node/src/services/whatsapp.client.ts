@@ -63,29 +63,72 @@ async function graph(path: string, body: unknown, { timeoutMs = 20_000 } = {}) {
   }
 }
 
-export interface TemplateParam { type: 'text'; text: string; parameter_name?: string }
+/*
+ * The parts of a template message that change from one send to the next. The wording, the buttons
+ * and the layout live in WhatsApp Manager, where Meta approved them.
+ *
+ * body is NAMED ({ customer_name: 'Priya' }) or POSITIONAL (['Priya']). The template fixed which one
+ * when it was created, and a send in the other format is rejected.
+ *
+ * headerImage is required on every send of a template with an image header: a public https URL
+ * (Meta fetches it, so a login-protected preview deployment will not do), or the id of media
+ * already uploaded to WhatsApp.
+ */
+export interface TemplateMessage {
+  name: string;
+  language: string;
+  headerImage?: string;
+  body?: Record<string, string> | string[];
+}
+
+export type TemplateSendResult =
+  | { ok: true; messageId: string | null }
+  | { ok: false; reason: string };
+
+/*
+ * Meta refuses the WHOLE message over one bad variable (error 132018): no line breaks, no tabs, no
+ * more than four spaces in a row, and never empty. Cleaned here, once, so that no template has to
+ * remember — a customer's name with a stray newline in it must not cost them their confirmation.
+ */
+function paramText(value: string): string {
+  const text = String(value ?? '').replace(/[\r\n\t]+/g, ' ').replace(/ {5,}/g, '    ').trim();
+  return text || '-';
+}
+
+function templateComponents(m: TemplateMessage) {
+  const components: unknown[] = [];
+  if (m.headerImage) {
+    const image = /^https?:\/\//i.test(m.headerImage) ? { link: m.headerImage } : { id: m.headerImage };
+    components.push({ type: 'header', parameters: [{ type: 'image', image }] });
+  }
+  if (m.body) {
+    const parameters = Array.isArray(m.body)
+      ? m.body.map((text) => ({ type: 'text', text: paramText(text) }))
+      : Object.entries(m.body).map(([name, text]) => ({ type: 'text', parameter_name: name, text: paramText(text) }));
+    if (parameters.length) components.push({ type: 'body', parameters });
+  }
+  return components;
+}
 
 /**
  * Send an approved template. The only thing that reaches a customer who has not messaged us first.
  *
- * `params` are BODY parameters in order (positional format). Named format is supported by passing
- * parameter_name on each — the template decides which, and mixing them is what gets a send rejected.
+ * A successful result means Meta ACCEPTED the message, not that it arrived. Delivery comes later,
+ * on the webhook, keyed by the messageId returned here.
  */
-export async function sendTemplate(to: string, name: string, language = 'en', params: TemplateParam[] = []) {
+export async function sendTemplate(to: string, m: TemplateMessage): Promise<TemplateSendResult> {
   if (!whatsappConfigured()) return { ok: false, reason: 'not_configured' };
   const number = waNumber(to);
   if (number.length < 11) return { ok: false, reason: `bad_number:${to}` };
-  const components = params.length ? [{ type: 'body', parameters: params }] : [];
   const r = await graph(`/${PHONE_NUMBER_ID}/messages`, {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to: `+${number}`,
     type: 'template',
-    template: { name, language: { code: language }, components },
+    template: { name: m.name, language: { code: m.language }, components: templateComponents(m) },
   });
-  const messageId = r.ok ? r.data?.messages?.[0]?.id ?? null : null;
-  log('send', `${name} → ${number} | ${r.ok ? `✓ ${messageId}` : `✗ ${r.reason}`}`);
-  return r.ok ? { ok: true, messageId, data: r.data } : { ok: false, reason: r.reason, data: r.data };
+  if (!r.ok) return { ok: false, reason: r.reason };
+  return { ok: true, messageId: r.data?.messages?.[0]?.id ?? null };
 }
 
 /**
