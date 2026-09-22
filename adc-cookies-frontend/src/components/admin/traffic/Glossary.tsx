@@ -6,9 +6,21 @@ import { card } from '../shared/ui';
  * Every word on this tab, in plain terms.
  *
  * Written for someone who runs the shop, not for someone who runs ads. Grouped the way the tab is
- * read: people on the site, where they came from, then what the ads cost.
+ * read: the ads first, then people on the site and where they came from.
  */
 const GROUPS: { heading: string; terms: [string, string][] }[] = [
+  {
+    heading: 'Ads and money',
+    terms: [
+      ['Campaign · Ad set · Ad', 'Meta’s three levels. A campaign is one goal with its budget. An ad set is who sees it (area, age, interests). An ad is the actual picture or video.'],
+      ['Spent', 'What Meta charged in this period for the ads that link to the website. Ads that only open Instagram messages are left out.'],
+      ['Clicks to the website', 'Taps on an ad that left Instagram or Facebook for our site. Some people close it before the page loads, so there are usually fewer visitors than clicks.'],
+      ['Cost per click', 'Spent ÷ clicks to the website.'],
+      ['Paid orders', 'Orders in OUR records that were paid, from customers who arrived that way. The most reliable number here.'],
+      ['Cost per order', 'Spent ÷ paid orders from the ads. If this is more than you make on an order, the ad is losing money.'],
+      ['Return on ad spend', 'Rupees of orders for every ₹1 spent. 3.0× means ₹300 of orders for ₹100 of ads.'],
+    ],
+  },
   {
     heading: 'People on the site',
     terms: [
@@ -29,18 +41,6 @@ const GROUPS: { heading: string; terms: [string, string][] }[] = [
       ['Search', 'They searched on Google or Bing and tapped our result (not an ad).'],
       ['Other websites', 'They followed a link on some other site.'],
       ['Visits that ordered', 'Out of every 100 visits from that place, how many ended in a paid order.'],
-    ],
-  },
-  {
-    heading: 'Ads and money',
-    terms: [
-      ['Campaign · Ad set · Ad', 'Meta’s three levels. A campaign is one goal with its budget. An ad set is who sees it (area, age, interests). An ad is the actual picture or video.'],
-      ['Spent', 'What Meta charged in this period for the ads that link to the website. Ads that only open Instagram messages are left out.'],
-      ['Clicks to the website', 'Taps on an ad that left Instagram or Facebook for our site. Some people close it before the page loads, so there are usually fewer visitors than clicks.'],
-      ['Cost per click', 'Spent ÷ clicks to the website.'],
-      ['Paid orders', 'Orders in OUR records that were paid, from customers who arrived that way. The most reliable number here.'],
-      ['Cost per order', 'Spent ÷ paid orders from the ads. If this is more than you make on an order, the ad is losing money.'],
-      ['Return on ad spend', 'Rupees of orders for every ₹1 spent. 3.0× means ₹300 of orders for ₹100 of ads.'],
     ],
   },
 ];

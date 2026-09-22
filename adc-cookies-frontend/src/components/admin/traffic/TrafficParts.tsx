@@ -25,6 +25,19 @@ export function Section({ title, hint, right, children }: {
   );
 }
 
+/** One of the tab's two halves (ads, and all other traffic): a heading above its cards, not a card. */
+export function GroupHeading({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 18, marginBottom: -4, borderTop: '1px solid var(--border-default)' }}>
+      <span style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--gradient-warm)', color: 'var(--white)', display: 'grid', placeItems: 'center', flex: 'none' }}>{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        <h2 style={{ margin: 0, font: 'var(--weight-bold) var(--text-h3)/1.2 var(--font-display)', color: 'var(--text-strong)' }}>{title}</h2>
+        <p style={{ margin: '2px 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>{hint}</p>
+      </div>
+    </div>
+  );
+}
+
 const TONES = {
   info: { bg: 'var(--surface-sunken)', fg: 'var(--text-body)', Icon: Info },
   waiting: { bg: 'var(--amber-50)', fg: 'var(--amber-800)', Icon: Clock },
