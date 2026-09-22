@@ -579,3 +579,20 @@ body::before {
   .pack-scrim { align-items: center !important; padding: 24px; }
   .pack-sheet { border-radius: var(--radius-card) !important; max-height: 86svh !important; }
 }
+
+/* ---------- Admin dashboard layout ----------
+   Desktop gets a left sidebar for the tabs and the full width of the screen for the page; phones and
+   tablets keep the row of tab pills above the page, as before. Layout only — which tab is open, the
+   badges and what each tab loads are all decided in AdminDashboard.tsx, the same for both. */
+.adm-frame { max-width: 1680px; margin: 0 auto; padding-left: var(--gutter); padding-right: var(--gutter); box-sizing: border-box; }
+.adm-shell { padding-top: 22px; padding-bottom: 64px; }
+.adm-main { min-width: 0; }
+.adm-sidebar, .adm-desktop-only { display: none; }
+.adm-side-tab:not([aria-current="page"]):hover { background: var(--surface-sunken) !important; color: var(--text-strong) !important; }
+.adm-side-tab:focus-visible { outline: 2px solid var(--brand-secondary); outline-offset: 2px; }
+@media (min-width: 1025px) {
+  .adm-shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 28px; align-items: start; }
+  .adm-sidebar { display: block; position: sticky; top: 88px; max-height: calc(100vh - 104px); overflow-y: auto; }
+  .adm-desktop-only { display: flex; }
+  .adm-tabs-mobile { display: none !important; }
+}

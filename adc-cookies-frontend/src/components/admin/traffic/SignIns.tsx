@@ -2,7 +2,6 @@
 import { LogIn, UserPlus } from 'lucide-react';
 import type { AdminTraffic } from '@/lib/api';
 import { MiniStat, Empty } from '../shared/ui';
-import { Notice } from './TrafficParts';
 import { num } from './trafficFormat';
 
 type SignInData = NonNullable<AdminTraffic['google']['signIns']>;
@@ -10,9 +9,8 @@ type SignInData = NonNullable<AdminTraffic['google']['signIns']>;
 /**
  * Sign-ins on the storefront: customers signing back in, and brand-new accounts.
  *
- * Phone versus Google needs one setting in Google Analytics (the sign-in `method` registered as a
- * custom dimension). Until somebody adds it the split cannot be made, so the card says how to add
- * it rather than hiding the question.
+ * Phone versus Google appears only once the sign-in `method` is registered in Google Analytics as a
+ * custom dimension. Until then the two totals stand alone — setup steps are not dashboard content.
  */
 export default function SignIns({ data }: { data: SignInData }) {
   if (!data.existing && !data.newAccounts) return <Empty text="Nobody signed in during this period." />;
@@ -22,7 +20,7 @@ export default function SignIns({ data }: { data: SignInData }) {
         <MiniStat label="Returning customers signed in" value={num(data.existing)} />
         <MiniStat label="New accounts created" value={num(data.newAccounts)} />
       </div>
-      {data.byMethod?.length ? (
+      {!!data.byMethod?.length && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {data.byMethod.map(m => (
             <div key={m.method} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 'var(--text-sm)', padding: '8px 0', borderBottom: '1px solid var(--border-soft)' }}>
@@ -34,10 +32,6 @@ export default function SignIns({ data }: { data: SignInData }) {
             </div>
           ))}
         </div>
-      ) : (
-        <Notice title="Want to see phone vs Google?">
-          In Google Analytics go to <b>Admin → Custom definitions → Create custom dimension</b>. Name: <i>Sign-in method</i>, scope: <i>Event</i>, event parameter: <code>method</code>. It counts from the day it is added.
-        </Notice>
       )}
     </div>
   );
