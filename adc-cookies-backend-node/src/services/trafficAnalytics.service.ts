@@ -34,9 +34,19 @@ async function cached<T>(key: string, ttlMs: number, fresh: boolean, build: () =
   return value;
 }
 
-/* Campaign and ad names meet from three systems; spacing and case are the only things that differ. */
-const norm = (s: string) => s.replace(/\+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-const isSet = (s: string) => !!s && !['(not set)', '(none)', '(direct)', '(organic)', '(referral)'].includes(s.toLowerCase());
+/*
+ * Campaign and ad names as a person reads them. Meta fills {{campaign.name}} into the ad link
+ * URL-encoded, spaces as "+", and GA4 stores that verbatim — so the live property reported
+ * "SEPT+6+-+COOKIE+TIN+-+WEBSITE". Our own attribution is already decoded by the browser.
+ */
+function pretty(s: string): string {
+  let v = s.replace(/\+/g, ' ');
+  try { v = decodeURIComponent(v); } catch { /* a literal % in a name: keep it as it is */ }
+  return v.replace(/\s+/g, ' ').trim();
+}
+/* Names meet from three systems; encoding, spacing and case are the only things that differ. */
+const norm = (s: string) => pretty(s).toLowerCase();
+const isSet = (s: string) => !!s && !['(not set)', '(none)', '(direct)', '(organic)', '(referral)', '(data not available)'].includes(s.toLowerCase());
 
 /** Run one GA4 query; a failure is noted and the section comes back null, never thrown. */
 async function section<T>(errors: string[], result: Promise<Ga4Result>, map: (rows: Ga4Row[]) => T): Promise<T | null> {
@@ -192,7 +202,7 @@ export async function trafficReport(from: string, to: string, { fresh = false } 
     }
     for (const r of (google.connected && google.visits) || []) {
       if (channelOfVisit(r.dim(0), r.dim(1), r.dim(2), r.dim(3)) !== 'meta_ads' || !isSet(r.dim(3))) continue;
-      const row = campaignRow(r.dim(3)); row.visitors += r.met(0); row.visits += r.met(1);
+      const row = campaignRow(pretty(r.dim(3))); row.visitors += r.met(0); row.visits += r.met(1);
     }
     for (const c of orders.byCampaign.values()) { const row = campaignRow(c.name); row.orders += c.orders; row.revenue += c.revenue; }
 
@@ -205,7 +215,7 @@ export async function trafficReport(from: string, to: string, { fresh = false } 
     for (const a of meta.ads) Object.assign(adRow(a.campaign, a.adset, a.ad), { spend: a.spend, impressions: a.impressions, clicks: a.linkClicks });
     for (const r of (google.connected && google.adVisits) || []) {
       if (channelOfVisit(r.dim(0), r.dim(1), '', r.dim(2)) !== 'meta_ads' || !isSet(r.dim(4))) continue;
-      const row = adRow(r.dim(2), isSet(r.dim(3)) ? r.dim(3) : '', r.dim(4)); row.visitors += r.met(0); row.visits += r.met(1);
+      const row = adRow(pretty(r.dim(2)), isSet(r.dim(3)) ? pretty(r.dim(3)) : '', pretty(r.dim(4))); row.visitors += r.met(0); row.visits += r.met(1);
     }
     for (const a of orders.byAd.values()) { const row = adRow(a.campaign, a.adset, a.ad); row.orders += a.orders; row.revenue += a.revenue; }
 

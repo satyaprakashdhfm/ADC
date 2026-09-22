@@ -26,7 +26,7 @@ export const CHANNELS = {
   email: { label: 'Email', hint: 'A link in an email.' },
   tagged: { label: 'Other tagged links', hint: 'A link we tagged ourselves (a QR code, a partner) that is none of the above.' },
   direct: { label: 'Direct', hint: 'Typed the address, used a bookmark, or came from an app that hides where the link was — WhatsApp often does.' },
-  other: { label: 'Other', hint: 'Somewhere Google could not put in a group.' },
+  other: { label: 'Other / unknown', hint: 'Google could not tell where these visits came from. Common in the first days of tracking, and with some privacy-protecting browsers.' },
   untracked: { label: 'Not tracked', hint: 'Orders placed before we started recording where customers came from (18 Sep 2026).' },
 } as const;
 
@@ -37,7 +37,9 @@ const PAID_MEDIUM = /paid|cpc|ppc|cpm|^ads?$|display/;
 const WHATSAPP = /whatsapp|^wa\.me$|^l\.wl\.co$/;
 const SEARCH = /(^|\.)(google|bing|duckduckgo|yahoo|ecosia)\.|^(google|bing|duckduckgo|yahoo|ecosia)$/;
 const OTHER_SOCIAL = /youtube|linkedin|twitter|^t\.co$|(^|\.)x\.com$|pinterest|reddit|snapchat|threads/;
-const NOT_SET = new Set(['', '(not set)', '(none)', '(direct)', '(organic)', '(referral)']);
+/* GA4's placeholders for "no value". "(data not available)" is what it records for sessions it could
+   not attribute at all — seen on the live property the first week — and must not be read as a tag. */
+const NOT_SET = new Set(['', '(not set)', '(none)', '(direct)', '(organic)', '(referral)', '(data not available)']);
 
 /** The Meta-like source, split into which app it actually was. */
 function metaApp(s: string): ChannelKey {

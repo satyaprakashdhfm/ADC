@@ -29,15 +29,20 @@ interface ServiceAccount { client_email: string; private_key: string }
 /*
  * Read the key once, and when it is wrong say HOW — the admin tab shows this sentence verbatim.
  *
- * The first attempt at pasting the key file into Railway kept only its first line, `"{`, because
- * the file is multi-line JSON. That is the likeliest way this breaks, so it gets its own message.
+ * Railway mangles this value both ways it can be pasted, and both happened on the first day:
+ *   - pasted as the multi-line file, it keeps only the first line, `"{`;
+ *   - pasted as one line, it turns each `\n` inside private_key into a REAL line break, which is
+ *     not allowed inside a JSON string, so the whole value stops parsing.
+ * The second is undone here (real line breaks back into `\n`) rather than sending someone back to
+ * Railway a third time. The first cannot be undone — the rest of the file never arrived.
  */
 function readKey(): { key: ServiceAccount | null; problem: string | null } {
   if (!PROPERTY_ID) return { key: null, problem: 'GA4_PROPERTY_ID is not set.' };
   if (!/^\d+$/.test(PROPERTY_ID)) return { key: null, problem: 'GA4_PROPERTY_ID must be the property NUMBER (Admin → Property details), not the G-… measurement id.' };
   if (!RAW_KEY) return { key: null, problem: 'GA4_SERVICE_ACCOUNT_JSON is not set.' };
   let parsed: any = null;
-  for (const text of [RAW_KEY, Buffer.from(RAW_KEY, 'base64').toString('utf8')]) {
+  const forms = [RAW_KEY, RAW_KEY.replace(/\r?\n/g, '\\n'), Buffer.from(RAW_KEY, 'base64').toString('utf8')];
+  for (const text of forms) {
     try { parsed = JSON.parse(text); break; } catch { /* try the next form */ }
   }
   if (!parsed) {
