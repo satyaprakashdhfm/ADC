@@ -266,13 +266,23 @@ export async function trafficReport(from: string, to: string, { fresh = false } 
   });
 }
 
+/*
+ * The not-found page, kept out of "on the site right now".
+ *
+ * Google records it like any other page, by title, and the title never says WHICH address was
+ * missing — live reports carry no page path — so a row reading "404: This page could not be found."
+ * is a worry nobody can act on. Nothing stops being tracked: a real broken link still shows in the
+ * period reports, which do carry the address.
+ */
+const NOT_FOUND = /^404\b|could not be found/i;
+
 /** People on the site in the last 30 minutes, which pages and on what. Cached for a minute. */
 export async function liveVisitors({ fresh = false } = {}) {
   return cached('live', LIVE_TTL_MS, fresh, async () => {
     if (!ga4Configured()) return { connected: false, problem: ga4Problem(), error: null, visitors: 0, pages: [], devices: [] };
     const [total, pages, devices] = await Promise.all([
       runRealtimeReport({ metrics: [{ name: 'activeUsers' }] }),
-      runRealtimeReport({ dimensions: [{ name: 'unifiedScreenName' }], metrics: [{ name: 'activeUsers' }], orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }], limit: 6 }),
+      runRealtimeReport({ dimensions: [{ name: 'unifiedScreenName' }], metrics: [{ name: 'activeUsers' }], orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }], limit: 10 }),
       runRealtimeReport({ dimensions: [{ name: 'deviceCategory' }], metrics: [{ name: 'activeUsers' }] }),
     ]);
     const failed = [total, pages, devices].find((r) => !r.ok);
@@ -281,7 +291,7 @@ export async function liveVisitors({ fresh = false } = {}) {
       problem: null,
       error: failed && !failed.ok ? failed.reason : null,
       visitors: total.ok ? total.rows[0]?.mets[0] || 0 : 0,
-      pages: pages.ok ? pages.rows.map((r) => ({ label: r.dim(0), visitors: r.met(0) })) : [],
+      pages: pages.ok ? pages.rows.map((r) => ({ label: r.dim(0), visitors: r.met(0) })).filter((p) => !NOT_FOUND.test(p.label)).slice(0, 6) : [],
       devices: devices.ok ? devices.rows.map((r) => ({ label: DEVICE[r.dim(0)] || r.dim(0), visitors: r.met(0) })) : [],
     };
   });
