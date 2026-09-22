@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { ARTICLES } from '@/lib/seo/pages';
 
 const SITE_URL = 'https://www.adoughcookie.com';
 
@@ -17,6 +18,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // The city landing page ranks second only to the homepage on purpose: it is the page aimed at
     // the highest-intent search we compete for, so it should be the one crawled most often after it.
     { path: '/best-cookies-in-bangalore', changeFrequency: 'weekly', priority: 0.9 },
+    // The pages written for specific Google searches (see lib/seo/plan.ts). The gift page and the
+    // two tin landing pages answer buying searches, so they sit with the Bangalore page; the guides
+    // under /blog support them and sit a step lower.
+    { path: '/cookie-tins', changeFrequency: 'weekly', priority: 0.9 },
+    { path: '/cookie-tins-in-bangalore', changeFrequency: 'weekly', priority: 0.9 },
+    { path: '/cookie-gift-hampers', changeFrequency: 'weekly', priority: 0.9 },
+    { path: '/best-cookies-in-chennai', changeFrequency: 'weekly', priority: 0.8 },
+    { path: '/corporate', changeFrequency: 'monthly', priority: 0.8 },
+    ...ARTICLES.map(a => ({ path: a.path, changeFrequency: 'monthly' as const, priority: 0.7 })),
     { path: '/about', changeFrequency: 'monthly', priority: 0.8 },
     { path: '/locations', changeFrequency: 'monthly', priority: 0.8 },
     { path: '/contact', changeFrequency: 'monthly', priority: 0.6 },

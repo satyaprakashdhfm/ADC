@@ -7,6 +7,7 @@ import Footer from '@/components/storefront/Footer';
 import { STORES } from '@/lib/stores';
 import { PRODUCT_DOCS } from '@/lib/products';
 import { SITE_PHONE, SITE_EMAIL } from '@/lib/site';
+import { RelatedPages } from '@/components/seo/SeoParts';
 
 /*
  * A keyword landing page, not a blog post.
@@ -362,6 +363,13 @@ export default function BestCookiesInBangalorePage() {
             or write to{' '}
             <a href={`mailto:${SITE_EMAIL}`} style={{ color: 'var(--text-link)', fontWeight: 700 }}>{SITE_EMAIL}</a>.
           </p>
+        </div>
+      </section>
+
+      {/* ---- The other search pages, so Google finds them through this one ---- */}
+      <section style={{ ...section, paddingTop: 0 }}>
+        <div style={wrap}>
+          <RelatedPages paths={['/cookie-tins-in-bangalore', '/cookie-gift-hampers', '/cookie-tins', '/blog/best-cookies-in-india']} title="More from our kitchen" />
         </div>
       </section>
 

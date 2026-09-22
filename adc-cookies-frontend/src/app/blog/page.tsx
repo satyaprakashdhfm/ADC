@@ -4,6 +4,8 @@ import { Clock, ShoppingBag } from 'lucide-react';
 import Footer from '@/components/storefront/Footer';
 import OrderCta from '@/components/storefront/OrderCta';
 import SiteHeader from '@/components/storefront/SiteHeader';
+import { RelatedPages } from '@/components/seo/SeoParts';
+import { SEO_PAGES } from '@/lib/seo/pages';
 
 /* Photography, matched to what each piece is actually about. These were three unrelated
    single-cookie product shots — a plain cookie illustrating an article on gift tins, in
@@ -58,6 +60,15 @@ export default function BlogPage() {
               <span key={item} style={{ padding: '10px 16px', borderRadius: 'var(--radius-pill)', background: 'var(--panel-82)', border: '1px solid var(--border-default)', color: 'var(--text-strong)', fontWeight: 800 }}>{item}</span>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* The guides and gift pages written for Google searches. The blog is the only place on the
+          site that links to them (the blog itself is only in the footer), so shoppers browsing the
+          menu never trip over them, while search engines and anyone arriving from Google can. */}
+      <section style={{ padding: '0 var(--gutter) 56px' }}>
+        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+          <RelatedPages paths={[...SEO_PAGES.map(p => p.path), '/best-cookies-in-bangalore']} title="Guides and gift ideas" />
         </div>
       </section>
 

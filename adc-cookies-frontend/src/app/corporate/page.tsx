@@ -6,9 +6,26 @@ import SiteHeader from '@/components/storefront/SiteHeader';
 import EnquiryForm from '@/components/storefront/EnquiryForm';
 import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 
+const TITLE = 'Corporate Cookie Gifts & Custom Cookie Tins | a dough cookie';
+const DESCRIPTION = 'Corporate cookie tins and hampers for teams, clients and events, with your branding, volume pricing and pan-India delivery. Request a quote.';
+
+// Aimed at "corporate cookie tins" and "custom cookie tins" (see lib/seo/plan.ts). The canonical
+// keeps links carrying ?utm_ tags counted as this page rather than as copies of it.
 export const metadata = {
-  title: 'Corporate & Bulk Orders | a dough cookie',
-  description: 'Cookie hampers for teams, clients and celebrations, with custom branding, volume pricing and pan-India delivery. Request a quote from A Dough Cookie.',
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: { canonical: '/corporate' },
+  robots: { index: true, follow: true },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: 'https://www.adoughcookie.com/corporate',
+    siteName: 'a dough cookie',
+    locale: 'en_IN',
+    type: 'website',
+    images: [{ url: '/assets/seo/og/corporate-cookie-gift-hampers.jpg', width: 1200, height: 630, alt: 'Corporate cookie gift hampers from a dough cookie' }],
+  },
+  twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION, images: ['/assets/seo/og/corporate-cookie-gift-hampers.jpg'] },
 };
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 };
