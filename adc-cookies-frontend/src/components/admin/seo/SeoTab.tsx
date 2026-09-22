@@ -2,7 +2,7 @@
 import { ExternalLink } from 'lucide-react';
 import { MiniStat, th, td } from '../shared/ui';
 import { Section, Labelled } from '../traffic/TrafficParts';
-import { KEYWORD_GROUPS, KEYWORD_SOURCE, PLAN_PAGES, SKIPPED, statFor, type Competition } from '@/lib/seo/plan';
+import { KEYWORD_SOURCE, PLAN_PAGES, statFor, type Competition } from '@/lib/seo/plan';
 
 /*
  * SEO: which page is written for which Google search, and how big each search is.
@@ -37,7 +37,6 @@ const liveSince = (iso: string) =>
 const TERMS: [string, string][] = [
   ['Searches a month', 'How many times a month people in the planner\'s area typed this into Google, as Google\'s range. "1K–10K" means somewhere between 1,000 and 10,000.'],
   ['Competition', 'How many businesses pay to advertise on this search, from 0 to 100. It says nothing about how hard it is to appear in the free results. Low means few advertisers, so fewer shops are chasing these customers.'],
-  ['Top-of-page bid', 'What advertisers pay for one click to sit above the free results. A high price means the people searching tend to buy.'],
   ['vs last year', 'How the searches changed against a year before. "New" means almost nobody searched it a year ago.'],
   ['Main search', 'The one Google search a page is written for. Its title, first heading and opening line all use it.'],
   ['Also targets', 'Close variations the same page can show up for, without a page of their own.'],
@@ -87,43 +86,6 @@ export default function SeoTab() {
                 </tr>
               );
             })}
-          </tbody>
-        </table>
-      </Section>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 520px), 1fr))', gap: 18 }}>
-        {KEYWORD_GROUPS.map(g => (
-          <Section key={g.id} title={g.name} hint={g.why} right={<span style={{ ...chip, margin: 0, background: 'var(--amber-50)', color: 'var(--amber-800)', fontWeight: 800 }}>{g.verdict}</span>}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-              <thead>
-                <tr>{['Search', 'A month', 'Competition', 'Bid', 'vs last year'].map(h => <th key={h} style={th}>{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {g.keywords.map(k => (
-                  <tr key={k.keyword}>
-                    <td style={{ ...td, fontWeight: 700, color: 'var(--text-strong)' }}>{k.keyword}</td>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{k.searches}</td>
-                    <td style={td}><CompetitionChip level={k.competition} index={k.index} /></td>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{k.bid ?? '–'}</td>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{k.trend ?? '–'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Section>
-        ))}
-      </div>
-
-      <Section title="Searches we are skipping" hint="Big numbers in the file, but the wrong people for us.">
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-          <tbody>
-            {SKIPPED.map(s => (
-              <tr key={s.keyword}>
-                <td style={{ ...td, fontWeight: 700, color: 'var(--text-strong)' }}>{s.keyword}</td>
-                <td style={{ ...td, whiteSpace: 'nowrap' }}>{s.searches}</td>
-                <td style={td}>{s.why}</td>
-              </tr>
-            ))}
           </tbody>
         </table>
       </Section>

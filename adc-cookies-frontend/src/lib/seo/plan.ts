@@ -1,8 +1,10 @@
 /*
  * The SEO plan: which Google searches we target, and which page targets each one.
  *
- * Read by the admin SEO tab. Kept apart from the page copy in lib/seo/pages so the admin bundle
- * carries a few kilobytes of keywords instead of every article.
+ * Read by the admin SEO tab, which lists PLAN_PAGES and looks up each page's main search in
+ * KEYWORD_GROUPS. The groups are not shown on their own; they are the record of what the planner
+ * said and why each search was picked. Kept apart from the page copy in lib/seo/pages so the
+ * admin bundle carries a few kilobytes of keywords instead of every article.
  *
  * Numbers are from the Google Keyword Planner export of 22 Sep 2026 (searches from Sep 2025 to
  * Aug 2026). Google shows searches as a range, not a count, for accounts that are not running
@@ -117,16 +119,6 @@ export const KEYWORD_GROUPS: KeywordGroup[] = [
       { keyword: 'airtight cookie tins', searches: '10–100', competition: 'High', index: 90 },
     ],
   },
-];
-
-/** Searches in the file we are deliberately not chasing, and why. */
-export const SKIPPED: { keyword: string; searches: string; why: string }[] = [
-  { keyword: 'royal dansk cookies', searches: '1K–10K', why: 'People want that brand, not ours.' },
-  { keyword: 'butter cookies denmark', searches: '1K–10K', why: 'Same: the blue Danish tin.' },
-  { keyword: 'tin boxes for cookies', searches: '1K–10K', why: 'Empty tins, for people packing their own.' },
-  { keyword: 'cookie containers', searches: '100–1K', why: 'Storage boxes, not cookies.' },
-  { keyword: 'best sugar free biscuits in india', searches: '100–1K', why: 'Not on our menu.' },
-  { keyword: 'muffin tins, cookie pans, Walkers, Thanksgiving tins', searches: 'Many small', why: 'Baking tools, foreign brands and foreign holidays.' },
 ];
 
 export type PageKind = 'Landing page' | 'Article' | 'Gift page';
