@@ -108,15 +108,6 @@ export default function TrafficTab({ report, live, range, setRange, error, refre
               <Breakdown title="Cities" hint="Where visitors were, as Google estimates it from their connection." g={g} rows={g.cities} color="var(--google-green)" />
               <Breakdown title="New or returning" hint="First-time visitors against people who had been before." g={g} rows={g.newVsReturning} color="var(--brand-secondary)" />
             </div>
-
-            {g.rawSources && g.rawSources.length > 0 && (
-              <details style={{ padding: '0 4px' }}>
-                <summary style={{ cursor: 'pointer', fontWeight: 800, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Exactly what Google recorded (source / medium)</summary>
-                <div style={{ marginTop: 12 }}>
-                  <BarRows color="var(--text-subtle)" items={g.rawSources.map(r => ({ label: `${r.source} / ${r.medium}`, value: r.visits, sub: `${num(r.visits)} visits · ${num(r.visitors)} visitors` }))} />
-                </div>
-              </details>
-            )}
           </>
         )}
 
