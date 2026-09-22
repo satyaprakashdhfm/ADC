@@ -816,14 +816,17 @@ export interface AdminTraffic {
     connected: boolean;
     problem: string | null;
     error: string | null;
-    totals: { spend: number; impressions: number; reach: number; clicks: number; linkClicks: number; landingPageViews: number; metaPurchases: number; metaPurchaseValue: number } | null;
+    /** Website campaigns only. clicks = taps that left Meta for our site. */
+    totals: { spend: number; clicks: number } | null;
+    /** Campaigns with spend that sent nobody to the site (e.g. Instagram DM ones), left out of everything else. */
+    leftOut?: { name: string; spend: number }[];
   };
   /** Paid orders in the period, from our own records. */
   orders: { paid: number; revenue: number };
   channels: { key: string; label: string; hint: string; visitors: number; visits: number; engagedVisits: number; orders: number; revenue: number }[];
-  /** Meta campaigns. spend etc. are null until Meta Ads is connected; visits come from GA4, orders from us. */
-  campaigns: { name: string; spend: number | null; impressions: number | null; reach: number | null; clicks: number | null; metaPurchases: number | null; visitors: number; visits: number; orders: number; revenue: number }[];
-  ads: { campaign: string; adset: string; ad: string; spend: number | null; impressions: number | null; clicks: number | null; visitors: number; visits: number; orders: number; revenue: number }[];
+  /** Meta campaigns that send people to the website. spend and clicks are null until Meta Ads is connected; visits come from GA4, orders from us. */
+  campaigns: { name: string; spend: number | null; clicks: number | null; visitors: number; visits: number; orders: number; revenue: number }[];
+  ads: { campaign: string; adset: string; ad: string; spend: number | null; clicks: number | null; visitors: number; visits: number; orders: number; revenue: number }[];
 }
 
 export interface AdminTrafficLive {
