@@ -8,6 +8,7 @@ import { SITE_EMAIL, SITE_PHONE, whatsappLink } from '@/lib/site';
 export const metadata = {
   title: 'Partner With Us | Franchise & Bulk Orders | a dough cookie',
   description: 'Open an A Dough Cookie franchise or place a corporate or bulk order. Start your enquiry with a dough cookie.',
+  alternates: { canonical: '/franchise' },
 };
 
 const WHY = [

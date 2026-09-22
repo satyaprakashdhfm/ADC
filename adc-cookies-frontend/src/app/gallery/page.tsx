@@ -18,6 +18,7 @@ const GALLERY = [
 export const metadata = {
   title: 'Gallery - a dough cookie',
   description: 'A gallery of A Dough Cookie images and packaging moments.',
+  alternates: { canonical: '/gallery' },
 };
 
 export default function GalleryPage() {

@@ -12,11 +12,13 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: "/" },
+  /* No canonical and no og:url here. Every page inherits this block, so a canonical of "/" set here
+     told Google that /about, /contact, /locations, /gallery and /franchise were all copies of the
+     homepage, and Google left them out of its results. Each page states its own canonical; the
+     homepage's is in app/page.tsx. */
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: SITE_URL,
     siteName: "a dough cookie",
     locale: "en_IN",
     type: "website",

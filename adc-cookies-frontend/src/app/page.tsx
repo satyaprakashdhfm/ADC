@@ -5,6 +5,9 @@ import StoresAbout from '@/components/storefront/StoresAbout';
 import Reviews from '@/components/storefront/Reviews';
 import Footer from '@/components/storefront/Footer';
 
+// Title, description and social cards come from the root layout; only the canonical is the homepage's own.
+export const metadata = { alternates: { canonical: '/' } };
+
 /*
  * The hero banner, fetched on the SERVER so it is in the first paint.
  *

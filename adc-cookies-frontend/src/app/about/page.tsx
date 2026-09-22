@@ -9,6 +9,7 @@ import { STORES } from '@/lib/stores';
 export const metadata = {
   title: 'Our Story | a dough cookie',
   description: 'How A Dough Cookie began: a small handmade cookie kitchen built on real butter, couverture chocolate and small-batch baking, now four stores across Bengaluru and Chennai.',
+  alternates: { canonical: '/about' },
 };
 
 const eyebrow: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--brand-secondary)', marginBottom: 10 };

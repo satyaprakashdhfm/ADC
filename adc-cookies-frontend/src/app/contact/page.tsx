@@ -12,6 +12,7 @@ import { SITE_EMAIL, SITE_PHONE, whatsappLink, COMPANY_NAME, HEAD_OFFICE } from 
 export const metadata = {
   title: `Contact Us | ${COMPANY_NAME} (a dough cookie)`,
   description: `Contact ${COMPANY_NAME}, the company behind a dough cookie. Head office in Jayanagar, Bengaluru, with shops across Bengaluru and Chennai.`,
+  alternates: { canonical: '/contact' },
 };
 
 const BLR_STORE_COUNT = STORES.filter((s) => s.city === 'Bengaluru').length;

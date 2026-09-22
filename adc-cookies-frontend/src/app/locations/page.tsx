@@ -5,6 +5,7 @@ import LocationsClient from '@/components/storefront/LocationsClient';
 export const metadata = {
   title: 'Store Finder - a dough cookie',
   description: 'Find every A Dough Cookie store across India, with search, map and directions.',
+  alternates: { canonical: '/locations' },
 };
 
 export default function LocationsPage() {
