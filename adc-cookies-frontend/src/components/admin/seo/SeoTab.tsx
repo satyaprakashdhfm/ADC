@@ -66,7 +66,6 @@ const TERMS: [string, string][] = [
 export default function SeoTab({ report, days, setDays, error, refreshing, refresh }: Props) {
   const loading = !report && !error;
   const byPath = new Map((report?.pages || []).map(p => [p.path, p]));
-  const indexed = (report?.pages || []).filter(p => p.index?.verdict === 'PASS').length;
   const dash = loading ? '…' : '–';
 
   return (
@@ -90,13 +89,11 @@ export default function SeoTab({ report, days, setDays, error, refreshing, refre
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
         <MiniStat label={`Shown in Google · ${days} days`} value={report?.totals ? num(report.totals.impressions) : dash} />
         <MiniStat label={`Clicks from Google · ${days} days`} value={report?.totals ? num(report.totals.clicks) : dash} />
-        <MiniStat label="Search pages in Google" value={report?.connected ? `${indexed} of ${PLAN_PAGES.length}` : dash} />
-        <MiniStat label="Sitemap last read" value={report?.sitemap?.lastRead ? `${shortDate(report.sitemap.lastRead)} · ${report.sitemap.pages} pages` : dash} />
       </div>
 
       <Section
         title="Pages and how they are doing in Google"
-        hint={`Each page is written for one main search, plus a few close ones. Shown, clicks and position are for ${report ? `${shortDate(report.from)} to ${shortDate(report.to)}` : `the last ${days} days`}. The first two numbers above cover the whole site. Google's numbers run about two days behind.`}
+        hint={`Each page is written for one main search, plus a few close ones. Shown, clicks and position are for ${report ? `${shortDate(report.from)} to ${shortDate(report.to)}` : `the last ${days} days`}. The two numbers above cover the whole site. Google's numbers run about two days behind.`}
       >
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1060 }}>
           <thead>

@@ -1,5 +1,5 @@
 'use client';
-import { Users, UserPlus, Repeat, FileText, Sparkles, Clock, ShoppingBag, Percent } from 'lucide-react';
+import { Users, UserPlus, FileText, Clock } from 'lucide-react';
 import type { AdminTraffic } from '@/lib/api';
 import type { useAdminTraffic } from '@/hooks/admin/useAdminTraffic';
 import { fmtDate } from '../shared/format';
@@ -15,7 +15,7 @@ import MetaAdsSection from './MetaAdsSection';
 import Funnel from './Funnel';
 import SignIns from './SignIns';
 import Glossary from './Glossary';
-import { num, pct, duration, rupees } from './trafficFormat';
+import { num, duration } from './trafficFormat';
 
 type Props = ReturnType<typeof useAdminTraffic>;
 
@@ -74,12 +74,8 @@ export default function TrafficTab({ report, live, range, setRange, error, refre
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 14 }}>
               <StatCard icon={<Users size={20} />} label="Visitors" value={num(s?.visitors)} sub="different people" />
               <StatCard icon={<UserPlus size={20} />} label="New visitors" value={num(s?.newVisitors)} sub="first time on the site" />
-              <StatCard icon={<Repeat size={20} />} label="Visits" value={num(s?.visits)} sub="every time someone came" />
               <StatCard icon={<FileText size={20} />} label="Pages viewed" value={num(s?.pageViews)} sub={s?.visits ? `${(s.pageViews / s.visits).toFixed(1)} per visit` : ''} />
-              <StatCard icon={<Sparkles size={20} />} label="Engaged visits" value={s ? pct(s.engagedVisits, s.visits) : '—'} sub="stayed and looked around" />
               <StatCard icon={<Clock size={20} />} label="Time per visit" value={s ? duration(s.avgVisitSeconds) : '—'} sub="on average" />
-              <StatCard icon={<ShoppingBag size={20} />} label="Paid orders" value={num(orders?.paid)} sub={orders?.paid ? `${rupees(orders.revenue)} · our records` : 'our records'} accent={!!orders?.paid} />
-              <StatCard icon={<Percent size={20} />} label="Visits that ordered" value={s && orders ? pct(orders.paid, s.visits) : '—'} sub="paid orders ÷ visits" />
             </div>
 
             <Section title="Visitors per day" hint="How many different people opened the site each day. Hover a bar for the exact number.">

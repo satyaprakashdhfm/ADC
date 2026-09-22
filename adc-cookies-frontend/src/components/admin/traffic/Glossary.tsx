@@ -16,7 +16,6 @@ const GROUPS: { heading: string; terms: [string, string][] }[] = [
       ['New visitor', 'Someone opening the site for the first time.'],
       ['Visit', 'Each time someone opens the site. One person coming today and again tomorrow is 1 visitor and 2 visits.'],
       ['Pages viewed', 'Every page opened, across all visits.'],
-      ['Engaged visit', 'A visit where the person stayed at least 10 seconds, opened a second page, or did something like adding to the cart. The rest left almost straight away.'],
       ['Time per visit', 'How long a visit lasts on average, while the site is on screen.'],
       ['Landing page', 'The first page a visit opened: the home page, the menu, or wherever a link pointed.'],
     ],
