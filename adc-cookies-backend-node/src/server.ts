@@ -15,6 +15,7 @@ import { getOne } from './db/index.js';
 import { assertEnv } from './config/env.js';
 import { listTemplates, phoneNumberStatus, whatsappConfigured } from './services/whatsapp.client.js';
 import { ga4Configured, runReport } from './services/ga4.client.js';
+import { searchConsoleConfigured, scSite } from './services/searchConsole.client.js';
 import { ppRequest, petpoojaConfigured, egressRoute, REST_ID as PP_REST_ID } from './services/petpooja.client.js';
 
 const PORT = Number(process.env.PORT || 8080);
@@ -141,6 +142,14 @@ function dbTarget(): string {
           ? `[GA4] reachability | ✓ property answered | ${r.rows[0]?.mets[0] ?? 0} visitors today`
           : `[GA4] reachability | ✗ ${r.reason}`))
         .catch((e) => console.log(`[GA4] reachability | ✗ ${e.message}`));
+    }
+
+    /* Search Console, for the admin SEO tab: finding the property is one call, and it fails the
+       same way the tab would (API off, or the service account not added to the property). */
+    if (searchConsoleConfigured()) {
+      scSite()
+        .then((r) => console.log(r.ok ? `[SEARCH-CONSOLE] reachability | ✓ ${r.data}` : `[SEARCH-CONSOLE] reachability | ✗ ${r.reason}`))
+        .catch((e) => console.log(`[SEARCH-CONSOLE] reachability | ✗ ${e.message}`));
     }
   });
 })().catch(err => { console.error('Startup failed:', err); process.exit(1); });

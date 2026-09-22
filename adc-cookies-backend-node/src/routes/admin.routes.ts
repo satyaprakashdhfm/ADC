@@ -15,6 +15,7 @@ import shipments from './admin/shipments.routes.js';
 import cancelRefund from './admin/cancelRefund.routes.js';
 import uploads from './admin/uploads.routes.js';
 import traffic from './admin/traffic.routes.js';
+import seo from './admin/seo.routes.js';
 
 /*
  * Everything under /api/admin, split by domain.
@@ -46,5 +47,6 @@ router.use('/', shipments);
 router.use('/', cancelRefund);
 router.use('/', uploads);
 router.use('/', traffic);
+router.use('/', seo);
 
 export default router;
