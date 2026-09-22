@@ -7,6 +7,7 @@ import { useNewOrderAlert } from '@/hooks/admin/useNewOrderAlert';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
   LogOut, Truck, FileText, Store as StoreIcon, Paintbrush, Bell, BellOff, BellRing, TrendingUp,
+  SearchCheck,
 } from 'lucide-react';
 import { usePagination } from '@/hooks/admin/usePagination';
 import { useTransientNotice } from '@/hooks/admin/useTransientNotice';
@@ -27,6 +28,7 @@ import { useAdminTraffic } from '@/hooks/admin/useAdminTraffic';
 import UsersTab from './users/UsersTab';
 import OverviewTab from './overview/OverviewTab';
 import TrafficTab from './traffic/TrafficTab';
+import SeoTab from './seo/SeoTab';
 import MessagesTab from './messages/MessagesTab';
 import StoresTab from './stores/StoresTab';
 import CouponsTab from './coupons/CouponsTab';
@@ -50,6 +52,7 @@ import { card } from './shared/ui';
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'Insights', about: 'Sales, orders and customers at a glance.' },
   { id: 'traffic', label: 'Traffic & ads', icon: TrendingUp, group: 'Insights', about: 'Who visits the site, where they come from, and what the ads cost.' },
+  { id: 'seo', label: 'SEO', icon: SearchCheck, group: 'Insights', about: 'Which page is written for which Google search, and how many people search it.' },
   { id: 'orders', label: 'Orders', icon: ShoppingBag, group: 'Orders & delivery', about: 'Every order, its payment, and where it is now.' },
   { id: 'products', label: 'Products', icon: Package, group: 'Menu & offers', about: 'The menu: prices, photos and what is available.' },
   { id: 'customize', label: 'Customize UI', icon: Paintbrush, group: 'Menu & offers', about: 'The banner messages and hero image on the storefront.' },
@@ -250,6 +253,8 @@ export default function AdminDashboard() {
 
           {/* ===== Traffic & ads ===== */}
           {tab === 'traffic' && <TrafficTab {...traffic} />}
+
+          {tab === 'seo' && <SeoTab />}
 
           {/* ===== Orders ===== */}
           {tab === 'orders' && (
