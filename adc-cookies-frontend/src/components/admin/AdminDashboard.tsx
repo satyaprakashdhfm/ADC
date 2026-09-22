@@ -6,7 +6,7 @@ import { useAdminSession } from '@/hooks/admin/useAdminSession';
 import { useNewOrderAlert } from '@/hooks/admin/useNewOrderAlert';
 import {
   LayoutDashboard, ShoppingBag, Package, Ticket, Users, MessageSquare,
-  LogOut, Truck, FileText, Store as StoreIcon, Paintbrush, Bell, BellOff, BellRing,
+  LogOut, Truck, FileText, Store as StoreIcon, Paintbrush, Bell, BellOff, BellRing, TrendingUp,
 } from 'lucide-react';
 import { usePagination } from '@/hooks/admin/usePagination';
 import { useTransientNotice } from '@/hooks/admin/useTransientNotice';
@@ -23,8 +23,10 @@ import { useAdminAttention } from '@/hooks/admin/useAdminAttention';
 import { useAdminOrders } from '@/hooks/admin/useAdminOrders';
 import { useAdminDelivery } from '@/hooks/admin/useAdminDelivery';
 import { useAdminPetpooja } from '@/hooks/admin/useAdminPetpooja';
+import { useAdminTraffic } from '@/hooks/admin/useAdminTraffic';
 import UsersTab from './users/UsersTab';
 import OverviewTab from './overview/OverviewTab';
+import TrafficTab from './traffic/TrafficTab';
 import MessagesTab from './messages/MessagesTab';
 import StoresTab from './stores/StoresTab';
 import CouponsTab from './coupons/CouponsTab';
@@ -43,6 +45,7 @@ import { card } from './shared/ui';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'traffic', label: 'Traffic & ads', icon: TrendingUp },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
   { id: 'products', label: 'Products', icon: Package },
   { id: 'customize', label: 'Customize UI', icon: Paintbrush },
@@ -84,6 +87,8 @@ export default function AdminDashboard() {
   const { users, search: userSearch, setSearch: setUserSearch, saveUser, savingUser } = useAdminUsers(isAdmin && tab === 'users', setErr);
   const { stats, refreshStats } = useAdminStats(isAdmin, setErr);
   const { analytics, range, setRange, error: analyticsError, reload: reloadAnalytics } = useAdminAnalytics(isAdmin);
+  /* Nine Google Analytics queries plus Meta's per load, so only while the tab is actually open. */
+  const traffic = useAdminTraffic(isAdmin && tab === 'traffic');
   const { products, search: productSearch, setSearch: setProductSearch, category: productCat, setCategory: setProductCat, availability: productAvail, setAvailability: setProductAvail, editing, setEditing, saveProduct, removeProduct, refreshProducts } = useAdminProducts(isAdmin && tab === 'products', setErr, refreshStats);
   const siteSettings = useSiteSettings(isAdmin, setErr);
   const {
@@ -195,6 +200,9 @@ export default function AdminDashboard() {
             }}
           />
         )}
+
+        {/* ===== Traffic & ads ===== */}
+        {tab === 'traffic' && <TrafficTab {...traffic} />}
 
         {/* ===== Orders ===== */}
         {tab === 'orders' && (

@@ -790,6 +790,56 @@ export async function adminAnalytics(from?: string, to?: string): Promise<AdminA
   return request(`/admin/analytics${qs}`);
 }
 
+/* ---- Traffic tab: GA4 visits + Meta Ads spend + our own paid orders, joined by source ---- */
+
+export interface TrafficLabelCount { label: string; visitors: number; visits?: number }
+
+export interface AdminTraffic {
+  from: string; to: string; generatedAt: string;
+  google: {
+    connected: boolean;
+    /** Why Google Analytics is not connected, in a sentence — null when it is. */
+    problem: string | null;
+    /** Reports that failed even though it is connected. The rest still show. */
+    errors: string[];
+    summary?: { visitors: number; newVisitors: number; visits: number; engagedVisits: number; pageViews: number; avgVisitSeconds: number } | null;
+    byDay?: { day: string; visitors: number; visits: number }[] | null;
+    funnel?: { step: string; label: string; people: number }[] | null;
+    signIns?: { existing: number; newAccounts: number; byMethod: { method: string; existing: number; newAccounts: number }[] | null } | null;
+    landingPages?: TrafficLabelCount[] | null;
+    devices?: TrafficLabelCount[] | null;
+    cities?: TrafficLabelCount[] | null;
+    newVsReturning?: TrafficLabelCount[] | null;
+    rawSources?: { source: string; medium: string; visitors: number; visits: number }[] | null;
+  };
+  meta: {
+    connected: boolean;
+    problem: string | null;
+    error: string | null;
+    totals: { spend: number; impressions: number; reach: number; clicks: number; linkClicks: number; landingPageViews: number; metaPurchases: number; metaPurchaseValue: number } | null;
+  };
+  /** Paid orders in the period, from our own records. */
+  orders: { paid: number; revenue: number };
+  channels: { key: string; label: string; hint: string; visitors: number; visits: number; engagedVisits: number; orders: number; revenue: number }[];
+  /** Meta campaigns. spend etc. are null until Meta Ads is connected; visits come from GA4, orders from us. */
+  campaigns: { name: string; spend: number | null; impressions: number | null; reach: number | null; clicks: number | null; metaPurchases: number | null; visitors: number; visits: number; orders: number; revenue: number }[];
+  ads: { campaign: string; adset: string; ad: string; spend: number | null; impressions: number | null; clicks: number | null; visitors: number; visits: number; orders: number; revenue: number }[];
+}
+
+export interface AdminTrafficLive {
+  connected: boolean; problem: string | null; error: string | null;
+  visitors: number;
+  pages: { label: string; visitors: number }[];
+  devices: { label: string; visitors: number }[];
+}
+
+export async function adminTraffic(from: string, to: string, fresh = false): Promise<AdminTraffic> {
+  return request(`/admin/traffic?from=${from}&to=${to}${fresh ? '&fresh=1' : ''}`);
+}
+export async function adminTrafficLive(fresh = false): Promise<AdminTrafficLive> {
+  return request(`/admin/traffic/live${fresh ? '?fresh=1' : ''}`);
+}
+
 export async function adminGetOrders(): Promise<Order[]> { return request('/admin/orders'); }
 
 /** One new order, as the notification poller sees it — five fields, not a whole serialized order. */

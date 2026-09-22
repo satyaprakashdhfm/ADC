@@ -14,6 +14,7 @@ import { ensureMediaBucket } from './services/storage.client.js';
 import { getOne } from './db/index.js';
 import { assertEnv } from './config/env.js';
 import { listTemplates, phoneNumberStatus, whatsappConfigured } from './services/whatsapp.client.js';
+import { ga4Configured, runReport } from './services/ga4.client.js';
 import { ppRequest, petpoojaConfigured, egressRoute, REST_ID as PP_REST_ID } from './services/petpooja.client.js';
 
 const PORT = Number(process.env.PORT || 8080);
@@ -130,6 +131,16 @@ function dbTarget(): string {
           ? `[WHATSAPP] templates | ✓ ${r.templates.length} on the account`
           : `[WHATSAPP] templates | ✗ ${r.reason}`))
         .catch((e) => console.log(`[WHATSAPP] templates | ✗ ${e.message}`));
+    }
+
+    /* GA4, for the admin Traffic tab: one tiny report per deploy, so a bad key or a service account
+       nobody added to the property shows up here as well as on the tab. */
+    if (ga4Configured()) {
+      runReport({ dateRanges: [{ startDate: 'today', endDate: 'today' }], metrics: [{ name: 'activeUsers' }] })
+        .then((r) => console.log(r.ok
+          ? `[GA4] reachability | ✓ property answered | ${r.rows[0]?.mets[0] ?? 0} visitors today`
+          : `[GA4] reachability | ✗ ${r.reason}`))
+        .catch((e) => console.log(`[GA4] reachability | ✗ ${e.message}`));
     }
   });
 })().catch(err => { console.error('Startup failed:', err); process.exit(1); });
