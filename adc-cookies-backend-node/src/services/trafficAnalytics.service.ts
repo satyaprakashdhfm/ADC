@@ -8,7 +8,7 @@ import { CHANNELS, channelOfOrder, channelOfVisit, type ChannelKey } from './tra
  *
  * Three sources, each the authority on its own part and nothing else:
  *   GA4       visits — people, pages, where they came from, how far they got   (ga4.client)
- *   Meta Ads  what the ads cost and how many people they reached              (metaAds.client)
+ *   Meta Ads  what the ads cost and how many taps they sent to the site         (metaAds.client)
  *   orders    what was actually PAID for, from our own database
  *
  * They are joined in three places: by channel (trafficChannels), and — for Meta ads — by campaign
@@ -135,17 +135,15 @@ async function googleSide(from: string, to: string) {
 }
 
 async function metaSide(from: string, to: string) {
-  if (!metaAdsConfigured()) return { connected: false as const, problem: metaAdsProblem(), error: null, totals: null, campaigns: [] as MetaInsightRow[], ads: [] as MetaInsightRow[] };
-  const [account, campaigns, ads] = await Promise.all([
-    metaInsights('account', from, to), metaInsights('campaign', from, to), metaInsights('ad', from, to),
-  ]);
-  const error = [account, campaigns, ads].find((r) => !r.ok);
-  const zero = { spend: 0, impressions: 0, reach: 0, clicks: 0, linkClicks: 0, landingPageViews: 0, metaPurchases: 0, metaPurchaseValue: 0 };
+  if (!metaAdsConfigured()) return { connected: false as const, problem: metaAdsProblem(), error: null, loaded: false, campaigns: [] as MetaInsightRow[], ads: [] as MetaInsightRow[] };
+  const [campaigns, ads] = await Promise.all([metaInsights('campaign', from, to), metaInsights('ad', from, to)]);
+  const error = [campaigns, ads].find((r) => !r.ok);
   return {
     connected: true as const,
     problem: null,
     error: error && !error.ok ? error.reason : null,
-    totals: account.ok ? { ...zero, ...(account.rows[0] || {}) } : null,
+    /* Totals are summed from the website campaigns below, so they only exist if that report did. */
+    loaded: campaigns.ok,
     campaigns: campaigns.ok ? campaigns.rows : [],
     ads: ads.ok ? ads.rows : [],
   };
@@ -194,11 +192,11 @@ export async function trafficReport(from: string, to: string, { fresh = false } 
     for (const [k, c] of orders.byChannel) { const row = channelRow(k); row.orders += c.orders; row.revenue += c.revenue; }
 
     /* ---- Meta campaigns: spend (Meta) + visitors (GA4) + orders (ours) ---- */
-    const campaigns = new Map<string, { name: string; spend: number | null; impressions: number | null; reach: number | null; clicks: number | null; metaPurchases: number | null; visitors: number; visits: number; orders: number; revenue: number }>();
+    const campaigns = new Map<string, { name: string; spend: number | null; clicks: number | null; visitors: number; visits: number; orders: number; revenue: number }>();
     const campaignRow = (name: string) => campaigns.get(norm(name))
-      || campaigns.set(norm(name), { name, spend: null, impressions: null, reach: null, clicks: null, metaPurchases: null, visitors: 0, visits: 0, orders: 0, revenue: 0 }).get(norm(name))!;
+      || campaigns.set(norm(name), { name, spend: null, clicks: null, visitors: 0, visits: 0, orders: 0, revenue: 0 }).get(norm(name))!;
     for (const c of meta.campaigns) {
-      Object.assign(campaignRow(c.campaign), { name: c.campaign, spend: c.spend, impressions: c.impressions, reach: c.reach, clicks: c.linkClicks, metaPurchases: c.metaPurchases });
+      Object.assign(campaignRow(c.campaign), { name: c.campaign, spend: c.spend, clicks: c.siteClicks });
     }
     for (const r of (google.connected && google.visits) || []) {
       if (channelOfVisit(r.dim(0), r.dim(1), r.dim(2), r.dim(3)) !== 'meta_ads' || !isSet(r.dim(3))) continue;
@@ -207,17 +205,33 @@ export async function trafficReport(from: string, to: string, { fresh = false } 
     for (const c of orders.byCampaign.values()) { const row = campaignRow(c.name); row.orders += c.orders; row.revenue += c.revenue; }
 
     /* ---- Individual Meta ads, the same three ways ---- */
-    const ads = new Map<string, { campaign: string; adset: string; ad: string; spend: number | null; impressions: number | null; clicks: number | null; visitors: number; visits: number; orders: number; revenue: number }>();
+    const ads = new Map<string, { campaign: string; adset: string; ad: string; spend: number | null; clicks: number | null; visitors: number; visits: number; orders: number; revenue: number }>();
     const adRow = (campaign: string, adset: string, ad: string) => {
       const key = `${norm(campaign)}|${norm(ad)}`;
-      return ads.get(key) || ads.set(key, { campaign, adset, ad, spend: null, impressions: null, clicks: null, visitors: 0, visits: 0, orders: 0, revenue: 0 }).get(key)!;
+      return ads.get(key) || ads.set(key, { campaign, adset, ad, spend: null, clicks: null, visitors: 0, visits: 0, orders: 0, revenue: 0 }).get(key)!;
     };
-    for (const a of meta.ads) Object.assign(adRow(a.campaign, a.adset, a.ad), { spend: a.spend, impressions: a.impressions, clicks: a.linkClicks });
+    for (const a of meta.ads) Object.assign(adRow(a.campaign, a.adset, a.ad), { spend: a.spend, clicks: a.siteClicks });
     for (const r of (google.connected && google.adVisits) || []) {
       if (channelOfVisit(r.dim(0), r.dim(1), '', r.dim(2)) !== 'meta_ads' || !isSet(r.dim(4))) continue;
       const row = adRow(pretty(r.dim(2)), isSet(r.dim(3)) ? pretty(r.dim(3)) : '', pretty(r.dim(4))); row.visitors += r.met(0); row.visits += r.met(1);
     }
     for (const a of orders.byAd.values()) { const row = adRow(a.campaign, a.adset, a.ad); row.orders += a.orders; row.revenue += a.revenue; }
+
+    /*
+     * Only campaigns that send people to the website. One that sends them to Instagram DMs costs
+     * money and brings nobody to the site, so counting its spend here would make every website
+     * number (cost per click, cost per order, return) look worse than it is. A campaign counts once
+     * anything shows it reaching the site: Meta's clicks out, a Google visit, or one of our orders.
+     * The rest are named in `leftOut` so the spend still adds up against Ads Manager.
+     */
+    const reachesSite = (r: { clicks: number | null; visitors: number; orders: number }) => (r.clicks ?? 0) > 0 || r.visitors > 0 || r.orders > 0;
+    const siteCampaigns = [...campaigns.values()].filter(reachesSite);
+    const siteCampaignKeys = new Set(siteCampaigns.map((c) => norm(c.name)));
+    const leftOut = [...campaigns.values()].filter((c) => !reachesSite(c) && (c.spend ?? 0) > 0).map((c) => ({ name: c.name, spend: c.spend ?? 0 }));
+    const siteAds = [...ads.values()].filter((a) => siteCampaignKeys.has(norm(a.campaign)) || a.visitors > 0 || a.orders > 0);
+    const metaTotals = meta.connected && meta.loaded
+      ? siteCampaigns.reduce((t, c) => ({ spend: t.spend + (c.spend ?? 0), clicks: t.clicks + (c.clicks ?? 0) }), { spend: 0, clicks: 0 })
+      : null;
 
     /* The raw GA4 source / medium pairs, for whoever wants to see exactly what Google recorded. */
     const rawSources = google.connected && google.visits
@@ -241,13 +255,13 @@ export async function trafficReport(from: string, to: string, { fresh = false } 
             newVsReturning: google.newVsReturning, rawSources,
           }
         : { connected: false, problem: google.problem, errors: [] },
-      meta: { connected: meta.connected, problem: meta.problem, error: meta.error, totals: meta.totals },
+      meta: { connected: meta.connected, problem: meta.problem, error: meta.error, totals: metaTotals, leftOut },
       orders: { paid: orders.paid, revenue: orders.revenue },
       channels: [...channels.entries()]
         .map(([key, v]) => ({ key, label: CHANNELS[key].label, hint: CHANNELS[key].hint, ...v }))
         .sort(byVisitsThenOrders),
-      campaigns: [...campaigns.values()].sort((a, b) => (b.spend ?? 0) - (a.spend ?? 0) || byVisitsThenOrders(a, b)),
-      ads: [...ads.values()].sort((a, b) => (b.spend ?? 0) - (a.spend ?? 0) || byVisitsThenOrders(a, b)),
+      campaigns: siteCampaigns.sort((a, b) => (b.spend ?? 0) - (a.spend ?? 0) || byVisitsThenOrders(a, b)),
+      ads: siteAds.sort((a, b) => (b.spend ?? 0) - (a.spend ?? 0) || byVisitsThenOrders(a, b)),
     };
   });
 }

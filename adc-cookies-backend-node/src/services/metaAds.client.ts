@@ -1,9 +1,8 @@
 /*
  * Meta Ads — the Marketing API's Insights edge, read-only. Talks to Meta and nothing else.
  *
- * What our ads cost and how far they reached: spend, impressions, reach, clicks, and what Meta
- * itself credits them with. Everything a customer did AFTER the click comes from our own orders
- * and from GA4 instead; trafficAnalytics.service lines the three up by campaign and ad name, which
+ * What our ads cost and how many taps they sent to the website. Everything a customer did AFTER
+ * the click comes from our own orders and from GA4 instead; trafficAnalytics.service lines the three up by campaign and ad name, which
  * all come from the same {{campaign.name}} / {{ad.name}} URL parameters on the ad.
  *
  * DORMANT UNTIL CONFIGURED, like WhatsApp:
@@ -32,27 +31,24 @@ console.log(metaAdsConfigured()
   ? `[META] ads | ✓ on | account=act_…${ACCOUNT.slice(-4)}`
   : `[META] ads | off | ${metaAdsProblem()}`);
 
-/** One row of the Insights report, flattened into the numbers the dashboard shows. */
+/**
+ * One row of the Insights report: what an ad cost and how many people it sent to the website.
+ *
+ * Only the website side is read. Reach and times shown say nothing about the shop, and "link
+ * clicks" is no good either: Meta counts a tap that opens an Instagram DM as a link click, so a
+ * messages campaign shows hundreds of them and sends nobody to the site. Outbound clicks are the
+ * taps that left Instagram or Facebook, which for our ads means the website.
+ */
 export interface MetaInsightRow {
   campaign: string;
   adset: string;
   ad: string;
   spend: number;
-  impressions: number;
-  reach: number;
-  clicks: number;
-  linkClicks: number;
-  landingPageViews: number;
-  /** What META counts as purchases (includes people who only saw the ad). Ours are separate. */
-  metaPurchases: number;
-  metaPurchaseValue: number;
+  /** Taps that left Meta for our site (Meta's outbound clicks). */
+  siteClicks: number;
 }
 
 export type MetaInsightsResult = { ok: true; rows: MetaInsightRow[] } | { ok: false; reason: string };
-
-/* Meta reports a purchase under several names depending on how it was measured. `purchase` is the
-   deduplicated total when present; the pixel-specific one is the fallback on older setups. */
-const PURCHASE_TYPES = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'];
 
 function actionValue(list: any[] | undefined, types: string[]): number {
   for (const t of types) {
@@ -63,12 +59,12 @@ function actionValue(list: any[] | undefined, types: string[]): number {
 }
 
 /**
- * Spend and delivery for a date range (inclusive, in the ad account's timezone), at one level:
- * 'account' is one totals row, 'campaign' one per campaign, 'ad' one per ad. Follows paging.
+ * Spend and website clicks for a date range (inclusive, in the ad account's timezone), one row per
+ * campaign or per ad. Follows paging.
  */
-export async function metaInsights(level: 'account' | 'campaign' | 'ad', since: string, until: string): Promise<MetaInsightsResult> {
+export async function metaInsights(level: 'campaign' | 'ad', since: string, until: string): Promise<MetaInsightsResult> {
   if (!metaAdsConfigured()) return { ok: false, reason: metaAdsProblem() || 'not_configured' };
-  const fields = ['campaign_name', 'adset_name', 'ad_name', 'spend', 'impressions', 'reach', 'clicks', 'inline_link_clicks', 'actions', 'action_values'];
+  const fields = ['campaign_name', 'adset_name', 'ad_name', 'spend', 'outbound_clicks'];
   const qs = new URLSearchParams({
     level,
     fields: fields.join(','),
@@ -96,13 +92,7 @@ export async function metaInsights(level: 'account' | 'campaign' | 'ad', since: 
           adset: r.adset_name || '',
           ad: r.ad_name || '',
           spend: Number(r.spend) || 0,
-          impressions: Number(r.impressions) || 0,
-          reach: Number(r.reach) || 0,
-          clicks: Number(r.clicks) || 0,
-          linkClicks: Number(r.inline_link_clicks) || 0,
-          landingPageViews: actionValue(r.actions, ['landing_page_view']),
-          metaPurchases: actionValue(r.actions, PURCHASE_TYPES),
-          metaPurchaseValue: actionValue(r.action_values, PURCHASE_TYPES),
+          siteClicks: actionValue(r.outbound_clicks, ['outbound_click']),
         });
       }
       url = data?.paging?.next || null;
