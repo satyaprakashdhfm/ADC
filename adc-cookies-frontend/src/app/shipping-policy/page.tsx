@@ -28,7 +28,6 @@ const SECTIONS: LegalSection[] = [
     heading: 'Same-day delivery in our cities',
     body: [
       'If your address is in a city where we have a shop, the order is sent from whichever shop is actually nearest you, not from one central kitchen. That short trip is what lets a cookie arrive warm.',
-      'These orders usually reach you within about an hour of being baked.',
       'We only make that promise once our delivery partner has confirmed it for your specific address. If they cannot, we say so and the order is not accepted. We will not quietly turn a same-day order into a three-day parcel.',
     ],
   },
@@ -76,7 +75,7 @@ export default function ShippingPolicyPage() {
     <LegalPage
       title="Shipping & Delivery Policy"
       intro="How your order gets to you: same-day from the nearest shop in our cities, by courier elsewhere, and what each of those costs."
-      updated="12 August 2026"
+      updated="22 September 2026"
       sections={SECTIONS}
     />
   );

@@ -27,7 +27,7 @@ const SITE_URL = 'https://www.adoughcookie.com';
 const PATH = '/best-cookies-in-bangalore';
 const TITLE = 'Best Cookies in Bangalore, Freshly Baked & Same-Day Delivery | a dough cookie';
 const DESCRIPTION =
-  'Looking for the best cookies in Bangalore? A Dough Cookie bakes in small batches all day at three Bengaluru stores in Jayanagar, S.G. Palya and Electronic City, with same-day delivery across the city in about an hour.';
+  'Looking for the best cookies in Bangalore? A Dough Cookie bakes in small batches all day at three Bengaluru stores in Jayanagar, S.G. Palya and Electronic City, with same-day delivery across the city.';
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -68,7 +68,7 @@ const FAQS = [
   },
   {
     q: 'Do you deliver cookies across Bangalore on the same day?',
-    a: 'Yes. Orders to a Bengaluru address are fulfilled from whichever of our stores is nearest to you and typically arrive within about an hour. The delivery fee is calculated by distance from that store and shown before you pay, so there is no surprise at checkout.',
+    a: 'Yes. Orders to a Bengaluru address are fulfilled from whichever of our stores is nearest to you and are delivered the same day. The delivery fee is calculated by distance from that store and shown before you pay, so there is no surprise at checkout.',
   },
   {
     q: 'How much do your cookies cost?',
@@ -95,7 +95,7 @@ const FAQS = [
 const REASONS = [
   { icon: Wheat, title: 'Real ingredients, no substitutes', text: 'Président butter, couverture chocolate, and 100% real Nutella and Lotus Biscoff. No compound coatings, no vegetable-fat “chocolate”, no filling that is mostly sugar.' },
   { icon: Clock, title: 'Baked in small batches, all day', text: 'We bake through the day in small trays rather than one big morning run, so the cookie you pick up at seven in the evening is as fresh as the one at opening.' },
-  { icon: Truck, title: 'Across Bengaluru in about an hour', text: 'Same-day delivery from the store nearest your address, priced by real distance. You see the fee and the arrival time before you pay for anything.' },
+  { icon: Truck, title: 'Same-day across Bengaluru', text: 'Same-day delivery from the store nearest your address, priced by real distance. You see the fee and the arrival time before you pay for anything.' },
   { icon: Gift, title: 'Finished like a gift', text: 'Tins, sleeves, ribbons and a hand-written note. A box of cookies is usually going to somebody, so it should look like somebody meant it.' },
 ];
 
@@ -190,7 +190,7 @@ export default function BestCookiesInBangalorePage() {
           <p style={{ ...para, fontSize: 'var(--text-lg)', maxWidth: 780 }}>
             A Dough Cookie is a small-batch cookie kitchen with three stores across Bengaluru, in Jayanagar,
             S.G. Palya and Electronic City. Everything is shaped by hand, baked through the day rather
-            than all at once, and delivered anywhere in the city in about an hour.
+            than all at once, and delivered anywhere in the city the same day.
           </p>
 
           <div style={{ position: 'relative', width: '100%', aspectRatio: '21 / 9', borderRadius: 'var(--radius-card)', overflow: 'hidden', margin: '26px 0 30px', background: 'var(--surface-sunken)' }}>
@@ -256,7 +256,7 @@ export default function BestCookiesInBangalorePage() {
           <h2 style={h2}>What makes them worth the trip</h2>
           <p style={{ ...para, maxWidth: 760 }}>
             Bangalore is not short of places selling cookies. What is rarer is a cookie that was shaped by
-            a person, baked an hour ago, and made from ingredients nobody quietly swapped for something
+            a person, baked that same day, and made from ingredients nobody quietly swapped for something
             cheaper.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'clamp(14px,2vw,22px)', marginTop: 24 }}>
@@ -308,8 +308,7 @@ export default function BestCookiesInBangalorePage() {
           <p style={para}>
             Put in your address at checkout and the order is routed to whichever of our three stores is
             actually closest to you, not to a single central kitchen. That is what makes same-day
-            realistic: the cookie has a short trip, so it is still warm when it arrives, usually within
-            about an hour.
+            realistic: the cookie has a short trip, so it is still fresh when it arrives.
           </p>
           <p style={para}>
             The delivery fee is the real distance-based rate from that store, shown on the bill before

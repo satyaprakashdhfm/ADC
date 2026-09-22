@@ -90,8 +90,7 @@ export default function ContactPage() {
             </p>
             <p style={{ fontSize: 'var(--text-base)', lineHeight: 1.75, color: 'var(--text-body)', marginBottom: 18 }}>
               Ordering online works the same way: your order goes to whichever shop is nearest your
-              address, not to one central kitchen, which is what makes same-day delivery in about an
-              hour possible.
+              address, not to one central kitchen, which is what makes same-day delivery possible.
             </p>
             <Link href="/locations" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '13px 26px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 900, fontSize: 'var(--text-sm)', boxShadow: 'var(--shadow-brand)' }}>
               <MapPin size={17} /> All store locations

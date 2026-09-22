@@ -45,7 +45,7 @@ const OCCASIONS: { key: keyof typeof IMAGES.occasions; title: string; text: stri
 const STEPS = [
   { n: '01', title: 'Choose a tin or a box', text: 'Add it to your cart from the menu.' },
   { n: '02', title: 'Add your message', text: 'Turn on "Send this as a gift" at checkout. We add gift wrap and a handwritten card, and you can tag the occasion.' },
-  { n: '03', title: 'Send it to them', text: "Enter their address and phone number. In Bengaluru and Chennai it usually arrives in about an hour; elsewhere, the courier's date shows at checkout." },
+  { n: '03', title: 'Send it to them', text: "Enter their address and phone number. In Bengaluru and Chennai it arrives the same day; elsewhere, the courier's date shows at checkout." },
 ];
 
 const wrap: React.CSSProperties = { maxWidth: 1120, margin: '0 auto', padding: '0 var(--gutter)' };

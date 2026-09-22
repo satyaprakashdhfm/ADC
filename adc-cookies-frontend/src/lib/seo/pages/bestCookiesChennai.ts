@@ -65,7 +65,7 @@ export const bestCookiesChennai: SeoPageContent = {
     {
       h2: `Same-day cookie delivery in Chennai`,
       blocks: [
-        { kind: 'p', text: `Orders to a Chennai address are sent from Besant Nagar. At checkout you see the distance and the delivery fee, and whether same-day delivery is confirmed for your address, before you pay. Most orders arrive in about an hour.` },
+        { kind: 'p', text: `Orders to a Chennai address are sent from Besant Nagar. At checkout you see the distance and the delivery fee, and whether same-day delivery is confirmed for your address, before you pay.` },
         { kind: 'p', text: `Orders placed late in the evening go out on the next baking day. The full rules are in our [shipping policy](/shipping-policy).` },
         { kind: 'buttons', primary: { label: 'Order cookies', href: '/order' }, secondary: { label: 'All our stores', href: '/locations' } },
       ],
@@ -73,7 +73,7 @@ export const bestCookiesChennai: SeoPageContent = {
   ],
   faqs: [
     { q: `Where can I buy fresh cookies in Chennai?`, a: `At A Dough Cookie, 63, 6th Avenue, Besant Nagar, Chennai 600090. You can also order online for same-day delivery in Chennai.` },
-    { q: `Do you deliver cookies in Chennai?`, a: `Yes, from the Besant Nagar shop, usually in about an hour. Checkout confirms same-day delivery for your address before you pay.` },
+    { q: `Do you deliver cookies in Chennai?`, a: `Yes, the same day, from the Besant Nagar shop. Checkout confirms same-day delivery for your address before you pay.` },
     { q: `Are your cookies eggless?`, a: `Yes, all of them. Our kitchens do not use eggs.` },
     { q: `Do you have gluten-free cookies in Chennai?`, a: `Yes. The Ragi cookie is gluten-free, made with finger millet instead of wheat flour.` },
     { q: `How much are your cookies?`, a: `Single cookies cost {cookies:from} to {cookies:to}, and cookie tins {tins:from} to {tins:to}. Chennai delivery is priced by distance and shown before you pay.` },

@@ -52,7 +52,7 @@ export const cookieTins: SeoPageContent = {
     {
       h2: `Cookie tin delivery across India`,
       blocks: [
-        { kind: 'p', text: `In Bengaluru and Chennai, a tin is sent from our nearest shop and usually arrives in about an hour. Delivery is priced by distance, and you see the fee before you pay.` },
+        { kind: 'p', text: `In Bengaluru and Chennai, a tin is sent from our nearest shop and arrives the same day. Delivery is priced by distance, and you see the fee before you pay.` },
         { kind: 'p', text: `Everywhere else, the Chocolate Chip, Nutella and Biscoff tins go by courier for a flat fee. Checkout shows the expected delivery date for your PIN code, which comes from the courier. The Red Velvet tin does not travel this way.` },
         { kind: 'p', text: `In Bangalore, our page on [cookie tins in Bangalore](/cookie-tins-in-bangalore) lists the shops and how local delivery works. In Chennai, see [cookies in Chennai](/best-cookies-in-chennai).` },
         { kind: 'buttons', primary: { label: 'Order a cookie tin', href: '/order' } },

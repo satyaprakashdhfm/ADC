@@ -35,7 +35,8 @@ function googleProvider() {
  */
 const DELIVERY_RULES = `
 SAME-DAY (intracity — Bengaluru and Chennai, carrier Shiprocket):
-- Usually within an hour, and at most the same day.
+- Delivered the same day. Never promise a time in minutes or hours (not "within an hour", not
+  "in 30 minutes"); say "the same day", and point to the live tracking for where it is now.
 - An order placed late in the evening (after about 9pm) goes out early the next morning.
 - If the tracking shows the rider has not collected it yet, say we are waiting for a rider to pick
   it up. Once it is picked up, say a rider is assigned and it is on the way.

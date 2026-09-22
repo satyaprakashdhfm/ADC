@@ -6,8 +6,8 @@ export const cookieTinsBangalore: SeoPageContent = {
   path: '/cookie-tins-in-bangalore',
   kind: 'landing',
   title: `Cookie Tins in Bangalore, Same-Day Delivery | a dough cookie`,
-  description: `Fresh-baked cookie tins near you in Bangalore. Four eggless flavours from {tins:from}, sent from our three shops and delivered the same day, usually in about an hour.`,
-  h1: `Cookie tins in Bangalore, baked today and delivered in about an hour`,
+  description: `Fresh-baked cookie tins near you in Bangalore. Four eggless flavours from {tins:from}, sent from our three shops and delivered the same day.`,
+  h1: `Cookie tins in Bangalore, baked and delivered the same day`,
   name: `Cookie tins in Bangalore`,
   excerpt: `Where to get a fresh cookie tin near you in Bangalore, what the four tins cost, and how same-day delivery works.`,
   hero: {
@@ -25,7 +25,7 @@ export const cookieTinsBangalore: SeoPageContent = {
   ],
   answer: {
     title: `The short answer`,
-    text: `Order a cookie tin online and it is sent from the nearest of our three Bangalore shops, usually arriving in about an hour. Tins cost {tins:from} to {tins:to}, and like everything we bake, they are eggless.`,
+    text: `Order a cookie tin online and it is sent from the nearest of our three Bangalore shops and delivered the same day. Tins cost {tins:from} to {tins:to}, and like everything we bake, they are eggless.`,
   },
   sections: [
     {
@@ -46,7 +46,7 @@ export const cookieTinsBangalore: SeoPageContent = {
     {
       h2: `Same-day cookie tin delivery across Bangalore`,
       blocks: [
-        { kind: 'p', text: `Put in your address at checkout and, before you pay, you see which shop your tin is coming from, how far away it is, and the delivery fee for that distance. Most orders arrive in about an hour.` },
+        { kind: 'p', text: `Put in your address at checkout and, before you pay, you see which shop your tin is coming from, how far away it is, and the delivery fee for that distance.` },
         { kind: 'p', text: `We only promise same-day delivery once our delivery partner has confirmed they can reach your address. If they cannot, checkout tells you and the order is not taken. Orders placed late in the evening go out on the next baking day. The full rules are in our [shipping policy](/shipping-policy).` },
         { kind: 'buttons', primary: { label: 'Order a cookie tin', href: '/order' }, secondary: { label: 'Find a store', href: '/locations' } },
       ],
@@ -69,7 +69,7 @@ export const cookieTinsBangalore: SeoPageContent = {
   faqs: [
     { q: `Where can I buy cookie tins near me in Bangalore?`, a: `A Dough Cookie has three shops in Bangalore: Jayanagar 9th Block (opposite Jain University Gate 1), S.G. Palya and Electronic City Phase 1. Order a tin online and it comes from whichever shop is nearest your address.` },
     { q: `How much does a cookie tin cost?`, a: `Our cookie tins cost {tins:from} to {tins:to}: Chocolate Chip {price:${TIN.chocolateChip}}, Nutella {price:${TIN.nutella}}, Red Velvet {price:${TIN.redVelvet}} and Biscoff {price:${TIN.biscoff}}. Delivery is charged by distance and shown before you pay.` },
-    { q: `Can I get a cookie tin delivered the same day in Bangalore?`, a: `Yes. Orders to a Bangalore address usually arrive in about an hour. Checkout confirms same-day delivery for your address before you pay, and orders placed late in the evening go out the next baking day.` },
+    { q: `Can I get a cookie tin delivered the same day in Bangalore?`, a: `Yes. Orders to a Bangalore address are delivered the same day. Checkout confirms same-day delivery for your address before you pay, and orders placed late in the evening go out the next baking day.` },
     { q: `Are your cookie tins eggless?`, a: `Yes. Every cookie we bake is eggless, and our kitchens do not use eggs at all.` },
     { q: `Can I add a message to a cookie tin?`, a: `Yes. Choose "Send this as a gift" at checkout to add gift wrap and a handwritten message card, and pick the occasion.` },
     { q: `Do you deliver cookie tins outside Bangalore?`, a: `The Chocolate Chip, Nutella and Biscoff tins go by courier to most PIN codes in India, with the expected date shown at checkout. The Red Velvet tin is same-day only, inside Bengaluru and Chennai.` },

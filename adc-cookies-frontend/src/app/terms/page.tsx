@@ -62,7 +62,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: 'Delivery',
     body: [
-      'Inside the cities where we have shops, orders are sent same-day from whichever shop is nearest your address, and usually arrive within about an hour.',
+      'Inside the cities where we have shops, orders are sent same-day from whichever shop is nearest your address.',
       'Elsewhere in India, orders go by courier and take longer. The expected date is shown at checkout.',
       'Some items are only sold for same-day delivery inside our shop cities, because they keep for less than a day. Those items are marked at checkout and cannot be sent by courier, whatever the address.',
       'Delivery times are our honest estimate, not a guarantee. Weather, traffic and courier delays happen. If an order is running badly late, tell us.',
@@ -124,7 +124,7 @@ export default function TermsPage() {
     <LegalPage
       title="Terms of Service"
       intro="The agreement between you and us when you order cookies from this site. Written to be read, not to be skipped."
-      updated="12 August 2026"
+      updated="22 September 2026"
       sections={SECTIONS}
     />
   );

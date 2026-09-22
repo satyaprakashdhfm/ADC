@@ -49,7 +49,7 @@ export const cookieTinsForGifts: SeoPageContent = {
     {
       h2: `Time the delivery`,
       blocks: [
-        { kind: 'p', text: `In Bengaluru and Chennai, a tin is sent from our nearest shop and usually arrives in about an hour. Order in the morning for a same-day surprise. Orders placed late in the evening go out on the next baking day.` },
+        { kind: 'p', text: `In Bengaluru and Chennai, a tin is sent from our nearest shop and arrives the same day. Order in the morning for a same-day surprise. Orders placed late in the evening go out on the next baking day.` },
         { kind: 'p', text: `For another city, choose Chocolate Chip, Nutella or Biscoff, which travel by courier. Checkout shows the expected delivery date for their PIN code, so you can order a few days ahead of a birthday. Most tins keep for up to two days after they arrive.` },
       ],
     },
