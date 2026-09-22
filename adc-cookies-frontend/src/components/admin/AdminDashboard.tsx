@@ -25,6 +25,7 @@ import { useAdminOrders } from '@/hooks/admin/useAdminOrders';
 import { useAdminDelivery } from '@/hooks/admin/useAdminDelivery';
 import { useAdminPetpooja } from '@/hooks/admin/useAdminPetpooja';
 import { useAdminTraffic } from '@/hooks/admin/useAdminTraffic';
+import { useAdminSeo } from '@/hooks/admin/useAdminSeo';
 import UsersTab from './users/UsersTab';
 import OverviewTab from './overview/OverviewTab';
 import TrafficTab from './traffic/TrafficTab';
@@ -97,6 +98,7 @@ export default function AdminDashboard() {
   const { analytics, range, setRange, error: analyticsError, reload: reloadAnalytics } = useAdminAnalytics(isAdmin);
   /* Nine Google Analytics queries plus Meta's per load, so only while the tab is actually open. */
   const traffic = useAdminTraffic(isAdmin && tab === 'traffic');
+  const seo = useAdminSeo(isAdmin && tab === 'seo');
   const { products, search: productSearch, setSearch: setProductSearch, category: productCat, setCategory: setProductCat, availability: productAvail, setAvailability: setProductAvail, editing, setEditing, saveProduct, removeProduct, refreshProducts } = useAdminProducts(isAdmin && tab === 'products', setErr, refreshStats);
   const siteSettings = useSiteSettings(isAdmin, setErr);
   const {
@@ -254,7 +256,7 @@ export default function AdminDashboard() {
           {/* ===== Traffic & ads ===== */}
           {tab === 'traffic' && <TrafficTab {...traffic} />}
 
-          {tab === 'seo' && <SeoTab />}
+          {tab === 'seo' && <SeoTab {...seo} />}
 
           {/* ===== Orders ===== */}
           {tab === 'orders' && (

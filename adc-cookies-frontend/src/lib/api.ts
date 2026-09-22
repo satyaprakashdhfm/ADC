@@ -840,6 +840,30 @@ export async function adminTrafficLive(fresh = false): Promise<AdminTrafficLive>
   return request(`/admin/traffic/live${fresh ? '?fresh=1' : ''}`);
 }
 
+/* ---- Admin: SEO (Google Search Console) ---- */
+export interface AdminSeoQuery { query: string; clicks: number; impressions: number; position: number }
+export interface AdminSeoPage {
+  path: string;
+  clicks: number;
+  impressions: number;
+  position: number | null;
+  queries: AdminSeoQuery[];
+  /** URL Inspection, as Google words it; null when the check failed. */
+  index: { verdict: string; coverage: string; lastCrawl: string | null } | null;
+}
+export interface AdminSeo {
+  connected: boolean; problem: string | null; site: string | null;
+  days: number; from: string; to: string;
+  totals: { clicks: number; impressions: number; position: number | null } | null;
+  pages: AdminSeoPage[];
+  sitemap: { path: string; lastRead: string | null; pages: number; errors: number; warnings: number } | null;
+  generatedAt: string;
+}
+
+export async function adminSeo(days: number, paths: string[], fresh = false): Promise<AdminSeo> {
+  return request(`/admin/seo?days=${days}&paths=${encodeURIComponent(paths.join(','))}${fresh ? '&fresh=1' : ''}`);
+}
+
 export async function adminGetOrders(): Promise<Order[]> { return request('/admin/orders'); }
 
 /** One new order, as the notification poller sees it — five fields, not a whole serialized order. */
