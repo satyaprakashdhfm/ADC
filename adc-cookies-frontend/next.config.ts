@@ -69,6 +69,12 @@ const nextConfig: NextConfig = {
         source: '/api/:path*',
         destination: `${BACKEND}/api/:path*`,
       },
+      /* The WhatsApp payment-link button. The backend decides where it goes at the moment it is
+         tapped: Razorpay's page while the link is open, the checkout once it is not. */
+      {
+        source: '/pay/:token',
+        destination: `${BACKEND}/api/pay/:token`,
+      },
     ];
   },
   async redirects() {
