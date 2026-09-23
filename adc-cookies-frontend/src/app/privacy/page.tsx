@@ -37,7 +37,7 @@ const SECTIONS: LegalSection[] = [
     heading: 'Why we need it',
     body: [
       'To bake and deliver your order, to let you see your order history, to answer you when you contact us, and to meet our own accounting and tax obligations.',
-      'To send your order confirmation on WhatsApp, to the phone number on your account.',
+      'To send your order confirmation on WhatsApp, to the phone number on your account. If you are signed in and leave items in your basket, or a payment does not go through, we may send you one reminder there.',
       'To understand which of our adverts actually lead to orders, so we spend on the ones that work.',
       'We do not sell your information to anybody.',
     ],
@@ -73,7 +73,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: 'Cookies and local storage',
     body: [
-      'This site stores a few things in your browser: your basket so it survives a refresh, your login session, and whether you have already seen certain pop-ups. Clearing your browser data clears all of it.',
+      'This site stores a few things in your browser: your basket so it survives a refresh, your login session, and whether you have already seen certain pop-ups. Clearing your browser data clears all of it. While you are signed in, your basket is also saved to your account, so it is there when you sign in on another device. Empty the basket and the saved copy goes too.',
       "The Meta Pixel and Google Analytics also set their own cookies, which is how they measure our advertising as described above. You can block them with your browser's privacy settings or an ad blocker, and the site works exactly the same without them. Meta's own ad settings control which adverts it shows you.",
     ],
   },

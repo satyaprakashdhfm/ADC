@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import type { PackPick } from '@/lib/api';
+import { getSavedCart, putSavedCart, type PackPick } from '@/lib/api';
 import { trackAddToCart, trackRemoveFromCart } from '@/lib/analytics';
 
 export interface CartEntry {
@@ -134,6 +134,60 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
     prevAuthId.current = authId;
   }, [authId, clearAll]);
+
+  /*
+   * The basket, saved to the account while someone is signed in.
+   *
+   * Only in the browser, a basket built on a laptop was empty on the customer's phone, and we
+   * could not remind anyone about a basket we never saw. So a signed-in basket is copied to the
+   * server on every change, and brought back when they sign in somewhere it is empty.
+   *
+   * Nothing is written until the saved copy has been read for THIS account. Writing first would
+   * let a browser that opens with an empty basket wipe the one saved from the other device, which
+   * is the one thing this must never do. After that the rule is simple: a browser that already has
+   * items keeps them and saves them; an empty one takes the saved basket.
+   *
+   * Signing out saves nothing and deletes nothing: the basket waits on the account for next time.
+   * A free item a coupon added is left out, since the coupon does not travel with it.
+   */
+  const syncedFor = useRef<string | null>(null);
+  const giftLineRef = useRef(giftLineId);
+  useEffect(() => { giftLineRef.current = giftLineId; }, [giftLineId]);
+  const forServer = useCallback((c: Record<string, CartEntry>) => {
+    const out = { ...c };
+    if (giftLineRef.current) delete out[giftLineRef.current];
+    return out;
+  }, []);
+
+  useEffect(() => {
+    syncedFor.current = null;
+    if (!authId) return;
+    let stale = false;
+    (async () => {
+      let saved: Record<string, CartEntry>;
+      try {
+        saved = ((await getSavedCart())?.lines || {}) as Record<string, CartEntry>;
+      } catch {
+        return; // could not read it, so never overwrite it: this visit simply is not saved
+      }
+      if (stale) return;
+      const local = cartRef.current;
+      if (!Object.keys(local).length) {
+        if (Object.keys(saved).length) setCart(saved);
+      } else {
+        await putSavedCart(forServer(local)).catch(() => { /* the next change tries again */ });
+      }
+      if (!stale) syncedFor.current = authId;
+    })();
+    return () => { stale = true; };
+  }, [authId, forServer]);
+
+  useEffect(() => {
+    if (!authId || syncedFor.current !== authId) return;
+    // Debounced: pressing + five times is one save, not five.
+    const t = setTimeout(() => { putSavedCart(forServer(cart)).catch(() => { /* next change retries */ }); }, 1500);
+    return () => clearTimeout(t);
+  }, [cart, authId, forServer]);
 
   const count = Object.values(cart).reduce((s, e) => s + e.qty, 0);
   const total = Object.values(cart).reduce((s, e) => s + e.price * e.qty, 0);

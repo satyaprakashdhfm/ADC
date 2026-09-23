@@ -259,6 +259,19 @@ export async function removeCartItem(itemId: number): Promise<void> {
 
 export async function clearCart(): Promise<void> { return request('/cart', { method: 'DELETE' }); }
 
+/*
+ * The basket the storefront actually uses, saved against a signed-in account so it follows them to
+ * another device (and so a basket they walked away from can be reminded about). The functions above
+ * are an older cart the storefront never adopted. `lines` is CartContext's own shape, handed back
+ * as it was saved.
+ */
+export async function getSavedCart(): Promise<{ lines: Record<string, unknown>; updatedAt: string | null }> {
+  return request('/cart/saved');
+}
+export async function putSavedCart(lines: Record<string, unknown>): Promise<void> {
+  await request('/cart/saved', { method: 'PUT', body: JSON.stringify({ lines }) });
+}
+
 /* ---- Addresses ---- */
 export interface Address {
   id: number; fullName: string; phone: string;
