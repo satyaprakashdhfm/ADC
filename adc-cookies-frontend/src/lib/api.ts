@@ -434,6 +434,8 @@ export interface Order {
    *  own Petpooja terminal — the only link to the POS for every outlet except Begur. */
   store?: { code: string; name?: string; acceptedAt: string | null; readyAt: string | null; posBillNo: string | null; posManual?: boolean } | null;
   address?: Address | null; items?: OrderItem[];
+  /** The account that paid. Not the same person as `address` on a gift order. Admin views only. */
+  account?: { name: string | null; email: string | null; phone: string | null } | null;
   warningFlags?: string[]; // e.g. 'DUPLICATE_CHARGE' — admin-facing alerts, doesn't affect order status
 }
 

@@ -94,6 +94,16 @@ export default function OrderDetailModal({ order: o, onClose, trackResult, setTr
           {!items.length && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No item details recorded for this order.</div>}
         </div>
 
+        {/* Who paid. Separate from "Deliver to" because on a gift they are two different people,
+            and the phone number to call when something goes wrong is this one, not the parcel's. */}
+        {o.account && (
+          <div style={{ ...card, padding: 14, marginBottom: 14 }}>
+            <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 4 }}>Ordered by</div>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>{[o.account.name, o.account.phone].filter(Boolean).join(' · ') || '—'}</div>
+            {o.account.email && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{o.account.email}</div>}
+          </div>
+        )}
+
         {a && (
           <div style={{ ...card, padding: 14, marginBottom: 14 }}>
             <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-sm)', marginBottom: 4 }}>Deliver to</div>

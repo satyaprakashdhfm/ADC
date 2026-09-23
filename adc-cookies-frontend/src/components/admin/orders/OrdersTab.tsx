@@ -29,6 +29,34 @@ interface Props {
   onDeadOpen: (v: boolean) => void;
 }
 
+/*
+ * Who paid, and who the parcel is addressed to.
+ *
+ * These are the same person on most orders and different people on a gift, and the board used to
+ * show only the second one under a column headed Customer. An order paid for by Tirthesh and sent
+ * to a friend in Nampur therefore read as an order from a customer called sanskruti who did not
+ * exist in the customer list, which is exactly how it was reported.
+ *
+ * The second line appears only when the names actually differ, so an ordinary order stays one
+ * name and one city, and a gift is the row that looks different.
+ */
+function Customer({ o }: { o: Order }) {
+  const buyer = (o.account?.name || '').trim();
+  const recipient = (o.address?.fullName || '').trim();
+  const city = o.address?.city || '';
+  const gift = !!buyer && !!recipient && buyer.toLowerCase() !== recipient.toLowerCase();
+  const sub = { color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' } as React.CSSProperties;
+  return (
+    <>
+      {buyer || recipient || '—'}
+      <br />
+      {gift
+        ? <span style={sub} title={`Paid by ${buyer}${o.account?.phone ? ` · ${o.account.phone}` : ''} — delivering to ${recipient}`}>→ {recipient}{city ? ` · ${city}` : ''}</span>
+        : <span style={sub}>{city}</span>}
+    </>
+  );
+}
+
 /**
  * One half of the cancelled list.
  *
@@ -65,7 +93,7 @@ function DeadGroup({ title, note, rows, emptyText, owed, onOpenOrder }: {
               return (
                 <tr key={o.id} onClick={() => onOpenOrder(o)} style={{ cursor: 'pointer', opacity: 0.9 }}>
                   <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{(o.items || []).length} item{(o.items || []).length !== 1 ? 's' : ''} · tap for details</span></td>
-                  <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city || ''}</span></td>
+                  <td style={td}><Customer o={o} /></td>
                   <td style={{ ...td, color: 'var(--text-muted)' }}>{money(o.totalAmount)}</td>
                   <td style={td}>
                     <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-body)' }}>{reason.text}</span>
@@ -103,7 +131,12 @@ export default function OrdersTab({
     return (
       o.orderNumber.toLowerCase().includes(q) ||
       (o.address?.fullName || '').toLowerCase().includes(q) ||
-      (o.address?.city || '').toLowerCase().includes(q)
+      (o.address?.city || '').toLowerCase().includes(q) ||
+      /* The buyer too. Searching a gift order by the name of whoever paid for it found nothing,
+         because that name is on their account and never on the parcel. */
+      (o.account?.name || '').toLowerCase().includes(q) ||
+      (o.account?.email || '').toLowerCase().includes(q) ||
+      (o.account?.phone || '').includes(q)
     );
   };
 
@@ -136,7 +169,7 @@ export default function OrdersTab({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <Panel title={`Orders${orders ? ` (${filtered.length}${filtered.length !== live.length ? '/' + live.length : ''})` : ''}`} loading={orders === null}
         action={<button onClick={onRefresh} style={iconBtn} title="Refresh"><RefreshCw size={15} /></button>}>
-        <FilterBar search={search} onSearch={v => { onSearch(v); onPage(1); }} placeholder="Search order #, customer, city…" active={active} onClear={clear}>
+        <FilterBar search={search} onSearch={v => { onSearch(v); onPage(1); }} placeholder="Search order #, name, email, phone, city…" active={active} onClear={clear}>
           <Field label="Order status"><select value={statusFilter} onChange={e => { onStatusFilter(e.target.value); onPage(1); }} style={selStyle}><option value="">All statuses</option>{LIVE_ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
           <Field label="Carrier"><select value={carrierFilter} onChange={e => { onCarrierFilter(e.target.value); onPage(1); }} style={selStyle}><option value="">All carriers</option><option value="SHIPROCKET">Shiprocket (intracity)</option><option value="DELHIVERY">Delhivery (outstation)</option></select></Field>
           <Field label="Payment"><select value={paymentFilter} onChange={e => { onPaymentFilter(e.target.value); onPage(1); }} style={selStyle}><option value="">Any payment</option><option value="PAID">Paid</option><option value="PENDING">Pending</option></select></Field>
@@ -145,7 +178,7 @@ export default function OrdersTab({
           {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(o => (
             <tr key={o.id} onClick={() => onOpenOrder(o)} style={{ cursor: 'pointer' }}>
               <td style={td}><strong style={{ color: 'var(--text-link)' }}>{o.orderNumber}</strong><br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-2xs)' }}>{(o.items || []).length} item{(o.items || []).length !== 1 ? 's' : ''} · tap for details</span></td>
-              <td style={td}>{o.address?.fullName || '—'}<br /><span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{o.address?.city || ''}</span></td>
+              <td style={td}><Customer o={o} /></td>
               <td style={td}>{money(o.totalAmount)}</td>
               <td style={td}>
                 <Badge text={o.paymentStatus} ok={o.paymentStatus === 'PAID'} />
