@@ -66,6 +66,22 @@ function firstImage(images: string | null, fallback: string): string {
   }
 }
 
+/* What courier delivery costs when the API cannot be reached: the admin default. */
+const COURIER_FEE_FALLBACK = 100;
+
+/** The flat fee for a courier parcel, as set in admin, refreshed hourly like the menu. Never throws. */
+export async function getCourierFee(): Promise<number> {
+  const base = process.env.NEXT_PUBLIC_API_URL;
+  if (!base) return COURIER_FEE_FALLBACK;
+  try {
+    const res = await fetch(`${base}/delivery/courier-fee`, { next: { revalidate: 3600 } });
+    const fee = res.ok ? Number((await res.json())?.fee) : NaN;
+    return Number.isFinite(fee) && fee >= 0 ? fee : COURIER_FEE_FALLBACK;
+  } catch {
+    return COURIER_FEE_FALLBACK;
+  }
+}
+
 /** Every available product, or the snapshot when the API is unreachable. Never throws. */
 export async function getMenu(): Promise<MenuItem[]> {
   const base = process.env.NEXT_PUBLIC_API_URL;

@@ -49,7 +49,40 @@ const absolute = (src: string) => (src.startsWith('http') ? src : `${SITE_URL}${
  * the page's city. The shops point back to the brand-level Bakery the root layout publishes, rather
  * than declaring a second business.
  */
-export function seoJsonLd(page: SeoPageContent, menu: MenuItem[]) {
+/*
+ * Returns and delivery for Google's merchant listings, from what the policy pages already say.
+ *
+ * Returns: none. Food is baked to order and cannot be taken back (/refund-policy); a wrong or
+ * damaged order is refunded or replaced, which is not a return. Google has a category for exactly
+ * that, so it is stated rather than left for Google to guess.
+ *
+ * Delivery: the courier option only, since it is the one with a fixed price. Same-day delivery is
+ * priced by distance, so it has no single fee to state and is left out rather than misstated. The
+ * 2 to 6 days is Delhivery's own express estimate from Begur, asked for sixteen pincodes across
+ * India on 23 Sep 2026 (median 3). The Andamans came back at 14 and are the one exception; Google
+ * does not say it supports regions within India, so they are not listed separately, and checkout
+ * shows every customer Delhivery's date for their own pincode anyway. Dispatch is the same day or
+ * the next baking day. A product that cannot travel by courier (Red Velvet) states no shipping.
+ */
+const RETURN_POLICY = {
+  '@type': 'MerchantReturnPolicy',
+  applicableCountry: 'IN',
+  returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
+  merchantReturnLink: `${SITE_URL}/refund-policy`,
+};
+
+const courierShipping = (fee: number) => ({
+  '@type': 'OfferShippingDetails',
+  shippingRate: { '@type': 'MonetaryAmount', value: fee, currency: 'INR' },
+  shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'IN' },
+  deliveryTime: {
+    '@type': 'ShippingDeliveryTime',
+    handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
+    transitTime: { '@type': 'QuantitativeValue', minValue: 2, maxValue: 6, unitCode: 'DAY' },
+  },
+});
+
+export function seoJsonLd(page: SeoPageContent, menu: MenuItem[], courierFee = 100) {
   const url = `${SITE_URL}${page.path}`;
   const fill = (t: string) => plainText(fillPrices(t, menu));
   const brand = { '@type': 'Organization', name: 'a dough cookie', url: SITE_URL, logo: `${SITE_URL}/assets/adc-logo.png` };
@@ -116,6 +149,8 @@ export function seoJsonLd(page: SeoPageContent, menu: MenuItem[]) {
             priceCurrency: 'INR',
             availability: 'https://schema.org/InStock',
             url: `${SITE_URL}/?q=${encodeURIComponent(t.name)}`,
+            hasMerchantReturnPolicy: RETURN_POLICY,
+            ...(t.ships ? { shippingDetails: courierShipping(courierFee) } : {}),
           },
         },
       })),

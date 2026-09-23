@@ -41,6 +41,16 @@ async function getOriginPin() {
  * resolved. This separates the two: the area is a fact about our stores, the product list is a fact
  * about the products.
  */
+/*
+ * The flat courier fee, public. The search pages state it in their product markup for Google
+ * (shippingDetails), and reading it here keeps that in step with the fee set in admin rather than
+ * with a number someone typed into a page once.
+ */
+router.get('/courier-fee', async (_req, res) => {
+  const row = await getOne("SELECT value FROM site_settings WHERE key = 'delivery_fee_outstation'");
+  res.json({ fee: row?.value != null ? Number(row.value) : 100 });
+});
+
 router.get('/area', async (req, res) => {
   const pin = String(req.query.pincode || '').replace(/\D/g, '');
   if (!/^\d{6}$/.test(pin)) return res.json({ pincode: pin, mode: null, open: false, reason: 'invalid_pincode' });

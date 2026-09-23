@@ -8,7 +8,7 @@ import OrderCta from '@/components/storefront/OrderCta';
 import RichText from '@/components/seo/RichText';
 import { Breadcrumbs, FaqList, JsonLd, RelatedPages, TinGrid, seoStyles } from '@/components/seo/SeoParts';
 import { giftHampers as page } from '@/lib/seo/pages/giftHampers';
-import { EIGHT_PACK, fillPrices, getMenu, rupees } from '@/lib/seo/menu';
+import { EIGHT_PACK, fillPrices, getCourierFee, getMenu, rupees } from '@/lib/seo/menu';
 import { seoJsonLd, seoMetadata } from '@/lib/seo/meta';
 import { whatsappLink } from '@/lib/site';
 
@@ -63,7 +63,7 @@ export default async function CookieGiftHampersPage() {
 
   return (
     <main style={{ background: 'var(--surface-page)' }}>
-      <JsonLd data={seoJsonLd(page, menu)} />
+      <JsonLd data={seoJsonLd(page, menu, await getCourierFee())} />
       <SiteHeader />
 
       {/* ---- Hero ---- */}

@@ -4,7 +4,7 @@ import Footer from '@/components/storefront/Footer';
 import OrderCta from '@/components/storefront/OrderCta';
 import RichText from './RichText';
 import { Breadcrumbs, Buttons, FaqList, JsonLd, RelatedPages, StoreGrid, TinGrid, seoStyles } from './SeoParts';
-import { fillPrices, type MenuItem } from '@/lib/seo/menu';
+import { fillPrices, getCourierFee, type MenuItem } from '@/lib/seo/menu';
 import { seoJsonLd } from '@/lib/seo/meta';
 import type { Block, SeoPageContent } from '@/lib/seo/types';
 
@@ -71,7 +71,9 @@ function BlockView({ block, menu }: { block: Block; menu: MenuItem[] }) {
   }
 }
 
-export default function SeoPage({ page, menu }: { page: SeoPageContent; menu: MenuItem[] }) {
+export default async function SeoPage({ page, menu }: { page: SeoPageContent; menu: MenuItem[] }) {
+  // Only the product markup uses it, and only on a page that lists tins; cached for the hour like the menu.
+  const courierFee = page.listsTins ? await getCourierFee() : undefined;
   const isArticle = page.kind === 'article';
   const width = isArticle ? 780 : 1080;
   const wrap: React.CSSProperties = { maxWidth: width, margin: '0 auto', padding: '0 var(--gutter)' };
@@ -83,7 +85,7 @@ export default function SeoPage({ page, menu }: { page: SeoPageContent; menu: Me
 
   return (
     <main style={{ background: 'var(--surface-page)' }}>
-      <JsonLd data={seoJsonLd(page, menu)} />
+      <JsonLd data={seoJsonLd(page, menu, courierFee)} />
       <SiteHeader />
 
       <article>
