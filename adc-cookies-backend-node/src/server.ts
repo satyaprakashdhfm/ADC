@@ -8,6 +8,7 @@ import { initSchema } from './db/initSchema.js';
 import { seedIfEmpty } from './db/seed.js';
 import { startStatusPoller } from './jobs/statusPoller.js';
 import { startPaymentReconciler } from './jobs/paymentReconcile.js';
+import { startWhatsAppReminders } from './jobs/whatsappReminders.js';
 import { startLogRetention } from './jobs/logRetention.js';
 import { ensureStoreAccounts } from './services/storeAuth.service.js';
 import { ensureMediaBucket } from './services/storage.client.js';
@@ -63,6 +64,9 @@ function dbTarget(): string {
      looking at a portal. The webhook was meant to cover this and has not fired once. */
   startStatusPoller();
   startPaymentReconciler();
+  /* Cart and unpaid-checkout nudges on WhatsApp. Off until switched on, and then only once Meta has
+     approved each template; see jobs/whatsappReminders.ts. */
+  startWhatsAppReminders();
   /* Trim the API log directory. It is a mounted volume, so it survives every deploy and nothing
      had ever removed a file from it — and a full volume surfaces as appendFileSync throwing inside
      logApiCall, which stops the record of what we sent Razorpay and Delhivery without stopping the

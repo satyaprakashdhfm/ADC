@@ -103,3 +103,83 @@ export const ORDER_CONFIRMATION: WaTemplate<OrderConfirmationData> = {
     },
   }),
 };
+
+/* ---------------------------------------------------------------- reminders ------------------- */
+
+/*
+ * The two nudges for a customer who did not finish, sent by jobs/whatsappReminders. Both are
+ * MARKETING to Meta, whatever they are submitted as: it counts "come back and buy" as promotion,
+ * charges more for it, and caps how many one person is sent.
+ *
+ * Neither has a header, and the button is a fixed link to /checkout, tagged utm_source=whatsapp
+ * so an order it brings back is credited to WhatsApp. The button needs no variable because the
+ * basket is saved on the account (saved_carts): signing in on any device puts it back.
+ */
+
+/** The first name only: "Hi Tirthesh" reads like a person, "Hi Tirthesh Patel" like a form. */
+function firstName(name: string | null): string {
+  return (name || '').replace(/\s+/g, ' ').trim().split(' ')[0] || 'there';
+}
+
+/* Room for a long basket without pushing the message past Meta's length limit. */
+const NAMES_MAX_CHARS = 400;
+
+/** "2 × Chocolate Chip Cookie, 1 × Nutella Cookie Tin, +3 more". One line, as itemsLine explains. */
+function namesLine(items: { name: string; qty: number }[]): string {
+  const entries = items.map((i) => `${i.qty} × ${i.name.replace(/\s+/g, ' ').trim()}`);
+  const kept: string[] = [];
+  let length = 12; // room for "+N more"
+  for (const entry of entries) {
+    if (kept.length && length + entry.length + 2 > NAMES_MAX_CHARS) break;
+    kept.push(entry.slice(0, NAMES_MAX_CHARS));
+    length += entry.length + 2;
+  }
+  const more = entries.length - kept.length;
+  return [...kept, ...(more ? [`+${more} more`] : [])].join(', ');
+}
+
+export interface CartReminderData {
+  customerName: string | null;
+  items: { name: string; qty: number }[];
+}
+
+/*
+ * Items left in the basket, never taken to payment. No total: the prices in a saved basket are
+ * whatever the browser last saw, and a number we cannot stand behind has no place in a message.
+ */
+export const CART_REMINDER: WaTemplate<CartReminderData> = {
+  name: 'cart_reminder',
+  language: 'en',
+  kind: 'marketing',
+  render: (d) => ({
+    body: {
+      customer_name: firstName(d.customerName),
+      cart_items: namesLine(d.items),
+    },
+  }),
+};
+
+export interface CheckoutReminderData {
+  customerName: string | null;
+  items: { name: string; qty: number }[];
+  total: number;
+}
+
+/*
+ * Pressed Pay and did not pay. By the time this is sent the order has already been closed as
+ * unpaid, so the wording is "did not go through", never "payment pending", and it does not
+ * promise that nothing was charged: a UPI payment can be held by the bank for a while before it
+ * is returned. The total here is the order's own, from our records.
+ */
+export const CHECKOUT_REMINDER: WaTemplate<CheckoutReminderData> = {
+  name: 'checkout_reminder',
+  language: 'en',
+  kind: 'marketing',
+  render: (d) => ({
+    body: {
+      customer_name: firstName(d.customerName),
+      order_items: namesLine(d.items),
+      order_total: rupees(d.total),
+    },
+  }),
+};

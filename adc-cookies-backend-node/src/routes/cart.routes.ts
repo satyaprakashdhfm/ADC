@@ -9,9 +9,23 @@ import { getOne, query } from '../db/index.js';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { ApiError } from '../utils/ApiError.js';
 import { getCartRow, touchCart, cartById, fullCart } from '../services/cart.service.js';
+import { saveCart, loadCart } from '../services/savedCart.service.js';
 
 const router = Router();
 router.use(requireAuth);
+
+/*
+ * The basket the storefront actually uses, saved against the account. The routes below this pair
+ * are the older product-per-row cart, which the storefront never adopted; see saved_carts.
+ */
+router.get('/saved', async (req, res) => {
+  res.json(await loadCart(req.user!.id));
+});
+
+router.put('/saved', async (req, res) => {
+  if (!(await saveCart(req.user!.id, req.body?.lines))) throw new ApiError('Basket is too large to save', 413);
+  res.json({ ok: true });
+});
 
 router.get('/', async (req, res) => {
   const cart = await getCartRow(req.user!.id);

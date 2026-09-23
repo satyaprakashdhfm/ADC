@@ -905,6 +905,33 @@ export async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_message_id ON whatsapp_messages(message_id);
     CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_order ON whatsapp_messages(order_id);
+    -- The reminder job asks "has this person had a reminder lately?" on every sweep.
+    CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_user_template ON whatsapp_messages(user_id, template, created_at);
+
+    /*
+     * A signed-in customer's basket, as the storefront holds it.
+     *
+     * The storefront keeps the basket in the browser, so a basket left on a laptop was invisible
+     * to us and gone on the customer's phone. This is a copy of it, written by the storefront
+     * whenever it changes, so the basket follows the account to another device and so we can
+     * remind someone who walked away from it.
+     *
+     * Kept apart from cart / cart_items on purpose. Those are an older product-per-row cart the
+     * storefront never adopted, and they cannot hold what a real line carries: a pack's eight
+     * picks, add-ons, a note. The lines column is the storefront's own shape, stored as given and only
+     * ever read back by the storefront, or for the names in a reminder. Prices in it are what the
+     * browser last saw and are never charged: an order re-prices every line from the catalogue.
+     *
+     * reminded_at is cleared whenever the contents change, so one basket is reminded about once.
+     */
+    CREATE TABLE IF NOT EXISTS saved_carts (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      lines JSONB NOT NULL,
+      item_count INTEGER NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
+      reminded_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_saved_carts_updated ON saved_carts(updated_at);
 
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This

@@ -4,6 +4,7 @@ import { storeByCode } from './store.service.js';
 import { bookShipmentAndRelay } from './shipment.service.js';
 import { sendMetaPurchase } from './metaCapi.client.js';
 import { sendOrderConfirmationWhatsApp } from './whatsapp.service.js';
+import { clearCartAfterPayment } from './savedCart.service.js';
 
 /*
  * What happens to an order once the money is actually in.
@@ -88,6 +89,10 @@ export async function finalizePaidOrder(orderId, razorpayPaymentId, paymentEntit
   /* The customer's WhatsApp confirmation, on the same once-only claim. Never throws, and does
      nothing where WhatsApp is not configured. */
   void sendOrderConfirmationWhatsApp(orderId);
+
+  /* The basket saved on the account is now an order. Emptied here as well as by the success screen,
+     which a redirected or closed-tab payment never reaches. */
+  void clearCartAfterPayment(order.user_id);
 
   // Record coupon redemption now (on payment) — idempotent via the per-order check, so calling
   // finalizePaidOrder from both the verify route and the webhook can't double-count a use.
