@@ -12,7 +12,7 @@ import { serializeOrder, serializeTracking, PAYMENT_SELECT } from '../serializer
 import { getCartRow } from '../services/cart.service.js';
 import { validateCoupon, calculateDiscount, getCouponByCode, resolveGiftProduct } from '../services/coupon.service.js';
 import { trackShipment } from '../services/delhivery.client.js';
-import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, intercityStoreForAddress, deliveryEligible, isStoreActive, intercityOpen, storeBlockedProductIds } from '../services/store.service.js';
+import { zoneStores, activeZoneStores, orderStoresByProximity, storeForAddress, intercityStoreForAddress, deliveryEligible, isStoreActive, storeServiceMode, intercityOpen, storeBlockedProductIds } from '../services/store.service.js';
 import { trackShiprocket, pickServiceableStore } from '../services/shiprocket.client.js';
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, fetchPayment, fetchOrderPayments } from '../services/razorpay.client.js';
 import { applyCarrierTerminalStatus } from '../services/orderProgress.service.js';
@@ -190,20 +190,34 @@ router.post('/', async (req, res) => {
      every out-of-town address to the warehouse by default, which was right while Begur was the only
      candidate and silently wrong the moment a second store could be. Intracity is unchanged: the
      zone decides, as before. */
-  let fulfillingStore = zoneStores(destPin).length
+  const sameDayZone = zoneStores(destPin).length > 0;
+  let fulfillingStore = sameDayZone
     ? storeForAddress(address)
     : await intercityStoreForAddress();
-  if (fulfillingStore && !(await isStoreActive(fulfillingStore.code))) {
-    /* The nearest store is shut — hand the order to the nearest one that is open rather than
-       refusing it. Refusing was right when every store traded and one being off meant a genuine
-       local outage; with a single store trading it rejected orders the open shop was minutes from,
-       because "nearest" is decided before anyone asks who is working. */
+  /*
+   * The nearest store cannot take this one: it is shut, or it is set to parcels only (INTERCITY)
+   * and this is a same-day order. Hand it to the nearest store that can, rather than refusing it.
+   * Refusing was right when every store traded and one being off meant a genuine local outage;
+   * with a single store trading it rejected orders the open shop was minutes from, because
+   * "nearest" is decided before anyone asks who is working.
+   *
+   * The parcels-only half was missing, and it is why switching Begur to INTERCITY did not stop it
+   * being handed same-day orders: the checkout quote asked activeZoneStores, which honours the
+   * switch, while this asked only whether the nearest store was open. So a customer near Begur was
+   * quoted from Jayanagar and the order still landed on Begur. Both now ask the same question, and
+   * activeZoneStores keeps its rule that a switch never strands a whole city.
+   */
+  const why = !fulfillingStore ? null
+    : !(await isStoreActive(fulfillingStore.code)) ? 'is closed'
+    : sameDayZone && (await storeServiceMode(fulfillingStore.code)) === 'INTERCITY' ? 'is parcels-only'
+    : null;
+  if (fulfillingStore && why) {
     const open = orderStoresByProximity(await activeZoneStores(destPin), address?.latitude, address?.longitude);
     if (!open.length) {
       console.log(`[ORDER] create | ✗ no_open_store | zone=${destPin}`);
       throw new ApiError('None of our stores near this address are taking orders right now. Please try again later, or choose a different address.', 503);
     }
-    console.log(`[ORDER] create | ${fulfillingStore.code} is closed → ${open[0].code}`);
+    console.log(`[ORDER] create | ${fulfillingStore.code} ${why} → ${open[0].code}`);
     fulfillingStore = open[0];
   }
 
