@@ -922,7 +922,7 @@ export async function initSchema() {
      * ever read back by the storefront, or for the names in a reminder. Prices in it are what the
      * browser last saw and are never charged: an order re-prices every line from the catalogue.
      *
-     * reminded_at is cleared whenever the contents change, so one basket is reminded about once.
+     * reminded_at is cleared whenever the contents change, so a changed basket counts as new.
      */
     CREATE TABLE IF NOT EXISTS saved_carts (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -932,6 +932,33 @@ export async function initSchema() {
       reminded_at TIMESTAMPTZ
     );
     CREATE INDEX IF NOT EXISTS idx_saved_carts_updated ON saved_carts(updated_at);
+    -- How many reminders this basket has had (it gets at most two, a day apart). Reset with
+    -- reminded_at whenever the contents change.
+    ALTER TABLE saved_carts ADD COLUMN IF NOT EXISTS reminder_count INTEGER NOT NULL DEFAULT 0;
+
+    /*
+     * The Razorpay Payment Link sent on WhatsApp after a checkout closed unpaid. One per order.
+     *
+     * token is what the WhatsApp button carries (/pay/<token>), not the Razorpay URL itself, so
+     * the button can outlive the link: a tap after it has expired, or after the order was paid,
+     * lands somewhere useful instead of on Razorpay's "link expired" page. status mirrors
+     * Razorpay's (created, paid, expired, cancelled) plus 'failed' for a link Razorpay refused
+     * to create, whose message still goes out and whose button then opens the checkout.
+     */
+    CREATE TABLE IF NOT EXISTS payment_links (
+      id SERIAL PRIMARY KEY,
+      order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      razorpay_link_id TEXT,
+      short_url TEXT,
+      amount NUMERIC(12,2) NOT NULL,
+      status TEXT NOT NULL DEFAULT 'created',
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_links_order ON payment_links(order_id);
+    CREATE INDEX IF NOT EXISTS idx_payment_links_razorpay ON payment_links(razorpay_link_id);
 
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This

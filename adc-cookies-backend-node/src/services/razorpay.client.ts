@@ -206,3 +206,84 @@ export function verifyWebhookSignature(rawBody, signature, secret = process.env.
   logApiCall({ service: 'razorpay', method: 'WEBHOOK', endpoint: '/webhooks/razorpay', request: { bodyBytes: rawBody?.length }, ok, status: ok ? 200 : 400 });
   return ok;
 }
+
+/* ---------------------------------------------------------------- payment links --------------- */
+
+/*
+ * Payment Links: a hosted page Razorpay serves at a short URL, for the WhatsApp nudge that follows
+ * a checkout closed unpaid. It is a separate product from Checkout, with its own entity and its
+ * own webhook (payment_link.paid), and a payment through it carries an order id Razorpay made for
+ * the link, never ours. That is why every link is tagged with our order number as reference_id
+ * and our order id in notes: those are what find the order again.
+ *
+ * Razorpay texts and emails the customer about a link by default. Both are switched off, and so
+ * are its reminders: the customer hears about it once, from us, on WhatsApp.
+ */
+export interface PaymentLinkInput {
+  amountPaise: number;
+  referenceId: string;
+  description: string;
+  expireBy: number; // unix seconds; Razorpay wants it at least 15 minutes out
+  customer: { name?: string; contact?: string; email?: string };
+  notes?: Record<string, string>;
+  callbackUrl?: string;
+}
+
+export async function createPaymentLink(input: PaymentLinkInput) {
+  // Razorpay refuses an empty customer object outright ("faulty key: customer"), so it is sent only with something in it.
+  const customer = Object.fromEntries(Object.entries(input.customer).filter(([, v]) => v));
+  const requestBody = {
+    amount: input.amountPaise, currency: 'INR', accept_partial: false,
+    reference_id: input.referenceId, description: input.description.slice(0, 2048),
+    expire_by: input.expireBy,
+    customer: Object.keys(customer).length ? customer : undefined,
+    notify: { sms: false, email: false }, reminder_enable: false,
+    notes: input.notes, callback_url: input.callbackUrl, callback_method: input.callbackUrl ? 'get' : undefined,
+  };
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${BASE}/payment_links`, {
+      method: 'POST',
+      headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+    const data: any = await res.json().catch(() => null);
+    const durationMs = Date.now() - t0;
+    logApiCall({ service: 'razorpay', method: 'POST', endpoint: '/v1/payment_links', request: requestBody, response: data, status: res.status, ok: res.ok, durationMs });
+    if (!res.ok) {
+      console.log(`[RAZORPAY] link-create | ${input.referenceId} | ✗ status=${res.status} | ${JSON.stringify(data).slice(0, 200)}`);
+      return { ok: false as const, reason: data?.error?.description || `api_error_${res.status}` };
+    }
+    console.log(`[RAZORPAY] link-create | ${input.referenceId} | ✓ ${data.id}`);
+    return { ok: true as const, link: data };
+  } catch (err: any) {
+    console.log(`[RAZORPAY] link-create | ${input.referenceId} | ✗ network_error: ${err.message}`);
+    return { ok: false as const, reason: 'network_error' };
+  }
+}
+
+/** A link and the payments made through it. status: created | partially_paid | paid | expired | cancelled. */
+export async function fetchPaymentLink(linkId: string) {
+  try {
+    const res = await fetch(`${BASE}/payment_links/${linkId}`, { headers: { Authorization: authHeader() } });
+    const data: any = await res.json().catch(() => null);
+    if (!res.ok) return { ok: false as const, reason: data?.error?.description || `api_error_${res.status}` };
+    return { ok: true as const, link: data };
+  } catch (err: any) {
+    return { ok: false as const, reason: 'network_error' };
+  }
+}
+
+/** Close a link nobody should pay any more. A link already paid or expired cannot be cancelled. */
+export async function cancelPaymentLink(linkId: string) {
+  try {
+    const res = await fetch(`${BASE}/payment_links/${linkId}/cancel`, {
+      method: 'POST', headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
+    });
+    const data: any = await res.json().catch(() => null);
+    console.log(`[RAZORPAY] link-cancel | ${linkId} | ${res.ok ? '✓' : `✗ ${data?.error?.description || res.status}`}`);
+    return res.ok ? { ok: true as const } : { ok: false as const, reason: data?.error?.description || `api_error_${res.status}` };
+  } catch (err: any) {
+    return { ok: false as const, reason: 'network_error' };
+  }
+}

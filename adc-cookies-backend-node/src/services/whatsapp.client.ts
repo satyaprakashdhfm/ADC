@@ -73,12 +73,16 @@ async function graph(path: string, body: unknown, { timeoutMs = 20_000 } = {}) {
  * headerImage is required on every send of a template with an image header: a public https URL
  * (Meta fetches it, so a login-protected preview deployment will not do), or the id of media
  * already uploaded to WhatsApp.
+ *
+ * buttonUrl fills the variable at the end of a Visit website button whose URL was approved as
+ * dynamic (https://www.adoughcookie.com/pay/{{1}}). A template with a static button takes none.
  */
 export interface TemplateMessage {
   name: string;
   language: string;
   headerImage?: string;
   body?: Record<string, string> | string[];
+  buttonUrl?: string;
 }
 
 export type TemplateSendResult =
@@ -106,6 +110,9 @@ function templateComponents(m: TemplateMessage) {
       ? m.body.map((text) => ({ type: 'text', text: paramText(text) }))
       : Object.entries(m.body).map(([name, text]) => ({ type: 'text', parameter_name: name, text: paramText(text) }));
     if (parameters.length) components.push({ type: 'body', parameters });
+  }
+  if (m.buttonUrl) {
+    components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: paramText(m.buttonUrl) }] });
   }
   return components;
 }

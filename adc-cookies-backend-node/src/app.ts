@@ -41,6 +41,7 @@ import storeRoutes from './routes/store.routes.js';
 import whatsappRoutes from './routes/webhooks/whatsapp.routes.js';
 import { paymentWebhook } from './routes/webhooks/razorpay.routes.js';
 import { paymentCallback } from './routes/orders.routes.js';
+import { destinationFor } from './services/paymentLink.service.js';
 
 
 const app = express();
@@ -127,6 +128,15 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/coupons', couponRoutes);
+/*
+ * The WhatsApp payment-link button: /pay/<token> on the storefront, proxied here. Public, because
+ * the person tapping it is often not signed in on that browser; the token is random, and all it
+ * can do is send someone to pay for that one order or on to the checkout. Where it goes is decided
+ * at the tap (see destinationFor), so the button stays useful after the link behind it expires.
+ */
+app.get('/api/pay/:token', async (req, res) => {
+  res.redirect(302, await destinationFor(String(req.params.token || '').slice(0, 64)));
+});
 app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/addresses', addressRoutes);

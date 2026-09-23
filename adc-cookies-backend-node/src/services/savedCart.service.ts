@@ -54,8 +54,9 @@ export async function saveCart(userId: number, input: unknown): Promise<boolean>
   if (json.length > MAX_BYTES) return false;
   /*
    * updated_at always moves: it means "last seen with this basket", and nobody should be reminded
-   * about a basket they were looking at a minute ago. reminded_at clears only when the contents
-   * actually change, so opening the site again does not earn the same basket a second reminder.
+   * about a basket they were looking at a minute ago. The reminder count resets only when the
+   * contents actually change, so opening the site again does not restart the same basket's
+   * reminders.
    */
   await query(
     `INSERT INTO saved_carts (user_id, lines, item_count, updated_at, reminded_at)
@@ -64,7 +65,8 @@ export async function saveCart(userId: number, input: unknown): Promise<boolean>
        lines = EXCLUDED.lines,
        item_count = EXCLUDED.item_count,
        updated_at = EXCLUDED.updated_at,
-       reminded_at = CASE WHEN saved_carts.lines = EXCLUDED.lines THEN saved_carts.reminded_at ELSE NULL END`,
+       reminded_at = CASE WHEN saved_carts.lines = EXCLUDED.lines THEN saved_carts.reminded_at ELSE NULL END,
+       reminder_count = CASE WHEN saved_carts.lines = EXCLUDED.lines THEN saved_carts.reminder_count ELSE 0 END`,
     [userId, json, count, nowIso()],
   );
   return true;

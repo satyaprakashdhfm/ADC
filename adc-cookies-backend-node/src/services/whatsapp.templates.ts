@@ -25,7 +25,7 @@ export interface WaTemplate<D> {
   name: string;
   language: string;
   kind: WaKind;
-  render: (data: D) => Pick<TemplateMessage, 'headerImage' | 'body'>;
+  render: (data: D) => Pick<TemplateMessage, 'headerImage' | 'body' | 'buttonUrl'>;
 }
 
 /* Meta fetches header images itself on every send, so these must be public: the live site, never a
@@ -111,9 +111,14 @@ export const ORDER_CONFIRMATION: WaTemplate<OrderConfirmationData> = {
  * MARKETING to Meta, whatever they are submitted as: it counts "come back and buy" as promotion,
  * charges more for it, and caps how many one person is sent.
  *
- * Neither has a header, and the button is a fixed link to /checkout, tagged utm_source=whatsapp
- * so an order it brings back is credited to WhatsApp. The button needs no variable because the
- * basket is saved on the account (saved_carts): signing in on any device puts it back.
+ * Neither has a header.
+ *
+ * cart_reminder's button is a fixed link to /checkout, tagged utm_source=whatsapp so an order it
+ * brings back is credited to WhatsApp. It needs no variable because the basket is saved on the
+ * account (saved_carts): signing in on any device puts it back.
+ *
+ * checkout_reminder's button is dynamic, /pay/{{1}}, and carries a payment link's token: one tap
+ * pays for the very order that was left unpaid. See services/paymentLink.service.
  */
 
 /** The first name only: "Hi Tirthesh" reads like a person, "Hi Tirthesh Patel" like a form. */
@@ -163,13 +168,15 @@ export interface CheckoutReminderData {
   customerName: string | null;
   items: { name: string; qty: number }[];
   total: number;
+  /** The payment link's token, for the button's /pay/{{1}}. */
+  token: string;
 }
 
 /*
- * Pressed Pay and did not pay. By the time this is sent the order has already been closed as
- * unpaid, so the wording is "did not go through", never "payment pending", and it does not
- * promise that nothing was charged: a UPI payment can be held by the bank for a while before it
- * is returned. The total here is the order's own, from our records.
+ * Pressed Pay and did not pay, sent once with a payment link for that same order. The wording is
+ * "did not go through", never "payment pending", and it does not promise that nothing was charged:
+ * a UPI payment can be held by the bank for a while before it is returned. The total here is the
+ * order's own, from our records, and it is exactly what the link charges.
  */
 export const CHECKOUT_REMINDER: WaTemplate<CheckoutReminderData> = {
   name: 'checkout_reminder',
@@ -181,5 +188,6 @@ export const CHECKOUT_REMINDER: WaTemplate<CheckoutReminderData> = {
       order_items: namesLine(d.items),
       order_total: rupees(d.total),
     },
+    buttonUrl: d.token,
   }),
 };

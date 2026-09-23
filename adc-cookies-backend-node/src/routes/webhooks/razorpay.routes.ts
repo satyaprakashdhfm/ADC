@@ -1,6 +1,7 @@
 import { verifyWebhookSignature } from '../../services/razorpay.client.js';
 import { getOne, query, nowIso } from '../../db/index.js';
 import { finalizePaidOrder } from '../../services/order.service.js';
+import { settleLinkPayment } from '../../services/paymentLink.service.js';
 import { logApiCall } from '../../utils/logger.js';
 
 /*
@@ -16,6 +17,7 @@ import { logApiCall } from '../../utils/logger.js';
  * Mounted in server.js with a RAW body parser BEFORE express.json so we can verify the
  * X-Razorpay-Signature (HMAC of the exact bytes) with RAZORPAY_WEBHOOK_SECRET.
  * Configure the webhook in the Razorpay dashboard for events: payment.captured, order.paid,
+ * payment_link.paid,
  * payment.failed.
  */
 /*
@@ -97,6 +99,19 @@ export async function paymentWebhook(req, res) {
     } else {
       console.log(`[PAYMENT] webhook | no local order matches rzpOrder=${rzpOrderId}`);
     }
+  }
+
+  /*
+   * A payment through a WhatsApp payment link. Its payment carries an order id Razorpay made for the
+   * link, so the payment.captured above matches nothing of ours and logs as much; this event names
+   * the link, and the link names our order. Needs payment_link.paid ticked in the dashboard's
+   * webhook settings. Without it the reminder job still finds the payment by asking Razorpay.
+   */
+  if (type === 'payment_link.paid') {
+    const linkEntity = event?.payload?.payment_link?.entity;
+    const link = linkEntity?.id ? await getOne('SELECT * FROM payment_links WHERE razorpay_link_id = $1', [linkEntity.id]) : null;
+    if (link && paymentEntity) await settleLinkPayment(link, paymentEntity);
+    else console.log(`[PAYMENT] webhook | payment_link.paid | no local link matches ${linkEntity?.id || 'none'}`);
   }
 
   // A failed attempt never marks the order PAID (so the shopper can retry with a fresh Razorpay
