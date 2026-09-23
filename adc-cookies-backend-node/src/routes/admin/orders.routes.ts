@@ -17,8 +17,12 @@ router.get('/orders', async (req, res) => {
   if (status) { params.push(status); where.push(`o.order_status = $${params.length}`); }
   if (search) {
     params.push(`%${search}%`);
+    /* The account too, not just the parcel. Searching a gift order by the name of the person who
+       paid for it found nothing, because their name is on the users row and never on the address. */
     where.push(`(o.order_number ILIKE $${params.length} OR EXISTS (
       SELECT 1 FROM addresses a WHERE a.id = o.address_id AND (a.full_name ILIKE $${params.length} OR a.city ILIKE $${params.length})
+    ) OR EXISTS (
+      SELECT 1 FROM users u WHERE u.id = o.user_id AND (u.name ILIKE $${params.length} OR u.email ILIKE $${params.length} OR u.phone ILIKE $${params.length})
     ))`);
   }
   if (where.length) sql += ' WHERE ' + where.join(' AND ');
@@ -29,7 +33,8 @@ router.get('/orders', async (req, res) => {
   // session pooler (~15 client cap) -> EMAXCONNSESSION -> 500 (empty admin shipments table).
   const orderIds = rows.map((o) => o.id);
   const addrIds = [...new Set(rows.map((o) => o.address_id).filter(Boolean))];
-  const [items, payments, addresses, warnings, posRows, noteRows] = await Promise.all([
+  const userIds = [...new Set(rows.map((o) => o.user_id).filter(Boolean))];
+  const [items, payments, addresses, warnings, posRows, noteRows, accounts] = await Promise.all([
     orderIds.length ? getAll('SELECT * FROM order_items WHERE order_id = ANY($1) ORDER BY id', [orderIds]) : [],
     orderIds.length ? getAll('SELECT DISTINCT ON (order_id) order_id, provider, transaction_id, status, paid_at, amount, amount_refunded FROM payments WHERE order_id = ANY($1) ORDER BY order_id, id DESC', [orderIds]) : [],
     addrIds.length ? getAll('SELECT * FROM addresses WHERE id = ANY($1)', [addrIds]) : [],
@@ -52,6 +57,8 @@ router.get('/orders', async (req, res) => {
           AND status = ANY($2)
         ORDER BY order_id, created_at DESC, id DESC`,
       [orderIds, ORDER_STATUSES]) : [],
+    // Who paid, for the same set-based reason as everything above it.
+    userIds.length ? getAll('SELECT id, name, email, phone FROM users WHERE id = ANY($1)', [userIds]) : [],
   ]);
   const itemsByOrder = new Map();
   for (const it of items) {
@@ -63,9 +70,11 @@ router.get('/orders', async (req, res) => {
   const duplicateChargeOrderIds = new Set(warnings.map((w) => w.order_id));
   const posByOrder = new Map(posRows.map((p): [any, any] => [p.order_id, p]));
   const noteByOrder = new Map(noteRows.map((n): [any, any] => [n.order_id, n.remarks]));
+  const userById = new Map(accounts.map((u): [any, any] => [u.id, u]));
   const serialized = rows.map((o) =>
     serializeOrder(o, itemsByOrder.get(o.id) || [], o.address_id ? addrById.get(o.address_id) || null : null, payByOrder.get(o.id) || null,
-      duplicateChargeOrderIds.has(o.id) ? ['DUPLICATE_CHARGE'] : [], posByOrder.get(o.id) || null, noteByOrder.get(o.id) ?? null)
+      duplicateChargeOrderIds.has(o.id) ? ['DUPLICATE_CHARGE'] : [], posByOrder.get(o.id) || null, noteByOrder.get(o.id) ?? null,
+      o.user_id ? userById.get(o.user_id) || null : null)
   );
   res.json(serialized);
 });
@@ -123,7 +132,8 @@ router.get('/orders/:id', async (req, res) => {
       WHERE order_id = $1 AND remarks IS NOT NULL AND btrim(remarks) <> '' AND status = ANY($2)
       ORDER BY created_at DESC, id DESC LIMIT 1`,
     [order.id, ORDER_STATUSES]).catch(() => null);
-  res.json(serializeOrder(order, items, address, payment, hasDuplicateCharge ? ['DUPLICATE_CHARGE'] : [], pos, note?.remarks ?? null));
+  const account = order.user_id ? await getOne('SELECT id, name, email, phone FROM users WHERE id = $1', [order.user_id]) : null;
+  res.json(serializeOrder(order, items, address, payment, hasDuplicateCharge ? ['DUPLICATE_CHARGE'] : [], pos, note?.remarks ?? null, account));
 });
 
 router.patch('/orders/:id/status', async (req, res) => {

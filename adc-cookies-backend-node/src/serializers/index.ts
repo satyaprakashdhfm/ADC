@@ -150,9 +150,18 @@ export function serializeOrderItem(oi) {
 // of short codes (e.g. 'DUPLICATE_CHARGE') the caller pre-computed from order_tracking rows —
 // admin-facing alerts that don't affect order/payment status itself. `pos` is the petpooja_orders
 // row for this order (admin views only) — whether the kitchen actually received the ticket.
-export function serializeOrder(order, items: any[] = [], address: any = null, payment: any = null, warningFlags: any[] = [], pos: any = null, statusNote: string | null = null) {
+export function serializeOrder(order, items: any[] = [], address: any = null, payment: any = null, warningFlags: any[] = [], pos: any = null, statusNote: string | null = null, account: any = null) {
   if (!order) return null;
   return {
+    /*
+     * The ACCOUNT that paid, which is not always the name on the parcel.
+     *
+     * A gift order carries the recipient in `address` — "sanskruti, Nampur" — and the admin board
+     * showed only that, under a column headed Customer. So the person who actually paid, whose
+     * history and phone number matter when something goes wrong, appeared on the order nowhere at
+     * all. Admin views only; a customer reading their own order already knows whose it is.
+     */
+    account: account ? { name: account.name ?? null, email: account.email ?? null, phone: account.phone ?? null } : null,
     pos: pos ? { relayed: !!pos.relay_ok, petpoojaOrderId: pos.petpooja_order_id ?? null, attempts: pos.attempts, lastError: pos.last_error ?? null } : null,
     id: order.id, orderNumber: order.order_number,
     subtotal: order.subtotal, discountAmount: order.discount_amount,
