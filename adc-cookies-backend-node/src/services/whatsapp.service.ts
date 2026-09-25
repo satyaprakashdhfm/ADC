@@ -1,5 +1,5 @@
 import { getOne, getAll, query, nowIso } from '../db/index.js';
-import { sendTemplate, whatsappConfigured, waNumber, log, type TemplateSendResult } from './whatsapp.client.js';
+import { sendTemplate, whatsappConfigured, waNumber, log, listTemplates, type TemplateSendResult } from './whatsapp.client.js';
 import { ORDER_CONFIRMATION, ORDER_SHIPPED, ORDER_DELIVERED, WELCOME, type WaTemplate, type OrderConfirmationData } from './whatsapp.templates.js';
 
 /*
@@ -192,9 +192,31 @@ export async function sendOrderMilestoneWhatsApp(orderId: number, milestone: str
  *
  * Never throws.
  */
+/*
+ * Whether Meta lists a template as APPROVED, asked at most every ten minutes. For one-shot messages
+ * like the welcome: sent while the template is still in review it would fail, and the moment to
+ * send it does not come back.
+ */
+let approvedCache: { at: number; names: Set<string> } | null = null;
+export async function templateApproved(name: string, language = 'en'): Promise<boolean> {
+  if (!approvedCache || Date.now() - approvedCache.at > 10 * 60_000) {
+    const r: any = await listTemplates();
+    if (!r.ok) return approvedCache?.names.has(`${name}|${language}`) ?? false;
+    approvedCache = {
+      at: Date.now(),
+      names: new Set((r.templates || []).filter((t: any) => t.status === 'APPROVED').map((t: any) => `${t.name}|${t.language}`)),
+    };
+  }
+  return approvedCache.names.has(`${name}|${language}`);
+}
+
 export async function sendWelcomeWhatsApp(userId: number | null | undefined): Promise<void> {
   try {
     if (!userId || !whatsappConfigured()) return;
+    if (!(await templateApproved(WELCOME.name, WELCOME.language))) {
+      log('send', `${WELCOME.name} | user ${userId} | skip — template not approved yet`);
+      return;
+    }
     const u = await getOne(
       `SELECT id, name, phone FROM users
         WHERE id = $1 AND phone IS NOT NULL AND created_at > now() - interval '2 days'

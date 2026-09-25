@@ -248,15 +248,71 @@ export interface WelcomeData {
 }
 
 /*
- * Once per account, when a new one has both a phone number and a name. MARKETING to Meta, so it
- * counts toward the per-person cap, but it is the first message anyone gets from us.
+ * Once per account, when a new one has both a phone number and a name.
+ *
+ * account_welcome, UTILITY: it only says the account is ready. It replaced 'welcome', which was
+ * MARKETING ("what are we baking into your next order?"), and Meta dropped that one for new
+ * customers (131049) because they had never written to us. Keep this one free of selling, or
+ * Meta will re-file it as marketing and the same thing happens.
  */
 export const WELCOME: WaTemplate<WelcomeData> = {
-  name: 'welcome',
+  name: 'account_welcome',
   language: 'en',
   kind: 'account',
   render: (d) => ({
     headerImage: `${IMAGES}/welcome.jpg`,
+    body: { customer_name: firstName(d.customerName) },
+  }),
+};
+
+/* ---------------------------------------------------------------- support --------------------- */
+
+/*
+ * The two templates behind WhatsApp support (services/support). Both UTILITY, no header, and a
+ * QUICK REPLY button rather than a link: tapping it sends a message to our number, which is what
+ * opens Meta's 24-hour window and lets the conversation carry on in the chat itself.
+ */
+
+export interface TicketCreatedData {
+  customerName: string | null;
+  ticketId: number;
+  summary: string;
+}
+
+/* A ticket's subject is written for the team and can run long; the message needs one short line. */
+function oneLine(text: string, max = 140): string {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+}
+
+/** Sent once, after a ticket is raised on the website. Button: "Continue on WhatsApp". */
+export const TICKET_CREATED: WaTemplate<TicketCreatedData> = {
+  name: 'ticket_created',
+  language: 'en',
+  kind: 'account',
+  render: (d) => ({
+    body: {
+      customer_name: firstName(d.customerName),
+      ticket_id: String(d.ticketId),
+      ticket_summary: oneLine(d.summary) || 'Your request',
+    },
+  }),
+};
+
+export interface SupportReplyData {
+  customerName: string | null;
+}
+
+/*
+ * A person on our side replied after the 24-hour window closed, when a plain message is no longer
+ * allowed. This says there is a reply; tapping "Show reply" reopens the window and the held reply
+ * is delivered straight away (support/outbound.service).
+ */
+export const SUPPORT_REPLY: WaTemplate<SupportReplyData> = {
+  name: 'support_reply',
+  language: 'en',
+  kind: 'account',
+  render: (d) => ({
     body: { customer_name: firstName(d.customerName) },
   }),
 };
