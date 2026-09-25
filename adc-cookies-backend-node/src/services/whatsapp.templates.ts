@@ -92,7 +92,7 @@ export const ORDER_CONFIRMATION: WaTemplate<OrderConfirmationData> = {
   language: 'en',
   kind: 'order',
   render: (d) => ({
-    headerImage: `${IMAGES}/order-confirmation.jpg`,
+    headerImage: `${IMAGES}/order-confirmed.jpg`,
     body: {
       customer_name: d.customerName?.trim() || 'there',
       order_id: d.orderNumber,
@@ -111,7 +111,8 @@ export const ORDER_CONFIRMATION: WaTemplate<OrderConfirmationData> = {
  * MARKETING to Meta, whatever they are submitted as: it counts "come back and buy" as promotion,
  * charges more for it, and caps how many one person is sent.
  *
- * Neither has a header.
+ * Both carry an image header, as every template on the account now does. Meta refuses a send that
+ * leaves out a header the template was approved with.
  *
  * cart_reminder's button is a fixed link to /checkout, tagged utm_source=whatsapp so an order it
  * brings back is credited to WhatsApp. It needs no variable because the basket is saved on the
@@ -157,6 +158,7 @@ export const CART_REMINDER: WaTemplate<CartReminderData> = {
   language: 'en',
   kind: 'marketing',
   render: (d) => ({
+    headerImage: `${IMAGES}/cart-reminder.jpg`,
     body: {
       customer_name: firstName(d.customerName),
       cart_items: namesLine(d.items),
@@ -183,11 +185,78 @@ export const CHECKOUT_REMINDER: WaTemplate<CheckoutReminderData> = {
   language: 'en',
   kind: 'marketing',
   render: (d) => ({
+    headerImage: `${IMAGES}/checkout-reminder.jpg`,
     body: {
       customer_name: firstName(d.customerName),
       order_items: namesLine(d.items),
       order_total: rupees(d.total),
     },
     buttonUrl: d.token,
+  }),
+};
+
+/* ---------------------------------------------------------------- delivery progress ----------- */
+
+/*
+ * Two messages once the parcel has left us, sent from orderProgress.notifyOrderMilestone beside the
+ * emails. Both UTILITY, both with a static button to /account, where the order and its tracking
+ * live. Like the confirmation they go to the account's number, never the delivery address's.
+ */
+
+export interface OrderShippedData {
+  customerName: string | null;
+  orderNumber: string;
+  items: { name: string; qty: number }[];
+}
+
+export const ORDER_SHIPPED: WaTemplate<OrderShippedData> = {
+  name: 'order_shipped',
+  language: 'en',
+  kind: 'order',
+  render: (d) => ({
+    headerImage: `${IMAGES}/order-shipped.jpg`,
+    body: {
+      customer_name: firstName(d.customerName),
+      order_id: d.orderNumber,
+      order_items: namesLine(d.items),
+    },
+  }),
+};
+
+export interface OrderDeliveredData {
+  customerName: string | null;
+  orderNumber: string;
+}
+
+export const ORDER_DELIVERED: WaTemplate<OrderDeliveredData> = {
+  name: 'order_delivered',
+  language: 'en',
+  kind: 'order',
+  render: (d) => ({
+    headerImage: `${IMAGES}/order-delivered.jpg`,
+    body: {
+      customer_name: firstName(d.customerName),
+      order_id: d.orderNumber,
+    },
+  }),
+};
+
+/* ---------------------------------------------------------------- welcome --------------------- */
+
+export interface WelcomeData {
+  customerName: string | null;
+}
+
+/*
+ * Once per account, when a new one has both a phone number and a name. MARKETING to Meta, so it
+ * counts toward the per-person cap, but it is the first message anyone gets from us.
+ */
+export const WELCOME: WaTemplate<WelcomeData> = {
+  name: 'welcome',
+  language: 'en',
+  kind: 'account',
+  render: (d) => ({
+    headerImage: `${IMAGES}/welcome.jpg`,
+    body: { customer_name: firstName(d.customerName) },
   }),
 };

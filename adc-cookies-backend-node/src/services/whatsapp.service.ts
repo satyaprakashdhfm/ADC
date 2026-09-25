@@ -1,6 +1,6 @@
 import { getOne, getAll, query, nowIso } from '../db/index.js';
 import { sendTemplate, whatsappConfigured, waNumber, log, type TemplateSendResult } from './whatsapp.client.js';
-import { ORDER_CONFIRMATION, type WaTemplate, type OrderConfirmationData } from './whatsapp.templates.js';
+import { ORDER_CONFIRMATION, ORDER_SHIPPED, ORDER_DELIVERED, WELCOME, type WaTemplate, type OrderConfirmationData } from './whatsapp.templates.js';
 
 /*
  * WhatsApp, the database half: who is sent which template, and a record of every send.
@@ -109,5 +109,102 @@ export async function sendOrderConfirmationWhatsApp(orderId: number): Promise<vo
     await sendWhatsApp(ORDER_CONFIRMATION, c.data, { to: c.to, orderId, userId: c.userId, label: c.orderNumber });
   } catch (err: any) {
     log('send', `${ORDER_CONFIRMATION.name} | order id ${orderId} | ✗ ${err?.message || err}`);
+  }
+}
+
+/* ---------------------------------------------------------------- shipped / delivered --------- */
+
+/*
+ * "On its way" and "delivered", each at most once per order, called from notifyOrderMilestone for
+ * every carrier scan, rider webhook and status set by hand.
+ *
+ * Both SHIPPED and OUT_FOR_DELIVERY count as "on its way": a same-day order often goes straight to
+ * out-for-delivery, and a counter marking its own delivery by hand only has that status to pick.
+ *
+ * The claim is a row in order_mail_log under its own milestone names (WA_SHIPPED, WA_DELIVERED),
+ * made in the same statement that checks nothing later went out, for the reason the emails do it:
+ * carriers report out of order, and "on its way" after "delivered" reads as the parcel going back.
+ * A send Meta refuses there and then hands the claim back so the next scan can try again.
+ *
+ * "On its way" is skipped for a parcel whose shipped email went out more than 12 hours ago: those
+ * are the orders already in transit when this was switched on, and the news is old.
+ */
+export async function sendOrderMilestoneWhatsApp(orderId: number, milestone: string): Promise<void> {
+  try {
+    if (!whatsappConfigured()) return;
+    const step = milestone === 'DELIVERED' ? 'WA_DELIVERED'
+      : milestone === 'SHIPPED' || milestone === 'OUT_FOR_DELIVERY' ? 'WA_SHIPPED' : null;
+    if (!step) return;
+
+    const o = await getOne(
+      `SELECT o.id, o.order_number, o.user_id, u.name AS user_name, u.phone AS user_phone
+         FROM orders o JOIN users u ON u.id = o.user_id
+        WHERE o.id = $1 AND o.payment_status = 'PAID'`, [orderId]);
+    if (!o) return;
+    if (!o.user_phone) {
+      log('send', `${step} | ${o.order_number} | skip — no phone on the account`);
+      return;
+    }
+
+    const ahead = step === 'WA_SHIPPED' ? ['WA_SHIPPED', 'WA_DELIVERED'] : ['WA_DELIVERED'];
+    const claimed = await getOne(
+      `INSERT INTO order_mail_log (order_id, milestone, sent_at)
+       SELECT $1, $2, $3
+        WHERE NOT EXISTS (SELECT 1 FROM order_mail_log WHERE order_id = $1 AND milestone = ANY($4::text[]))
+          AND ($2 <> 'WA_SHIPPED' OR NOT EXISTS (
+                SELECT 1 FROM order_mail_log WHERE order_id = $1
+                   AND milestone IN ('SHIPPED','OUT_FOR_DELIVERY') AND sent_at < now() - interval '12 hours'))
+       ON CONFLICT (order_id, milestone) DO NOTHING
+       RETURNING milestone`,
+      [orderId, step, nowIso(), ahead]);
+    if (!claimed) return;
+
+    const dest = { to: o.user_phone, orderId, userId: o.user_id, label: o.order_number };
+    let r: TemplateSendResult;
+    if (step === 'WA_SHIPPED') {
+      const items = await getAll('SELECT product_name, quantity FROM order_items WHERE order_id = $1 ORDER BY id', [orderId]);
+      r = await sendWhatsApp(ORDER_SHIPPED, {
+        customerName: o.user_name,
+        orderNumber: o.order_number,
+        items: items.map((i) => ({ name: i.product_name, qty: Number(i.quantity) || 1 })),
+      }, dest);
+    } else {
+      r = await sendWhatsApp(ORDER_DELIVERED, { customerName: o.user_name, orderNumber: o.order_number }, dest);
+    }
+    if (!r.ok && r.reason !== 'not_configured') {
+      await query('DELETE FROM order_mail_log WHERE order_id = $1 AND milestone = $2', [orderId, step]).catch(() => {});
+    }
+  } catch (err: any) {
+    log('send', `${milestone} | order id ${orderId} | ✗ ${err?.message || err}`);
+  }
+}
+
+/* ---------------------------------------------------------------- welcome --------------------- */
+
+/*
+ * The welcome, once per account, the first time a NEW account has both a number and a name. Called
+ * after the profile is saved and after an OTP sign-in, and it does nothing unless all of these hold:
+ *
+ *   the account was made in the last two days   an existing customer signing in again is not new,
+ *                                                and neither are the contacts seeded before launch
+ *   it has a phone number and a real name        "Hey there" is a worse first message than none
+ *   no welcome has gone to it before             a failed attempt does not count
+ *
+ * Never throws.
+ */
+export async function sendWelcomeWhatsApp(userId: number | null | undefined): Promise<void> {
+  try {
+    if (!userId || !whatsappConfigured()) return;
+    const u = await getOne(
+      `SELECT id, name, phone FROM users
+        WHERE id = $1 AND phone IS NOT NULL AND created_at > now() - interval '2 days'
+          AND NOT EXISTS (SELECT 1 FROM whatsapp_messages m
+                           WHERE m.user_id = users.id AND m.template = $2 AND m.status <> 'failed')`,
+      [userId, WELCOME.name]);
+    const name = String(u?.name || '').trim();
+    if (!u || !name || name === 'Guest') return;
+    await sendWhatsApp(WELCOME, { customerName: name }, { to: u.phone, userId: u.id, label: `user ${u.id}` });
+  } catch (err: any) {
+    log('send', `${WELCOME.name} | user ${userId} | ✗ ${err?.message || err}`);
   }
 }

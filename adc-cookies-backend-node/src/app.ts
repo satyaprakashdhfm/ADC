@@ -135,7 +135,10 @@ app.use('/api/coupons', couponRoutes);
  * at the tap (see destinationFor), so the button stays useful after the link behind it expires.
  */
 app.get('/api/pay/:token', async (req, res) => {
-  res.redirect(302, await destinationFor(String(req.params.token || '').slice(0, 64)));
+  /* The approved button carries leftover text before the token (/pay/%7B%7B1%7D%7D<token>), so the
+     token is whatever follows the last brace. Tokens are base64url, so nothing real is cut. */
+  const token = String(req.params.token || '').replace(/^.*\}/, '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+  res.redirect(302, await destinationFor(token));
 });
 app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);

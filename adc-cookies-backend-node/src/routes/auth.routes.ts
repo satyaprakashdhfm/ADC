@@ -22,6 +22,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { normalizePhone, sendOtp, validateOtp, messageCentralConfigured } from '../services/messageCentral.client.js';
 import { adminClient, anonClient, supabaseConfigured, findAuthUserIdByEmail } from '../config/supabase.js';
 import { linkEmailClaimsToUser } from '../services/coupon.service.js';
+import { sendWelcomeWhatsApp } from '../services/whatsapp.service.js';
 
 // Rejects junk like "123@gmail.com" (digits-only local part) — requires a real-looking local
 // part (at least one letter, 2+ characters) and a proper domain/TLD.
@@ -233,6 +234,9 @@ router.patch('/me', requireAuth, async (req, res) => {
   sets.push(`updated_at = $${i++}`); params.push(nowIso());
   params.push(req.user!.id);
   const row = await getOne(`UPDATE users SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, params);
+  /* A new account is complete once it has a number and a name, and this is where the second of
+     the two usually arrives. Checks and sends in the background; see sendWelcomeWhatsApp. */
+  void sendWelcomeWhatsApp(row?.id);
 
   /* COMMENTED OUT 2026-09-08 — mirrored the name and phone into Supabase user_metadata so a
      Supabase-hosted session would show the change. Nothing reads that copy now: the client gets
@@ -480,6 +484,9 @@ router.post('/otp/verify', verifyLimiter, async (req, res) => {
   const localUser = await syncUser({ phone: phone.digits, name: name || localName, authId: null });
   if (!localUser) throw new ApiError('Could not establish an account for this number.', 500);
   const ours = await createUserSession(localUser.id, req.headers['user-agent']);
+  /* A number that signs in already holding a name is complete now; one without is welcomed when
+     the name is saved (PATCH /me). */
+  if (!needsName) void sendWelcomeWhatsApp(localUser.id);
 
   /* 4) Done. There is no Supabase session to mint any more, and no accessToken/refreshToken in
         the reply — the client has been reading sessionToken since the frontend switched over. */

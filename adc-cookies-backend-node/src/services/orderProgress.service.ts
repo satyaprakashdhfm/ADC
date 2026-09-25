@@ -1,6 +1,7 @@
 import { getOne, query, nowIso } from '../db/index.js';
 import { shiprocketStatusToOrderStatus } from './shiprocket.client.js';
 import { sendOrderMilestoneEmail } from './mailer.client.js';
+import { sendOrderMilestoneWhatsApp } from './whatsapp.service.js';
 
 /*
  * One rule for how a carrier's own status becomes OUR order status, applied wherever we learn it.
@@ -121,6 +122,10 @@ export async function notifyOrderMilestone(order, carrierStatus, note = '') {
   try {
     const milestone = mailMilestoneFor(carrierStatus);
     if (!milestone) return null;
+
+    /* The WhatsApp message keeps its own once-only record, and does not need the email address
+       the mail below stops without. */
+    await sendOrderMilestoneWhatsApp(order.id, milestone);
 
     /* Read the customer BEFORE claiming. A phone-OTP account can have no email at all — 127 of
        them do — and claiming a milestone we cannot send would silently retire it, so if that
