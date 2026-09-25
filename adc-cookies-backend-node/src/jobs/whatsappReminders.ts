@@ -21,10 +21,9 @@ import { razorpayConfigured } from '../services/razorpay.client.js';
  * the cookies now and hit a snag, and a nudge half an hour later catches them still wanting them.
  * A basket can sit for days by design, so it is left alone for a day before anyone mentions it.
  *
- * Each is OFF until its own switch is set on the backend (WHATSAPP_CART_REMINDER=on,
- * WHATSAPP_CHECKOUT_REMINDER=on), and even then sends nothing until Meta lists that template as
- * APPROVED, so a switch set early waits for the approval rather than burning a reminder on a
- * rejected send.
+ * Both are on in code. Each still sends nothing unless Meta lists its template as APPROVED, so a
+ * template that is paused or rejected costs no reminders. To stop one, set its constant below to
+ * false.
  *
  * Both are marketing to Meta, which caps how many one person receives, and a shop that nags gets
  * blocked, which lowers the number's quality rating for every message after. So, as well as the
@@ -37,9 +36,8 @@ import { razorpayConfigured } from '../services/razorpay.client.js';
  *     choose these cookies)
  */
 
-const isOn = (v: string | undefined) => /^(on|true|1|yes)$/i.test((v || '').trim());
-const CART_ON = isOn(process.env.WHATSAPP_CART_REMINDER);
-const CHECKOUT_ON = isOn(process.env.WHATSAPP_CHECKOUT_REMINDER);
+const CART_ON = true;
+const CHECKOUT_ON = true;
 
 const SWEEP_MS = Number(process.env.WHATSAPP_REMINDER_SWEEP_MS || 5 * 60_000);
 /* The payment sweep closes an unpaid order at 20 minutes; by 30 it is certainly closed, and a
@@ -223,10 +221,7 @@ async function sweep() {
 }
 
 export function startWhatsAppReminders() {
-  if (!CART_ON && !CHECKOUT_ON) {
-    log('remind', 'off (set WHATSAPP_CART_REMINDER / WHATSAPP_CHECKOUT_REMINDER to on)');
-    return;
-  }
+  if (!CART_ON && !CHECKOUT_ON) { log('remind', 'off in code'); return; }
   if (!whatsappConfigured()) { log('remind', 'off — WhatsApp is not configured'); return; }
   log('remind', `on | checkout=${CHECKOUT_ON ? `on, ${CHECKOUT_AFTER_MIN} min after the order, link open ${LINK_TTL_MIN} min` : 'off'} | cart=${CART_ON ? `on, after ${CART_FIRST_AFTER_H} h and again ${CART_SECOND_AFTER_H} h later` : 'off'} | every ${Math.round(SWEEP_MS / 60_000)} min`);
   // After the payment sweep's first run (40 s), so an order it is about to close is closed first.
