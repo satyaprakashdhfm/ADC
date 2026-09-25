@@ -1,17 +1,19 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Store, LogOut, RefreshCw, Check, Package, Truck, Phone, MapPin, Receipt,
-  AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink, Volume2, Gift, Bell,
+  AlertTriangle, BookOpen, ClipboardList, KeyRound, X, Bike, ExternalLink, Volume2, Gift, Bell, MessageCircle,
 } from 'lucide-react';
 import StoreSignIn from './StoreSignIn';
 import StoreMenuBoard from './StoreMenuBoard';
 import StatusPopup from './StatusPopup';
+import SupportInbox from '../support/SupportInbox';
+import { useSupportAlerts, playChime } from '../support/useSupportAlerts';
 import { askToNotify, notifyMoney, notifyOrder, notifyPermission, type NotifyState } from '@/lib/notify';
 import {
   storeMe, storeOrders, storeTrack,
   storeAcceptOrder, storeMarkReady, storeSetPosBill, storeSetOrderStatus, storeChangePassword,
-  getStoreToken, clearStoreToken, StoreAuthError,
+  getStoreToken, clearStoreToken, StoreAuthError, storeSupportApi,
   type StoreSession, type StoreOrder, type StoreTrack, type StoreOrdersResponse,
 } from '@/lib/storeApi';
 import { parseOptions, hasGift, giftMessage } from '@/lib/orderFormat';
@@ -406,7 +408,7 @@ export default function StorePortal({ code }: { code: string }) {
   const [session, setSession] = useState<StoreSession | null>(null);
   const [booting, setBooting] = useState(true);
   const [orders, setOrders] = useState<StoreOrder[] | null>(null);
-  const [view, setView] = useState<'orders' | 'menu'>('orders');
+  const [view, setView] = useState<'orders' | 'menu' | 'chats'>('orders');
   const [tracks, setTracks] = useState<Record<number, StoreTrack>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
   /* Which order has the status popup open. The order itself is looked up from `orders` on render
@@ -637,6 +639,20 @@ export default function StorePortal({ code }: { code: string }) {
     } finally { setBusyId(null); }
   };
 
+  /*
+   * WhatsApp chats for this store's orders. The summary is polled all the time, not only on the
+   * Chats screen, so a customer message is heard while staff are on the order board: a soft chime
+   * (not the order alarm), and a notification when the tab is not in front.
+   */
+  const supportApi = useMemo(() => storeSupportApi(code), [code]);
+  const onNewChat = useCallback(async () => {
+    const ctx = await ensureAudio();
+    if (ctx) playChime(ctx);
+    notifyOrder('New WhatsApp message', 'A customer has written to you. Open Chats to reply.', 'adc-store-chat');
+  }, [ensureAudio]);
+  const chatSummary = useSupportAlerts(supportApi, onNewChat, { enabled: !!session });
+  const chatBadge = chatSummary ? Math.max(chatSummary.unreadChats, chatSummary.needsHuman) : 0;
+
   if (booting) return <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><p>Loading…</p></main>;
   // Signing in is the user gesture that lets the browser play sound at all — prime the audio
   // context here or the first new-order chime is silently dropped by the autoplay policy.
@@ -715,6 +731,12 @@ export default function StorePortal({ code }: { code: string }) {
               )}
             </div>
           </div>
+          <button onClick={() => setView(view === 'chats' ? 'orders' : 'chats')} style={{ ...btn(), ...(view === 'chats' ? { background: '#00a884', color: '#fff', borderColor: '#00a884' } : {}) }}>
+            {view === 'chats' ? <><ClipboardList size={15} /> Orders</> : <><MessageCircle size={15} /> Chats</>}
+            {view !== 'chats' && chatBadge > 0 && (
+              <span style={{ background: '#25d366', color: '#fff', borderRadius: 999, padding: '0 7px', fontSize: 12, fontWeight: 800 }}>{chatBadge}</span>
+            )}
+          </button>
           <button onClick={() => setView(view === 'orders' ? 'menu' : 'orders')} style={btn()}>
             {view === 'orders' ? <><BookOpen size={15} /> Menu &amp; stock</> : <><ClipboardList size={15} /> Orders</>}
           </button>
@@ -736,7 +758,7 @@ export default function StorePortal({ code }: { code: string }) {
         </div>
       </header>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '22px 18px 70px' }}>
+      <div style={{ maxWidth: view === 'chats' ? 1240 : 900, margin: '0 auto', padding: '22px 18px 70px' }}>
         {err && (
           <p style={{ ...wrap, background: '#fdecec', borderColor: '#f3c9c6', color: '#a4231d', padding: 14, fontWeight: 700, marginBottom: 18 }}>
             <AlertTriangle size={16} style={{ verticalAlign: -3, marginRight: 8 }} />{err}
@@ -772,7 +794,9 @@ export default function StorePortal({ code }: { code: string }) {
           </div>
         )}
 
-        {view === 'menu' ? (
+        {view === 'chats' ? (
+          <SupportInbox api={supportApi} title="WhatsApp chats" />
+        ) : view === 'menu' ? (
           /* Its own component now, because it stopped being a read-only list: it holds the shop's
              open/closed switch and a per-item on/off, each with its own loading and error state.
              Keeping that inside this file would have added a third set of them to a component that

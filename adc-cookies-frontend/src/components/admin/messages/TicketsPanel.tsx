@@ -118,6 +118,7 @@ export default function TicketsPanel({ tickets, search, onSearch, statusFilter, 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
                 <span style={{ ...pill, ...STATUS_STYLE[t.status] }}>{STATUS_LABEL[t.status]}</span>
                 <span style={{ ...pill, background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}>{CATEGORY_LABEL[t.category] || t.category}</span>
+                {t.source === 'WHATSAPP' && <span style={{ ...pill, background: '#e7fce3', color: '#008069' }}>WhatsApp</span>}
                 <strong style={{ color: 'var(--text-strong)' }}>{t.subject}</strong>
                 <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>#{t.id} · {fmtDateTime(t.createdAt)}</span>
               </div>
@@ -155,6 +156,19 @@ export default function TicketsPanel({ tickets, search, onSearch, statusFilter, 
                 {t.customerWords && <span style={{ display: 'block', fontWeight: 700, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>What Doughie understood</span>}
                 {t.details}
               </p>
+
+              {/* Asked again later, on the website or WhatsApp: a repeat request about the same problem
+                  is added here rather than opened as a second ticket. */}
+              {!!t.notes?.length && (
+                <div style={{ marginBottom: 10, fontSize: 'var(--text-sm)', color: 'var(--text-body)' }}>
+                  <span style={{ display: 'block', fontWeight: 700, fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Added later ({t.notes.length})</span>
+                  {t.notes.map((n, i) => (
+                    <div key={i} style={{ padding: '4px 0', borderTop: i ? '1px dashed var(--border-default)' : 'none', whiteSpace: 'pre-wrap' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{n.source === 'WHATSAPP' ? 'WhatsApp' : n.source === 'WEB' ? 'Website' : n.author || 'Staff'} · {fmtDateTime(n.createdAt)}: </span>{n.body}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Only offered when there is something to show — an empty ticket has no conversation
                   worth a control that opens onto nothing. */}

@@ -11,6 +11,8 @@
  * laptop signed into Begur can share a browser profile without evicting each other.
  */
 
+import type { SupportApi } from './supportTypes';
+
 const API_BASE = typeof window !== 'undefined' ? '/api' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api');
 
 const tokenKey = (storeCode: string) => `adc.store.token.${storeCode}`;
@@ -194,3 +196,26 @@ export const storeSetItemAvailability = (code: string, productId: number, availa
 
 export const storeChangePassword = (code: string, currentPassword: string, newPassword: string) =>
   request<{ ok: boolean }>(code, '/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+
+/* ---- WhatsApp support: this store's conversations (see lib/supportTypes) ---- */
+
+export function storeSupportApi(storeCode: string): SupportApi {
+  const post = (path: string, body: unknown = {}) => request(storeCode, path, { method: 'POST', body: JSON.stringify(body) });
+  return {
+    summary: () => request(storeCode, '/support/summary'),
+    list: () => request(storeCode, '/support/conversations'),
+    open: (id) => request(storeCode, `/support/conversations/${id}`),
+    reply: (id, text) => post(`/support/conversations/${id}/reply`, { text }) as Promise<{ ok: boolean; held?: boolean }>,
+    take: (id) => post(`/support/conversations/${id}/take`),
+    release: (id) => post(`/support/conversations/${id}/release`),
+    close: (id, resolveTicket) => post(`/support/conversations/${id}/close`, { resolveTicket }),
+    mediaUrl: async (mediaId) => {
+      const token = getStoreToken(storeCode);
+      const res = await fetch(`${API_BASE}/store/support/media/${encodeURIComponent(mediaId)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Could not load that file');
+      return URL.createObjectURL(await res.blob());
+    },
+  };
+}

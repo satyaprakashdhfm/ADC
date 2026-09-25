@@ -2,6 +2,7 @@
 // (localhost or your LAN IP on a phone), and Next.js rewrites it to the backend server-side.
 import type { ProductCategory } from './categories';
 import { getAttribution } from './attribution';
+import type { SupportApi } from './supportTypes';
 
 // Where the browser sends API calls. In the browser we ALWAYS use the same-origin `/api` path so
 // Next.js rewrites it to the backend (see next.config.ts). This keeps `next dev` hitting your LOCAL
@@ -1144,12 +1145,33 @@ export interface AdminTicket {
   order: { orderNumber: string; orderStatus: string; totalAmount: number } | null;
   /** The turns that led here — what was actually asked, not just the line the model summarised it into. */
   transcript: AdminTicketTurn[];
+  /** WEB (the website assistant) or WHATSAPP (the WhatsApp bot). */
+  source?: 'WEB' | 'WHATSAPP';
+  /** Added later: a repeat request about the same problem lands here instead of a new ticket. */
+  notes?: { source: string; author: string | null; body: string; createdAt: string }[];
 }
 
 export async function adminGetTickets(): Promise<AdminTicket[]> { return request('/admin/tickets'); }
 export async function adminSetTicketStatus(id: number, status: AdminTicketStatus): Promise<{ id: number; status: AdminTicketStatus }> {
   return request(`/admin/tickets/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
 }
+
+/* ---- Admin: WhatsApp support, every conversation (see lib/supportTypes) ---- */
+export const adminSupportApi: SupportApi = {
+  summary: () => request('/admin/support/summary'),
+  list: () => request('/admin/support/conversations'),
+  open: (id) => request(`/admin/support/conversations/${id}`),
+  reply: (id, text) => request(`/admin/support/conversations/${id}/reply`, { method: 'POST', body: JSON.stringify({ text }) }),
+  take: (id) => request(`/admin/support/conversations/${id}/take`, { method: 'POST', body: '{}' }),
+  release: (id) => request(`/admin/support/conversations/${id}/release`, { method: 'POST', body: '{}' }),
+  close: (id, resolveTicket) => request(`/admin/support/conversations/${id}/close`, { method: 'POST', body: JSON.stringify({ resolveTicket }) }),
+  mediaUrl: async (mediaId) => {
+    const at = adminSessionToken.get();
+    const res = await fetch(`${API_BASE}/admin/support/media/${encodeURIComponent(mediaId)}`, { headers: at ? { 'X-Admin-Token': at } : {} });
+    if (!res.ok) throw new Error('Could not load that file');
+    return URL.createObjectURL(await res.blob());
+  },
+};
 
 /* ---- Admin: Delivery — Warehouses ---- */
 export interface Warehouse {

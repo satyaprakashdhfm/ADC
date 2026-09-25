@@ -1,7 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { Check } from 'lucide-react';
-import { type AdminMessage, type AdminTicket, type AdminTicketStatus } from '@/lib/api';
+import { type AdminMessage, type AdminTicket, type AdminTicketStatus, adminSupportApi } from '@/lib/api';
+import SupportInbox from '@/components/support/SupportInbox';
+import { useChime, useSupportAlerts } from '@/components/support/useSupportAlerts';
 import { PAGE_SIZE } from '@/hooks/admin/usePagination';
 import { fmtDateTime } from '../shared/format';
 import { card, inp, iconBtn, Panel, Empty, Field, FilterBar, Pager } from '../shared/ui';
@@ -45,7 +47,12 @@ export default function MessagesTab({
   tickets, ticketSearch, onTicketSearch, ticketStatusFilter, onTicketStatusFilter,
   ticketCategoryFilter, onTicketCategoryFilter, onSetTicketStatus, ticketPage, onTicketPage,
 }: Props) {
-  const [view, setView] = useState<'messages' | 'tickets'>('messages');
+  /* WhatsApp first: it is where conversations with customers now carry on. A new customer message
+     chimes while this tab is open, whichever of the three views is showing. */
+  const [view, setView] = useState<'whatsapp' | 'messages' | 'tickets'>('whatsapp');
+  const chime = useChime();
+  const chat = useSupportAlerts(adminSupportApi, () => { void chime(); });
+  const chatBadge = chat ? Math.max(chat.unreadChats, chat.needsHuman) : 0;
 
   const mq = search.trim().toLowerCase();
   const list = (messages || []).filter(m => {
@@ -61,7 +68,7 @@ export default function MessagesTab({
 
   const openTickets = (tickets || []).filter(t => t.status === 'OPEN').length;
 
-  const switchBtn = (id: 'messages' | 'tickets', label: string, count?: number): React.ReactNode => (
+  const switchBtn = (id: 'whatsapp' | 'messages' | 'tickets', label: string, count?: number): React.ReactNode => (
     <button
       key={id}
       onClick={() => setView(id)}
@@ -85,17 +92,20 @@ export default function MessagesTab({
     </button>
   );
 
-  const title = view === 'messages'
-    ? `Contact messages${messages ? ` (${list.length})` : ''}`
-    : `Support tickets${tickets ? ` (${tickets.length})` : ''}`;
+  const title = view === 'whatsapp' ? 'WhatsApp support'
+    : view === 'messages'
+      ? `Contact messages${messages ? ` (${list.length})` : ''}`
+      : `Support tickets${tickets ? ` (${tickets.length})` : ''}`;
 
   return (
     <Panel
       title={title}
       loading={view === 'messages' && messages === null}
-      action={<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{[switchBtn('messages', 'Contact'), switchBtn('tickets', 'Tickets', openTickets)]}</div>}
+      action={<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{[switchBtn('whatsapp', 'WhatsApp', chatBadge), switchBtn('tickets', 'Tickets', openTickets), switchBtn('messages', 'Contact')]}</div>}
     >
-      {view === 'tickets' ? (
+      {view === 'whatsapp' ? (
+        <SupportInbox api={adminSupportApi} title="All WhatsApp chats" />
+      ) : view === 'tickets' ? (
         <TicketsPanel
           tickets={tickets}
           search={ticketSearch}
