@@ -15,6 +15,7 @@ import { trackShiprocket, getRiderData, shiprocketConfigured, walletStatus } fro
 import { trackShipment, delhiveryConfigured } from '../services/delhivery.client.js';
 import { bookShipmentAndRelay } from '../services/shipment.service.js';
 import { riderOutcome, deliveredByUs, ORDER_STATUSES } from '../config/delivery.js';
+import { supportInboxRouter } from './supportInbox.routes.js';
 
 /*
  * The store portal — /store/<code> on the frontend, /api/store here.
@@ -72,6 +73,12 @@ router.post('/login', loginLimiter, async (req, res) => {
 
 // Everything below is store-authenticated.
 router.use(requireStoreUser);
+
+/* WhatsApp support for this store's orders. Scoped by the store on the login, never the request. */
+router.use('/support', supportInboxRouter(
+  (req) => ({ kind: 'store', storeCode: req.storeUser!.storeCode }),
+  (req) => ({ sender: 'store', name: `${req.storeUser!.username || 'Staff'} · ${req.storeUser!.store?.name || req.storeUser!.storeCode}` }),
+));
 
 router.get('/me', (req, res) => {
   const { store, ...u } = req.storeUser!;

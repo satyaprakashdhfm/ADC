@@ -960,6 +960,81 @@ export async function initSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_links_order ON payment_links(order_id);
     CREATE INDEX IF NOT EXISTS idx_payment_links_razorpay ON payment_links(razorpay_link_id);
 
+    /*
+     * WhatsApp support. One conversation per customer number, because WhatsApp itself shows one
+     * thread per number; the ticket it is currently about can change over its life.
+     *
+     *   mode           BOT answers on its own; HUMAN means a person has it and the bot stays quiet.
+     *   store_code     the store that sees it in its portal: the ticket's order's store. NULL means
+     *                  admin only (a question that is not about an order).
+     *   last_customer_at   the start of Meta's 24-hour window. A free-form reply is allowed only
+     *                  within 24 hours of it; after that a staff reply is held and a template sent.
+     */
+    CREATE TABLE IF NOT EXISTS wa_conversations (
+      id SERIAL PRIMARY KEY,
+      phone TEXT NOT NULL UNIQUE,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      profile_name TEXT,
+      ticket_id INTEGER REFERENCES support_tickets(id) ON DELETE SET NULL,
+      store_code TEXT,
+      mode TEXT NOT NULL DEFAULT 'BOT',
+      status TEXT NOT NULL DEFAULT 'OPEN',
+      needs_human BOOLEAN NOT NULL DEFAULT false,
+      needs_human_reason TEXT,
+      taken_by TEXT,
+      last_customer_at TIMESTAMPTZ,
+      last_message_at TIMESTAMPTZ,
+      last_preview TEXT,
+      unread_staff INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_wa_conversations_store ON wa_conversations(store_code, last_message_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_wa_conversations_recent ON wa_conversations(last_message_at DESC);
+
+    /*
+     * Every message in a support conversation, both ways. wa_message_id is Meta's id and is UNIQUE:
+     * Meta redelivers a webhook it thinks we missed, and the insert that hits the conflict is how a
+     * message is never answered twice. A staff reply held for the 24-hour window has status 'held'
+     * and no id until it is actually sent.
+     */
+    CREATE TABLE IF NOT EXISTS wa_chat_messages (
+      id SERIAL PRIMARY KEY,
+      conversation_id INTEGER NOT NULL REFERENCES wa_conversations(id) ON DELETE CASCADE,
+      ticket_id INTEGER REFERENCES support_tickets(id) ON DELETE SET NULL,
+      wa_message_id TEXT,
+      direction TEXT NOT NULL,
+      sender TEXT NOT NULL,
+      sender_name TEXT,
+      body TEXT,
+      media_type TEXT,
+      media_id TEXT,
+      status TEXT NOT NULL DEFAULT 'received',
+      error TEXT,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_wa_chat_messages_wamid ON wa_chat_messages(wa_message_id) WHERE wa_message_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_wa_chat_messages_conv ON wa_chat_messages(conversation_id, id);
+
+    /* Where a ticket came from, and the store that sees it. */
+    ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'WEB';
+    ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS store_code TEXT;
+
+    /*
+     * What a customer added to a ticket after raising it: a second message about the same problem is
+     * a note on the ticket already open, never a second ticket.
+     */
+    CREATE TABLE IF NOT EXISTS support_ticket_notes (
+      id SERIAL PRIMARY KEY,
+      ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+      source TEXT NOT NULL,
+      author TEXT,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_ticket_notes_ticket ON support_ticket_notes(ticket_id, id);
+
     -- Security: enable Row Level Security on every public table so the Supabase auto REST
     -- API (reachable with the public anon key) denies all anon/authenticated access. This
     -- backend connects as the table owner, which bypasses RLS, so the app is unaffected.

@@ -36,7 +36,18 @@ router.get('/tickets', async (req, res) => {
       LIMIT 200`,
     [status],
   );
+  /* What was added later: a second request about the same problem is a note here, not a new ticket. */
+  const notes = rows.length ? await getAll(
+    'SELECT ticket_id, source, author, body, created_at FROM support_ticket_notes WHERE ticket_id = ANY($1::int[]) ORDER BY id',
+    [rows.map((t) => t.id)]) : [];
+  const notesBy = new Map<number, any[]>();
+  for (const n of notes) {
+    if (!notesBy.has(n.ticket_id)) notesBy.set(n.ticket_id, []);
+    notesBy.get(n.ticket_id)!.push({ source: n.source, author: n.author, body: n.body, createdAt: n.created_at });
+  }
   res.json(rows.map((t) => ({
+    source: t.source || 'WEB',
+    notes: notesBy.get(t.id) || [],
     id: t.id,
     subject: t.subject,
     details: t.details,

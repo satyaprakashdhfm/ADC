@@ -8,6 +8,7 @@ import stores from './admin/stores.routes.js';
 import coupons from './admin/coupons.routes.js';
 import users from './admin/users.routes.js';
 import contact from './admin/contact.routes.js';
+import { supportInboxRouter } from './supportInbox.routes.js';
 import settings from './admin/settings.routes.js';
 import insights from './admin/insights.routes.js';
 import delivery from './admin/delivery.routes.js';
@@ -32,6 +33,12 @@ import seo from './admin/seo.routes.js';
  */
 const router = Router();
 router.use(requireAdminSession);
+
+/* WhatsApp support, every conversation. */
+router.use('/support', supportInboxRouter(
+  () => ({ kind: 'admin' }),
+  (req) => ({ sender: 'admin', name: req.admin?.name || 'ADC team' }),
+));
 
 router.use('/', products);
 router.use('/', orders);

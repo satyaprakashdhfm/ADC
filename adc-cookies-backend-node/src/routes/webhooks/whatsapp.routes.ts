@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import { query, nowIso } from '../../db/index.js';
 import { log } from '../../services/whatsapp.client.js';
+import { handleInboundMessages } from '../../services/support/inbound.service.js';
+import { applyDeliveryStatus } from '../../services/support/conversation.service.js';
 
 /*
  * Endpoints Meta calls on US.
@@ -108,13 +110,17 @@ router.post('/webhook', async (req, res) => {
                       > COALESCE(array_position(ARRAY['accepted','sent','delivered','read'], status), 0))`,
             [String(st?.status || ''), err ? `${err.code}: ${err.title || err.message || ''}`.slice(0, 500) : null, nowIso(), String(st?.id || '')]
           ).catch(() => {});
+          await applyDeliveryStatus(String(st?.id || ''), String(st?.status || ''),
+            err ? `${err.code}: ${err.title || err.message || ''}`.slice(0, 500) : null);
           log('status', `${st?.id} → ${st?.status}${err ? ` (${err.code} ${err.title || ''})` : ''}`);
         }
 
-        /* Someone messaged US. Recorded, not answered — replying opens a 24-hour service window and
-           is a product decision, not a webhook's. */
-        for (const m of value?.messages ?? []) {
-          log('inbound', `from=${m?.from} type=${m?.type} id=${m?.id}`);
+        /* Someone messaged US: WhatsApp support (services/support). Not awaited, so a slow model
+           reply cannot hold up the statuses in the same delivery; it records every message once,
+           keyed by Meta's id, so a redelivered webhook is harmless. */
+        if (value?.messages?.length) {
+          for (const m of value.messages) log('inbound', `from=…${String(m?.from || '').slice(-4)} type=${m?.type} id=${m?.id}`);
+          void handleInboundMessages(value);
         }
 
         /* A template was approved, rejected, paused or disabled. Worth logging loudly: a paused

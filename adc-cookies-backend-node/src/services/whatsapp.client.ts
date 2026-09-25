@@ -200,3 +200,37 @@ export async function listTemplates() {
     clearTimeout(timer);
   }
 }
+
+/*
+ * Blue ticks on the customer's message, and "typing…" under our name while the reply is worked out.
+ * The indicator clears itself when our reply lands, or after 25 seconds. Best effort: a failure
+ * here changes nothing about the conversation.
+ */
+export async function markReadAndTyping(messageId: string, typing = true) {
+  if (!whatsappConfigured() || !messageId) return;
+  await graph(`/${PHONE_NUMBER_ID}/messages`, {
+    messaging_product: 'whatsapp',
+    status: 'read',
+    message_id: messageId,
+    ...(typing ? { typing_indicator: { type: 'text' } } : {}),
+  }, { timeoutMs: 8_000 }).catch(() => null);
+}
+
+/*
+ * A photo, voice note or document a customer sent, as bytes. Two calls: the media id resolves to a
+ * short-lived URL, and that URL wants the same bearer token. The URL expires in minutes, so it is
+ * fetched when someone opens the conversation, never stored.
+ */
+export async function downloadMedia(mediaId: string): Promise<{ ok: true; type: string; bytes: Buffer } | { ok: false; reason: string }> {
+  if (!whatsappConfigured()) return { ok: false, reason: 'not_configured' };
+  try {
+    const meta = await fetch(`${BASE}/${encodeURIComponent(mediaId)}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    const info: any = await meta.json().catch(() => ({}));
+    if (!meta.ok || !info?.url) return { ok: false, reason: info?.error?.message || `media_${meta.status}` };
+    const file = await fetch(info.url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    if (!file.ok) return { ok: false, reason: `download_${file.status}` };
+    return { ok: true, type: info.mime_type || file.headers.get('content-type') || 'application/octet-stream', bytes: Buffer.from(await file.arrayBuffer()) };
+  } catch (err: any) {
+    return { ok: false, reason: err?.message || 'download_failed' };
+  }
+}
