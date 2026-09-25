@@ -16,6 +16,9 @@
   --wa-tick-read: #53bdeb;
   display: grid;
   grid-template-columns: minmax(280px, 360px) 1fr;
+  /* One row exactly the shell's height. Without it the row grows to fit a long chat, the shell
+     clips it, and the reply box ends up below the bottom edge. */
+  grid-template-rows: minmax(0, 1fr);
   height: min(80vh, 780px);
   min-height: 520px;
   border: 1px solid var(--wa-line);
@@ -28,14 +31,14 @@
 }
 
 /* ---- list ---- */
-.list { display: flex; flex-direction: column; border-right: 1px solid var(--wa-line); min-width: 0; background: #fff; }
+.list { display: flex; flex-direction: column; border-right: 1px solid var(--wa-line); min-width: 0; min-height: 0; background: #fff; }
 .listHead { background: var(--wa-panel); padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 10px; }
 .listTitle { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; }
 .search { width: 100%; border: none; border-radius: 8px; background: #fff; padding: 8px 12px; font-size: 14px; outline: none; color: var(--wa-text); }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { border: none; border-radius: 999px; padding: 4px 12px; font-size: 13px; background: #fff; color: var(--wa-muted); cursor: pointer; }
 .chipOn { background: #e7fce3; color: var(--wa-green-dark); font-weight: 600; }
-.rows { overflow-y: auto; flex: 1; }
+.rows { overflow-y: auto; flex: 1; min-height: 0; }
 .row { display: flex; gap: 12px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--wa-line); align-items: center; background: #fff; width: 100%; text-align: left; border-left: none; border-right: none; border-top: none; font: inherit; color: inherit; }
 .row:hover { background: #f5f6f6; }
 .rowOn { background: #f0f2f5; }
@@ -55,7 +58,7 @@
 .empty { padding: 40px 20px; text-align: center; color: var(--wa-muted); }
 
 /* ---- thread ---- */
-.thread { display: flex; flex-direction: column; min-width: 0; background: var(--wa-chat-bg); }
+.thread { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--wa-chat-bg); }
 .threadHead { background: var(--wa-panel); padding: 10px 14px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--wa-line); flex-wrap: wrap; }
 .threadWho { flex: 1; min-width: 160px; }
 .threadName { font-weight: 600; font-size: 16px; }
@@ -72,7 +75,7 @@
 .bannerTicket { background: #fff; color: var(--wa-text); border-bottom: 1px solid var(--wa-line); }
 
 .messages {
-  flex: 1; overflow-y: auto; padding: 14px 6% 10px;
+  flex: 1; min-height: 0; overflow-y: auto; padding: 14px 6% 10px;
   background-color: var(--wa-chat-bg);
   background-image: radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px);
   background-size: 18px 18px;
@@ -102,7 +105,7 @@
 .media { display: block; max-width: 100%; max-height: 320px; border-radius: 6px; margin-bottom: 4px; cursor: pointer; }
 .mediaBox { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(0,0,0,.04); border-radius: 6px; margin-bottom: 4px; font-size: 13px; }
 
-.composer { background: var(--wa-panel); padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+.composer { background: var(--wa-panel); padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
 .composerRow { display: flex; align-items: flex-end; gap: 8px; }
 .input { flex: 1; resize: none; border: none; border-radius: 8px; padding: 10px 12px; font: inherit; max-height: 140px; outline: none; background: #fff; color: var(--wa-text); }
 .send { width: 42px; height: 42px; border-radius: 50%; border: none; background: var(--wa-green); color: #fff; display: grid; place-items: center; cursor: pointer; flex-shrink: 0; }
@@ -117,7 +120,7 @@
 
 /* One pane at a time on a phone or a narrow tablet. */
 @media (max-width: 760px) {
-  .shell { grid-template-columns: 1fr; height: 78vh; }
+  .shell { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); height: 78vh; }
   .shell.threadOpen .list { display: none; }
   .shell:not(.threadOpen) .thread { display: none; }
   .back { display: inline-flex; }
