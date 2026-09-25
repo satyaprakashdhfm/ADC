@@ -15,11 +15,12 @@
   --wa-chat-bg: #efeae2;
   --wa-tick-read: #53bdeb;
   display: grid;
-  grid-template-columns: minmax(280px, 360px) 1fr;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
   /* One row exactly the shell's height. Without it the row grows to fit a long chat, the shell
      clips it, and the reply box ends up below the bottom edge. */
   grid-template-rows: minmax(0, 1fr);
   height: min(80vh, 780px);
+  height: min(80dvh, 780px);
   min-height: 520px;
   border: 1px solid var(--wa-line);
   border-radius: 14px;
@@ -59,17 +60,21 @@
 
 /* ---- thread ---- */
 .thread { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--wa-chat-bg); }
-.threadHead { background: var(--wa-panel); padding: 10px 14px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--wa-line); flex-wrap: wrap; }
-.threadWho { flex: 1; min-width: 160px; }
+.threadHead { background: var(--wa-panel); padding: 10px 14px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--wa-line); flex-shrink: 0; min-width: 0; }
+.threadWho { flex: 1; min-width: 0; }
+.threadName, .threadSub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .threadName { font-weight: 600; font-size: 16px; }
 .threadSub { font-size: 12.5px; color: var(--wa-muted); }
-.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.actions { display: flex; gap: 6px; flex-shrink: 0; }
 .btn { border: 1px solid #d1d7db; background: #fff; color: var(--wa-text); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .btn:disabled { opacity: .55; cursor: default; }
 .btnGreen { background: var(--wa-green); border-color: var(--wa-green); color: #fff; }
 .back { border: none; background: none; cursor: pointer; padding: 4px; display: none; color: var(--wa-muted); }
 
-.banner { padding: 8px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.banner { padding: 7px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px; min-width: 0; flex-shrink: 0; }
+/* One line each, so the chat keeps the height. The full text is in the title on hover or tap. */
+.bannerText { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bannerMore { border: none; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; padding: 0; flex-shrink: 0; }
 .bannerBot { background: #e7f4ff; color: #174e7c; }
 .bannerHuman { background: #fff4e5; color: #7a4100; }
 .bannerTicket { background: #fff; color: var(--wa-text); border-bottom: 1px solid var(--wa-line); }
@@ -114,13 +119,23 @@
 .placeholder { flex: 1; display: grid; place-items: center; text-align: center; color: var(--wa-muted); padding: 30px; background: #f7f8fa; border-bottom: 6px solid var(--wa-green); }
 .placeholder h3 { color: var(--wa-text); font-weight: 400; font-size: 26px; margin: 12px 0 6px; }
 
-.notes { background: #fff; border-bottom: 1px solid var(--wa-line); padding: 6px 14px 10px; font-size: 12.5px; max-height: 120px; overflow-y: auto; }
+.notes { background: #fff; border-bottom: 1px solid var(--wa-line); padding: 4px 14px 8px; font-size: 12.5px; max-height: 110px; overflow-y: auto; flex-shrink: 0; }
 .note { margin-top: 4px; color: var(--wa-text); }
 .noteMeta { color: var(--wa-muted); }
 
 /* One pane at a time on a phone or a narrow tablet. */
+/* A tablet in portrait: a narrower list leaves the conversation room to read. */
+@media (max-width: 1024px) {
+  .shell { grid-template-columns: minmax(230px, 290px) minmax(0, 1fr); }
+  .btnLabel { display: none; }
+  .btn { padding: 7px 9px; }
+}
+
 @media (max-width: 760px) {
-  .shell { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); height: 78vh; }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 80vh; height: calc(100dvh - 120px); min-height: 440px; border-radius: 10px; }
+  /* 16px or iOS zooms the page into the box on focus. */
+  .input, .search { font-size: 16px; }
+  .bubble { max-width: 88%; }
   .shell.threadOpen .list { display: none; }
   .shell:not(.threadOpen) .thread { display: none; }
   .back { display: inline-flex; }

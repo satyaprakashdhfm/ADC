@@ -22,6 +22,7 @@ export default function ChatThread({ api, thread, onBack, onChanged }: {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState('');
+  const [notesOpen, setNotesOpen] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const lastId = messages[messages.length - 1]?.id;
@@ -33,6 +34,11 @@ export default function ChatThread({ api, thread, onBack, onChanged }: {
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [lastId, c.id]);
+  /* A photo arriving grows the chat after it was scrolled to the end; keep the end in view. */
+  const onMediaLoad = () => {
+    const el = scroller.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  };
   const onScroll = () => {
     const el = scroller.current;
     if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
@@ -55,6 +61,10 @@ export default function ChatThread({ api, thread, onBack, onChanged }: {
     void act('close', () => api.close(c.id, resolve));
   };
 
+  const handoverText = c.needsHuman
+    ? `Bot passed this to you${c.needsHumanReason ? `: ${c.needsHumanReason}` : ''}`
+    : `${c.takenBy || 'The team'} has this chat. The bot is paused.`;
+
   /* Day separators, and the author line only on the first bubble of a run, as WhatsApp draws them. */
   const rows: ReactNode[] = [];
   let lastDay = '';
@@ -64,7 +74,7 @@ export default function ChatThread({ api, thread, onBack, onChanged }: {
     const side = m.sender === 'system' ? 'system' : `${m.direction}:${m.sender}`;
     const newDay = day !== lastDay;
     if (newDay) rows.push(<div key={`d${m.id}`} className={s.day}><span className={s.dayPill}>{day}</span></div>);
-    rows.push(<MessageBubble key={m.id} api={api} m={m} first={side !== lastSide || newDay} />);
+    rows.push(<MessageBubble key={m.id} api={api} m={m} first={side !== lastSide || newDay} onMediaLoad={onMediaLoad} />);
     lastDay = day;
     lastSide = side;
   }
@@ -80,33 +90,42 @@ export default function ChatThread({ api, thread, onBack, onChanged }: {
         </div>
         <div className={s.actions}>
           {c.mode === 'BOT'
-            ? <button className={s.btn} disabled={!!busy} onClick={() => void act('take', () => api.take(c.id))}><Hand size={14} /> Take over</button>
-            : <button className={s.btn} disabled={!!busy} onClick={() => void act('release', () => api.release(c.id))}><Bot size={14} /> Hand back to bot</button>}
-          {c.status === 'OPEN' && <button className={s.btn} disabled={!!busy} onClick={close}><CheckCircle2 size={14} /> Close</button>}
+            ? <button className={s.btn} title="Take over from the bot" disabled={!!busy} onClick={() => void act('take', () => api.take(c.id))}><Hand size={15} /><span className={s.btnLabel}>Take over</span></button>
+            : <button className={s.btn} title="Hand back to the bot" disabled={!!busy} onClick={() => void act('release', () => api.release(c.id))}><Bot size={15} /><span className={s.btnLabel}>Hand back to bot</span></button>}
+          {c.status === 'OPEN' && <button className={s.btn} title="Close this chat" disabled={!!busy} onClick={close}><CheckCircle2 size={15} /><span className={s.btnLabel}>Close</span></button>}
         </div>
       </div>
 
       {c.ticket && (
         <div className={`${s.banner} ${s.bannerTicket}`}>
-          <strong>Ticket #{c.ticket.id}</strong>
-          <span>{c.ticket.subject}</span>
-          {c.ticket.orderNumber && <span style={{ color: '#667781' }}>· {c.ticket.orderNumber}</span>}
+          <strong style={{ flexShrink: 0 }}>#{c.ticket.id}</strong>
+          <span className={s.bannerText} title={`${c.ticket.subject}${c.ticket.orderNumber ? ` · ${c.ticket.orderNumber}` : ''}`}>
+            {c.ticket.subject}{c.ticket.orderNumber && !c.ticket.subject.includes(c.ticket.orderNumber) ? ` · ${c.ticket.orderNumber}` : ''}
+          </span>
+          {ticketNotes.length > 0 && (
+            <button className={s.bannerMore} onClick={() => setNotesOpen(o => !o)}>{notesOpen ? 'Hide notes' : `+${ticketNotes.length} added`}</button>
+          )}
           <span className={`${s.tag} ${c.ticket.status === 'RESOLVED' ? s.tagClosed : s.tagHuman}`}>{c.ticket.status.replace('_', ' ')}</span>
         </div>
       )}
-      {ticketNotes.length > 0 && (
+      {notesOpen && ticketNotes.length > 0 && (
         <div className={s.notes}>
-          <strong>Added to the ticket later</strong>
-          {ticketNotes.slice(-5).map((n, i) => (
+          {ticketNotes.map((n, i) => (
             <div key={i} className={s.note}><span className={s.noteMeta}>{n.source === 'WHATSAPP' ? 'WhatsApp' : n.source === 'WEB' ? 'Website' : n.author || 'Staff'}: </span>{n.body}</div>
           ))}
         </div>
       )}
-      {c.mode === 'BOT'
-        ? <div className={`${s.banner} ${s.bannerBot}`}><Bot size={15} /> Doughie, the bot, is answering this chat. Sending a reply takes it over.</div>
-        : <div className={`${s.banner} ${s.bannerHuman}`}><UserRound size={15} />
-            {c.needsHuman ? `The bot passed this to the team${c.needsHumanReason ? `: ${c.needsHumanReason}` : ''}.` : `${c.takenBy || 'The team'} has this chat.`} The bot is paused.
-          </div>}
+      {c.mode === 'BOT' ? (
+        <div className={`${s.banner} ${s.bannerBot}`}>
+          <Bot size={15} style={{ flexShrink: 0 }} />
+          <span className={s.bannerText}>The bot is answering. Sending a reply takes over.</span>
+        </div>
+      ) : (
+        <div className={`${s.banner} ${s.bannerHuman}`} title={handoverText}>
+          <UserRound size={15} style={{ flexShrink: 0 }} />
+          <span className={s.bannerText}>{handoverText}</span>
+        </div>
+      )}
 
       <div className={s.messages} ref={scroller} onScroll={onScroll}>
         {rows}

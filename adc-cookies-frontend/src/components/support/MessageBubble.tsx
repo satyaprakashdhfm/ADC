@@ -15,7 +15,7 @@ function Ticks({ status }: { status: string }) {
 }
 
 /* A customer's photo, voice note or file. Fetched only when shown, with this side's credential. */
-function Media({ api, m }: { api: SupportApi; m: SupportMessage }) {
+function Media({ api, m, onLoad }: { api: SupportApi; m: SupportMessage; onLoad?: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const isPicture = m.mediaType === 'image' || m.mediaType === 'sticker';
@@ -37,7 +37,7 @@ function Media({ api, m }: { api: SupportApi; m: SupportMessage }) {
   if (isPicture) {
     return url
       // eslint-disable-next-line @next/next/no-img-element -- a private blob URL, not an optimisable asset
-      ? <a href={url} target="_blank" rel="noreferrer"><img className={s.media} src={url} alt="Photo from the customer" /></a>
+      ? <a href={url} target="_blank" rel="noreferrer"><img className={s.media} src={url} alt="Photo from the customer" onLoad={onLoad} /></a>
       : <div className={s.mediaBox}><ImageIcon size={16} /> Loading photo…</div>;
   }
   if (m.mediaType === 'voice note' || m.mediaType === 'audio') {
@@ -53,7 +53,7 @@ function Media({ api, m }: { api: SupportApi; m: SupportMessage }) {
     : <button className={s.btn} onClick={load}><FileText size={14} /> Load file</button>;
 }
 
-export default function MessageBubble({ api, m, first }: { api: SupportApi; m: SupportMessage; first: boolean }) {
+export default function MessageBubble({ api, m, first, onMediaLoad }: { api: SupportApi; m: SupportMessage; first: boolean; onMediaLoad?: () => void }) {
   if (m.sender === 'system') {
     return <div className={s.system}><span className={s.systemPill}>{m.body}</span></div>;
   }
@@ -65,7 +65,7 @@ export default function MessageBubble({ api, m, first }: { api: SupportApi; m: S
     <div className={`${s.line} ${out ? s.lineOut : ''}`}>
       <div className={bubble}>
         {author && first && <div className={`${s.author} ${m.sender === 'bot' ? s.authorBot : s.authorStaff}`}>{author}</div>}
-        {m.mediaType && <Media api={api} m={m} />}
+        {m.mediaType && <Media api={api} m={m} onLoad={onMediaLoad} />}
         {m.body && <span className={s.text}>{waFormat(m.body)}</span>}
         <span className={s.meta}>
           {clock(m.createdAt)}
