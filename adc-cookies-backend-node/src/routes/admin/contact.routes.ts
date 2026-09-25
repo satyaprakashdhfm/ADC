@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getOne, getAll } from '../../db/index.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { ticketResolvedElsewhere } from '../../services/support/inbox.service.js';
 
 const router = Router();
 
@@ -73,11 +74,16 @@ router.patch('/tickets/:id/status', async (req, res) => {
   if (!['OPEN', 'IN_PROGRESS', 'RESOLVED'].includes(next)) {
     throw new ApiError('Status must be OPEN, IN_PROGRESS or RESOLVED.');
   }
+  const before = await getOne('SELECT status FROM support_tickets WHERE id = $1', [req.params.id]);
   const row = await getOne(
     'UPDATE support_tickets SET status = $1, updated_at = now() WHERE id = $2 RETURNING id, status',
     [next, req.params.id],
   );
   if (!row) throw new ApiError('Ticket not found');
+  /* Resolving it tells the customer on WhatsApp, as closing it from a chat does. */
+  if (next === 'RESOLVED' && before?.status !== 'RESOLVED') {
+    void ticketResolvedElsewhere(row.id, { sender: 'admin', name: req.admin?.name || 'ADC team' });
+  }
   res.json({ id: row.id, status: row.status });
 });
 

@@ -52,7 +52,7 @@ export function supportInboxRouter(scopeOf: (req: any) => InboxScope, staffOf: (
   });
 
   router.post('/conversations/:id/close', async (req, res) => {
-    if (!(await closeConversation(scopeOf(req), idOf(req), !!req.body?.resolveTicket))) throw new ApiError('Conversation not found.', 404);
+    if (!(await closeConversation(scopeOf(req), idOf(req), !!req.body?.resolveTicket, staffOf(req)))) throw new ApiError('Conversation not found.', 404);
     res.json({ ok: true });
   });
 

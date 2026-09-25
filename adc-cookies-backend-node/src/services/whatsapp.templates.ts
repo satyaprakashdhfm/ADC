@@ -316,3 +316,22 @@ export const SUPPORT_REPLY: WaTemplate<SupportReplyData> = {
     body: { customer_name: firstName(d.customerName) },
   }),
 };
+
+export interface TicketResolvedData {
+  customerName: string | null;
+  ticketId: number;
+}
+
+/*
+ * The ticket is closed as resolved, told to a customer who has not written in the last 24 hours
+ * (inside the window a plain message is sent instead; support/inbox.service). No button: replying
+ * to it is enough, and a reply about the same problem reopens the ticket.
+ */
+export const TICKET_RESOLVED: WaTemplate<TicketResolvedData> = {
+  name: 'ticket_resolved',
+  language: 'en',
+  kind: 'account',
+  render: (d) => ({
+    body: { customer_name: firstName(d.customerName), ticket_id: String(d.ticketId) },
+  }),
+};

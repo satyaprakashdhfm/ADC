@@ -1,6 +1,8 @@
 import { getAll, getOne, query, nowIso } from '../../db/index.js';
-import { downloadMedia } from '../whatsapp.client.js';
-import { getConversation, windowOpen, type Conversation } from './conversation.service.js';
+import { downloadMedia, log } from '../whatsapp.client.js';
+import { sendWhatsApp, templateApproved } from '../whatsapp.service.js';
+import { TICKET_RESOLVED } from '../whatsapp.templates.js';
+import { getConversation, conversationForPhone, windowOpen, recordMessage, type Conversation } from './conversation.service.js';
 import { sendToCustomer } from './outbound.service.js';
 
 /*
@@ -113,10 +115,38 @@ export async function handBack(scope: InboxScope, id: number) {
 }
 
 /*
- * Done. The conversation closes and goes back to the bot, so whatever the customer writes next is
- * answered; with resolveTicket the ticket is marked RESOLVED too. A new message reopens it.
+ * The customer is told their ticket is resolved. Inside the 24-hour window that is a plain message
+ * from whoever closed it; outside it, only the ticket_resolved template is allowed, and until Meta
+ * approves that the chat says no message went out rather than pretending one did.
  */
-export async function closeConversation(scope: InboxScope, id: number, resolveTicket: boolean) {
+async function tellResolved(c: Conversation, ticketId: number, who: Staff) {
+  try {
+    if (windowOpen(c)) {
+      await sendToCustomer(c, `Your ticket ${ticketId} is now resolved. If anything still isn't right, just reply here and we'll pick it up again.`, who.sender, who.name);
+      return;
+    }
+    if (!(await templateApproved(TICKET_RESOLVED.name, TICKET_RESOLVED.language))) {
+      await recordMessage({ conversationId: c.id, direction: 'out', sender: 'system', status: 'failed',
+        body: `Ticket ${ticketId} resolved. The customer was not told: they last wrote over 24 hours ago and the ticket_resolved template is not approved yet.` });
+      return;
+    }
+    const user = c.user_id ? await getOne<{ name: string | null }>('SELECT name FROM users WHERE id = $1', [c.user_id]) : null;
+    const r = await sendWhatsApp(TICKET_RESOLVED, { customerName: user?.name || c.profile_name, ticketId },
+      { to: c.phone, userId: c.user_id, label: `ticket ${ticketId}` });
+    await recordMessage({ conversationId: c.id, direction: 'out', sender: 'system',
+      body: `Ticket ${ticketId} resolved. The customer was sent the ticket_resolved message.`,
+      waMessageId: r.ok ? r.messageId : null, status: r.ok ? 'sent' : 'failed', error: r.ok ? null : r.reason });
+  } catch (err: any) {
+    log('support', `conv ${c.id} | ✗ resolved notice: ${err?.message || err}`);
+  }
+}
+
+/*
+ * Done. The conversation closes and goes back to the bot, so whatever the customer writes next is
+ * answered; with resolveTicket the ticket is marked RESOLVED too and the customer is told. A new
+ * message reopens the chat, and one about the same problem reopens the ticket.
+ */
+export async function closeConversation(scope: InboxScope, id: number, resolveTicket: boolean, who: Staff) {
   const c = await scoped(scope, id);
   if (!c) return false;
   const ts = nowIso();
@@ -124,7 +154,8 @@ export async function closeConversation(scope: InboxScope, id: number, resolveTi
     `UPDATE wa_conversations SET status = 'CLOSED', mode = 'BOT', taken_by = NULL, needs_human = false, needs_human_reason = NULL,
             unread_staff = 0, updated_at = $1 WHERE id = $2`, [ts, id]);
   if (resolveTicket && c.ticket_id) {
-    await query(`UPDATE support_tickets SET status = 'RESOLVED', updated_at = $1 WHERE id = $2`, [ts, c.ticket_id]);
+    const changed = await query(`UPDATE support_tickets SET status = 'RESOLVED', updated_at = $1 WHERE id = $2 AND status <> 'RESOLVED'`, [ts, c.ticket_id]);
+    if (changed.rowCount) await tellResolved(c, c.ticket_id, who);
   }
   return true;
 }
@@ -151,4 +182,20 @@ export async function mediaFor(scope: InboxScope, mediaId: string) {
       WHERE m.media_id = $1 AND ${w.sql} LIMIT 1`, [mediaId, ...w.params]);
   if (!owned) return null;
   return downloadMedia(mediaId);
+}
+
+/*
+ * A ticket marked RESOLVED from the admin Tickets list, not from a chat. The customer is told the
+ * same way: through the conversation for their number, made now if they never wrote to us.
+ */
+export async function ticketResolvedElsewhere(ticketId: number, who: Staff) {
+  try {
+    const t = await getOne<{ user_id: number; phone: string | null }>(
+      'SELECT t.user_id, u.phone FROM support_tickets t JOIN users u ON u.id = t.user_id WHERE t.id = $1', [ticketId]);
+    if (!t?.phone) return;
+    const conv = await conversationForPhone(t.phone);
+    await tellResolved(conv, ticketId, who);
+  } catch (err: any) {
+    log('support', `ticket ${ticketId} | ✗ resolved notice: ${err?.message || err}`);
+  }
 }
