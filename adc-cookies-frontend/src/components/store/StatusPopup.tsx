@@ -23,22 +23,46 @@ const STATUSES = [
   { value: 'CONFIRMED', label: 'Confirmed', hint: 'Paid and accepted, not started' },
   { value: 'PREPARING', label: 'Preparing', hint: 'Being baked' },
   { value: 'PACKED', label: 'Packed', hint: 'Bagged and waiting' },
-  { value: 'CANCELLED', label: 'Cancelled', hint: 'Calls off the POS ticket and the rider' },
+  { value: 'CANCELLED', label: 'Cancelled', hint: 'Refunds the customer — needs a code from the office' },
 ] as const;
 
 const PRIMARY = 2;   // how many of the list above are the everyday ones
 
 export default function StatusPopup({
-  orderNumber, current, busy, onClose, onSet,
+  orderNumber, current, busy, onClose, onSet, onRequestCancelCode, onCancel,
 }: {
   orderNumber: string;
   current: string;
   busy: boolean;
   onClose: () => void;
   onSet: (status: string, remarks: string) => void;
+  /** Sends the approval code to the company phone; resolves to the masked number. */
+  onRequestCancelCode: () => Promise<string>;
+  /** Cancels and refunds. Resolves once the server has done both. */
+  onCancel: (reason: string, code: string) => Promise<void>;
 }) {
   const [picked, setPicked] = useState<string>('');
   const [note, setNote] = useState('');
+  // Cancel & refund runs its own requests here, so a wrong code keeps the popup open to retry.
+  const [phoneHint, setPhoneHint] = useState('');
+  const [otp, setOtp] = useState('');
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelErr, setCancelErr] = useState('');
+  const cancelling = picked === 'CANCELLED';
+  const canConfirm = !cancelBusy && !!phoneHint && !!otp && !!note.trim();
+
+  const sendCode = async () => {
+    setCancelBusy(true); setCancelErr('');
+    try { setPhoneHint(await onRequestCancelCode()); }
+    catch (e) { setCancelErr(e instanceof Error ? e.message : 'Could not send the code'); }
+    finally { setCancelBusy(false); }
+  };
+  const confirmCancel = async () => {
+    setCancelBusy(true); setCancelErr('');
+    try { await onCancel(note.trim(), otp.trim()); }
+    catch (e) { setCancelErr(e instanceof Error ? e.message : 'That did not work'); }
+    finally { setCancelBusy(false); }
+  };
 
   const chosen = STATUSES.find(s => s.value === picked);
 
@@ -106,27 +130,30 @@ export default function StatusPopup({
         </div>
         {STATUSES.slice(PRIMARY).map(row)}
 
-        {picked === 'CANCELLED' && (
-          /* The one that does something a counter cannot undo. It calls off the POS ticket and the
-             courier, and it does NOT refund — refunds are an admin action on their own screen. A
-             cancellation is the only choice here that can leave a customer charged for nothing. */
+        {cancelling && (
+          /* The one that does something a counter cannot undo: it calls off the POS ticket and the
+             courier AND refunds the customer in full. So the office approves it — the code goes to
+             the company phone, not to anyone at this counter. */
           <div style={{ display: 'flex', gap: 9, padding: '11px 13px', borderRadius: 10, marginTop: 4,
                         background: '#fdecec', border: '1.5px solid #e9b4b1' }}>
             <AlertTriangle size={17} style={{ color: '#a4231d', flex: 'none', marginTop: 1 }} />
             <div style={{ fontSize: 12.5, color: '#7d1c17', lineHeight: 1.5 }}>
-              This calls off the POS ticket and the rider, but it does <strong>not refund</strong> the
-              customer. If they have paid, ask the office to refund from the admin dashboard.
+              Cancelling <strong>refunds the customer in full</strong> and calls off the POS ticket and
+              the rider. A refund cannot be undone, so it needs an approval code sent to
+              the <strong>company phone</strong>. Call the office and ask them for it.
             </div>
           </div>
         )}
 
         <label style={{ display: 'block', fontSize: 12.5, fontWeight: 800, margin: '14px 0 5px' }}>
-          Note for the customer <span style={{ fontWeight: 600, color: 'var(--text-subtle, #8a7f70)' }}>(optional)</span>
+          {cancelling
+            ? <>Reason for cancelling <span style={{ fontWeight: 600, color: 'var(--text-subtle, #8a7f70)' }}>(required)</span></>
+            : <>Note for the customer <span style={{ fontWeight: 600, color: 'var(--text-subtle, #8a7f70)' }}>(optional)</span></>}
         </label>
         <input
           value={note}
           onChange={e => setNote(e.target.value.slice(0, 200))}
-          placeholder="e.g. our own rider is bringing it"
+          placeholder={cancelling ? 'e.g. we could not bake it in time tonight' : 'e.g. our own rider is bringing it'}
           style={{
             width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 10,
             border: '1.5px solid var(--border-default, #e5e0d5)', fontSize: 14,
@@ -137,23 +164,72 @@ export default function StatusPopup({
           Goes into the customer&rsquo;s email, so write it for them.
         </div>
 
+        {cancelling && (
+          <div style={{ marginTop: 14 }}>
+            {!phoneHint ? (
+              <button onClick={sendCode} disabled={cancelBusy || !note.trim()} style={{
+                width: '100%', padding: '11px 14px', borderRadius: 10, fontWeight: 800,
+                border: '1.5px solid #a4231d', background: '#fff', color: '#a4231d',
+                cursor: cancelBusy || !note.trim() ? 'not-allowed' : 'pointer',
+                opacity: cancelBusy || !note.trim() ? 0.55 : 1,
+              }}>
+                {cancelBusy ? 'Sending…' : 'Send approval code to company phone'}
+              </button>
+            ) : (
+              <>
+                <div style={{ fontSize: 12.5, color: 'var(--text-muted, #6b6155)', marginBottom: 6 }}>
+                  Code sent to <strong>{phoneHint}</strong>. Ask the office for it.{' '}
+                  <button onClick={sendCode} disabled={cancelBusy} style={{
+                    border: 'none', background: 'none', padding: 0, color: '#a4231d', fontWeight: 800, cursor: 'pointer',
+                  }}>Resend</button>
+                </div>
+                <input
+                  value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputMode="numeric"
+                  placeholder="Approval code"
+                  style={{
+                    width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 10,
+                    border: '1.5px solid var(--border-default, #e5e0d5)', fontSize: 16, letterSpacing: '.2em',
+                    background: 'var(--surface-card, #fff)',
+                  }}
+                />
+              </>
+            )}
+            {cancelErr && <div style={{ fontSize: 12.5, color: '#a4231d', fontWeight: 700, marginTop: 6 }}>{cancelErr}</div>}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 9, marginTop: 16 }}>
-          <button onClick={onClose} disabled={busy} style={{
+          <button onClick={onClose} disabled={busy || cancelBusy} style={{
             flex: '0 0 auto', padding: '12px 18px', borderRadius: 10, cursor: 'pointer', fontWeight: 800,
             border: '1px solid var(--border-default, #e5e0d5)', background: 'var(--surface-card, #fff)',
           }}>Cancel</button>
-          <button
-            disabled={!picked || busy}
-            onClick={() => picked && onSet(picked, note.trim())}
-            style={{
-              flex: 1, padding: '12px 18px', borderRadius: 10, fontWeight: 800, border: 'none',
-              cursor: !picked || busy ? 'not-allowed' : 'pointer',
-              opacity: !picked || busy ? 0.55 : 1,
-              background: picked === 'CANCELLED' ? '#a4231d' : 'var(--brand-orange, #e8641c)',
-              color: '#fff',
-            }}>
-            {busy ? 'Saving…' : chosen ? `Mark ${chosen.label.toLowerCase()}` : 'Pick a status'}
-          </button>
+          {cancelling ? (
+            <button
+              disabled={!canConfirm}
+              onClick={confirmCancel}
+              style={{
+                flex: 1, padding: '12px 18px', borderRadius: 10, fontWeight: 800, border: 'none',
+                cursor: canConfirm ? 'pointer' : 'not-allowed', opacity: canConfirm ? 1 : 0.55,
+                background: '#a4231d', color: '#fff',
+              }}>
+              {cancelBusy && phoneHint ? 'Cancelling…' : 'Cancel & refund'}
+            </button>
+          ) : (
+            <button
+              disabled={!picked || busy}
+              onClick={() => picked && onSet(picked, note.trim())}
+              style={{
+                flex: 1, padding: '12px 18px', borderRadius: 10, fontWeight: 800, border: 'none',
+                cursor: !picked || busy ? 'not-allowed' : 'pointer',
+                opacity: !picked || busy ? 0.55 : 1,
+                background: 'var(--brand-orange, #e8641c)',
+                color: '#fff',
+              }}>
+              {busy ? 'Saving…' : chosen ? `Mark ${chosen.label.toLowerCase()}` : 'Pick a status'}
+            </button>
+          )}
         </div>
       </div>
     </div>

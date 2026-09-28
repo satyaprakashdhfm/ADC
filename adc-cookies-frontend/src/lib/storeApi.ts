@@ -180,6 +180,18 @@ export const storeSetOrderStatus = (code: string, id: number, status: string, re
   request<{ ok: boolean; status: string; at: string; unchanged?: boolean; cancelWarnings?: string[] }>(
     code, `/orders/${id}/status`, { method: 'POST', body: JSON.stringify({ status, remarks }) });
 
+/*
+ * Cancel & refund. Every store cancellation refunds a paid customer, so it needs a code sent to the
+ * company phone: staff ring the office for it. phoneHint is the masked number the code went to.
+ */
+export const storeRequestCancelCode = (code: string, id: number) =>
+  request<{ sent: boolean; phoneHint: string; expiresInSeconds: number }>(
+    code, `/orders/${id}/cancel/request-code`, { method: 'POST' });
+
+export const storeCancelOrder = (code: string, id: number, reason: string, otp: string) =>
+  request<{ ok: boolean; cancelled: boolean; refunded: boolean; refundId: string | null; notes: string[] }>(
+    code, `/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason, code: otp }) });
+
 /* ---- What this store can currently sell ----
    Scoped to the signed-in store by the token; there is no store code in these paths to get wrong. */
 

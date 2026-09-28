@@ -13,6 +13,7 @@ import { askToNotify, notifyMoney, notifyOrder, notifyPermission, type NotifySta
 import {
   storeMe, storeOrders, storeTrack,
   storeAcceptOrder, storeMarkReady, storeSetPosBill, storeSetOrderStatus, storeChangePassword,
+  storeRequestCancelCode, storeCancelOrder,
   getStoreToken, clearStoreToken, StoreAuthError, storeSupportApi,
   type StoreSession, type StoreOrder, type StoreTrack, type StoreOrdersResponse,
 } from '@/lib/storeApi';
@@ -109,8 +110,8 @@ function GiftNote({ order, compact = false }: { order: StoreOrder; compact?: boo
  *
  * Built for a tablet propped next to the oven, not a desk: big targets, one obvious next action per
  * order, and an alert that cannot be missed from across a kitchen. It shows this store's orders and
- * nothing else — no takings, no other stores, no customer records, no way to cancel anything. A
- * cancel calls off a rider and refunds money, so it stays in /admin where one person owns it.
+ * nothing else — no takings, no other stores, no customer records. A cancel calls off a rider and
+ * refunds money, so the counter can only do it with an approval code sent to the company phone.
  *
  * The flow a store actually walks:
  *   NEW  →  Accept  →  (bill it on the POS)  →  Ready for pickup  →  rider collects
@@ -927,6 +928,16 @@ export default function StorePortal({ code }: { code: string }) {
                 if (r.cancelWarnings?.length) setErr(r.cancelWarnings.join(' · '));
               });
               setStatusFor(null);
+            }}
+            onRequestCancelCode={async () => (await storeRequestCancelCode(code, o.id)).phoneHint}
+            onCancel={async (reason, otp) => {
+              const r = await storeCancelOrder(code, o.id, reason, otp);
+              setStatusFor(null);
+              /* Anything the carrier, POS or Razorpay refused comes back marked ⚠. The counter has to
+                 see it, or a rider still turns up or the customer waits for money that never left. */
+              const warn = r.notes.filter(n => n.startsWith('⚠'));
+              setErr(warn.join(' · '));
+              await refresh(false);
             }}
           />
         );
