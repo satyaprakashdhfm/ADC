@@ -16,6 +16,8 @@ import { trackShipment, delhiveryConfigured } from '../services/delhivery.client
 import { bookShipmentAndRelay } from '../services/shipment.service.js';
 import { riderOutcome, deliveredByUs, ORDER_STATUSES } from '../config/delivery.js';
 import { supportInboxRouter } from './supportInbox.routes.js';
+import { normalizePhone } from '../services/messageCentral.client.js';
+import { loadCancellable, issueCancelCode, cancelWithCode } from '../services/cancelRefund.service.js';
 
 /*
  * The store portal — /store/<code> on the frontend, /api/store here.
@@ -26,9 +28,10 @@ import { supportInboxRouter } from './supportInbox.routes.js';
  * customers, no products beyond the menu, no takings, no admin actions. Two rules make that hold:
  *
  *   1. Every query is filtered by the store code on the token, never by one from the request.
- *   2. Nothing here can change money, cancel an order, or REROUTE a carrier booking — that stays in
- *      /admin, because a mis-tap on a shared counter tablet must not be able to call off a rider or
- *      cancel a paid order. Accepting an order is the one exception that CREATES a booking (see
+ *   2. Nothing here can change money or REROUTE a carrier booking on the counter's say-so alone —
+ *      a mis-tap on a shared counter tablet must not be able to call off a rider or refund a paid
+ *      order. Cancelling is allowed only behind a code sent to the COMPANY phone (see
+ *      /orders/:id/cancel below), so the office approves every refund. Accepting an order is the one exception that CREATES a booking (see
  *      bookShipmentAndRelay in orders.js): a manual store's same-day rider is deliberately not
  *      booked at payment time, only once a real person here confirms the order — Accept is that
  *      confirmation, not a courier action staff are choosing to take.
@@ -401,6 +404,10 @@ router.post('/orders/:id/status', async (req, res) => {
   const order = await loadStoreOrder(req);
   const status = String(req.body?.status || '').toUpperCase();
   if (!ORDER_STATUSES.includes(status)) throw new ApiError('Unknown status.');
+  // Cancelling refunds the customer, so it goes through the approval code below, never this route.
+  if (status === 'CANCELLED' && order.order_status !== 'CANCELLED') {
+    throw new ApiError('Cancelling needs an approval code from the office — use Cancel & refund.', 409);
+  }
   if (status === order.order_status) return res.json({ ok: true, unchanged: true, status });
 
   const who = `${req.storeUser!.store.name} (${req.storeUser!.username})`;
@@ -409,6 +416,43 @@ router.post('/orders/:id/status', async (req, res) => {
   });
   console.log(`[STORE] status | order=${order.order_number} | ${order.order_status} -> ${status} | by=${who}`);
   res.json({ ok: true, status, at, cancelWarnings });
+});
+
+/*
+ * Cancel & refund, from the counter.
+ *
+ * Every cancellation refunds a paid customer in full, and a refund cannot be taken back. So the
+ * counter cannot approve its own: the code goes to the COMPANY number, staff ring the office, and
+ * the office reads it out only if it agrees. Same service as the admin dashboard, so the POS ticket,
+ * the courier and the customer's email all behave the same whichever door it came through.
+ *
+ * REFUND_APPROVAL_PHONE overrides the number; it defaults to the company admin line.
+ */
+const REFUND_APPROVAL_PHONE = () => normalizePhone(process.env.REFUND_APPROVAL_PHONE || '8861657617');
+
+const cancelCodeLimiter = rateLimit({
+  windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Too many attempts', message: 'Too many codes requested. Try again in 15 minutes.' },
+});
+
+router.post('/orders/:id/cancel/request-code', cancelCodeLimiter, async (req, res) => {
+  const order = await loadCancellable(Number(req.params.id), { storeCode: req.storeUser!.storeCode });
+  const phone = REFUND_APPROVAL_PHONE();
+  if (!phone) throw new ApiError('No company number is set for refund approval.', 503);
+  const out = await issueCancelCode({ callerKey: `store:${req.storeUser!.id}`, order, phone });
+  console.log(`[STORE-CANCEL] code sent | order=${order.order_number} | by=${req.storeUser!.store.name} (${req.storeUser!.username})`);
+  res.json(out);
+});
+
+router.post('/orders/:id/cancel', async (req, res) => {
+  const order = await loadCancellable(Number(req.params.id), { storeCode: req.storeUser!.storeCode });
+  const result = await cancelWithCode({
+    callerKey: `store:${req.storeUser!.id}`, order,
+    code: String(req.body?.code || '').trim(),
+    reason: String(req.body?.reason || '').trim(),
+    by: req.storeUser!.store.name, logTag: 'STORE-CANCEL',
+  });
+  res.json(result);
 });
 
 /*

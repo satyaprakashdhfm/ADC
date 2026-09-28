@@ -314,6 +314,24 @@ export async function sendOrderCancelledEmail({ order, reason, refunded }) {
 }
 
 /*
+ * A refund we started by hand, after the cancellation email had already gone out saying one was
+ * "being arranged". This is the follow-up that closes the loop: the amount, and the refund id their
+ * bank can trace it with if it is slow to arrive.
+ */
+export async function sendRefundStartedEmail({ to, orderNumber, amount, refundId }) {
+  if (!to) return;
+  const body = `
+    <p style="color:#5C4636">We have refunded your order <b>${esc(orderNumber)}</b>, which we had to cancel.</p>
+    <div style="margin:16px 0;padding:16px;border-radius:12px;background:#FFF6E9;border:1px solid #F3D9B5;color:#2B1D12;line-height:1.8">
+      <div><b>Amount:</b> ${esc(amount)}</div>
+      <div><b>Refund ID:</b> ${esc(refundId)}</div>
+    </div>
+    <p style="color:#2B1D12;line-height:1.6">The money goes back to the account you paid from. It usually shows up within 5&ndash;7 working days. If it takes longer, your bank can trace it with the refund ID above.</p>
+    <p style="color:#7A6353;font-size:13px;line-height:1.6">We are sorry we could not get your cookies to you this time. Reply to this email if you have any questions.</p>`;
+  await send({ to, subject: `Your refund for order ${orderNumber} has started`, html: shell('Refund started', body) });
+}
+
+/*
  * The three delivery updates a customer actually wants, and no more.
  *
  * The order confirmation already goes out from finalizePaidOrder, so these are the three that
