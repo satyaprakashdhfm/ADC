@@ -1,4 +1,4 @@
-import { verifyWebhookSignature } from '../../services/razorpay.client.js';
+import { verifyWebhookSignature, fetchPayment } from '../../services/razorpay.client.js';
 import { getOne, query, nowIso } from '../../db/index.js';
 import { finalizePaidOrder } from '../../services/order.service.js';
 import { settleLinkPayment } from '../../services/paymentLink.service.js';
@@ -149,19 +149,39 @@ export async function paymentWebhook(req, res) {
     if (rzpPaymentId) {
       const payment = await getOne('SELECT id, order_id FROM payments WHERE transaction_id = $1', [rzpPaymentId]);
       if (payment) {
-        const STATUS_MAP = { 'refund.created': 'REFUND_INITIATED', 'refund.processed': 'REFUNDED', 'refund.failed': 'REFUND_FAILED' };
-        const newStatus = STATUS_MAP[type];
-        // Only record the refunded amount once the refund actually completes — 'created' is
-        // just the request being accepted, and a 'failed' one never moved any money.
-        if (type === 'refund.processed' && refundEntity?.amount != null) {
-          await query('UPDATE payments SET status = $1, amount_refunded = $2 WHERE id = $3', [newStatus, refundEntity.amount / 100, payment.id]);
+        /*
+         * A payment can be refunded in parts, so one refund event no longer means "the payment is
+         * refunded". The running total comes from the payment itself: Razorpay sends it alongside
+         * the refund, and we ask for it if it is missing. Taking the total rather than adding this
+         * refund to ours also makes a retried webhook harmless.
+         */
+        let rzpPayment = event?.payload?.payment?.entity;
+        if (rzpPayment?.amount == null) {
+          const r = await fetchPayment(rzpPaymentId).catch(() => null);
+          rzpPayment = r?.ok ? r.payment : null;
+        }
+        const refundedPaise = rzpPayment ? Number(rzpPayment.amount_refunded) || 0 : null;
+        const full = rzpPayment ? refundedPaise! >= Number(rzpPayment.amount) : true;
+
+        let newStatus: string;
+        if (type === 'refund.created') {
+          newStatus = full ? 'REFUND_INITIATED' : 'PARTIALLY_REFUNDED';
+          // REFUNDING means our own refund call is mid-flight and will set the status itself.
+          await query("UPDATE payments SET status = $1 WHERE id = $2 AND status <> 'REFUNDING'", [newStatus, payment.id]);
+        } else if (type === 'refund.processed') {
+          newStatus = full ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+          const refundedRupees = refundedPaise != null ? refundedPaise / 100 : (refundEntity?.amount ?? 0) / 100;
+          await query('UPDATE payments SET status = $1, amount_refunded = GREATEST(amount_refunded, $2) WHERE id = $3', [newStatus, refundedRupees, payment.id]);
         } else {
-          await query('UPDATE payments SET status = $1 WHERE id = $2', [newStatus, payment.id]);
+          // The money did not move. Whatever was refunded before this one still stands.
+          newStatus = 'REFUND_FAILED';
+          await query('UPDATE payments SET status = $1 WHERE id = $2',
+            [refundedPaise ? 'PARTIALLY_REFUNDED' : 'REFUND_FAILED', payment.id]);
         }
         const amount = refundEntity?.amount != null ? (refundEntity.amount / 100).toFixed(2) : '?';
         await query(
           'INSERT INTO order_tracking (order_id, status, remarks, created_at) VALUES ($1,$2,$3,$4)',
-          [payment.order_id, newStatus, `Refund ${refundEntity?.id || ''} — ₹${amount} — ${type}`, nowIso()]
+          [payment.order_id, newStatus, `Refund ${refundEntity?.id || ''} — ₹${amount}${full ? '' : ' (partial)'} — ${type}`, nowIso()]
         );
         console.log(`[PAYMENT] webhook | ${type} | order_id=${payment.order_id} | refund=${refundEntity?.id} | ₹${amount}`);
         // A refund on an order the kitchen is still cooking, or a rider is still carrying, is the
@@ -170,7 +190,8 @@ export async function paymentWebhook(req, res) {
         // the only place we would ever learn about it. Flag it loudly rather than reverse anything
         // automatically — a refund is often a goodwill gesture on an order we still intend to
         // deliver, so silently cancelling the rider would be worse than the problem.
-        if (type === 'refund.processed') await flagIfStillLive(payment.order_id, `Refund of ₹${amount} processed`);
+        // A partial refund on a live order is the normal case (a late rider, one cookie short), not a warning.
+        if (type === 'refund.processed' && full) await flagIfStillLive(payment.order_id, `Refund of ₹${amount} processed`);
       } else {
         console.log(`[PAYMENT] webhook | ${type} | no local payment matches rzpPayment=${rzpPaymentId}`);
       }

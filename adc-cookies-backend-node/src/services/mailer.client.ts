@@ -314,21 +314,26 @@ export async function sendOrderCancelledEmail({ order, reason, refunded }) {
 }
 
 /*
- * A refund we started by hand, after the cancellation email had already gone out saying one was
- * "being arranged". This is the follow-up that closes the loop: the amount, and the refund id their
- * bank can trace it with if it is slow to arrive.
+ * Money sent back on an order, from the admin's refund action: a damaged box, a missing item, a
+ * late delivery, or a cancelled order that had not been refunded yet.
+ *
+ * `customerLine` is the sentence for the reason the admin picked, and `note` is anything they added
+ * in their own words. Either can be empty (the "something else" reason has no stock line), but not
+ * both: the refund route requires a note when there is no line. `full` says whether this refund
+ * clears the payment, so a partial one is never mistaken for the whole amount.
  */
-export async function sendRefundStartedEmail({ to, orderNumber, amount, refundId }) {
+export async function sendRefundIssuedEmail({ to, orderNumber, amount, paid, full, refundId, customerLine, note }) {
   if (!to) return;
+  const why = [customerLine, note].filter(Boolean).map(esc).join(' ');
   const body = `
-    <p style="color:#5C4636">We have refunded your order <b>${esc(orderNumber)}</b>, which we had to cancel.</p>
+    <p style="color:#5C4636">${why} We are sorry, and we have refunded ${full ? 'your' : 'part of your'} order <b>${esc(orderNumber)}</b>.</p>
     <div style="margin:16px 0;padding:16px;border-radius:12px;background:#FFF6E9;border:1px solid #F3D9B5;color:#2B1D12;line-height:1.8">
-      <div><b>Amount:</b> ${esc(amount)}</div>
+      <div><b>Refunded:</b> ${esc(amount)}${full ? '' : ` of the ${esc(paid)} you paid`}</div>
       <div><b>Refund ID:</b> ${esc(refundId)}</div>
     </div>
     <p style="color:#2B1D12;line-height:1.6">The money goes back to the account you paid from. It usually shows up within 5&ndash;7 working days. If it takes longer, your bank can trace it with the refund ID above.</p>
-    <p style="color:#7A6353;font-size:13px;line-height:1.6">We are sorry we could not get your cookies to you this time. Reply to this email if you have any questions.</p>`;
-  await send({ to, subject: `Your refund for order ${orderNumber} has started`, html: shell('Refund started', body) });
+    <p style="color:#7A6353;font-size:13px;line-height:1.6">Reply to this email if you have any questions.</p>`;
+  await send({ to, subject: `We have refunded ${amount} for order ${orderNumber}`, html: shell('Refund issued', body) });
 }
 
 /*

@@ -6,7 +6,10 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { ApiError } from '../../utils/ApiError.js';
 import { normalizePhone } from '../../services/messageCentral.client.js';
-import { loadCancellable, issueCancelCode, cancelWithCode } from '../../services/cancelRefund.service.js';
+import {
+  loadCancellable, issueCancelCode, cancelWithCode,
+  loadRefundable, refundWithCode, refundIntent, refundState, REFUND_REASONS,
+} from '../../services/cancelRefund.service.js';
 
 /*
  * Cancel an order and refund it, behind a one-time code sent to the admin's own phone.
@@ -67,6 +70,54 @@ router.post('/orders/:id/cancel', async (req, res) => {
     code: String(req.body?.code || '').trim(),
     reason: String(req.body?.reason || '').trim(),
     by: 'admin', logTag: 'ADMIN-CANCEL',
+  });
+  res.json(result);
+});
+
+/*
+ * GET /orders/:id/refund-info
+ * What the refund panel needs before anyone decides anything: the reasons to pick from, and the
+ * money as Razorpay sees it right now (paid, already refunded, left), in rupees.
+ */
+router.get('/orders/:id/refund-info', async (req, res) => {
+  const order = await loadRefundable(req.params.id).catch(() => null);
+  const state = order ? await refundState(order) : null;
+  res.json({
+    reasons: Object.entries(REFUND_REASONS).map(([code, r]) => ({ code, ...r })),
+    paid: (state?.paidPaise ?? 0) / 100,
+    refunded: (state?.refundedPaise ?? 0) / 100,
+    refundable: (state?.refundablePaise ?? 0) / 100,
+  });
+});
+
+/*
+ * POST /orders/:id/refund/request-code  { reasonCode, amount, note }
+ * Sends the code for one refund: this amount, this reason, this note. The amount is checked against
+ * Razorpay now, so the admin hears "only ₹120 is left" before a code is spent, and again when the
+ * code comes back.
+ */
+router.post('/orders/:id/refund/request-code', otpLimiter, async (req, res) => {
+  const order = await loadRefundable(req.params.id);
+  const intent = refundIntent({ reasonCode: req.body?.reasonCode, amount: req.body?.amount, note: req.body?.note });
+  if (intent.kind !== 'refund') throw new ApiError('Pick a reason for the refund.');
+  const state = await refundState(order);
+  if (intent.amountPaise > state.refundablePaise) {
+    throw new ApiError(`Only ₹${(state.refundablePaise / 100).toLocaleString('en-IN')} is left to refund on this order.`, 409);
+  }
+  const { adminId, adminLabel, phone } = await adminPhone(req);
+  const out = await issueCancelCode({ callerKey: `admin:${adminId}`, order, phone, intent });
+  console.log(`[ADMIN-REFUND] code sent | order=${order.order_number} | ₹${intent.amountPaise / 100} | ${intent.reasonCode} | admin=${adminLabel}`);
+  res.json(out);
+});
+
+/* POST /orders/:id/refund  { code } — amount, reason and note are the ones the code was sent for. */
+router.post('/orders/:id/refund', async (req, res) => {
+  const order = await loadRefundable(req.params.id);
+  const { adminId } = await adminPhone(req);
+  const result = await refundWithCode({
+    callerKey: `admin:${adminId}`, order,
+    code: String(req.body?.code || '').trim(),
+    by: 'admin', logTag: 'ADMIN-REFUND',
   });
   res.json(result);
 });
