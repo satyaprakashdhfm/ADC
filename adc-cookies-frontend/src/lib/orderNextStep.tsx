@@ -72,8 +72,14 @@ export function orderNextStep({ orderStatus, shipmentStatus, bookingStatus, carr
   }
 
   const stage = Math.max(shipStage(shipmentStatus), shipStage(orderStatus));
-  if (os === 'DELIVERED' || stage >= 3)
+  if (os === 'DELIVERED' || stage >= 3) {
+    // A refund on a delivered order is money back for something that went wrong with it.
+    if (refunded) {
+      const when = refundedAt ? ` on ${shortDate(refundedAt)}` : '';
+      return `Delivered. ${formatMoney(amountRefunded)} was refunded${when} — banks usually take 5-7 working days to show it.`;
+    }
     return 'Delivered. We hope you love it! 🍪';
+  }
 
   // Prepaid-only: nothing is prepared or shipped until payment clears.
   if (!paid)

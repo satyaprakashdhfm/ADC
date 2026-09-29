@@ -715,6 +715,20 @@ export async function adminCancelAndRefund(orderId: number, reason: string, code
   return request(`/admin/orders/${orderId}/cancel`, { method: 'POST', body: JSON.stringify({ reason, code }) });
 }
 
+/* Refund without cancelling: part or all of a payment, for a reason picked from the server's list.
+   The amount, reason and note are fixed when the code is sent; the confirm call carries only the code. */
+export interface RefundReason { code: string; label: string; cancels: boolean; customerLine: string }
+export interface RefundInfo { reasons: RefundReason[]; paid: number; refunded: number; refundable: number }
+export async function adminGetRefundInfo(orderId: number): Promise<RefundInfo> {
+  return request(`/admin/orders/${orderId}/refund-info`);
+}
+export async function adminRequestRefundCode(orderId: number, body: { reasonCode: string; amount: number; note: string }): Promise<{ sent: boolean; phoneHint: string; expiresInSeconds: number }> {
+  return request(`/admin/orders/${orderId}/refund/request-code`, { method: 'POST', body: JSON.stringify(body) });
+}
+export async function adminRefund(orderId: number, code: string): Promise<{ ok: boolean; cancelled: boolean; refunded: boolean; refundId: string | null; notes: string[] }> {
+  return request(`/admin/orders/${orderId}/refund`, { method: 'POST', body: JSON.stringify({ code }) });
+}
+
 export async function adminGetStoreStatus(): Promise<AdminStoreStatusReport> { return request('/admin/store-status'); }
 export async function adminToggleStoreStatus(code: string): Promise<{ ok: boolean; code: string; isActive: boolean }> {
   return request(`/admin/store-status/${code}/toggle`, { method: 'PATCH' });

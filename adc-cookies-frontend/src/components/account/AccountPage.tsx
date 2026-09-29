@@ -66,8 +66,8 @@ function ShipmentTracker({ order }: { order: Order }) {
      confirms `refund.processed`, REFUND_INITIATED when it is first accepted — so no extra field is
      needed on the order itself. Prefer the confirmed one; fall back to when it was raised. */
   const refundedAt =
-    ourEvents.find((e) => e.status === 'REFUNDED')?.createdAt
-    ?? ourEvents.find((e) => e.status === 'REFUND_INITIATED')?.createdAt
+    ourEvents.find((e) => e.status === 'REFUNDED' || e.status === 'PARTIALLY_REFUNDED')?.createdAt
+    ?? ourEvents.find((e) => e.status === 'REFUND_INITIATED' || e.status === 'REFUND_ISSUED')?.createdAt
     ?? null;
 
   return (
