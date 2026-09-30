@@ -114,8 +114,7 @@ function shuffled<T>(arr: T[], seed: number): T[] {
 }
 
 const GREETING =
-  'Hey there! I’m Doughie, your ADC support cookie. Ask me about our cookies, delivery, '
-  + 'or your orders — I’m here to help.';
+  'Hi, I’m Doughie from A Dough Cookie. Ask me about our cookies, delivery, or an order you’ve placed.';
 
 export default function Chatbot({ open, onClose }: { open: boolean; onClose: () => void }) {
   /*
@@ -334,7 +333,7 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
 
         {error && (
           <div style={{ alignSelf: 'flex-start', maxWidth: '82%', padding: '10px 13px', borderRadius: 14, background: 'var(--red-wash)', border: '1px solid var(--status-error)', color: 'var(--text-body)', fontSize: 'var(--text-sm)' }}>
-            Sorry — I couldn’t reach support just then. Try again, or{' '}
+            Sorry, that didn’t go through. Try again, or{' '}
             <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-secondary)', fontWeight: 700 }}>message us on WhatsApp</a>.
           </div>
         )}

@@ -112,7 +112,7 @@ async function runBot(conversationId: number) {
     [conv.id]);
   if ((busy?.n ?? 0) >= MAX_BOT_REPLIES_PER_DAY) {
     await handToHuman(conv.id, 'Long conversation, the bot has stepped back');
-    await sendToCustomer(conv, 'I have passed this chat to our team. A person will reply here as soon as they can.', 'bot', 'Doughie');
+    await sendToCustomer(conv, "I've passed this chat to our team. Someone will reply here as soon as they can.", 'bot', 'Doughie');
     return;
   }
 
@@ -150,7 +150,7 @@ async function runBot(conversationId: number) {
   const result = await agent.generate({ messages: turns });
   const text = whatsappText(result.text);
   const fresh = (await getConversation(conv.id)) || conv;
-  await sendToCustomer(fresh, text || 'Sorry, I could not get that just now. Could you say it another way?', 'bot', 'Doughie');
+  await sendToCustomer(fresh, text || "Sorry, I didn't quite get that. Could you put it another way?", 'bot', 'Doughie');
 }
 
 /*
@@ -180,7 +180,7 @@ async function run(conversationId: number) {
     const conv = await getConversation(conversationId).catch(() => null);
     if (conv && conv.mode === 'BOT') {
       await handToHuman(conv.id, 'The bot could not answer');
-      await sendToCustomer(conv, 'Sorry, I could not get that just now. I have passed your message to our team and a person will reply here.', 'bot', 'Doughie').catch(() => {});
+      await sendToCustomer(conv, "Sorry, something went wrong on my side. I've passed your message to the team and someone will reply here.", 'bot', 'Doughie').catch(() => {});
     }
   } finally {
     running.delete(conversationId);
