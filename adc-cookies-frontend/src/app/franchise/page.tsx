@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { Award, Users, MapPin, TrendingUp, Mail, Phone, ArrowRight, MessageCircle, FileText, Store, Hammer, Rocket, ChevronDown, Check, ChefHat, Package, GraduationCap, Megaphone } from 'lucide-react';
+import { Award, Users, MapPin, TrendingUp, Mail, Phone, ArrowRight, Store, ChevronDown, Check, ChefHat, Package, GraduationCap, Megaphone } from 'lucide-react';
 import Footer from '@/components/storefront/Footer';
 import SiteHeader from '@/components/storefront/SiteHeader';
 import EnquiryForm from '@/components/storefront/EnquiryForm';
@@ -48,10 +48,10 @@ const WHY = [
 ];
 
 const STEPS = [
-  { icon: <FileText size={18} />, t: 'Send your enquiry', d: 'Fill in the form with a little about you and the city you have in mind.' },
-  { icon: <MessageCircle size={18} />, t: 'We call you', d: 'We talk you through the model, the numbers for your city and your questions.' },
-  { icon: <Hammer size={18} />, t: 'Site and set-up', d: 'We help you pick the site, fit it out, set up supply and train your staff.' },
-  { icon: <Rocket size={18} />, t: 'Open your doors', d: 'Your store starts baking and serving, with our team on call while you settle in.' },
+  { t: 'Send your enquiry', d: 'Fill in the form with a little about you and the city you have in mind.' },
+  { t: 'We call you', d: 'We talk you through the model, the numbers for your city and your questions.' },
+  { t: 'Site and set-up', d: 'We help you pick the site, fit it out, set up supply and train your staff.' },
+  { t: 'Open your doors', d: 'Your store starts baking and serving, with our team on call while you settle in.' },
 ];
 
 const FAQ = [
@@ -87,7 +87,8 @@ export default function FranchisePage() {
       <section style={band('var(--band-ivory)', { borderBottom: '1px solid var(--border-default)' })}>
         <div style={inner}>
           <div style={split}>
-            <div style={{ ...col(420), display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Centred against the form, with even spacing, so neither column ends in a gap. */}
+            <div style={{ ...col(420), display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 24 }}>
               <div>
                 <p style={eyebrow}>Cookie franchise</p>
                 <h1 style={{ font: '900 clamp(2rem,1.4rem + 3vw,3.4rem)/1.04 var(--font-display)', letterSpacing: '-.02em', margin: '0 0 12px', color: 'var(--text-strong)' }}>
@@ -167,13 +168,12 @@ export default function FranchisePage() {
 
             <div style={col(420)}>
               <p style={eyebrow}>About us</p>
-              <h2 style={heading}>Who we are</h2>
-              <p style={body}>
-                A Dough Cookie is an eggless cookie bakery from Bengaluru, with stores in {cities.join(' and ')}.
-                We bake every cookie fresh in our stores, and our gift tins ship across India. People order at the
-                counter, on our website with same-day delivery in the cities we bake in, and in bulk for corporate gifting.
+              <h2 style={heading}>An eggless cookie bakery from Bengaluru</h2>
+              <p style={{ ...body, marginBottom: 20 }}>
+                We have stores in {cities.join(' and ')} and bake every cookie fresh in them. Our gift tins ship across
+                India, and people order at the counter, on our website with same-day delivery in the cities we bake in,
+                and in bulk for corporate gifting.
               </p>
-              <h3 style={{ font: '900 var(--text-h4)/1.2 var(--font-display)', color: 'var(--text-strong)', margin: '6px 0 12px' }}>Why choose us?</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 12 }}>
                 {WHY.map(w => (
                   <div key={w.title} style={{ ...peachCard, padding: 14, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -207,7 +207,7 @@ export default function FranchisePage() {
                 recipes, the supply of ingredients and packaging, training for your team, and marketing support,
                 for an agreed franchise fee and term.
               </p>
-              <a href="#enquire" style={{ ...pillBtn, alignSelf: 'flex-start', marginTop: 'auto' }}>Start with step 1 <ArrowRight size={15} /></a>
+              <a href="#enquire" style={{ ...pillBtn, alignSelf: 'flex-start', marginTop: 'auto' }}>Send your enquiry <ArrowRight size={15} /></a>
             </div>
             {/* Two by two beside the model, one column on a phone; never three and an orphan. */}
             <style>{`
@@ -216,13 +216,14 @@ export default function FranchisePage() {
             `}</style>
             <div className="franchise-steps" style={{ ...col(520), display: 'grid', gap: 12 }}>
               {STEPS.map((s, i) => (
-                <div key={s.t} style={{ ...lightCard, padding: 18, position: 'relative', overflow: 'hidden' }}>
-                  {/* The step number, large and faint in the corner, so the order reads at a glance. */}
-                  <span aria-hidden style={{ position: 'absolute', right: 12, top: 2, font: '900 64px/1 var(--font-display)', color: 'var(--peach-300)', opacity: 0.8 }}>{i + 1}</span>
-                  <span style={{ ...iconDot(40), position: 'relative' }}>{s.icon}</span>
-                  <div style={{ ...eyebrow, margin: '12px 0 2px', position: 'relative' }}>Step {i + 1}</div>
-                  <h4 style={{ font: 'var(--weight-bold) var(--text-lg)/1.25 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px', position: 'relative' }}>{s.t}</h4>
-                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0, position: 'relative' }}>{s.d}</p>
+                /* One number per step, big on the right. No icon and no "Step 1" label beside it: three
+                   markers for one fact only made the card busier. */
+                <div key={s.t} style={{ ...lightCard, padding: '18px 18px 18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h4 style={{ font: 'var(--weight-bold) var(--text-lg)/1.25 var(--font-display)', color: 'var(--text-strong)', margin: '0 0 4px' }}>{s.t}</h4>
+                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{s.d}</p>
+                  </div>
+                  <span aria-label={`Step ${i + 1}`} style={{ flex: 'none', font: '900 clamp(3rem,2.4rem + 2vw,4.2rem)/1 var(--font-display)', color: 'var(--brand-secondary)', minWidth: '1ch', textAlign: 'right' }}>{i + 1}</span>
                 </div>
               ))}
             </div>
@@ -280,23 +281,43 @@ export default function FranchisePage() {
         </div>
       </section>
 
-      {/* ── Close · salmon band, one row: the ask on the left, every way to reach us on the right ── */}
+      {/* ── Close · salmon band: one card, the ask and Doughie on the left, three ways to reach us on
+          the right, each a tile with what it is and where it goes ── */}
       <section style={band('var(--band-ivory)', { borderTop: '1px solid var(--border-default)' })}>
         <div style={inner}>
-          <div style={{ ...split, alignItems: 'center' }}>
-            <div style={col(360)}>
-              <h2 style={{ ...heading, marginBottom: 6 }}>Ready to talk?</h2>
-              <p style={{ ...body, margin: 0 }}>
-                Send the form and our franchise team will call you, or reach us directly. Looking for a one-off
-                bulk order instead? See <Link href="/corporate" style={{ color: 'var(--brand-secondary)', fontWeight: 800 }}>corporate gifting</Link>.
-              </p>
+          <div style={{ ...lightCard, borderRadius: 28, padding: 'clamp(22px,3.5vw,40px)', position: 'relative', overflow: 'hidden' }}>
+            {/* A soft warm glow in the corner, the one decorative touch on the card. */}
+            <span aria-hidden style={{ position: 'absolute', right: -120, top: -120, width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, var(--peach-300), transparent 70%)', opacity: 0.7 }} />
+            <div style={{ ...split, alignItems: 'center', position: 'relative' }}>
+              <div style={{ ...col(380), display: 'flex', alignItems: 'center', gap: 'clamp(14px,2.5vw,26px)' }}>
+                <Image src="/assets/mascots/mascot-3.png" alt="" width={120} height={124} style={{ flex: 'none', width: 'clamp(72px,9vw,120px)', height: 'auto' }} />
+                <div>
+                  <p style={eyebrow}>Get in touch</p>
+                  <h2 style={{ ...heading, marginBottom: 6 }}>Ready to talk?</h2>
+                  <p style={{ ...body, margin: '0 0 14px' }}>Send the form and our franchise team will call you. Or reach us now, whichever suits you.</p>
+                  <a href="#enquire" style={pillBtn}><Check size={15} /> Request franchise details</a>
+                </div>
+              </div>
+              <div style={{ ...col(420), display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12 }}>
+                {[
+                  { href: whatsappLink('Hi A Dough Cookie! I’m interested in a franchise.'), ext: true, icon: <WhatsAppIcon size={20} />, bg: 'var(--whatsapp-green)', label: 'WhatsApp', value: 'Chat with us' },
+                  { href: `tel:${SITE_PHONE.replace(/\s/g, '')}`, icon: <Phone size={18} />, bg: 'var(--gradient-warm)', label: 'Call us', value: SITE_PHONE },
+                  { href: `mailto:${SITE_EMAIL}`, icon: <Mail size={18} />, bg: 'var(--gradient-warm)', label: 'Email us', value: SITE_EMAIL },
+                ].map(c => (
+                  <a key={c.label} href={c.href} {...(c.ext ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                    style={{ ...peachCard, padding: 16, display: 'flex', flexDirection: 'column', gap: 10, textDecoration: 'none', minWidth: 0 }}>
+                    <span style={{ width: 42, height: 42, borderRadius: '50%', background: c.bg, color: 'var(--white)', display: 'grid', placeItems: 'center' }}>{c.icon}</span>
+                    <span>
+                      <span style={{ display: 'block', fontSize: 'var(--text-2xs)', fontWeight: 900, color: 'var(--orange-800)', textTransform: 'uppercase', letterSpacing: '.08em' }}>{c.label}</span>
+                      <span style={{ display: 'block', fontWeight: 800, fontSize: 'var(--text-sm)', color: 'var(--ink-900)', overflowWrap: 'anywhere' }}>{c.value}</span>
+                    </span>
+                  </a>
+                ))}
+              </div>
             </div>
-            <div style={{ ...col(420), display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'flex-end' }}>
-              <a href="#enquire" style={pillBtn}><Check size={15} /> Request details</a>
-              <a href={whatsappLink('Hi A Dough Cookie! I’m interested in a franchise.')} target="_blank" rel="noopener noreferrer" style={ghostBtn}><WhatsAppIcon size={16} /> WhatsApp</a>
-              <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={ghostBtn}><Phone size={15} /> {SITE_PHONE}</a>
-              <a href={`mailto:${SITE_EMAIL}`} style={ghostBtn}><Mail size={15} /> Email us</a>
-            </div>
+            <p style={{ position: 'relative', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '20px 0 0', paddingTop: 16, borderTop: '1px dashed var(--border-strong)' }}>
+              Looking for a one-off bulk order instead? <Link href="/corporate" style={{ color: 'var(--brand-secondary)', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>See corporate gifting <ArrowRight size={14} /></Link>
+            </p>
           </div>
         </div>
       </section>

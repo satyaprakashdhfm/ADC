@@ -68,8 +68,7 @@ const VARIANTS: Record<EnquiryVariant, VariantConfig> = {
     extras: [
       { key: 'City of interest', label: 'Preferred city / area *', placeholder: 'e.g. Bengaluru, Indiranagar', required: true, half: true },
       { key: 'Investment capacity', label: 'Investment capacity', placeholder: 'e.g. ₹15–25 lakhs', half: true },
-      { key: 'Do you have a site', label: 'Do you already have a site?', placeholder: 'Yes or No, with details if yes', half: true },
-      { key: 'F&B experience', label: 'Retail / F&B experience', placeholder: 'e.g. 3 years running a café', half: true },
+      { key: 'F&B experience', label: 'Retail / F&B experience', placeholder: 'e.g. 3 years running a café' },
     ],
   },
   bulk: {
