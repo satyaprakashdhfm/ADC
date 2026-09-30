@@ -182,6 +182,29 @@ Examples of the tone. The facts in them are made up; always use what the tools r
   can tell you about our cookies, delivery, or an order you've placed."
 `.trim();
 
+/*
+ * Corporate and franchise enquiries. These are sales leads, and the team can only quote or call
+ * back with the right details. Asking for them one at a time, or filing a ticket after the first
+ * answer, is how a lead arrives as "1000 cookies" with no date and no city.
+ */
+const ENQUIRY_RULE = `
+CORPORATE, BULK AND FRANCHISE ENQUIRIES:
+- Corporate or bulk orders and gift hampers: the team needs how many cookies or boxes, the date they
+  are needed by, and the delivery city. Franchise: the city they want to open in, and their budget.
+- Ask for everything still missing in ONE message, as a short numbered list. Never ask again for
+  something they already told you.
+- Once you have it all, raise a ticket (category CORPORATE_ORDER or FRANCHISE) with every detail in
+  it and a subject like "Corporate order: 1,000 cookies by 12 Oct, Bengaluru". Then reply with
+  exactly one of:
+  "Thanks, I've passed this to our corporate team as ticket <number>. They'll call you with a quote."
+  "Thanks, I've passed this to our franchise team as ticket <number>. They'll call you to talk it through."
+- If you cannot raise a ticket (nobody signed in on the website, or a WhatsApp number with no
+  account): on the website, point them to adoughcookie.com/corporate or adoughcookie.com/franchise;
+  on WhatsApp, hand over to a person with all the details in the reason, and say "Thanks, I've
+  passed this to our team. They'll get back to you here."
+- Never quote a price, a discount or a delivery date for these. The team does that.
+`.trim();
+
 /** The persona and the hard rules. Signed-out visitors get a version with no account promises. */
 export function systemPrompt({ signedIn, customerName }: { signedIn: boolean; customerName?: string | null }) {
   const who = signedIn
@@ -216,6 +239,7 @@ export function sharedRules(): string[] {
     SECURITY_RULE,
     VOCABULARY_RULE,
     TICKET_RULE,
+    ENQUIRY_RULE,
     DELIVERY_RULES,
     `ADC is prepaid only — there is no cash on delivery. Every cookie is 100% eggless and vegetarian.`,
   ];

@@ -41,6 +41,8 @@ export const TICKET_CATEGORIES = [
   'LOGIN_ACCESS',       // cannot sign in, our sign-in OTP did not arrive
   'CONTACT_DETAILS',    // wrong phone or address on the order
   'PRODUCT',            // quality, wrong or missing item, allergens
+  'CORPORATE_ORDER',    // a bulk or corporate order, or gift hampers, wanting a quote
+  'FRANCHISE',          // someone who wants to open a store
   'OTHER',
 ] as const;
 export type TicketCategory = (typeof TICKET_CATEGORIES)[number];
@@ -202,7 +204,7 @@ export function buildTicketTool(
           + 'delivery OTP the RIDER asks for, handover failed) · CANCELLATION · REFUND · PAYMENT '
           + "(failed, charged twice, the bank's OTP) · LOGIN_ACCESS (cannot sign in, OUR sign-in "
           + 'OTP did not arrive) · CONTACT_DETAILS (wrong phone or address on the order) · PRODUCT '
-          + '(quality, wrong or missing item, allergens) · OTHER. Pick OTHER rather than forcing a '
+          + '(quality, wrong or missing item, allergens) · CORPORATE_ORDER (bulk, corporate or hamper order wanting a quote) · FRANCHISE (wants to open a store) · OTHER. Pick OTHER rather than forcing a '
           + 'near-miss — a wrong label sends the ticket to the wrong person.',
         ),
         orderNumber: z.string().default('').describe('The ADC order number if this is about one; empty otherwise'),

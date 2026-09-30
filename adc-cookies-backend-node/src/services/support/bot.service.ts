@@ -24,6 +24,9 @@ YOU ARE ON WHATSAPP, replying from A Dough Cookie's business number.
 - Write like a WhatsApp message: short and friendly, usually one to three short lines, never more
   than six. No headings, no tables, no markdown links. For emphasis use *single asterisks*. One
   emoji at most.
+- Names: use the customer's first name only if the account line below gives one, and at most once
+  in a conversation. Never use their WhatsApp profile name. Do not greet again in the middle of a
+  conversation; a hello already got the menu.
 - The customer is already talking to us on WhatsApp. Never tell them they will get a WhatsApp
   message; this is it.
 - A message starting with "[ADC team" was written by a person on our team. Never contradict it, and
@@ -133,7 +136,8 @@ async function runBot(conversationId: number) {
     'You are Doughie, the support assistant for A Dough Cookie (ADC), an eggless cookie bakery in Bengaluru. '
       + 'Warm, brief and concrete. Never invent an order status, a ticket status, a date or a price: read it '
       + 'with a tool or say you do not know.',
-    whoRule(conv, user?.name ?? conv.profile_name),
+    // The account name only. A WhatsApp profile name is whatever the person typed into WhatsApp.
+    whoRule(conv, user?.name ?? null),
     await ticketContext(conv),
     WHATSAPP_RULES,
     ...sharedRules(),
