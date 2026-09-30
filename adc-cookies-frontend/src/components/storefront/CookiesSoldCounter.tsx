@@ -53,8 +53,11 @@ export function useCookiesSold({ countUpFrom = 0, tickMs = 6000 }: { countUpFrom
     }
 
     const sync = () => {
-      // Ease toward the true value so the number visibly ticks up rather than snapping.
-      shown.current = Math.min(soldTotal(new Date()), shown.current + 1);
+      /* Ease toward the true value so the number visibly ticks up rather than snapping. If it has
+         fallen far behind (the count-up stalls in a background tab, where animation frames pause),
+         catch up at once, so two counters on one page never disagree for long. */
+      const target = soldTotal(new Date());
+      shown.current = target - shown.current > 50 ? target : Math.min(target, shown.current + 1);
       setN(shown.current);
     };
     const t = setInterval(sync, tickMs);
