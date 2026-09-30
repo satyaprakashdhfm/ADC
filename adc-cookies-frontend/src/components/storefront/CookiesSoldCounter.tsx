@@ -9,7 +9,7 @@ import Image from 'next/image';
  * reads as a real, organic number rather than a marketing round figure. Ticks up live every few
  * seconds. Purely decorative — no data source, just a warm bit of social proof.
  */
-function soldTotal(now: Date): number {
+export function soldTotal(now: Date): number {
   const BASE = 1_000_000;                                     // all-time floor: 10 lakh+
   const dayIndex = Math.floor(now.getTime() / 86_400_000);
   const epoch = Math.floor(Date.UTC(2026, 0, 1) / 86_400_000);
@@ -22,22 +22,50 @@ function soldTotal(now: Date): number {
   return n;
 }
 
-export default function CookiesSoldCounter() {
+/*
+ * The live figure, shared so every counter on the site shows the same number. The footer and the
+ * franchise hero both read it; two counters disagreeing on one page would give the game away.
+ *
+ * `countUpFrom` starts the display that many cookies below the real figure and runs up to it over
+ * a second or so, for a counter that is the first thing on the page. After that it ticks up one
+ * cookie at a time every `tickMs`, never past the real figure.
+ */
+export function useCookiesSold({ countUpFrom = 0, tickMs = 6000 }: { countUpFrom?: number; tickMs?: number } = {}) {
   const [n, setN] = useState<number | null>(null);
   const shown = useRef(0);
 
   useEffect(() => {
+    const target0 = soldTotal(new Date());
+    shown.current = target0 - countUpFrom;
+    setN(shown.current);
+
+    let raf = 0;
+    if (countUpFrom > 0) {
+      const start = performance.now();
+      const from = shown.current;
+      const step = (t: number) => {
+        const p = Math.min(1, (t - start) / 1400);
+        shown.current = Math.round(from + (target0 - from) * (1 - Math.pow(1 - p, 3)));
+        setN(shown.current);
+        if (p < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }
+
     const sync = () => {
-      const target = soldTotal(new Date());
       // Ease toward the true value so the number visibly ticks up rather than snapping.
-      shown.current = shown.current === 0 ? target : Math.min(target, shown.current + 1);
+      shown.current = Math.min(soldTotal(new Date()), shown.current + 1);
       setN(shown.current);
     };
-    sync();
-    const t = setInterval(sync, 6000);
-    return () => clearInterval(t);
-  }, []);
+    const t = setInterval(sync, tickMs);
+    return () => { clearInterval(t); cancelAnimationFrame(raf); };
+  }, [countUpFrom, tickMs]);
 
+  return n;
+}
+
+export default function CookiesSoldCounter() {
+  const n = useCookiesSold();
   if (n == null) return null;
 
   return (
