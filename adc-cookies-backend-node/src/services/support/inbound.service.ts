@@ -2,6 +2,7 @@ import { markReadAndTyping, log } from '../whatsapp.client.js';
 import { conversationForPhone, attachTicket, latestOpenTicket, recordMessage, getConversation } from './conversation.service.js';
 import { deliverHeld } from './outbound.service.js';
 import { scheduleBotReply } from './bot.service.js';
+import { handleMenu } from './menu.service.js';
 
 /*
  * The message service: one customer message in, recorded once, routed.
@@ -17,13 +18,15 @@ import { scheduleBotReply } from './bot.service.js';
 /* The quick-reply button on support_reply. Tapping it asks for the held reply, not for the bot. */
 const SHOW_REPLY = /^show reply$/i;
 
-/* What a message says, whatever kind it is. */
-function readMessage(m: any): { body: string | null; mediaType: string | null; mediaId: string | null } {
+/* What a message says, whatever kind it is. `replyId` is the id of a tapped list row or button. */
+function readMessage(m: any): { body: string | null; mediaType: string | null; mediaId: string | null; replyId?: string | null } {
   switch (m?.type) {
     case 'text': return { body: m.text?.body ?? '', mediaType: null, mediaId: null };
     case 'button': return { body: m.button?.text || m.button?.payload || '', mediaType: null, mediaId: null };
-    case 'interactive':
-      return { body: m.interactive?.button_reply?.title || m.interactive?.list_reply?.title || '', mediaType: null, mediaId: null };
+    case 'interactive': {
+      const reply = m.interactive?.list_reply || m.interactive?.button_reply || {};
+      return { body: reply.title || '', mediaType: null, mediaId: null, replyId: reply.id || null };
+    }
     case 'image': case 'video': case 'audio': case 'document': case 'sticker': {
       const media = m[m.type] || {};
       const type = m.type === 'audio' && media.voice ? 'voice note' : m.type === 'document' ? 'file' : m.type;
@@ -54,7 +57,7 @@ export async function handleInboundMessages(value: any): Promise<void> {
         if (t) await attachTicket(conv.id, t.id);
       }
 
-      const { body, mediaType, mediaId } = readMessage(m);
+      const { body, mediaType, mediaId, replyId = null } = readMessage(m);
       const at = m?.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : undefined;
       const recorded = await recordMessage({
         conversationId: conv.id, direction: 'in', sender: 'customer', senderName: names.get(from) || null,
@@ -71,6 +74,8 @@ export async function handleInboundMessages(value: any): Promise<void> {
       const delivered = await deliverHeld(conv.id);
 
       if (delivered && SHOW_REPLY.test(String(body || '').trim())) continue;
+      // A hello, a website WhatsApp button, or a tapped menu row gets the menu's answer.
+      if (await handleMenu(conv, { body, replyId }).catch((e) => { log('support', `✗ menu: ${e?.message || e}`); return false; })) continue;
       if (conv.mode === 'BOT') scheduleBotReply(conv.id);
     } catch (err: any) {
       log('support', `✗ inbound ${m?.id}: ${err?.message || err}`);

@@ -154,6 +154,23 @@ export async function sendText(to: string, body: string) {
   return r.ok ? { ok: true, messageId: r.data?.messages?.[0]?.id ?? null } : { ok: false, reason: r.reason };
 }
 
+/**
+ * An interactive message: a list of options, or a single link button. Like sendText, ONLY inside
+ * the 24-hour window, which is always open when we are answering what the customer just sent. No
+ * template or approval is involved; `interactive` is Meta's own object, passed through as is.
+ */
+export async function sendInteractive(to: string, interactive: unknown) {
+  if (!whatsappConfigured()) return { ok: false, reason: 'not_configured' };
+  const r = await graph(`/${PHONE_NUMBER_ID}/messages`, {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: `+${waNumber(to)}`,
+    type: 'interactive',
+    interactive,
+  });
+  return r.ok ? { ok: true, messageId: r.data?.messages?.[0]?.id ?? null } : { ok: false, reason: r.reason };
+}
+
 /*
  * What Meta itself thinks of our business phone number.
  *

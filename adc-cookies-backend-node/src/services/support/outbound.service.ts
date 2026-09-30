@@ -1,5 +1,5 @@
 import { getAll, getOne, query, nowIso } from '../../db/index.js';
-import { sendText, log } from '../whatsapp.client.js';
+import { sendText, sendInteractive, log } from '../whatsapp.client.js';
 import { sendWhatsApp, templateApproved } from '../whatsapp.service.js';
 import { SUPPORT_REPLY } from '../whatsapp.templates.js';
 import { recordMessage, windowOpen, getConversation, type Conversation, type Sender } from './conversation.service.js';
@@ -37,6 +37,22 @@ export async function sendToCustomer(conv: Conversation, body: string, sender: E
   });
   log('support', `conv ${conv.id} | ${sender} reply | ${r.ok ? '✓' : `✗ ${r.reason}`}`);
   return r.ok ? { ok: true as const, held: false } : { ok: false as const, reason: String(r.reason) };
+}
+
+/*
+ * A list or a link button, recorded in the inbox as `summary` so staff can see what the customer was
+ * shown. Only ever sent as an answer to what the customer just wrote, so the window is open; if it
+ * somehow is not, nothing is sent and the caller falls back to the bot.
+ */
+export async function sendInteractiveToCustomer(conv: Conversation, interactive: unknown, summary: string) {
+  if (!windowOpen(conv)) return { ok: false as const, reason: 'window_closed' };
+  const r: any = await sendInteractive(conv.phone, interactive);
+  await recordMessage({
+    conversationId: conv.id, direction: 'out', sender: 'bot', senderName: 'Doughie', body: summary,
+    waMessageId: r.ok ? r.messageId : null, status: r.ok ? 'sent' : 'failed', error: r.ok ? null : String(r.reason).slice(0, 300),
+  });
+  log('support', `conv ${conv.id} | interactive | ${r.ok ? '✓' : `✗ ${r.reason}`}`);
+  return r.ok ? { ok: true as const } : { ok: false as const, reason: String(r.reason) };
 }
 
 /*
