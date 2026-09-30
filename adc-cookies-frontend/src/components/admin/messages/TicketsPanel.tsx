@@ -61,6 +61,8 @@ const CATEGORIES: [string, string][] = [
   ['LOGIN_ACCESS', 'Login / access'],
   ['CONTACT_DETAILS', 'Contact details'],
   ['PRODUCT', 'Product'],
+  ['CORPORATE_ORDER', 'Corporate / bulk order'],
+  ['FRANCHISE', 'Franchise'],
   ['OTHER', 'Other'],
 ];
 const CATEGORY_LABEL = Object.fromEntries(CATEGORIES) as Record<string, string>;
