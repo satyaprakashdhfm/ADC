@@ -141,7 +141,7 @@ function linkCard(conv: Conversation, card: Card) {
 
 export const CARDS: Record<'order' | 'corporate' | 'franchise', Card> = {
   order: {
-    image: '/assets/hero-cookies-wide.jpg',
+    image: '/assets/whatsapp/order-logo.jpg',
     text: 'Our full menu is on the website. Order there for same-day delivery in Bengaluru and Chennai, or shipping anywhere in India.',
     button: 'Order now', url: `${SITE}/order?${utm('menu_order')}`,
     summary: 'Sent the "Order now" link',
