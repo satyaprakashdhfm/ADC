@@ -152,7 +152,7 @@ export default async function CookieGiftHampersPage() {
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <Link href="/corporate#quote" style={seoStyles.primaryBtn}>Ask for a quote <ArrowRight size={17} /></Link>
-            <a href={whatsappLink("Hi a dough cookie! I'd like a quote for cookie gift hampers.")} target="_blank" rel="noopener noreferrer" style={seoStyles.secondaryBtn}>
+            <a href={whatsappLink('Hi A Dough Cookie! I’d like a quote for cookie gift hampers.')} target="_blank" rel="noopener noreferrer" style={seoStyles.secondaryBtn}>
               <MessageCircle size={17} /> Message us on WhatsApp
             </a>
           </div>

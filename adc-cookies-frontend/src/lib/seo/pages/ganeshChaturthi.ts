@@ -33,7 +33,7 @@ export const ganeshChaturthi: SeoPageContent = {
       h2: `Why eggless matters during the festival`,
       blocks: [
         { kind: 'p', text: `Many families keep their kitchen vegetarian through the festival days. Every cookie at A Dough Cookie is eggless and our kitchens are kept egg-free, so a tin from us can go into any home you visit.` },
-        { kind: 'p', text: `If you plan to offer the cookies as naivedya at the puja itself, ask us for the full ingredient list first. Call +91 88616 57617 or message us on [WhatsApp](https://wa.me/918861657617).` },
+        { kind: 'p', text: `If you plan to offer the cookies as naivedya at the puja itself, ask us for the full ingredient list first. Call +91 88616 57617 or message us on [WhatsApp](https://wa.me/918494940066).` },
       ],
     },
     {

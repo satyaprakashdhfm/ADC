@@ -1,7 +1,8 @@
 // Central contact / channel config so the WhatsApp number and brand details live in one place.
 
-// Digits only, with country code — used to build wa.me links. (+91 88616 57617)
-export const WHATSAPP_NUMBER = '918861657617';
+// Digits only, with country code — used to build wa.me links. This is the WhatsApp Business number
+// (+91 84949 40066) the support bot answers on; SITE_PHONE below is for calls.
+export const WHATSAPP_NUMBER = '918494940066';
 export const SITE_PHONE = '+91 88616 57617';
 export const SITE_EMAIL = 'info@adoughcookie.com';
 
@@ -36,6 +37,11 @@ export const YOUTUBE_URL = 'https://youtube.com/@adoughcookies?si=1oE39EYWdQIf2r
 export const LINKEDIN_URL = 'https://www.linkedin.com/company/adough-cookie/';
 
 /** Build a WhatsApp deep link with an optional pre-filled message. */
-export function whatsappLink(message = "Hi a dough cookie! I'd like to order some fresh cookies.") {
+/*
+ * Every prefilled message starts with "Hi A Dough Cookie!". The WhatsApp bot recognises that opening
+ * as one of our buttons: on its own it gets the menu, and with "franchise" or "corporate" in it the
+ * bot answers that straight away. Keep the opening if you add a new button.
+ */
+export function whatsappLink(message = 'Hi A Dough Cookie!') {
   return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 }

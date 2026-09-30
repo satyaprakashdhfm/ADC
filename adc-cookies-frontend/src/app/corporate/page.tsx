@@ -76,7 +76,7 @@ export default function CorporatePage() {
               <a href="#quote" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 26px', borderRadius: 'var(--radius-pill)', background: 'var(--gradient-warm)', color: 'var(--white)', fontWeight: 900, fontSize: 'var(--text-base)', boxShadow: 'var(--shadow-brand)' }}>
                 Request a quote <ArrowRight size={18} />
               </a>
-              <a href={whatsappLink('Hi! I’d like a quote for a bulk / corporate cookie order.')} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--whatsapp-green)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>
+              <a href={whatsappLink('Hi A Dough Cookie! I’d like a quote for a bulk / corporate order.')} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--whatsapp-green)', fontWeight: 800, fontSize: 'var(--text-sm)' }}>
                 <MessageCircle size={16} /> Or message us on WhatsApp
               </a>
             </div>
@@ -149,7 +149,7 @@ export default function CorporatePage() {
               quote. Prefer to talk it through? Reach us directly:
             </p>
             <div style={{ display: 'grid', gap: 12, fontWeight: 700, fontSize: 'var(--text-sm)' }}>
-              <a href={whatsappLink('Hi! I’d like a quote for a bulk / corporate cookie order.')} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 9, color: 'var(--whatsapp-green)', fontWeight: 800 }}><MessageCircle size={17} /> WhatsApp us</a>
+              <a href={whatsappLink('Hi A Dough Cookie! I’d like a quote for a bulk / corporate order.')} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 9, color: 'var(--whatsapp-green)', fontWeight: 800 }}><MessageCircle size={17} /> WhatsApp us</a>
               <a href={`mailto:${SITE_EMAIL}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, color: 'var(--text-muted)' }}><Mail size={17} /> {SITE_EMAIL}</a>
               <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, color: 'var(--text-muted)' }}><Phone size={17} /> {SITE_PHONE}</a>
             </div>

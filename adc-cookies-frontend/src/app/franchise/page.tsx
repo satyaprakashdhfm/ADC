@@ -263,7 +263,7 @@ export default function FranchisePage() {
             Request franchise details <ArrowRight size={16} />
           </a>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap', marginTop: 22 }}>
-            <a href={whatsappLink('Hi! I’m interested in an A Dough Cookie franchise.')} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--whatsapp-green)', fontWeight: 800, fontSize: 'var(--text-sm)' }}><MessageCircle size={15} /> WhatsApp us</a>
+            <a href={whatsappLink('Hi A Dough Cookie! I’m interested in a franchise.')} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--whatsapp-green)', fontWeight: 800, fontSize: 'var(--text-sm)' }}><MessageCircle size={15} /> WhatsApp us</a>
             <a href={`mailto:${SITE_EMAIL}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}><Mail size={15} /> {SITE_EMAIL}</a>
             <a href={`tel:${SITE_PHONE.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: 'var(--text-sm)' }}><Phone size={15} /> {SITE_PHONE}</a>
           </div>
