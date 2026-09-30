@@ -43,38 +43,38 @@ type Topic = 'order' | 'delivery' | 'product' | 'payment' | 'help';
 
 const POOL: Record<Topic, string[]> = {
   order: [
-    'Where is my order?',
+    'Where’s my order?',
     'Track my latest order',
     'Has my order been picked up?',
-    'When will it arrive?',
+    'When will it get here?',
     'My order is taking too long',
   ],
   delivery: [
     'Do you deliver to my area?',
     'How long does delivery take?',
-    'Do you deliver same day?',
-    'What are your delivery charges?',
-    'Can I get it delivered tomorrow morning?',
+    'Can I get it today?',
+    'How much is delivery?',
+    'Can it come tomorrow morning?',
   ],
   product: [
-    'What cookies do you sell?',
+    'Which cookies do you have?',
     'What are your bestsellers?',
     'Are your cookies eggless?',
-    'What are the allergens?',
-    'What is in the Nutella filled cookie?',
-    'Do you have anything without nuts?',
+    'What allergens are in them?',
+    'What’s in the Nutella-filled cookie?',
+    'Anything without nuts?',
   ],
   payment: [
-    'I was charged but there is no order',
+    'I paid but can’t see my order',
     'How long does a refund take?',
-    'Do you accept cash on delivery?',
+    'Can I pay cash on delivery?',
     'My payment failed',
   ],
   help: [
     'I need help with an order',
-    'I want to cancel an order',
+    'I want to cancel my order',
     'Something was wrong with my order',
-    'I want to talk to someone',
+    'Can I talk to someone?',
   ],
 };
 
@@ -114,7 +114,7 @@ function shuffled<T>(arr: T[], seed: number): T[] {
 }
 
 const GREETING =
-  'Hi, I’m Doughie from A Dough Cookie. Ask me about our cookies, delivery, or an order you’ve placed.';
+  'Hi, I’m Doughie from A Dough Cookie. What can I help with? I can answer questions about our cookies and delivery, or check on an order you’ve placed.';
 
 export default function Chatbot({ open, onClose }: { open: boolean; onClose: () => void }) {
   /*
@@ -356,7 +356,7 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={signedIn ? 'Ask about your order or our cookies…' : 'Ask about our cookies…'}
+          placeholder={signedIn ? 'Type your question…' : 'Ask about our cookies or delivery…'}
           aria-label="Message"
           style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--text-body)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', outline: 'none' }}
         />
@@ -370,7 +370,7 @@ export default function Chatbot({ open, onClose }: { open: boolean; onClose: () 
           to somebody who can must never be buried. */}
       <a href={whatsappLink()} target="_blank" rel="noopener noreferrer"
         style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '8px 12px 11px', fontSize: 'var(--text-2xs)', color: 'var(--text-muted)', fontWeight: 700, textDecoration: 'none', background: 'var(--surface-page)' }}>
-        <Send size={12} /> Prefer a person? Message us on WhatsApp
+        <Send size={12} /> Rather talk to a person? Message us on WhatsApp
       </a>
     </div>
   );

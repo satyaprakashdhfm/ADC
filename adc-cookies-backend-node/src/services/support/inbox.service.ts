@@ -122,7 +122,7 @@ export async function handBack(scope: InboxScope, id: number) {
 async function tellResolved(c: Conversation, ticketId: number, who: Staff) {
   try {
     if (windowOpen(c)) {
-      await sendToCustomer(c, `Your ticket ${ticketId} is now resolved. If anything still isn't right, just reply here and we'll pick it up again.`, who.sender, who.name);
+      await sendToCustomer(c, `We've marked ticket ${ticketId} as resolved. If anything still isn't right, reply here and we'll pick it up again.`, who.sender, who.name);
       return;
     }
     if (!(await templateApproved(TICKET_RESOLVED.name, TICKET_RESOLVED.language))) {
