@@ -1,3 +1,4 @@
+import { parcelGrams, ITEMS_WITH_CATEGORY_SQL } from '../../services/parcel.service.js';
 import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db/index.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -61,9 +62,12 @@ router.post('/orders/:id/shipment', async (req, res) => {
     throw new ApiError(`Could not fetch waybill from Delhivery: ${waybillRes.reason}`, 502);
   }
   const waybill = String(waybillRes.waybills[0]);
-  console.log(`[ADMIN-SHIPMENT] create | order=${order.order_number} | wh=${wh.pickup_location} | dest=${address.pincode} | weight=${req.body?.weight || 0.5} | waybill=${waybill}`);
-
-  const items = await getAll('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+  const items = await getAll(ITEMS_WITH_CATEGORY_SQL, [order.id]);
+  /* The admin's box is in grams; when it is empty (or an old kilogram value under 20 slips through)
+     the weight comes from the items, so a parcel is never declared at half a gram again. */
+  const typed = Number(req.body?.weightGrams ?? req.body?.weight);
+  const grams = Number.isFinite(typed) && typed >= 20 ? Math.round(typed) : parcelGrams(items);
+  console.log(`[ADMIN-SHIPMENT] create | order=${order.order_number} | wh=${wh.pickup_location} | dest=${address.pincode} | weight=${grams}g | waybill=${waybill}`);
   const productsDesc = items.map(i => `${i.product_name} x${i.quantity}`).join(', ') || 'Cookies';
 
   const shipmentData = {
@@ -95,7 +99,7 @@ router.post('/orders/:id/shipment', async (req, res) => {
     quantity: String(items.reduce((s, i) => s + i.quantity, 0) || 1),
     shipment_type: 0,
     origin_scan: 1,
-    weight: String(req.body?.weight || 0.5),
+    weight: String(grams), // Delhivery takes GRAMS
     shipping_mode: 'Express',
     address_type: 'home',
     seller_gst_tin: '',
@@ -458,21 +462,26 @@ router.post('/delivery/pickup-request', async (req, res) => {
   });
 
   /*
-   * Delhivery's rejections are terse and name no cause, so translate the two that actually happen.
-   * A wallet under ₹500 is the common one — it applies to Prepaid and COD alike (confirmed live) —
-   * and the other is a slot already open for this warehouse today, since only one pickup request
-   * per location per day is allowed until the existing one is closed.
+   * A refusal goes back as two parts: what it means and what to do (`message`), and Delhivery's
+   * own sentence (`delhiveryMessage`), e.g. "Client wallet balance is -23.22 which is less than
+   * 500.0". The wallet one is the common case; it applies to Prepaid and COD alike.
    */
   if (!result.ok) {
-    const raw = JSON.stringify(result.reason ?? result.detail ?? '').toLowerCase();
-    let hint: any = null;
-    if (/balance|wallet|insufficient|recharge|fund/.test(raw)) {
-      hint = 'Your Delhivery wallet is below the ₹500 minimum needed to book a pickup. Top it up in the Delhivery panel and try again. (Prepaid and COD both require this.)';
-    } else if (/already|exist|duplicate|open|pending/.test(raw)) {
-      hint = `A pickup request is already open for ${wh.pickup_location} today. Delhivery allows only one per warehouse per day — the existing one must be closed before another can be raised. Check it in their panel.`;
+    const said = String(result.reason || '');
+    const s = said.toLowerCase();
+    let message = 'Delhivery refused the pickup request.';
+    if (/balance|wallet|insufficient|recharge/.test(s)) {
+      const bal = said.match(/balance is (-?[\d.]+)/i)?.[1];
+      message = `Delhivery wallet is ${bal != null ? `at ₹${Number(bal).toFixed(2)}` : 'too low'}. A pickup needs at least ₹500 in it. Recharge in the Delhivery panel, then request again.`;
+    } else if (/does not exist|invalid pickup location/.test(s)) {
+      message = `Delhivery does not recognise the warehouse "${wh.pickup_location}". Check the name matches the one registered in their panel exactly.`;
+    } else if (/already|duplicate/.test(s)) {
+      message = `A pickup is already open for ${wh.pickup_location} on that day. Delhivery allows one per warehouse per day; close it in their panel or pick another date.`;
     }
-    const message = hint || `Delhivery refused the pickup request: ${JSON.stringify(result.reason ?? '').slice(0, 300)}`;
-    return res.status(502).json({ ...result, error: message, message, warehouse: wh.pickup_location });
+    return res.status(502).json({
+      ok: false, error: message, message, delhiveryMessage: said, delhiveryStatus: (result as any).status ?? null,
+      warehouse: wh.pickup_location,
+    });
   }
   res.json({ ...result, warehouse: wh.pickup_location });
 });

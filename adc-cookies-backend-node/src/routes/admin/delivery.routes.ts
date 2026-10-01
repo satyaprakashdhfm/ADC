@@ -124,7 +124,8 @@ router.patch('/delivery/warehouses/:id/toggle', async (req, res) => {
 
 router.get('/delivery/shipping-cost', async (req, res) => {
   if (!delhiveryConfigured()) throw new ApiError('Delhivery not configured', 503);
-  const { destPin, weight = '0.5', cod = '0', mode = 'S' } = req.query;
+  // weight in GRAMS, as Delhivery prices it.
+  const { destPin, weight = '500', cod = '0', mode = 'S' } = req.query;
   // Origin from default warehouse, fall back to env
   const wh = await getOne('SELECT pincode FROM warehouses WHERE is_default = TRUE AND is_active = TRUE LIMIT 1');
   const originPin = wh?.pincode || process.env.ORIGIN_PINCODE || '';

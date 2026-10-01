@@ -303,7 +303,8 @@ export interface ShippingCostInput {
   weight?: number; cod?: number; mode?: string;
 }
 
-export async function getShippingCost({ originPin, destPin, weight = 0.5, cod = 0, mode = 'S' }: ShippingCostInput = {}) {
+/** `weight` is GRAMS (Delhivery's cgm). */
+export async function getShippingCost({ originPin, destPin, weight = 500, cod = 0, mode = 'S' }: ShippingCostInput = {}) {
   const o = String(originPin || '').replace(/\D/g, '');
   const d = String(destPin || '').replace(/\D/g, '');
   if (!/^\d{6}$/.test(o) || !/^\d{6}$/.test(d)) {
@@ -312,17 +313,17 @@ export async function getShippingCost({ originPin, destPin, weight = 0.5, cod = 
   }
   try {
     const { ok, status, data } = await dhRequest('/api/kinko/v1/invoice/charges/.json', {
-      query: { md: mode, cgm: weight, o_pin: o, d_pin: d, ss: cod > 0 ? 'COD' : 'Delivered', c_flag: cod > 0 ? 'C' : 'P', cod },
+      query: { md: mode, cgm: Math.round(weight), o_pin: o, d_pin: d, ss: 'Delivered', pt: cod > 0 ? 'COD' : 'Pre-paid', cod },
     });
     if (!ok) {
-      log('shipping-cost', `${o}→${d} ${weight}kg | ✗ api_error_${status}`);
+      log('shipping-cost', `${o}→${d} ${weight}g | ✗ api_error_${status}`);
       return { ok: false, reason: `api_error_${status}`, detail: data };
     }
     const row = Array.isArray(data) ? data[0] : data?.[0];
-    log('shipping-cost', `${o}→${d} ${weight}kg | ✓ total=₹${row?.total_amount ?? '?'} zone=${row?.zone ?? '?'} charged=${row?.charged_weight ?? '?'}kg`);
+    log('shipping-cost', `${o}→${d} ${weight}g | ✓ total=₹${row?.total_amount ?? '?'} zone=${row?.zone ?? '?'} charged=${row?.charged_weight ?? '?'}g`);
     return { ok: true, data };
   } catch (err: any) {
-    log('shipping-cost', `${o}→${d} ${weight}kg | ✗ network_error: ${err.message}`);
+    log('shipping-cost', `${o}→${d} ${weight}g | ✗ network_error: ${err.message}`);
     return { ok: false, reason: 'network_error' };
   }
 }
@@ -411,21 +412,42 @@ export interface PickupRequestInput {
   pickupDate?: string; pickupTime?: string; pickupLocation?: string; packageCount?: number;
 }
 
+/*
+ * A refused pickup comes back as a 400 whose body maps the failing check to a sentence, e.g.
+ *   {"prepaid": "Client wallet balance is -23.22 which is less than 500.0"}
+ *   {"pickup_location": "Invalid Pickup Location ClientWarehouse matching query does not exist."}
+ * This pulls those sentences out so the admin reads Delhivery's own words, not "api_error_400".
+ */
+export function delhiveryMessage(data: unknown): string {
+  if (data == null) return '';
+  if (typeof data === 'string') return data.trim();
+  if (Array.isArray(data)) return data.map(delhiveryMessage).filter(Boolean).join(' ');
+  if (typeof data === 'object') {
+    return Object.values(data as Record<string, unknown>)
+      .map((v) => (typeof v === 'boolean' || typeof v === 'number' ? '' : delhiveryMessage(v)))
+      .filter(Boolean).join(' ');
+  }
+  return '';
+}
+
 export async function createPickupRequest({ pickupDate, pickupTime, pickupLocation, packageCount }: PickupRequestInput = {}) {
+  // Delhivery wants HH:MM:SS; the admin's time picker sends HH:MM.
+  const time = pickupTime && /^\d{2}:\d{2}$/.test(pickupTime) ? `${pickupTime}:00` : pickupTime;
   try {
     const { ok, status, data } = await dhRequest('/fm/request/new/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         pickup_date: pickupDate,
-        pickup_time: pickupTime,
+        pickup_time: time,
         pickup_location: pickupLocation,
         expected_package_count: packageCount || 1,
       }),
     });
     if (!ok) {
-      log('pickup-request', `${pickupDate} ${pickupTime} count=${packageCount || 1} | ✗ api_error_${status}`);
-      return { ok: false, reason: `api_error_${status}`, detail: data };
+      const said = delhiveryMessage(data);
+      log('pickup-request', `${pickupDate} ${time} count=${packageCount || 1} | ✗ ${status} | ${said.slice(0, 160)}`);
+      return { ok: false, reason: said || `api_error_${status}`, status, detail: data };
     }
     log('pickup-request', `${pickupDate} ${pickupTime} count=${packageCount || 1} | ✓`);
     return { ok: true, data };

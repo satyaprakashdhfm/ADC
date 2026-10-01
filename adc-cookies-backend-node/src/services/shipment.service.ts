@@ -1,5 +1,6 @@
 import { getOne, getAll, query, nowIso } from '../db/index.js';
 import { createShipment, delhiveryConfigured, fetchWaybill } from './delhivery.client.js';
+import { parcelGrams, parcelKg, ITEMS_WITH_CATEGORY_SQL } from './parcel.service.js';
 import { shiprocketConfigured, createHyperlocalOrder, assignAwb, trackShiprocket, pickServiceableStore, getWalletBalance } from './shiprocket.client.js';
 import { zoneStores, storeByCode, storeForAddress } from './store.service.js';
 import { relayOrder } from './petpooja.service.js';
@@ -52,7 +53,7 @@ async function attemptShipment(orderId, addressArg?) {
   const address = addressArg || (order.address_id ? await getOne('SELECT * FROM addresses WHERE id = $1', [order.address_id]) : null);
   if (!address) { console.log(`[SHIPMENT] auto | order=${order.order_number} | skip=no_address`); return { ok: false, reason: 'no_address' }; }
 
-  const items = await getAll('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+  const items = await getAll(ITEMS_WITH_CATEGORY_SQL, [order.id]);
   const destPin = String(address.pincode || '').replace(/\D/g, '');
   const stores = zoneStores(destPin);
 
@@ -115,6 +116,8 @@ async function attemptShipment(orderId, addressArg?) {
       console.log(`[SHIPMENT] auto | order=${order.order_number} | intracity dest=${destPin} | store=${pickup.name} | ₹${chosen.rate} | ${chosen.distance} km`);
       const created = await createHyperlocalOrder({
         order, items,
+        // Shiprocket takes kilograms.
+        dims: { weight: parcelKg(items) },
         customer: { name: address.full_name, phone: address.phone, email: null },
         address,
         // Falls back to the configured default when this store has no registered pickup nickname —
@@ -228,7 +231,7 @@ async function attemptShipment(orderId, addressArg?) {
     quantity,
     shipment_width: 20,
     shipment_height: 10,
-    weight: 0.5,
+    weight: parcelGrams(items), // Delhivery takes GRAMS
     seller_gst_tin: '',
     shipping_mode: 'Express',
     address_type: 'home',
