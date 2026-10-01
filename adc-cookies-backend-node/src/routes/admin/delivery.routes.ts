@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { serializeWarehouse } from '../../serializers/index.js';
-import { delhiveryConfigured, createWarehouseOnDelhivery, updateWarehouseOnDelhivery, getShippingCost } from '../../services/delhivery.client.js';
+import { delhiveryConfigured, createWarehouseOnDelhivery, updateWarehouseOnDelhivery, getShippingCost, explainDelhivery } from '../../services/delhivery.client.js';
 import { ADC_STORES } from '../../services/store.service.js';
 import { listPickups, shiprocketConfigured } from '../../services/shiprocket.client.js';
 
@@ -135,6 +135,11 @@ router.get('/delivery/shipping-cost', async (req, res) => {
     originPin: String(originPin ?? ''), destPin: String(destPin ?? ''),
     weight: Number(weight), cod: Number(cod), mode: String(mode ?? 'S'),
   });
+  if (!result.ok) {
+    const said = String(result.reason || '');
+    const message = said === 'invalid_pincode' ? 'Enter a valid 6-digit pincode.' : `Could not get the Delhivery cost. ${explainDelhivery(said)}`;
+    return res.status(502).json({ ok: false, error: message, message, delhiveryMessage: said });
+  }
   res.json(result);
 });
 

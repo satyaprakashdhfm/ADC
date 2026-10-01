@@ -316,8 +316,9 @@ export async function getShippingCost({ originPin, destPin, weight = 500, cod = 
       query: { md: mode, cgm: Math.round(weight), o_pin: o, d_pin: d, ss: 'Delivered', pt: cod > 0 ? 'COD' : 'Pre-paid', cod },
     });
     if (!ok) {
-      log('shipping-cost', `${o}→${d} ${weight}g | ✗ api_error_${status}`);
-      return { ok: false, reason: `api_error_${status}`, detail: data };
+      const said = delhiveryMessage(data);
+      log('shipping-cost', `${o}→${d} ${weight}g | ✗ ${status} | ${said.slice(0, 160)}`);
+      return { ok: false, reason: said || `api_error_${status}`, detail: data };
     }
     const row = Array.isArray(data) ? data[0] : data?.[0];
     log('shipping-cost', `${o}→${d} ${weight}g | ✓ total=₹${row?.total_amount ?? '?'} zone=${row?.zone ?? '?'} charged=${row?.charged_weight ?? '?'}g`);
@@ -347,8 +348,9 @@ export async function createShipment(shipmentData, pickupLocation) {
       body,
     });
     if (!ok) {
-      log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ api_error_${status}`);
-      return { ok: false, reason: `api_error_${status}`, detail: data };
+      const said = delhiveryMessage(data);
+      log('shipment-create', `waybill=${wbn} ref=${ref} | ✗ ${status} | ${said.slice(0, 160)}`);
+      return { ok: false, reason: said && said.length < 300 ? said : `api_error_${status}`, detail: data };
     }
     // Delhivery returns HTTP 200 even on a rejected shipment — the real reason is in `rmk`
     // (e.g. "ClientWarehouse matching query does not exist." = pickup location not registered).
@@ -428,6 +430,37 @@ export function delhiveryMessage(data: unknown): string {
       .filter(Boolean).join(' ');
   }
   return '';
+}
+
+/*
+ * What a Delhivery refusal means for us and what to do about it, in one sentence. Their messages
+ * are written for their engineers; this is for whoever is running the admin. The original text is
+ * always sent alongside, so nothing is hidden.
+ */
+export function explainDelhivery(said: string, ctx: { warehouse?: string } = {}): string {
+  const s = String(said || '').toLowerCase();
+  if (!s) return 'Delhivery refused the request without giving a reason.';
+  if (s === 'network_error') return 'Could not reach Delhivery. Check the connection and try again in a minute.';
+  if (/balance|insufficient|recharge|wallet/.test(s)) {
+    const bal = said.match(/balance is (-?[\d.]+)/i)?.[1];
+    return `Delhivery wallet is ${bal != null ? `at ₹${Number(bal).toFixed(2)}` : 'too low'}. Shipments and pickups need at least ₹500 in it. Recharge in the Delhivery panel, then try again.`;
+  }
+  if (/clientwarehouse matching query does not exist|invalid pickup location/.test(s)) {
+    return `Delhivery does not recognise the warehouse${ctx.warehouse ? ` "${ctx.warehouse}"` : ''}. The name must match the one registered in their panel exactly.`;
+  }
+  if (/warehouse is not active/.test(s)) return 'The warehouse is inactive at Delhivery. Ask the Delhivery account manager to activate it.';
+  if (/non serviceable pincode|not serviceable/.test(s)) return 'Delhivery does not deliver to this pincode.';
+  if (/incorrect phone/.test(s)) return "The customer's phone number was rejected. Fix it on the order's address and try again.";
+  if (/duplicate order|duplicate waybill/.test(s)) return 'Delhivery already has a shipment for this order. Check the waybill before trying again.';
+  if (/exceeded the available capacity/.test(s)) return 'Delhivery has hit its daily limit for this pincode. Try again after midnight.';
+  if (/suspicious/.test(s)) return 'Delhivery flagged this customer as suspicious. Contact the Delhivery account manager.';
+  if (/already|pickup request.*exist/.test(s)) {
+    return `A pickup is already open for ${ctx.warehouse || 'this warehouse'} on that day. Delhivery allows one per warehouse per day; close it in their panel or pick another date.`;
+  }
+  if (/^api_error_(401|403)$/.test(s) || /authentication credentials/.test(s)) return 'Delhivery rejected our API token. It may have expired; check DELIVERY_API_TOKEN.';
+  if (/^api_error_5\d\d$/.test(s)) return 'Delhivery is having a problem on their side. Try again in a few minutes.';
+  if (/^api_error_429$/.test(s)) return 'Too many requests to Delhivery. Wait a few minutes and try again.';
+  return 'Delhivery refused the request.';
 }
 
 export async function createPickupRequest({ pickupDate, pickupTime, pickupLocation, packageCount }: PickupRequestInput = {}) {

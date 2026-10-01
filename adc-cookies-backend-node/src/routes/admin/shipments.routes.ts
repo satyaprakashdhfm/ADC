@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { getOne, getAll, query, nowIso } from '../../db/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { serializeOrder } from '../../serializers/index.js';
-import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../services/delhivery.client.js';
+import { delhiveryConfigured, fetchWaybill, createShipment, cancelShipment, createPickupRequest, explainDelhivery, shippingLabelUrl, trackShipment, fetchDocument, DELHIVERY_DOC_TYPES } from '../../services/delhivery.client.js';
 import { cancelShiprocketOrder, trackShiprocket, getWalletBalance, walletStatus, assignAwb, shiprocketConfigured } from '../../services/shiprocket.client.js';
 import { to4x6 } from '../../services/labelPdf.js';
 import { autoCreateShipment } from '../../services/shipment.service.js';
@@ -59,7 +59,8 @@ router.post('/orders/:id/shipment', async (req, res) => {
   const waybillRes = await fetchWaybill(1);
   if (!waybillRes.ok || !waybillRes.waybills?.length) {
     console.log(`[ADMIN-SHIPMENT] create FAILED | order=${order.order_number} | waybill_fetch=FAILED | reason=${waybillRes.reason}`);
-    throw new ApiError(`Could not fetch waybill from Delhivery: ${waybillRes.reason}`, 502);
+    const said = String(waybillRes.reason || '');
+    return res.status(502).json({ error: `Could not get a waybill. ${explainDelhivery(said)}`, message: `Could not get a waybill. ${explainDelhivery(said)}`, delhiveryMessage: said });
   }
   const waybill = String(waybillRes.waybills[0]);
   const items = await getAll(ITEMS_WITH_CATEGORY_SQL, [order.id]);
@@ -108,7 +109,9 @@ router.post('/orders/:id/shipment', async (req, res) => {
   const result = await createShipment(shipmentData, wh.pickup_location);
   if (!result.ok) {
     console.log(`[ADMIN-SHIPMENT] create FAILED | order=${order.order_number} | reason=${result.reason} | detail=${JSON.stringify(result.detail || '').slice(0, 300)}`);
-    return res.status(502).json({ error: result.reason, detail: result.detail });
+    const said = String(result.reason || '');
+    const message = `Shipment not created. ${explainDelhivery(said, { warehouse: wh.pickup_location })}`;
+    return res.status(502).json({ error: message, message, delhiveryMessage: said });
   }
 
   await query(
@@ -461,27 +464,12 @@ router.post('/delivery/pickup-request', async (req, res) => {
     pickupDate, pickupTime, pickupLocation: wh.pickup_location, packageCount: Number(packageCount || 1),
   });
 
-  /*
-   * A refusal goes back as two parts: what it means and what to do (`message`), and Delhivery's
-   * own sentence (`delhiveryMessage`), e.g. "Client wallet balance is -23.22 which is less than
-   * 500.0". The wallet one is the common case; it applies to Prepaid and COD alike.
-   */
+  /* A refusal goes back as what it means and what to do (`message`), plus Delhivery's own sentence
+     (`delhiveryMessage`), e.g. "Client wallet balance is -23.22 which is less than 500.0". */
   if (!result.ok) {
     const said = String(result.reason || '');
-    const s = said.toLowerCase();
-    let message = 'Delhivery refused the pickup request.';
-    if (/balance|wallet|insufficient|recharge/.test(s)) {
-      const bal = said.match(/balance is (-?[\d.]+)/i)?.[1];
-      message = `Delhivery wallet is ${bal != null ? `at ₹${Number(bal).toFixed(2)}` : 'too low'}. A pickup needs at least ₹500 in it. Recharge in the Delhivery panel, then request again.`;
-    } else if (/does not exist|invalid pickup location/.test(s)) {
-      message = `Delhivery does not recognise the warehouse "${wh.pickup_location}". Check the name matches the one registered in their panel exactly.`;
-    } else if (/already|duplicate/.test(s)) {
-      message = `A pickup is already open for ${wh.pickup_location} on that day. Delhivery allows one per warehouse per day; close it in their panel or pick another date.`;
-    }
-    return res.status(502).json({
-      ok: false, error: message, message, delhiveryMessage: said, delhiveryStatus: (result as any).status ?? null,
-      warehouse: wh.pickup_location,
-    });
+    const message = explainDelhivery(said, { warehouse: wh.pickup_location });
+    return res.status(502).json({ ok: false, error: message, message, delhiveryMessage: said, warehouse: wh.pickup_location });
   }
   res.json({ ...result, warehouse: wh.pickup_location });
 });
