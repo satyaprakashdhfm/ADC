@@ -5,7 +5,7 @@ import {
   adminGetWarehouses, adminSetDefaultWarehouse, adminToggleWarehouse, adminGetOrders,
   adminCreateShipment, adminCancelShipment, adminTrackOrder, openLabel,
   adminCreatePickupRequest, adminFetchOrderDocument, adminGetStoreReadiness, adminGetShiprocketWallet,
-  type Order, type Warehouse, type WarehouseInput, type StoreReadinessReport, type ShiprocketWallet,
+  type Order, type Warehouse, type WarehouseInput, type ApiRequestError, type StoreReadinessReport, type ShiprocketWallet,
 } from '@/lib/api';
 import { todayStr, money, fmtDateTime } from '../shared/format';
 import { card, td, inp, addBtn, iconBtn, actionBtn, Panel, Table, Badge, Empty, Field } from '../shared/ui';
@@ -106,6 +106,8 @@ export default function DeliveryTab({
      and it must not join the props chain every other field here already travels through. */
   const [wallet, setWallet] = useState<ShiprocketWallet | null>(null);
   useEffect(() => { adminGetShiprocketWallet().then(setWallet).catch(() => {}); }, []);
+  /* Delhivery's own sentence for a refused pickup, shown under our explanation of it. */
+  const [purSaid, setPurSaid] = useState('');
 
   /*
    * What this panel is for: orders that still need something doing about a parcel.
@@ -261,17 +263,36 @@ export default function DeliveryTab({
           <Field label="Package count"><input type="number" style={{ ...inp, width: 90 }} value={purCount} onChange={e => setPurCount(e.target.value)} min="1" /></Field>
           <button onClick={() => setPurCount(String(Math.max(1, pending.length)))} style={{ ...iconBtn, width: 'auto', padding: '0 12px', height: 40, marginRight: 0, fontSize: 'var(--text-xs)', fontWeight: 700 }} title="Use the awaiting-pickup count">Use {Math.max(1, pending.length)}</button>
           <button onClick={async () => {
-            setPurResult('Submitting…');
-            const r = await adminCreatePickupRequest(purDate, purTime, Number(purCount)).catch(e => ({ ok: false, reason: String(e.message || e), data: undefined }));
-            // The backend translates Delhivery's terse refusals — a wallet under the Rs.500
-            // minimum, or a slot already open for this warehouse today — into a sentence worth
-            // reading, so prefer it over the raw reason.
-            setPurResult(r.ok
-              ? `Pickup scheduled for ${purDate} at ${purTime} · ${purCount} package(s). Delhivery sometimes moves the date — check their panel to confirm the slot.`
-              : `Error: ${(r as { ok: boolean; reason?: string }).reason}`);
+            setPurResult('Submitting…'); setPurSaid('');
+            try {
+              await adminCreatePickupRequest(purDate, purTime, Number(purCount));
+              setPurResult(`Pickup scheduled for ${purDate} at ${purTime} · ${purCount} package(s). Delhivery sometimes moves the date — check their panel to confirm the slot.`);
+            } catch (e) {
+              // The backend sends what the refusal means and what to do, plus Delhivery's own words.
+              const err = e as ApiRequestError;
+              setPurResult(`Error: ${err.message || String(e)}`);
+              setPurSaid(String(err.body?.delhiveryMessage || ''));
+            }
           }} disabled={!purDate || !purTime} style={{ ...addBtn, opacity: !purDate ? 0.5 : 1 }}>Request pickup</button>
         </div>
-        {purResult && <div style={{ marginTop: 10, fontSize: 'var(--text-sm)', color: purResult.startsWith('Error') ? 'var(--status-error)' : 'var(--status-success)', fontWeight: 700 }}>{purResult}</div>}
+        {purResult && (purResult.startsWith('Error') ? (
+          <div role="alert" style={{ marginTop: 12, padding: '12px 14px', borderRadius: 10, background: 'var(--surface-card)', border: '1px solid var(--status-error)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <AlertTriangle size={16} style={{ color: 'var(--status-error)', flex: 'none', marginTop: 2 }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: 'var(--status-error)' }}>Pickup not booked</div>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-body)', marginTop: 4, lineHeight: 1.5 }}>{purResult.replace(/^Error:\s*/, '')}</div>
+                {purSaid && (
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 8 }}>
+                    Delhivery said: <span style={{ fontFamily: 'monospace', color: 'var(--text-body)' }}>&ldquo;{purSaid}&rdquo;</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ marginTop: 10, fontSize: 'var(--text-sm)', color: 'var(--status-success)', fontWeight: 700 }}>{purResult}</div>
+        ))}
 
         {/* Delhivery's rules, from their own Pickup Request Creation docs. An earlier version
             of this box claimed the waybills had to be attached by hand in their panel and that
@@ -327,7 +348,7 @@ export default function DeliveryTab({
         {orders && (
           <Table head={['Order', 'Customer', 'Service', 'Waybill', 'Status', 'Actions']}>
             {shipmentRows.map(o => {
-              const w = shipmentWeights[o.id] ?? '0.5';
+              const w = shipmentWeights[o.id] ?? ''; // grams; empty = worked out from the items
               /* What is still true of this shipment, decided once per row.
                  Separators flattened because our statuses are SCREAMING_SNAKE and the carriers'
                  are spaced words. A shipment that has arrived, been called off, or come back has
@@ -392,12 +413,13 @@ export default function DeliveryTab({
                       </div>
                     ) : canCreateDelhivery ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <input type="number" value={w} min="0.1" step="0.1" title="Weight (kg)"
+                        <input type="number" value={w} min="20" step="10" placeholder="auto g"
+                          title="Parcel weight in GRAMS. Leave empty and it is worked out from the items: 55 g per cookie, 450 g per tin, plus 100 g packing."
                           onChange={e => setShipmentWeights(p => ({ ...p, [o.id]: e.target.value }))}
-                          style={{ ...inp, width: 62, padding: '6px 8px' }} />
+                          style={{ ...inp, width: 78, padding: '6px 8px' }} />
                         <button disabled={shipmentBusy === o.id} onClick={async () => {
                           setShipmentBusy(o.id); setErr('');
-                          const r = await adminCreateShipment(o.id, Number(w) || 0.5).catch(e => { setErr(String(e.message || e)); return null; });
+                          const r = await adminCreateShipment(o.id, Number(w) || undefined).catch(e => { setErr(String(e.message || e)); return null; });
                           if (r) setOrders(p => (p || []).map(x => x.id === o.id ? { ...x, delhiveryWaybill: r.delhiveryWaybill, shipmentStatus: r.shipmentStatus, carrier: 'DELHIVERY' } : x));
                           setShipmentBusy(null);
                         }} style={{ ...addBtn, padding: '7px 12px', fontSize: 'var(--text-xs)' }}>

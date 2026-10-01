@@ -68,7 +68,7 @@ export const adminSessionToken = {
 };
 
 /** Thrown by request() so callers can act on the reason, not just the sentence. */
-export interface ApiRequestError extends Error { code?: string; status?: number }
+export interface ApiRequestError extends Error { code?: string; status?: number; body?: Record<string, unknown> }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await getToken();
@@ -94,6 +94,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const e: ApiRequestError = new Error(detailRmk && detailRmk !== base ? `${base}: ${detailRmk}` : base);
     e.code = err.code;
     e.status = res.status;
+    e.body = err;
     /* A refused admin session is dead. Drop it here so every subsequent call does not re-send a
        token the server has already rejected, and so the dashboard falls back to its sign-in. */
     if (e.code === 'ADMIN_AUTH_REQUIRED' || e.code === 'ADMIN_SESSION_EXPIRED' || e.code === 'ADMIN_REVOKED') {
@@ -1218,13 +1219,15 @@ export async function adminToggleWarehouse(id: number): Promise<Warehouse> {
 
 /* ---- Admin: Delivery — Shipping cost ---- */
 export interface ShippingCostResult { ok: boolean; data?: unknown; reason?: string; }
-export async function adminGetShippingCost(destPin: string, weight = 0.5): Promise<ShippingCostResult> {
-  return request(`/admin/delivery/shipping-cost?destPin=${encodeURIComponent(destPin)}&weight=${weight}`);
+/** `weightGrams` in grams, which is how Delhivery prices. */
+export async function adminGetShippingCost(destPin: string, weightGrams = 500): Promise<ShippingCostResult> {
+  return request(`/admin/delivery/shipping-cost?destPin=${encodeURIComponent(destPin)}&weight=${weightGrams}`);
 }
 
 /* ---- Admin: Delivery — Shipment actions ---- */
-export async function adminCreateShipment(orderId: number, weight = 0.5): Promise<Order> {
-  return request(`/admin/orders/${orderId}/shipment`, { method: 'POST', body: JSON.stringify({ weight }) });
+/** `weightGrams` overrides the weight worked out from the items; leave it out to use that. */
+export async function adminCreateShipment(orderId: number, weightGrams?: number): Promise<Order> {
+  return request(`/admin/orders/${orderId}/shipment`, { method: 'POST', body: JSON.stringify({ weightGrams }) });
 }
 /**
  * Cancel with whichever carrier booked it. `dispatched` says whether a rider had already been
