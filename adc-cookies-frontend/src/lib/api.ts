@@ -91,7 +91,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     // `error` (e.g. shipment_rejected) and the carrier's own message in `detail.rmk`.
     const detailRmk = err?.detail?.rmk || err?.detail?.remarks;
     const base = err.message || err.error || `HTTP ${res.status}`;
-    const e: ApiRequestError = new Error(detailRmk && detailRmk !== base ? `${base}: ${detailRmk}` : base);
+    // Delhivery refusals come with their own sentence as well as our explanation; show both.
+    const said = typeof err?.delhiveryMessage === 'string' && !/^api_error_\d+$/.test(err.delhiveryMessage) ? err.delhiveryMessage : '';
+    const extra = said && !base.includes(said) ? ` (Delhivery said: "${said}")` : (detailRmk && detailRmk !== base ? `: ${detailRmk}` : '');
+    const e: ApiRequestError = new Error(`${base}${extra}`);
     e.code = err.code;
     e.status = res.status;
     e.body = err;

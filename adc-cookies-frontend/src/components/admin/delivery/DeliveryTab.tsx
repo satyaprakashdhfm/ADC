@@ -238,7 +238,16 @@ export default function DeliveryTab({
 
       {/* Pickup request (Delhivery only) */}
       {(() => {
-        const pending = (orders || []).filter(o => o.carrier === 'DELHIVERY' && o.delhiveryWaybill && !['DELIVERED', 'CANCELLED'].includes(o.shipmentStatus || ''));
+        /* Waiting for pickup = booked and not yet moving. Delhivery writes its own status words
+           ("Delivered", "In Transit") in its own case, so an exact 'DELIVERED' check counted
+           delivered parcels as still waiting. Only a parcel that is booked (manifested) counts,
+           and only while the order itself is still live. */
+        const pending = (orders || []).filter(o => {
+          if (o.carrier !== 'DELHIVERY' || !o.delhiveryWaybill) return false;
+          if (['DELIVERED', 'CANCELLED', 'REFUNDED'].includes(String(o.orderStatus || '').toUpperCase())) return false;
+          const st = (o.shipmentStatus || '').toLowerCase().replace(/[_-]+/g, ' ');
+          return st === '' || /created|manifest|not picked|pickup scheduled|pending/.test(st);
+        });
         return (
       <Panel title="Schedule a Delhivery pickup">
         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
@@ -270,7 +279,7 @@ export default function DeliveryTab({
             } catch (e) {
               // The backend sends what the refusal means and what to do, plus Delhivery's own words.
               const err = e as ApiRequestError;
-              setPurResult(`Error: ${err.message || String(e)}`);
+              setPurResult(`Error: ${String(err.body?.message || err.message || e)}`);
               setPurSaid(String(err.body?.delhiveryMessage || ''));
             }
           }} disabled={!purDate || !purTime} style={{ ...addBtn, opacity: !purDate ? 0.5 : 1 }}>Request pickup</button>
